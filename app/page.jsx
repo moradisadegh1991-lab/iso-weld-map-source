@@ -1,6 +1,8 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
 import Viewer3D, { SPOOL_COLORS } from "../components/Viewer3D";
+import WeldMap2D from "../components/WeldMap2D";
+import { exportWorkbook } from "../lib/excel";
 import { buildModel, registerCsv } from "../lib/engine";
 import { DEMO } from "../lib/demo";
 import { TYPE_FA } from "../lib/standards";
@@ -34,17 +36,27 @@ function renderCrop(img, sx, sy, sw, sh, max, quality) {
   return c.toDataURL("image/jpeg", quality).split(",")[1];
 }
 
-function tiles(img, max, quality) {
+const ROW = ["TOP", "MIDDLE", "BOTTOM"];
+const COL = ["LEFT", "CENTRE", "RIGHT"];
+
+/* A dense A1 sheet loses its BOM text if sent whole — the vision model downsamples
+   anything past ~1568 px. So crop a grid: the finer the source, the finer the grid. */
+function tiles(img, max, quality, grid) {
   const W = img.naturalWidth || img.width;
   const H = img.naturalHeight || img.height;
-  const ox = W * 0.07, oy = H * 0.07;
-  const defs = [
-    ["FULL SHEET", 0, 0, W, H],
-    ["TOP-LEFT QUADRANT", 0, 0, W / 2 + ox, H / 2 + oy],
-    ["TOP-RIGHT QUADRANT", W / 2 - ox, 0, W / 2 + ox, H / 2 + oy],
-    ["BOTTOM-LEFT QUADRANT", 0, H / 2 - oy, W / 2 + ox, H / 2 + oy],
-    ["BOTTOM-RIGHT QUADRANT", W / 2 - ox, H / 2 - oy, W / 2 + ox, H / 2 + oy],
-  ];
+  const n = grid;
+  const ox = (W / n) * 0.14, oy = (H / n) * 0.14;
+  const defs = [["FULL SHEET", 0, 0, W, H]];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const sx = Math.max(0, (W / n) * c - ox);
+      const sy = Math.max(0, (H / n) * r - oy);
+      defs.push([
+        `${n === 2 ? ROW[r * 2] : ROW[r]}-${n === 2 ? COL[c * 2] : COL[c]} TILE`,
+        sx, sy, W / n + ox * 2, H / n + oy * 2,
+      ]);
+    }
+  }
   return defs.map(([label, sx, sy, sw, sh]) => ({
     label, mediaType: "image/jpeg",
     data: renderCrop(img, sx, sy, Math.min(sw, W - sx), Math.min(sh, H - sy), max, quality),
@@ -55,12 +67,15 @@ const LIMIT = 3_400_000; // keep well under the 4.5 MB body cap
 
 async function prepare(file) {
   const img = await loadImage(file);
-  let out = tiles(img, 1500, 0.82);
-  let bytes = out.reduce((a, i) => a + i.data.length, 0);
-  if (bytes > LIMIT) { out = tiles(img, 1250, 0.68); bytes = out.reduce((a, i) => a + i.data.length, 0); }
-  if (bytes > LIMIT) { out = tiles(img, 1000, 0.55); bytes = out.reduce((a, i) => a + i.data.length, 0); }
-  if (bytes > LIMIT) { out = out.slice(0, 3); bytes = out.reduce((a, i) => a + i.data.length, 0); }
-  return { images: out, bytes, w: img.naturalWidth, h: img.naturalHeight };
+  const long = Math.max(img.naturalWidth, img.naturalHeight);
+  const grid = long >= 3200 ? 3 : 2;          // 10 tiles for a real scan, 5 for a photo
+  const sum = (o) => o.reduce((a, i) => a + i.data.length, 0);
+  let out = tiles(img, 1500, 0.82, grid);
+  if (sum(out) > LIMIT) out = tiles(img, 1350, 0.7, grid);
+  if (sum(out) > LIMIT) out = tiles(img, 1150, 0.58, grid);
+  if (sum(out) > LIMIT && grid === 3) out = tiles(img, 1400, 0.75, 2);
+  if (sum(out) > LIMIT) out = out.slice(0, 3);
+  return { images: out, bytes: sum(out), w: img.naturalWidth, h: img.naturalHeight, grid };
 }
 
 export default function Page() {
@@ -77,6 +92,9 @@ export default function Page() {
   const [showTags, setShowTags] = useState(true);
   const [showDims, setShowDims] = useState(false);
   const [view, setView] = useState("iso");
+  const [dim, setDim] = useState("3d");
+  const [renderMode, setRenderMode] = useState("solid");
+  const [colorBy, setColorBy] = useState("spool");
   const [editing, setEditing] = useState("");
   const fileRef = useRef(null);
 
@@ -86,7 +104,7 @@ export default function Page() {
   /* One serverless invocation per pass. Passes run in parallel so total wall
      time is the slower of the two, not their sum — that is what keeps each
      invocation inside Vercel's function duration limit. */
-  async function callPass(pass, images, attempt = 0) {
+  async function callPass(pass, images, attempt = 0, extra = {}) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 115000);
     try {
@@ -94,7 +112,7 @@ export default function Page() {
         method: "POST",
         headers: { "content-type": "application/json" },
         signal: ctrl.signal,
-        body: JSON.stringify({ pass, images, apiKey: apiKey || undefined, model: modelName || undefined }),
+        body: JSON.stringify({ pass, images, ...extra, apiKey: apiKey || undefined, model: modelName || undefined }),
       });
       const raw = await resp.text();
       let j = null;
@@ -103,7 +121,7 @@ export default function Page() {
       if (!resp.ok || !j) {
         const snippet = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
         if ((resp.status === 504 || resp.status === 502) && attempt === 0 && !(j && j.raw)) {
-          return callPass(pass, images, 1);
+          return callPass(pass, images, 1, extra);
         }
         throw new Error(
           ((j && j.error) ||
@@ -123,14 +141,35 @@ export default function Page() {
     }
   }
 
+  async function repair(base, images) {
+    const m = buildModel(base);
+    const issues = (m.error ? [m.error] : (m.checks || []))
+      .filter((c) => (typeof c === "string" ? true : c.status === "warn"))
+      .map((c) => (typeof c === "string" ? c : `${c.label}: ${c.detail}`));
+    if (!issues.length) return { data: base, ran: false };
+    setBusy("چک‌ها نخواندند — پاس اصلاح…");
+    try {
+      const r = await callPass("repair", images, 0, { json: base, issues });
+      const fixed = { ...base, ...r.data };
+      const after = buildModel(fixed);
+      const worse = (after.checks || []).filter((c) => c.status === "warn").length >
+        (m.checks || []).filter((c) => c.status === "warn").length;
+      return worse
+        ? { data: base, ran: true, kept: true }
+        : { data: fixed, ran: true, notes: r.data.repairNotes || [] };
+    } catch {
+      return { data: base, ran: true, failed: true };
+    }
+  }
+
   async function onFile(f) {
     if (!f) return;
     setErr(null); setNote(null); setSelected(null);
     try {
       setBusy("آماده‌سازی تصویر…");
       setPreview(URL.createObjectURL(f));
-      const { images, bytes, w, h } = await prepare(f);
-      setNote(`${w}×${h} px → ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
+      const { images, bytes, w, h, grid } = await prepare(f);
+      setNote(`${w}×${h} px → شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
 
       setBusy("خواندن نقشه — دو پاس موازی…");
       const [ra, rb] = await Promise.allSettled([
@@ -152,8 +191,11 @@ export default function Page() {
         unreadable: [...((a && a.data.unreadable) || []), ...((b && b.data.unreadable) || [])],
       };
 
-      setData(merged);
-      setEditing(JSON.stringify(merged, null, 2));
+      let final = merged, rep = { ran: false };
+      if (a && b) { rep = await repair(merged, images); final = rep.data; }
+
+      setData(final);
+      setEditing(JSON.stringify(final, null, 2));
 
       // A half-failure is recoverable: open the editor on the missing half.
       if (!a || !b) {
@@ -163,9 +205,14 @@ export default function Page() {
       }
 
       const tok = (x) => (x && x.usage ? `${x.usage.input_tokens || "?"}/${x.usage.output_tokens || "?"}` : "?");
-      setNote(`${w}×${h} px · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ${(a || b).model} · ` +
-        `meta ${a ? (a.ms / 1000).toFixed(1) + "s " + tok(a) : "ناموفق"} · ` +
-        `nodes ${b ? (b.ms / 1000).toFixed(1) + "s " + tok(b) : "ناموفق"}`);
+      setNote(`${w}×${h} px · شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ` +
+        `${(a || b).model} · meta ${a ? (a.ms / 1000).toFixed(1) + "s " + tok(a) : "ناموفق"} · ` +
+        `nodes ${b ? (b.ms / 1000).toFixed(1) + "s " + tok(b) : "ناموفق"}` +
+        (rep.ran
+          ? rep.failed ? " · پاس اصلاح ناموفق"
+            : rep.kept ? " · پاس اصلاح اجرا شد ولی نتیجه بهتر نبود؛ نسخه اول نگه داشته شد"
+              : ` · پاس اصلاح اعمال شد${rep.notes?.length ? `: ${rep.notes.join(" ")}` : ""}`
+          : " · همه چک‌ها پاس"));
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -261,27 +308,64 @@ export default function Page() {
             </div>
           ) : (
             <div className="canvas">
-            <Viewer3D model={model} selected={selected} onSelect={setSelected}
-              exploded={exploded} showTags={showTags} showDims={showDims} view={view} />
+            {dim === "3d" ? (
+              <Viewer3D model={model} selected={selected} onSelect={setSelected}
+                exploded={exploded} showTags={showTags} showDims={showDims} view={view}
+                renderMode={renderMode} colorBy={colorBy} />
+            ) : (
+              <WeldMap2D model={model} meta={data.meta} selected={selected} onSelect={setSelected}
+                showDims={showDims} colorBy={colorBy} />
+            )}
             <div className="ctl">
-              <div className="row">
-                {[["iso", "ایزو"], ["elev", "نما"], ["plan", "پلان"]].map(([k, t]) => (
-                  <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{t}</button>
+              <div className="row seg">
+                {[["3d", "سه‌بعدی"], ["2d", "نقشه ۲بعدی"]].map(([k, t]) => (
+                  <button key={k} className={dim === k ? "on" : ""} onClick={() => setDim(k)}>{t}</button>
                 ))}
               </div>
-              <button className={exploded ? "on wide" : "wide"} onClick={() => setExploded(!exploded)}>اسپول باز</button>
-              <button className={showTags ? "on wide" : "wide"} onClick={() => setShowTags(!showTags)}>تگ جوش</button>
+              {dim === "3d" && (
+                <>
+                  <div className="row">
+                    {[["iso", "ایزو"], ["elev", "نما"], ["plan", "پلان"]].map(([k, t]) => (
+                      <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{t}</button>
+                    ))}
+                  </div>
+                  <div className="row">
+                    {[["solid", "توپر"], ["xray", "شفاف"], ["wire", "مش"], ["centerline", "تک‌خط"]].map(([k, t]) => (
+                      <button key={k} className={renderMode === k ? "on" : ""} onClick={() => setRenderMode(k)}>{t}</button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="row">
+                <span className="lbl">رنگ:</span>
+                {[["spool", "اسپول"], ["size", "قطر"], ["none", "خنثی"]].map(([k, t]) => (
+                  <button key={k} className={colorBy === k ? "on" : ""} onClick={() => setColorBy(k)}>{t}</button>
+                ))}
+              </div>
+              {dim === "3d" && (
+                <button className={exploded ? "on wide" : "wide"} onClick={() => setExploded(!exploded)}>اسپول باز</button>
+              )}
+              {dim === "3d" && (
+                <button className={showTags ? "on wide" : "wide"} onClick={() => setShowTags(!showTags)}>تگ جوش</button>
+              )}
               <button className={showDims ? "on wide" : "wide"} onClick={() => setShowDims(!showDims)}>ابعاد</button>
             </div>
             <div className="legend">
-              {model.spoolIds.map((id, i) => (
+              {colorBy === "size"
+                ? [...new Set(model.elements.map((e) => e.nps || model.nps))].sort((a, b) => b - a).map((n, i) => (
+                    <span key={n}><i style={{ background: SPOOL_COLORS[i % SPOOL_COLORS.length] }} />
+                      <b className="mono">{n}&quot;</b></span>
+                  ))
+                : colorBy === "spool" && model.spoolIds.map((id, i) => (
                 <span key={id}><i style={{ background: SPOOL_COLORS[i % SPOOL_COLORS.length] }} /><b className="mono">{id}</b></span>
               ))}
               <span className="sep" />
               <span><i className="dot" style={{ background: "#FF6B4A" }} />سایت ({model.totals.field})</span>
               <span><i className="dot" style={{ background: "#CFDDE6" }} />کارگاه ({model.totals.shop})</span>
             </div>
-            <div className="hint">بکشید تا بچرخد · اسکرول یا پینچ زوم · روی حلقه جوش بزنید</div>
+            <div className="hint">{dim === "3d"
+              ? "بکشید تا بچرخد · اسکرول یا پینچ زوم · روی حلقه جوش بزنید"
+              : "بکشید تا جابه‌جا شود · اسکرول زوم · روی تگ جوش بزنید"}</div>
           </div>
           )}
 
@@ -299,6 +383,7 @@ export default function Page() {
                   {model.totals.welds} جوش · {model.spoolIds.length} اسپول ·
                   لوله {(model.totals.pipeLen / 1000).toFixed(2)} m ·
                   CL {(model.totals.clCalc / 1000).toFixed(2)} m
+                  {model.totals.girth > 0 ? ` · ${model.totals.girth} girth` : ""}
                 </div>
                 <table>
                   <thead><tr><th>No</th><th>Spool</th><th>محل</th><th>نوع</th><th>اتصال</th><th>EL</th><th>NDT</th></tr></thead>
@@ -317,7 +402,10 @@ export default function Page() {
                     ))}
                   </tbody>
                 </table>
-                <button className="ghost" onClick={download}>دانلود Weld Register (CSV)</button>
+                <div className="row">
+                  <button className="ghost" onClick={() => exportWorkbook(model, data)}>دانلود Excel (۵ شیت)</button>
+                  <button className="ghost" onClick={download}>CSV</button>
+                </div>
                 <p className="muted sm">
                   ستون‌های WPS No، Welder ID، NDT Report و Status در CSV خالی گذاشته شده تا QC پر کند.
                   درصد NDT پیش‌فرض بر مبنای ASME B31.3 §341.4.1 برای Normal Fluid Service است؛ Piping Class پروژه حاکم است.

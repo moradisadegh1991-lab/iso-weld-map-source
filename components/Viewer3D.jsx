@@ -7,7 +7,7 @@ const C_FIELD = "#FF6B4A";
 const C_SHOP = "#CFDDE6";
 const V = (p) => new THREE.Vector3(p.x, p.y, p.z);
 
-export default function Viewer3D({ model, selected, onSelect, exploded, showTags, showDims, view }) {
+export default function Viewer3D({ model, selected, onSelect, exploded, showTags, showDims, view, renderMode = "solid", colorBy = "spool" }) {
   const mountRef = useRef(null);
   const layerRef = useRef(null);
   const api = useRef({});
@@ -60,6 +60,13 @@ export default function Viewer3D({ model, selected, onSelect, exploded, showTags
     });
     const grp = (id) => groups[id] || groups[model.spoolIds[0]];
 
+    const sizes = [...new Set(model.elements.map((e) => e.nps || model.nps))].sort((a, b) => b - a);
+    const paintOf = (e, spoolColor) => {
+      if (colorBy === "size") return SPOOL_COLORS[sizes.indexOf(e.nps || model.nps) % SPOOL_COLORS.length];
+      if (colorBy === "none") return "#8FA3B0";
+      return spoolColor;
+    };
+
     // explode offsets: push each spool along the route axis
     const dirOf = {};
     model.spoolIds.forEach((id, i) => {
@@ -75,13 +82,20 @@ export default function Viewer3D({ model, selected, onSelect, exploded, showTags
         : new THREE.LineCurve3(a, b);
       if (a.distanceTo(b) < 1 && e.kind !== "fitting") return;
       const g = grp(e.spool);
-      const base = new THREE.Color(g.userData.color);
-      const mat = new THREE.MeshStandardMaterial({
-        color: e.kind === "pup" ? base.clone().offsetHSL(0, -0.14, -0.14) : base,
-        metalness: 0.45,
-        roughness: e.kind === "fitting" ? 0.42 : 0.58,
-      });
-      const r = (e.nps ? OD_MM(e.nps) : model.diameter) / 2;
+      const base = new THREE.Color(paintOf(e, g.userData.color));
+      const mat = renderMode === "centerline"
+        ? new THREE.MeshBasicMaterial({ color: base, wireframe: false })
+        : new THREE.MeshStandardMaterial({
+            color: e.kind === "pup" ? base.clone().offsetHSL(0, -0.14, -0.14) : base,
+            metalness: 0.45,
+            roughness: e.kind === "fitting" ? 0.42 : 0.58,
+            transparent: renderMode === "xray",
+            opacity: renderMode === "xray" ? 0.26 : 1,
+            depthWrite: renderMode !== "xray",
+            wireframe: renderMode === "wire",
+          });
+      const rBase = (e.nps ? OD_MM(e.nps) : model.diameter) / 2;
+      const r = renderMode === "centerline" ? Math.max(rBase * 0.12, span * 0.0016) : rBase;
       g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, e.kind === "fitting" ? 48 : 2, r, 36, false), mat));
     });
 
@@ -235,7 +249,7 @@ export default function Viewer3D({ model, selected, onSelect, exploded, showTags
       renderer.dispose();
       if (dom.parentNode) dom.parentNode.removeChild(dom);
     };
-  }, [model]);
+  }, [model, renderMode, colorBy]);
 
   useEffect(() => {
     const g = api.current.goal; if (!g) return;

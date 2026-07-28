@@ -3,6 +3,16 @@ export const dynamic = "force-dynamic";
 // Hobby caps this at 60 s; Pro honours up to 300 s.
 export const maxDuration = 300;
 
+import { ELL90, ELL45, TEE_C } from "../../../lib/standards";
+
+/* Give the model the real B16.9 take-outs instead of one hard-coded size —
+   it can then self-check every dimension it reads, at any diameter. */
+const TAKEOUT_TABLE = (() => {
+  const sizes = Object.keys(ELL90).map(Number).sort((a, b) => a - b);
+  const row = (n) => `  ${String(n).padStart(2)}"  ELL90 ${String(ELL90[n]).padStart(4)}   ELL45 ${String(ELL45[n]).padStart(4)}   TEE ${String(TEE_C[n]).padStart(4)}`;
+  return sizes.map(row).join("\n");
+})();
+
 const COMMON = `You are a senior piping engineer reading a piping isometric drawing.
 
 You are given the FULL SHEET plus overlapping high-resolution QUADRANT crops of the same
@@ -12,7 +22,15 @@ The quadrants overlap, so the same item may appear twice - do not double count i
 Return ONLY a JSON object. No markdown fences, no preamble, no commentary, no explanation.
 Be terse: no trailing prose, no repeated fields.
 ALL COORDINATES AND LENGTHS IN MILLIMETRES.
-If a value is genuinely unreadable use null and list it in "unreadable". Never invent a number.`;
+If a value is genuinely unreadable use null and list it in "unreadable". Never invent a number.
+
+ASME B16.9 centre-to-face, mm (LR elbows; TEE keyed on the RUN size):
+${TAKEOUT_TABLE}
+
+Use this table to verify every dimension you read. On these drawings the dimension printed
+between a fitting vertex and the adjacent weld equals the table value PLUS the pup length
+from the DETAIL note. If a dimension you read does not decompose that way, you have
+mis-read either the dimension or the fitting type — re-read the quadrant crop before answering.`;
 
 const META_PROMPT = `${COMMON}
 
@@ -65,9 +83,7 @@ CRITICAL RULES
 2. Tie-in coordinates are printed on the drawing. Derive INTERMEDIATE node coordinates
    (fitting vertices) from the running dimensions. A fitting node coordinate is the
    intersection of the two centrelines, NOT a weld point.
-3. Cross-check: the dimension from a fitting vertex to the adjacent weld equals the ASME B16.9
-   centre-to-face for that fitting PLUS any pup piece length given in a DETAIL. For DN900 (36
-   inch) LR elbows: 90 deg = 1372 mm, 45 deg = 565 mm.
+3. Cross-check every node against the B16.9 table above before you output it.
 4. "ref" holds the continuation drawing number for tie-in nodes, "" otherwise.
 5. Do NOT number welds and do NOT define spools. That is computed downstream.
 6. A reduced tee (e.g. 32X18) is ONE node with three edges: two collinear run edges at
@@ -79,9 +95,29 @@ CRITICAL RULES
    and name what is missing in "unreadable". An incomplete node list is useful;
    prose is not. Your entire reply must be the JSON object and nothing else.`;
 
+const REPAIR_PROMPT = `${COMMON}
+
+Below is a JSON extraction of this drawing together with the automated checks that FAILED.
+A failed check means a number was mis-read — the standards arithmetic does not lie.
+
+Re-read the drawing crops and return the SAME JSON structure, corrected. Keep every field
+that was already right. Change only what the failed checks point at. Common causes, in order
+of likelihood:
+  - a digit mis-read in a running dimension (6 vs 8, 1 vs 7, 3 vs 9)
+  - a fitting typed as elbow90 when the drawing shows elbow45, or vice versa
+  - a missing node: a fitting present on the drawing but absent from the node list
+  - a missing edge, especially the branch leg of a tee
+  - "pupLength" wrong, which shifts every take-out at once
+  - the MTO covers several sheets while the geometry is one sheet - if so set
+    meta.mtoCoversWholeLine true and leave the geometry alone
+
+Return the corrected object with the same keys as the input, plus "repairNotes": [string]
+saying what you changed and why. Nothing else.`;
+
 const PASSES = {
   meta: { prompt: META_PROMPT, maxTokens: 4000 },
   nodes: { prompt: NODES_PROMPT, maxTokens: 4000 },
+  repair: { prompt: REPAIR_PROMPT, maxTokens: 5000 },
 };
 
 /** Parse JSON, and if it was cut off mid-structure, close it and retry. */
@@ -116,7 +152,7 @@ export async function POST(req) {
       return Response.json({ error: "بدنه درخواست خوانده نشد؛ احتمالاً از سقف ۴.۵ مگابایت Vercel رد شده." }, { status: 413 });
     }
 
-    const { images, imageBase64, mediaType, apiKey, model, pass } = body || {};
+    const { images, imageBase64, mediaType, apiKey, model, pass, json, issues } = body || {};
     const cfg = PASSES[pass] || PASSES.meta;
 
     const list = Array.isArray(images) && images.length
@@ -144,6 +180,11 @@ export async function POST(req) {
       content.push({ type: "image", source: { type: "base64", media_type: im.mediaType || "image/jpeg", data: im.data } });
     });
     content.push({ type: "text", text: cfg.prompt });
+    if (pass === "repair") {
+      content.push({ type: "text", text:
+        `CURRENT EXTRACTION:\n${JSON.stringify(json)}\n\nFAILED CHECKS:\n` +
+        (issues || []).map((i) => `- ${i}`).join("\n") });
+    }
 
     const chosen = model || process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
@@ -156,6 +197,7 @@ export async function POST(req) {
         body: JSON.stringify({
           model: chosen,
           max_tokens: cfg.maxTokens,
+          temperature: 0,
           stream: true,
           messages: [
             { role: "user", content },
