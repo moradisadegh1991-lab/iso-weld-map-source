@@ -125,3 +125,10 @@ aside .note{margin:10px 12px}
 
 button.link{background:none;border:none;color:var(--cy);font:inherit;font-size:11px;
   cursor:pointer;padding:0 4px;text-decoration:underline}
+
+.canvas.empty{display:flex;align-items:center;justify-content:center;padding:32px;text-align:center}
+.canvas.empty .big{font-size:15px;margin-bottom:10px;color:var(--fld)}
+.canvas.empty p{max-width:480px;margin:0 auto 8px;line-height:1.9}
+code{font-family:var(--mono);font-size:10px;background:var(--surf);
+  border:1px solid var(--rule);border-radius:3px;padding:1px 4px;margin:0 2px}
+.err{white-space:pre-wrap;max-height:220px;overflow:auto}

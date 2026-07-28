@@ -60,12 +60,38 @@ CRITICAL RULES
    centre-to-face for that fitting PLUS any pup piece length given in a DETAIL. For DN900 (36
    inch) LR elbows: 90 deg = 1372 mm, 45 deg = 565 mm.
 4. "ref" holds the continuation drawing number for tie-in nodes, "" otherwise.
-5. Do NOT number welds and do NOT define spools. That is computed downstream.`;
+5. Do NOT number welds and do NOT define spools. That is computed downstream.
+6. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
+   vertices, still output every tie-in node whose coordinates are printed on the drawing,
+   and name what is missing in "unreadable". An incomplete node list is useful;
+   prose is not. Your entire reply must be the JSON object and nothing else.`;
 
 const PASSES = {
-  meta: { prompt: META_PROMPT, maxTokens: 3000 },
-  nodes: { prompt: NODES_PROMPT, maxTokens: 2000 },
+  meta: { prompt: META_PROMPT, maxTokens: 4000 },
+  nodes: { prompt: NODES_PROMPT, maxTokens: 4000 },
 };
+
+/** Parse JSON, and if it was cut off mid-structure, close it and retry. */
+function parseLoose(t) {
+  try { return JSON.parse(t); } catch { /* fall through */ }
+  let inStr = false, esc = false;
+  const stack = [];
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (esc) { esc = false; continue; }
+    if (ch === "\\") { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+  let s = t;
+  if (inStr) s = s.slice(0, s.lastIndexOf('"'));
+  s = s.replace(/,\s*$/, "");
+  s = s.replace(/,\s*"[^"]*"?\s*:?\s*[^,{}[\]]*$/, "");
+  for (let i = stack.length - 1; i >= 0; i--) s += stack[i] === "{" ? "}" : "]";
+  try { return JSON.parse(s); } catch { return null; }
+}
 
 export async function POST(req) {
   const started = Date.now();
@@ -118,7 +144,12 @@ export async function POST(req) {
           model: chosen,
           max_tokens: cfg.maxTokens,
           stream: true,
-          messages: [{ role: "user", content }],
+          messages: [
+            { role: "user", content },
+            // Prefilling the assistant turn with "{" makes prose physically
+            // impossible — the model can only continue the JSON object.
+            { role: "assistant", content: "{" },
+          ],
         }),
       });
     } catch (e) {
@@ -137,7 +168,7 @@ export async function POST(req) {
     // Collect the SSE stream into the full text.
     const reader = r.body.getReader();
     const dec = new TextDecoder();
-    let buf = "", text = "", usage = null;
+    let buf = "", text = "", usage = null, stopReason = null;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -151,25 +182,47 @@ export async function POST(req) {
         let ev;
         try { ev = JSON.parse(payload); } catch { continue; }
         if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") text += ev.delta.text;
-        if (ev.type === "message_delta" && ev.usage) usage = { ...(usage || {}), ...ev.usage };
+        if (ev.type === "message_delta") {
+          if (ev.usage) usage = { ...(usage || {}), ...ev.usage };
+          if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
+        }
         if (ev.type === "message_start" && ev.message?.usage) usage = { ...(usage || {}), ...ev.message.usage };
-        if (ev.type === "error") return Response.json({ error: "Anthropic stream error: " + JSON.stringify(ev.error).slice(0, 250) }, { status: 502 });
+        if (ev.type === "error") {
+          return Response.json({ error: "Anthropic stream error: " + JSON.stringify(ev.error).slice(0, 250) }, { status: 502 });
+        }
       }
     }
 
-    const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const s = cleaned.indexOf("{"), e = cleaned.lastIndexOf("}");
-    if (s < 0 || e < 0) {
-      return Response.json({ error: `پاسخ مدل در پاس «${pass || "meta"}» JSON نبود.`, raw: cleaned.slice(0, 400) }, { status: 502 });
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(cleaned.slice(s, e + 1));
-    } catch (err) {
-      return Response.json({ error: `JSON پاس «${pass || "meta"}» قابل تجزیه نبود: ${err.message}`, raw: cleaned.slice(0, 400) }, { status: 502 });
+    const label = pass || "meta";
+
+    if (!text.trim()) {
+      return Response.json({
+        error: `پاس «${label}»: مدل هیچ متنی برنگرداند (stop_reason: ${stopReason || "نامشخص"}).`,
+      }, { status: 502 });
     }
 
-    return Response.json({ data: parsed, usage, model: chosen, ms: Date.now() - started, pass: pass || "meta" });
+    // The assistant turn was prefilled with "{", so put it back.
+    let cleaned = ("{" + text).replace(/```json/gi, "").replace(/```/g, "").trim();
+    const s = cleaned.indexOf("{");
+    const e = cleaned.lastIndexOf("}");
+    if (e > s) cleaned = cleaned.slice(s, e + 1);
+    else cleaned = cleaned.slice(s);
+
+    const parsed = parseLoose(cleaned);
+    if (!parsed) {
+      return Response.json({
+        error: `پاس «${label}»: خروجی مدل JSON معتبری نبود` +
+          (stopReason === "max_tokens" ? " و به سقف توکن خورد (بریده شد)." : `. stop_reason: ${stopReason || "نامشخص"}.`),
+        raw: cleaned.slice(0, 800),
+        stopReason,
+      }, { status: 502 });
+    }
+
+    return Response.json({
+      data: parsed, usage, model: chosen, ms: Date.now() - started,
+      pass: label, stopReason,
+      truncated: stopReason === "max_tokens",
+    });
   } catch (err) {
     return Response.json({ error: "خطای سرور: " + String(err && err.message ? err.message : err) }, { status: 500 });
   }

@@ -102,15 +102,16 @@ export default function Page() {
 
       if (!resp.ok || !j) {
         const snippet = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
-        if ((resp.status === 504 || resp.status === 502) && attempt === 0) {
+        if ((resp.status === 504 || resp.status === 502) && attempt === 0 && !(j && j.raw)) {
           return callPass(pass, images, 1);
         }
         throw new Error(
-          (j && j.error) ||
-          `پاس «${pass}» \u2014 پاسخ ${resp.status}: «${snippet || "خالی"}»` +
-          (resp.status === 504
-            ? " \u2014 تابع تایم‌اوت شد. اگر روی پلن Hobby هستید سقف ۶۰ ثانیه است؛ مدل سریع‌تری انتخاب کنید (مثلاً claude-haiku-4-5-20251001) یا تصویر را کوچک‌تر بدهید."
-            : "")
+          ((j && j.error) ||
+            `پاس «${pass}» \u2014 پاسخ ${resp.status}: «${snippet || "خالی"}»` +
+            (resp.status === 504
+              ? " \u2014 تابع تایم‌اوت شد. روی پلن Hobby سقف ۶۰ ثانیه است؛ دکمه «مدل سریع» را بزنید."
+              : "")) +
+          (j && j.raw ? `\n\nخروجی خام مدل:\n${j.raw}` : "")
         );
       }
       return j;
@@ -132,24 +133,39 @@ export default function Page() {
       setNote(`${w}×${h} px → ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
 
       setBusy("خواندن نقشه — دو پاس موازی…");
-      const [a, b] = await Promise.all([
+      const [ra, rb] = await Promise.allSettled([
         callPass("meta", images),
         callPass("nodes", images),
       ]);
 
+      if (ra.status === "rejected" && rb.status === "rejected") {
+        throw new Error(ra.reason.message);
+      }
+      const a = ra.status === "fulfilled" ? ra.value : null;
+      const b = rb.status === "fulfilled" ? rb.value : null;
+
       const merged = {
-        meta: { ...(a.data.meta || {}), nps: b.data.nps ?? a.data.meta?.nps },
-        bom: a.data.bom || [],
-        nodes: b.data.nodes || [],
-        notes: a.data.notes || [],
-        unreadable: [...(a.data.unreadable || []), ...(b.data.unreadable || [])],
+        meta: { ...((a && a.data.meta) || {}), nps: (b && b.data.nps) ?? (a && a.data.meta?.nps) },
+        bom: (a && a.data.bom) || [],
+        nodes: (b && b.data.nodes) || [],
+        notes: (a && a.data.notes) || [],
+        unreadable: [...((a && a.data.unreadable) || []), ...((b && b.data.unreadable) || [])],
       };
 
       setData(merged);
       setEditing(JSON.stringify(merged, null, 2));
-      const tok = (x) => (x.usage ? `${x.usage.input_tokens || "?"}/${x.usage.output_tokens || "?"}` : "?");
-      setNote(`${w}×${h} px · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ${a.model} · ` +
-        `meta ${(a.ms / 1000).toFixed(1)}s ${tok(a)} · nodes ${(b.ms / 1000).toFixed(1)}s ${tok(b)}`);
+
+      // A half-failure is recoverable: open the editor on the missing half.
+      if (!a || !b) {
+        setTab("json");
+        setErr((!a ? ra.reason.message : rb.reason.message) +
+          `\n\nنیمه دیگر استخراج شد. ${!b ? "گره‌ها" : "title block و BOM"} را در همین تب دستی وارد و «اعمال» بزنید.`);
+      }
+
+      const tok = (x) => (x && x.usage ? `${x.usage.input_tokens || "?"}/${x.usage.output_tokens || "?"}` : "?");
+      setNote(`${w}×${h} px · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ${(a || b).model} · ` +
+        `meta ${a ? (a.ms / 1000).toFixed(1) + "s " + tok(a) : "ناموفق"} · ` +
+        `nodes ${b ? (b.ms / 1000).toFixed(1) + "s " + tok(b) : "ناموفق"}`);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -228,11 +244,23 @@ export default function Page() {
         </section>
       )}
 
-      {model?.error && <div className="err">{model.error}</div>}
-
-      {model && !model.error && (
+      {data && (
         <section className="stage">
-          <div className="canvas">
+          {model.error ? (
+            <div className="canvas empty">
+              <div>
+                <div className="big">هندسه ناقص است</div>
+                <p className="muted sm">{model.error}</p>
+                <p className="muted sm">
+                  در تب JSON، آرایه <code>nodes</code> را کامل کنید: هر گره یک <code>type</code>
+                  (tie-in / elbow90 / elbow45 / tee / reducer / flange-wn / valve-bw) و مختصات
+                  <code>E</code>، <code>N</code>، <code>EL</code> بر حسب میلی‌متر می‌خواهد،
+                  به ترتیب مسیر از یک سر خط تا سر دیگر.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="canvas">
             <Viewer3D model={model} selected={selected} onSelect={setSelected}
               exploded={exploded} showTags={showTags} showDims={showDims} view={view} />
             <div className="ctl">
@@ -255,6 +283,7 @@ export default function Page() {
             </div>
             <div className="hint">بکشید تا بچرخد · اسکرول یا پینچ زوم · روی حلقه جوش بزنید</div>
           </div>
+          )}
 
           <aside>
             <nav>
@@ -264,7 +293,7 @@ export default function Page() {
                 ))}
             </nav>
 
-            {tab === "weld" && (
+            {tab === "weld" && !model.error && (
               <div className="pane">
                 <div className="tot mono">
                   {model.totals.welds} جوش · {model.spoolIds.length} اسپول ·
@@ -296,7 +325,7 @@ export default function Page() {
               </div>
             )}
 
-            {tab === "check" && (
+            {tab === "check" && !model.error && (
               <div className="pane">
                 {model.checks.map((c, i) => (
                   <div key={i} className={"check " + c.status}>
@@ -352,7 +381,7 @@ export default function Page() {
               </div>
             )}
 
-            {sel && (
+            {sel && !model.error && (
               <div className="card">
                 <b className="mono">{sel.no}</b>
                 <span className="mono sm">{sel.role} · {sel.size} · {sel.kind}</span>
