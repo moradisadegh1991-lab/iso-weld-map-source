@@ -5,12 +5,72 @@ import { buildModel, registerCsv } from "../lib/engine";
 import { DEMO } from "../lib/demo";
 import { TYPE_FA } from "../lib/standards";
 
+/* ── client-side image prep ────────────────────────────────────
+   Vercel functions cap the request body at ~4.5 MB and the vision
+   model downsamples anything past ~1568 px on the long edge.
+   So: send the full sheet for routing plus overlapping quadrant
+   crops for the small text, each already scaled to a useful size. */
+
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error("تصویر باز نشد. فرمت JPG یا PNG باشد."));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function renderCrop(img, sx, sy, sw, sh, max, quality) {
+  const scale = Math.min(1, max / Math.max(sw, sh));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(sw * scale));
+  c.height = Math.max(1, Math.round(sh * scale));
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", quality).split(",")[1];
+}
+
+function tiles(img, max, quality) {
+  const W = img.naturalWidth || img.width;
+  const H = img.naturalHeight || img.height;
+  const ox = W * 0.07, oy = H * 0.07;
+  const defs = [
+    ["FULL SHEET", 0, 0, W, H],
+    ["TOP-LEFT QUADRANT", 0, 0, W / 2 + ox, H / 2 + oy],
+    ["TOP-RIGHT QUADRANT", W / 2 - ox, 0, W / 2 + ox, H / 2 + oy],
+    ["BOTTOM-LEFT QUADRANT", 0, H / 2 - oy, W / 2 + ox, H / 2 + oy],
+    ["BOTTOM-RIGHT QUADRANT", W / 2 - ox, H / 2 - oy, W / 2 + ox, H / 2 + oy],
+  ];
+  return defs.map(([label, sx, sy, sw, sh]) => ({
+    label, mediaType: "image/jpeg",
+    data: renderCrop(img, sx, sy, Math.min(sw, W - sx), Math.min(sh, H - sy), max, quality),
+  }));
+}
+
+const LIMIT = 3_400_000; // keep well under the 4.5 MB body cap
+
+async function prepare(file) {
+  const img = await loadImage(file);
+  let out = tiles(img, 1500, 0.82);
+  let bytes = out.reduce((a, i) => a + i.data.length, 0);
+  if (bytes > LIMIT) { out = tiles(img, 1250, 0.68); bytes = out.reduce((a, i) => a + i.data.length, 0); }
+  if (bytes > LIMIT) { out = tiles(img, 1000, 0.55); bytes = out.reduce((a, i) => a + i.data.length, 0); }
+  if (bytes > LIMIT) { out = out.slice(0, 3); bytes = out.reduce((a, i) => a + i.data.length, 0); }
+  return { images: out, bytes, w: img.naturalWidth, h: img.naturalHeight };
+}
+
 export default function Page() {
   const [data, setData] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState("");
   const [err, setErr] = useState(null);
+  const [note, setNote] = useState(null);
   const [apiKey, setApiKey] = useState("");
+  const [modelName, setModelName] = useState("");
   const [tab, setTab] = useState("weld");
   const [selected, setSelected] = useState(null);
   const [exploded, setExploded] = useState(false);
@@ -25,41 +85,55 @@ export default function Page() {
 
   async function onFile(f) {
     if (!f) return;
-    setErr(null); setBusy(true); setSelected(null);
+    setErr(null); setNote(null); setSelected(null);
     try {
-      const b64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(String(r.result).split(",")[1]);
-        r.onerror = () => rej(new Error("خواندن فایل ناموفق بود"));
-        r.readAsDataURL(f);
-      });
+      setBusy("آماده‌سازی تصویر…");
       setPreview(URL.createObjectURL(f));
+      const { images, bytes, w, h } = await prepare(f);
+      setNote(`${w}×${h} px → ${images.length} تصویر · ${(bytes / 1e6).toFixed(2)} MB ارسال شد`);
+
+      setBusy("در حال خواندن نقشه…");
       const resp = await fetch("/api/extract", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ imageBase64: b64, mediaType: f.type || "image/jpeg", apiKey: apiKey || undefined }),
+        body: JSON.stringify({ images, apiKey: apiKey || undefined, model: modelName || undefined }),
       });
-      const j = await resp.json();
-      if (!resp.ok) throw new Error(j.error || "استخراج ناموفق بود");
+
+      // The function can fail at platform level and return HTML/plain text,
+      // so never call resp.json() blind.
+      const raw = await resp.text();
+      let j = null;
+      try { j = JSON.parse(raw); } catch { /* not JSON */ }
+
+      if (!resp.ok || !j) {
+        const snippet = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 220);
+        throw new Error(
+          j?.error ||
+          `پاسخ ${resp.status} از سرور، محتوایش JSON نبود: «${snippet || "خالی"}»` +
+          (resp.status === 413 ? " \u2014 فایل بیش از حد بزرگ است." : "") +
+          (resp.status === 504 ? " \u2014 تابع تایم‌اوت شد؛ تصویر کوچک‌تری بدهید." : "")
+        );
+      }
+
       setData(j.data);
       setEditing(JSON.stringify(j.data, null, 2));
+      if (j.usage) setNote((n) => `${n} · ${j.model} · ${j.usage.input_tokens} in / ${j.usage.output_tokens} out`);
     } catch (e) {
       setErr(e.message);
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   }
 
   function loadDemo() {
-    setErr(null); setPreview(null); setSelected(null);
+    setErr(null); setNote(null); setPreview(null); setSelected(null);
     setData(DEMO);
     setEditing(JSON.stringify(DEMO, null, 2));
   }
 
   function applyEdit() {
     try {
-      const p = JSON.parse(editing);
-      setData(p); setErr(null); setSelected(null);
+      setData(JSON.parse(editing)); setErr(null); setSelected(null);
     } catch (e) { setErr("JSON نامعتبر: " + e.message); }
   }
 
@@ -77,9 +151,7 @@ export default function Page() {
         <span className="brand">ISO&nbsp;WELD&nbsp;MAP</span>
         <span className="sub">آیزومتریک ← مدل سه‌بعدی ← رجیستر جوش</span>
         <div className="grow" />
-        {data?.meta?.drawingNo && (
-          <span className="chip mono">{data.meta.drawingNo} · REV {data.meta.rev || "?"}</span>
-        )}
+        {data?.meta?.drawingNo && <span className="chip mono">{data.meta.drawingNo} · REV {data.meta.rev || "?"}</span>}
         {data?.meta?.pipingClass && (
           <span className="chip mono cy">{data.meta.pipingClass} · {data.meta.nps}&quot; · {data.meta.schedule}</span>
         )}
@@ -90,24 +162,31 @@ export default function Page() {
           <div className="drop"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer.files?.[0]); }}
-            onClick={() => fileRef.current?.click()}>
-            <div className="big">{busy ? "در حال خواندن نقشه…" : "نقشه ایزومتریک را اینجا رها کنید"}</div>
-            <div className="muted">JPG یا PNG · حداقل ۲۰۰ DPI برای خوانده‌شدن BOM</div>
+            onClick={() => !busy && fileRef.current?.click()}>
+            <div className="big">{busy || "نقشه ایزومتریک را اینجا رها کنید"}</div>
+            <div className="muted">
+              JPG یا PNG · هرچه رزولوشن بالاتر بهتر — تصویر در مرورگر شما به چند کاشی تقسیم و فشرده می‌شود
+            </div>
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden
               onChange={(e) => onFile(e.target.files?.[0])} />
           </div>
 
           <div className="key">
-            <label className="muted">کلید Anthropic API (اختیاری — اگر روی Vercel متغیر محیطی گذاشته‌اید لازم نیست)</label>
+            <label className="muted">کلید Anthropic API (اگر روی Vercel متغیر محیطی گذاشته‌اید خالی بگذارید)</label>
             <input type="password" placeholder="sk-ant-…" value={apiKey}
               onChange={(e) => setApiKey(e.target.value)} className="mono" />
+            <label className="muted">نام مدل (اختیاری — پیش‌فرض claude-sonnet-5)</label>
+            <input type="text" placeholder="claude-sonnet-5" value={modelName}
+              onChange={(e) => setModelName(e.target.value)} className="mono" />
             <button className="ghost" onClick={loadDemo}>نمونه بدون کلید: SW 265022A</button>
           </div>
 
+          {note && <div className="note mono">{note}</div>}
           {err && <div className="err">{err}</div>}
 
           <ol className="how">
-            <li>تصویر خوانده می‌شود و فقط <b>داده خام</b> استخراج می‌گردد: title block، BOM، و مختصات گره‌ها.</li>
+            <li>تصویر در مرورگر به <b>یک نمای کامل + چهار کاشی هم‌پوشان</b> تقسیم می‌شود تا متن ریز BOM خوانده شود و حجم زیر سقف Vercel بماند.</li>
+            <li>مدل فقط <b>داده خام</b> برمی‌گرداند: title block، BOM، و مختصات گره‌ها.</li>
             <li>موتور قطعی، take-out استاندارد B16.9 را اعمال و <b>سرجوش‌گذاری</b> را تولید می‌کند — نه مدل زبانی.</li>
             <li>سه چک متقاطع اجرا می‌شود؛ اگر نخواند، هشدار می‌بینید و می‌توانید JSON را اصلاح کنید.</li>
           </ol>
@@ -176,7 +255,7 @@ export default function Page() {
                 </table>
                 <button className="ghost" onClick={download}>دانلود Weld Register (CSV)</button>
                 <p className="muted sm">
-                  ستون‌های WPS No، Welder ID، NDT Report و Status در فایل CSV خالی گذاشته شده تا QC پر کند.
+                  ستون‌های WPS No، Welder ID، NDT Report و Status در CSV خالی گذاشته شده تا QC پر کند.
                   درصد NDT پیش‌فرض بر مبنای ASME B31.3 §341.4.1 برای Normal Fluid Service است؛ Piping Class پروژه حاکم است.
                 </p>
               </div>
@@ -191,14 +270,11 @@ export default function Page() {
                   </div>
                 ))}
                 <p className="muted sm">
-                  «محاسبه» از مختصات گره‌ها و take-out استاندارد B16.9 به‌دست می‌آید و «نقشه» از BOM و title block.
-                  اگر اختلاف زیاد بود یعنی یک گره یا یک عدد اشتباه خوانده شده — در تب JSON اصلاحش کنید.
+                  «محاسبه» از مختصات گره‌ها و take-out استاندارد B16.9 می‌آید و «نقشه» از BOM و title block.
+                  اختلاف زیاد یعنی یک گره یا یک عدد اشتباه خوانده شده — در تب JSON اصلاحش کنید.
                 </p>
                 {data.unreadable?.length > 0 && (
-                  <div className="check warn">
-                    <b>! خوانده نشد</b>
-                    <span className="sm">{data.unreadable.join(" · ")}</span>
-                  </div>
+                  <div className="check warn"><b>! خوانده نشد</b><span className="sm">{data.unreadable.join(" · ")}</span></div>
                 )}
               </div>
             )}
@@ -212,8 +288,8 @@ export default function Page() {
                 </tbody></table>
                 <h4>گره‌ها</h4>
                 <table><thead><tr><th>ID</th><th>نوع</th><th>E</th><th>N</th><th>EL</th></tr></thead>
-                  <tbody>{(data.nodes || []).map((n) => (
-                    <tr key={n.id}><td className="mono">{n.id}</td><td className="sm">{TYPE_FA[n.type] || n.type}</td>
+                  <tbody>{(data.nodes || []).map((n, i) => (
+                    <tr key={n.id || i}><td className="mono">{n.id}</td><td className="sm">{TYPE_FA[n.type] || n.type}</td>
                       <td className="mono sm">{n.E}</td><td className="mono sm">{n.N}</td><td className="mono sm">{n.EL}</td></tr>
                   ))}</tbody></table>
               </div>
@@ -235,7 +311,7 @@ export default function Page() {
                 <textarea className="mono" value={editing} onChange={(e) => setEditing(e.target.value)} spellCheck={false} />
                 <div className="row">
                   <button className="ghost" onClick={applyEdit}>اعمال</button>
-                  <button className="ghost" onClick={() => { setData(null); setPreview(null); setErr(null); }}>نقشه جدید</button>
+                  <button className="ghost" onClick={() => { setData(null); setPreview(null); setErr(null); setNote(null); }}>نقشه جدید</button>
                 </div>
                 {preview && <img src={preview} alt="نقشه آپلودشده" className="thumb" />}
               </div>
@@ -249,6 +325,7 @@ export default function Page() {
                 <span className="mono sm">{sel.ndt} · پیش‌گرم ۱۰°C min · P1↔P1</span>
               </div>
             )}
+            {note && <div className="note mono">{note}</div>}
             {err && <div className="err">{err}</div>}
           </aside>
         </section>

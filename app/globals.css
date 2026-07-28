@@ -117,3 +117,8 @@ textarea:focus{border-color:var(--cy)}
   .canvas{min-height:340px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.note{margin:0;padding:8px 11px;border:1px solid var(--rule);border-inline-start:2px solid var(--cy);
+  border-radius:4px;color:var(--dim);font-size:11px;line-height:1.7;word-break:break-word}
+aside .note{margin:10px 12px}
+.err{word-break:break-word}
