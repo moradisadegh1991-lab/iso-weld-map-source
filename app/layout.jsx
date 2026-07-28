@@ -1,0 +1,14 @@
+import "./globals.css";
+
+export const metadata = {
+  title: "ISO Weld Map — آیزومتریک به رجیستر جوش",
+  description: "آپلود آیزومتریک، مدل سه‌بعدی، سرجوش‌گذاری بر مبنای ASME B16.9 و B31.3",
+};
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="fa" dir="rtl">
+      <body>{children}</body>
+    </html>
+  );
+}
