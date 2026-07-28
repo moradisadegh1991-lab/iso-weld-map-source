@@ -111,6 +111,17 @@ of likelihood:
   - the MTO covers several sheets while the geometry is one sheet - if so set
     meta.mtoCoversWholeLine true and leave the geometry alone
 
+HARD RULES FOR THIS PASS
+  - NEVER delete a node or an edge unless a failed check explicitly names it as spurious.
+    Deleting geometry to make a check pass is a failure, not a fix. Prefer correcting a
+    coordinate, a type or a size over removing anything.
+  - The result must keep AT LEAST two tie-in nodes and at least as many nodes as the input,
+    unless a check literally says a node is duplicated.
+  - "nps" must be one of the diameters listed in the MTO DIAM column. If your previous answer
+    disagrees with the MTO, the MTO wins.
+  - If you cannot find the mis-read number, return the input UNCHANGED with
+    repairNotes ["no change - could not identify the error"]. That is a valid, correct answer.
+
 Return the corrected object with the same keys as the input, plus "repairNotes": [string]
 saying what you changed and why. Nothing else.`;
 
@@ -238,10 +249,12 @@ export async function POST(req) {
         try { ev = JSON.parse(payload); } catch { continue; }
         if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") text += ev.delta.text;
         if (ev.type === "message_delta") {
-          if (ev.usage) usage = { ...(usage || {}), ...ev.usage };
+          if (ev.usage?.output_tokens != null) usage = { ...(usage || {}), output_tokens: ev.usage.output_tokens };
           if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
         }
-        if (ev.type === "message_start" && ev.message?.usage) usage = { ...(usage || {}), ...ev.message.usage };
+        if (ev.type === "message_start" && ev.message?.usage?.input_tokens != null) {
+          usage = { ...(usage || {}), input_tokens: ev.message.usage.input_tokens };
+        }
         if (ev.type === "error") {
           return Response.json({ error: "Anthropic stream error: " + JSON.stringify(ev.error).slice(0, 250) }, { status: 502 });
         }

@@ -63,6 +63,14 @@ function tiles(img, max, quality, grid) {
   }));
 }
 
+const MODELS = [
+  { id: "claude-opus-5", label: "Opus 5", note: "دقیق‌ترین — برای نقشه‌های شلوغ" },
+  { id: "claude-sonnet-5", label: "Sonnet 5", note: "پیش‌فرض — تعادل دقت و سرعت" },
+  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", note: "سریع — فقط برای نقشه‌های ساده" },
+];
+const DEFAULT_MODEL = "claude-sonnet-5";
+const DEFAULT_REPAIR = "claude-opus-5";   // repair output is small, so escalate freely
+
 const LIMIT = 3_400_000; // keep well under the 4.5 MB body cap
 
 async function prepare(file) {
@@ -75,8 +83,39 @@ async function prepare(file) {
   if (sum(out) > LIMIT) out = tiles(img, 1150, 0.58, grid);
   if (sum(out) > LIMIT && grid === 3) out = tiles(img, 1400, 0.75, 2);
   if (sum(out) > LIMIT) out = out.slice(0, 3);
-  return { images: out, bytes: sum(out), w: img.naturalWidth, h: img.naturalHeight, grid };
+  return { images: out, bytes: sum(out), w: img.naturalWidth, h: img.naturalHeight, grid, long };
 }
+
+/* Cheap deterministic guards that no model can talk its way past. */
+function sanitize(d) {
+  const notes = [];
+  d.meta = d.meta || {};
+  const bomSizes = [...new Set((d.bom || []).map((b) => Number(b.diam)).filter((n) => n > 0))]
+    .sort((a, b) => b - a);
+  if (bomSizes.length) {
+    const n = Number(d.meta.nps);
+    if (!n || !bomSizes.includes(n)) {
+      notes.push(`nps از ${n || "خالی"} به ${bomSizes[0]}" اصلاح شد (ستون DIAM در MTO)`);
+      d.meta.nps = bomSizes[0];
+    }
+    (d.edges || []).forEach((e) => { if (!bomSizes.includes(Number(e.nps))) e.nps = d.meta.nps; });
+  }
+  const before = (d.nodes || []).length;
+  const seen = new Set();
+  d.nodes = (d.nodes || []).filter((n) => {
+    if (![n.E, n.N, n.EL].every((v) => typeof v === "number" && isFinite(v))) return false;
+    const k = `${n.E}|${n.N}|${n.EL}`;
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+  if (d.nodes.length !== before) notes.push(`${before - d.nodes.length} گره تکراری یا بی‌مختصات حذف شد`);
+  const ids = new Set(d.nodes.map((n) => n.id));
+  if (Array.isArray(d.edges)) d.edges = d.edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+  return notes;
+}
+
+/* error counts far more than a warning — a repair that breaks the model is never an improvement */
+const score = (m) => (m.error ? 1000 : 0) + ((m.checks || []).filter((c) => c.status === "warn").length);
 
 export default function Page() {
   const [data, setData] = useState(null);
@@ -85,7 +124,8 @@ export default function Page() {
   const [err, setErr] = useState(null);
   const [note, setNote] = useState(null);
   const [apiKey, setApiKey] = useState("");
-  const [modelName, setModelName] = useState("");
+  const [modelName, setModelName] = useState(DEFAULT_MODEL);
+  const [repairModel, setRepairModel] = useState(DEFAULT_REPAIR);
   const [tab, setTab] = useState("weld");
   const [selected, setSelected] = useState(null);
   const [exploded, setExploded] = useState(false);
@@ -104,7 +144,7 @@ export default function Page() {
   /* One serverless invocation per pass. Passes run in parallel so total wall
      time is the slower of the two, not their sum — that is what keeps each
      invocation inside Vercel's function duration limit. */
-  async function callPass(pass, images, attempt = 0, extra = {}) {
+  async function callPass(pass, images, attempt = 0, extra = {}, overrideModel) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 115000);
     try {
@@ -112,7 +152,8 @@ export default function Page() {
         method: "POST",
         headers: { "content-type": "application/json" },
         signal: ctrl.signal,
-        body: JSON.stringify({ pass, images, ...extra, apiKey: apiKey || undefined, model: modelName || undefined }),
+        body: JSON.stringify({ pass, images, ...extra, apiKey: apiKey || undefined,
+          model: overrideModel || modelName || undefined }),
       });
       const raw = await resp.text();
       let j = null;
@@ -121,7 +162,7 @@ export default function Page() {
       if (!resp.ok || !j) {
         const snippet = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
         if ((resp.status === 504 || resp.status === 502) && attempt === 0 && !(j && j.raw)) {
-          return callPass(pass, images, 1, extra);
+          return callPass(pass, images, 1, extra, overrideModel);
         }
         throw new Error(
           ((j && j.error) ||
@@ -143,22 +184,34 @@ export default function Page() {
 
   async function repair(base, images) {
     const m = buildModel(base);
-    const issues = (m.error ? [m.error] : (m.checks || []))
-      .filter((c) => (typeof c === "string" ? true : c.status === "warn"))
-      .map((c) => (typeof c === "string" ? c : `${c.label}: ${c.detail}`));
+    const issues = m.error
+      ? [m.error]
+      : (m.checks || []).filter((c) => c.status === "warn").map((c) => `${c.label}: ${c.detail}`);
     if (!issues.length) return { data: base, ran: false };
-    setBusy("چک‌ها نخواندند — پاس اصلاح…");
+
+    setBusy(`چک‌ها نخواندند — پاس اصلاح با ${MODELS.find((x) => x.id === repairModel)?.label || repairModel}…`);
     try {
-      const r = await callPass("repair", images, 0, { json: base, issues });
+      const r = await callPass("repair", images, 0, { json: base, issues }, repairModel);
       const fixed = { ...base, ...r.data };
+      sanitize(fixed);
       const after = buildModel(fixed);
-      const worse = (after.checks || []).filter((c) => c.status === "warn").length >
-        (m.checks || []).filter((c) => c.status === "warn").length;
-      return worse
-        ? { data: base, ran: true, kept: true }
-        : { data: fixed, ran: true, notes: r.data.repairNotes || [] };
-    } catch {
-      return { data: base, ran: true, failed: true };
+
+      // Accept ONLY a strict improvement that keeps the geometry intact.
+      // The old guard read an empty `checks` array on a broken model as "zero
+      // warnings" and happily accepted a repair that had deleted the route.
+      const lostGeometry = (fixed.nodes || []).length < (base.nodes || []).length;
+      const tooFew = (fixed.nodes || []).length < 2;
+      const better = score(after) < score(m);
+
+      if (tooFew || lostGeometry || !better) {
+        return { data: base, ran: true, kept: true,
+          why: tooFew ? "نتیجه کمتر از دو گره داشت"
+            : lostGeometry ? "پاس اصلاح گره حذف کرده بود"
+              : "چک‌ها بهتر نشدند" };
+      }
+      return { data: fixed, ran: true, notes: r.data.repairNotes || [] };
+    } catch (e) {
+      return { data: base, ran: true, failed: true, why: e.message };
     }
   }
 
@@ -168,7 +221,7 @@ export default function Page() {
     try {
       setBusy("آماده‌سازی تصویر…");
       setPreview(URL.createObjectURL(f));
-      const { images, bytes, w, h, grid } = await prepare(f);
+      const { images, bytes, w, h, grid, long } = await prepare(f);
       setNote(`${w}×${h} px → شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
 
       setBusy("خواندن نقشه — دو پاس موازی…");
@@ -191,8 +244,10 @@ export default function Page() {
         unreadable: [...((a && a.data.unreadable) || []), ...((b && b.data.unreadable) || [])],
       };
 
+      const fixes = sanitize(merged);
       let final = merged, rep = { ran: false };
       if (a && b) { rep = await repair(merged, images); final = rep.data; }
+      sanitize(final);
 
       setData(final);
       setEditing(JSON.stringify(final, null, 2));
@@ -208,11 +263,15 @@ export default function Page() {
       setNote(`${w}×${h} px · شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ` +
         `${(a || b).model} · meta ${a ? (a.ms / 1000).toFixed(1) + "s " + tok(a) : "ناموفق"} · ` +
         `nodes ${b ? (b.ms / 1000).toFixed(1) + "s " + tok(b) : "ناموفق"}` +
+        (fixes.length ? ` · اصلاح خودکار: ${fixes.join(" · ")}` : "") +
         (rep.ran
-          ? rep.failed ? " · پاس اصلاح ناموفق"
-            : rep.kept ? " · پاس اصلاح اجرا شد ولی نتیجه بهتر نبود؛ نسخه اول نگه داشته شد"
+          ? rep.failed ? ` · پاس اصلاح ناموفق (${rep.why || "?"})`
+            : rep.kept ? ` · پاس اصلاح رد شد (${rep.why}) — نسخه اول نگه داشته شد`
               : ` · پاس اصلاح اعمال شد${rep.notes?.length ? `: ${rep.notes.join(" ")}` : ""}`
           : " · همه چک‌ها پاس"));
+      if (long < 2200) {
+        setErr(`رزولوشن منبع ${w}×${h} px است. برای خواندن مطمئن BOM و ابعاد ریز، ضلع بلند حداقل ۲۵۰۰ px لازم است — ترجیحاً اسکن ۳۰۰ DPI از PDF اصلی. نتیجه فعلی را حتماً در تب JSON بازبینی کنید.`);
+      }
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -270,12 +329,28 @@ export default function Page() {
             <label className="muted">کلید Anthropic API (اگر روی Vercel متغیر محیطی گذاشته‌اید خالی بگذارید)</label>
             <input type="password" placeholder="sk-ant-…" value={apiKey}
               onChange={(e) => setApiKey(e.target.value)} className="mono" />
+            <label className="muted">مدل استخراج</label>
+            <div className="models">
+              {MODELS.map((m) => (
+                <button key={m.id} className={modelName === m.id ? "on" : ""}
+                  onClick={() => setModelName(m.id)}>
+                  <b className="mono">{m.label}</b>
+                  <span>{m.note}</span>
+                </button>
+              ))}
+            </div>
             <label className="muted">
-              نام مدل (پیش‌فرض claude-sonnet-5) — اگر تایم‌اوت گرفتید
-              <button className="link" onClick={() => setModelName("claude-haiku-4-5-20251001")}>مدل سریع</button>
+              مدل پاس اصلاح — فقط وقتی چک‌ها نخوانند اجرا می‌شود؛ خروجی‌اش کوچک است
+              پس ارتقا به مدل قوی‌تر تقریباً رایگان است
             </label>
-            <input type="text" placeholder="claude-sonnet-5" value={modelName}
-              onChange={(e) => setModelName(e.target.value)} className="mono" />
+            <div className="models">
+              {MODELS.map((m) => (
+                <button key={m.id} className={repairModel === m.id ? "on" : ""}
+                  onClick={() => setRepairModel(m.id)}>
+                  <b className="mono">{m.label}</b>
+                </button>
+              ))}
+            </div>
             <button className="ghost" onClick={loadDemo}>نمونه بدون کلید: SW 265022A</button>
           </div>
 
@@ -465,6 +540,13 @@ export default function Page() {
                   <button className="ghost" onClick={applyEdit}>اعمال</button>
                   <button className="ghost" onClick={() => { setData(null); setPreview(null); setErr(null); setNote(null); }}>نقشه جدید</button>
                 </div>
+                <p className="muted sm">
+                  اگر هندسه ناقص ماند، معمولاً سریع‌ترین راه این است که آرایه <code>nodes</code> را
+                  خودتان از روی نقشه بنویسید: هر گره یک <code>type</code> و مختصات
+                  <code>E</code>/<code>N</code>/<code>EL</code> بر حسب میلی‌متر، به ترتیب مسیر.
+                  مختصات دو سر خط روی نقشه چاپ شده‌اند؛ گره‌های میانی از ابعاد جاری درمی‌آیند.
+                  موتور بقیه را خودش می‌سازد.
+                </p>
                 {preview && <img src={preview} alt="نقشه آپلودشده" className="thumb" />}
               </div>
             )}

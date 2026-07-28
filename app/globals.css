@@ -141,3 +141,13 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .map2d-bar{display:flex;gap:8px;align-items:center;padding:8px 12px;
   border-top:1px solid var(--rule);background:rgba(7,11,14,.7)}
 .map2d-bar .ghost{align-self:auto}
+
+.models{display:flex;gap:6px;flex-wrap:wrap}
+.models button{flex:1;min-width:120px;display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  padding:8px 10px;border:1px solid var(--rule);border-radius:5px;background:transparent;
+  color:var(--dim);cursor:pointer;text-align:start;transition:border-color .15s,color .15s}
+.models button:hover{border-color:var(--cy)}
+.models button b{font-size:12px;color:var(--ink)}
+.models button span{font-size:10px;line-height:1.5}
+.models button.on{border-color:var(--ink);background:rgba(221,231,238,.07)}
+.models button.on b{color:var(--ink)}
