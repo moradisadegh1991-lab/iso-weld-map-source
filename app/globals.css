@@ -122,3 +122,6 @@ textarea:focus{border-color:var(--cy)}
   border-radius:4px;color:var(--dim);font-size:11px;line-height:1.7;word-break:break-word}
 aside .note{margin:10px 12px}
 .err{word-break:break-word}
+
+button.link{background:none;border:none;color:var(--cy);font:inherit;font-size:11px;
+  cursor:pointer;padding:0 4px;text-decoration:underline}

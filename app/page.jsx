@@ -83,6 +83,45 @@ export default function Page() {
   const model = useMemo(() => (data ? buildModel(data) : null), [data]);
   const sel = model && !model.error ? model.register.find((w) => w.no === selected) : null;
 
+  /* One serverless invocation per pass. Passes run in parallel so total wall
+     time is the slower of the two, not their sum — that is what keeps each
+     invocation inside Vercel's function duration limit. */
+  async function callPass(pass, images, attempt = 0) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 115000);
+    try {
+      const resp = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        signal: ctrl.signal,
+        body: JSON.stringify({ pass, images, apiKey: apiKey || undefined, model: modelName || undefined }),
+      });
+      const raw = await resp.text();
+      let j = null;
+      try { j = JSON.parse(raw); } catch { /* platform error page, not JSON */ }
+
+      if (!resp.ok || !j) {
+        const snippet = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+        if ((resp.status === 504 || resp.status === 502) && attempt === 0) {
+          return callPass(pass, images, 1);
+        }
+        throw new Error(
+          (j && j.error) ||
+          `پاس «${pass}» \u2014 پاسخ ${resp.status}: «${snippet || "خالی"}»` +
+          (resp.status === 504
+            ? " \u2014 تابع تایم‌اوت شد. اگر روی پلن Hobby هستید سقف ۶۰ ثانیه است؛ مدل سریع‌تری انتخاب کنید (مثلاً claude-haiku-4-5-20251001) یا تصویر را کوچک‌تر بدهید."
+            : "")
+        );
+      }
+      return j;
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error(`پاس «${pass}» بیش از ۱۱۵ ثانیه طول کشید و لغو شد.`);
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function onFile(f) {
     if (!f) return;
     setErr(null); setNote(null); setSelected(null);
@@ -90,34 +129,27 @@ export default function Page() {
       setBusy("آماده‌سازی تصویر…");
       setPreview(URL.createObjectURL(f));
       const { images, bytes, w, h } = await prepare(f);
-      setNote(`${w}×${h} px → ${images.length} تصویر · ${(bytes / 1e6).toFixed(2)} MB ارسال شد`);
+      setNote(`${w}×${h} px → ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
 
-      setBusy("در حال خواندن نقشه…");
-      const resp = await fetch("/api/extract", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ images, apiKey: apiKey || undefined, model: modelName || undefined }),
-      });
+      setBusy("خواندن نقشه — دو پاس موازی…");
+      const [a, b] = await Promise.all([
+        callPass("meta", images),
+        callPass("nodes", images),
+      ]);
 
-      // The function can fail at platform level and return HTML/plain text,
-      // so never call resp.json() blind.
-      const raw = await resp.text();
-      let j = null;
-      try { j = JSON.parse(raw); } catch { /* not JSON */ }
+      const merged = {
+        meta: { ...(a.data.meta || {}), nps: b.data.nps ?? a.data.meta?.nps },
+        bom: a.data.bom || [],
+        nodes: b.data.nodes || [],
+        notes: a.data.notes || [],
+        unreadable: [...(a.data.unreadable || []), ...(b.data.unreadable || [])],
+      };
 
-      if (!resp.ok || !j) {
-        const snippet = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 220);
-        throw new Error(
-          j?.error ||
-          `پاسخ ${resp.status} از سرور، محتوایش JSON نبود: «${snippet || "خالی"}»` +
-          (resp.status === 413 ? " \u2014 فایل بیش از حد بزرگ است." : "") +
-          (resp.status === 504 ? " \u2014 تابع تایم‌اوت شد؛ تصویر کوچک‌تری بدهید." : "")
-        );
-      }
-
-      setData(j.data);
-      setEditing(JSON.stringify(j.data, null, 2));
-      if (j.usage) setNote((n) => `${n} · ${j.model} · ${j.usage.input_tokens} in / ${j.usage.output_tokens} out`);
+      setData(merged);
+      setEditing(JSON.stringify(merged, null, 2));
+      const tok = (x) => (x.usage ? `${x.usage.input_tokens || "?"}/${x.usage.output_tokens || "?"}` : "?");
+      setNote(`${w}×${h} px · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ${a.model} · ` +
+        `meta ${(a.ms / 1000).toFixed(1)}s ${tok(a)} · nodes ${(b.ms / 1000).toFixed(1)}s ${tok(b)}`);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -175,7 +207,10 @@ export default function Page() {
             <label className="muted">کلید Anthropic API (اگر روی Vercel متغیر محیطی گذاشته‌اید خالی بگذارید)</label>
             <input type="password" placeholder="sk-ant-…" value={apiKey}
               onChange={(e) => setApiKey(e.target.value)} className="mono" />
-            <label className="muted">نام مدل (اختیاری — پیش‌فرض claude-sonnet-5)</label>
+            <label className="muted">
+              نام مدل (پیش‌فرض claude-sonnet-5) — اگر تایم‌اوت گرفتید
+              <button className="link" onClick={() => setModelName("claude-haiku-4-5-20251001")}>مدل سریع</button>
+            </label>
             <input type="text" placeholder="claude-sonnet-5" value={modelName}
               onChange={(e) => setModelName(e.target.value)} className="mono" />
             <button className="ghost" onClick={loadDemo}>نمونه بدون کلید: SW 265022A</button>
