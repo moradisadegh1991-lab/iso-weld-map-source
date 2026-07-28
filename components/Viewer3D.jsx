@@ -47,6 +47,7 @@ export default function Viewer3D({ model, selected, onSelect, exploded, showTags
     grid.position.set(center.x, box.min.y - span * 0.12, center.z);
     scene.add(grid);
 
+    const OD_MM = (n) => (model.odOf ? model.odOf(n) : model.diameter);
     const R = model.diameter / 2;
     const EXPLODE = span * 0.18;
 
@@ -80,15 +81,17 @@ export default function Viewer3D({ model, selected, onSelect, exploded, showTags
         metalness: 0.45,
         roughness: e.kind === "fitting" ? 0.42 : 0.58,
       });
-      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, e.kind === "fitting" ? 48 : 2, R, 36, false), mat));
+      const r = (e.nps ? OD_MM(e.nps) : model.diameter) / 2;
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, e.kind === "fitting" ? 48 : 2, r, 36, false), mat));
     });
 
     // weld rings
-    const ringGeo = new THREE.CylinderGeometry(R * 1.12, R * 1.12, Math.max(40, R * 0.09), 36, 1, true);
+    const ringGeo = (rr) => new THREE.CylinderGeometry(rr * 1.12, rr * 1.12, Math.max(40, rr * 0.09), 36, 1, true);
     const rings = [];
     model.register.forEach((w, i) => {
       const isField = w.loc === "Field";
-      const m = new THREE.Mesh(ringGeo, new THREE.MeshStandardMaterial({
+      const rw = (w.nps ? OD_MM(w.nps) : model.diameter) / 2;
+      const m = new THREE.Mesh(ringGeo(rw), new THREE.MeshStandardMaterial({
         color: isField ? C_FIELD : C_SHOP,
         emissive: isField ? C_FIELD : "#3d4d59",
         emissiveIntensity: isField ? 0.55 : 0.18,

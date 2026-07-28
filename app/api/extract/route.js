@@ -26,7 +26,8 @@ Extract ONLY the title block, line data and bill of material. Do NOT output geom
     "testFluid": string, "testPressureBarg": number|null,
     "insulation": string, "heatTrace": string,
     "pipeSpec": string, "fittingSpec": string,
-    "pupLength": number|null, "pupNote": string
+    "pupLength": number|null, "pupNote": string,
+    "mtoCoversWholeLine": boolean
   },
   "bom": [{ "pt": number, "group": string, "description": string,
             "diam": number, "stockCode": string, "qty": number }],
@@ -36,7 +37,10 @@ Extract ONLY the title block, line data and bill of material. Do NOT output geom
 
 "pupLength" is set only when a DETAIL note adds short pipe pieces at every fitting
 (e.g. "pipe length 150 mm typ."). Otherwise null.
-Keep each BOM "description" under 90 characters.`;
+Keep each BOM "description" under 90 characters.
+Set "mtoCoversWholeLine" true when the sheet is one of several (e.g. SHEET 2/2) and the
+quantities plainly cover the whole line rather than this sheet alone.
+"pupLength" applies per fitting END: a tee with three ends therefore consumes 3 x pupLength.`;
 
 const NODES_PROMPT = `${COMMON}
 
@@ -48,8 +52,13 @@ Extract ONLY the route geometry. Do NOT output the BOM or the title block.
               "type": "tie-in"|"elbow90"|"elbow45"|"tee"|"reducer"|"flange-wn"|"valve-bw"|"valve-flanged",
               "ref": string,
               "E": number, "N": number, "EL": number }],
+  "edges": [{ "from": string, "to": string, "nps": number }],
   "unreadable": [string]
 }
+
+The route is a GRAPH, not a chain. "edges" lists every pipe leg and its own nominal
+size in inches. A tee therefore has THREE incident edges and a branch runs to its own
+tie-in node. For a single unbranched line the edges simply chain the nodes in order.
 
 CRITICAL RULES
 1. "nodes" must be ordered along the pipe route, from the first tie-in to the last tie-in.
@@ -61,7 +70,11 @@ CRITICAL RULES
    inch) LR elbows: 90 deg = 1372 mm, 45 deg = 565 mm.
 4. "ref" holds the continuation drawing number for tie-in nodes, "" otherwise.
 5. Do NOT number welds and do NOT define spools. That is computed downstream.
-6. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
+6. A reduced tee (e.g. 32X18) is ONE node with three edges: two collinear run edges at
+   the run size and one branch edge at the branch size. Give each edge its correct "nps".
+7. Every "FOR CONT. SEE ..." callout is its own tie-in node, including continuations to
+   another SHEET of the same drawing. A sheet with three callouts has three tie-in nodes.
+8. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
    vertices, still output every tie-in node whose coordinates are printed on the drawing,
    and name what is missing in "unreadable". An incomplete node list is useful;
    prose is not. Your entire reply must be the JSON object and nothing else.`;
