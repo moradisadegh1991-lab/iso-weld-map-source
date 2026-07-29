@@ -132,13 +132,14 @@ export default function Page() {
   const [showTags, setShowTags] = useState(true);
   const [showDims, setShowDims] = useState(false);
   const [view, setView] = useState("iso");
-  const [dim, setDim] = useState("3d");
+  const [dim, setDim] = useState(null);
+  const [strictBom, setStrictBom] = useState(true);
   const [renderMode, setRenderMode] = useState("solid");
   const [colorBy, setColorBy] = useState("spool");
   const [editing, setEditing] = useState("");
   const fileRef = useRef(null);
 
-  const model = useMemo(() => (data ? buildModel(data) : null), [data]);
+  const model = useMemo(() => (data ? buildModel(data, { strictBom }) : null), [data, strictBom]);
   const sel = model && !model.error ? model.register.find((w) => w.no === selected) : null;
 
   /* One serverless invocation per pass. Passes run in parallel so total wall
@@ -313,11 +314,31 @@ export default function Page() {
 
       {!data && (
         <section className="intake">
-          <div className="drop"
+          <div className="ask">
+            <div className="ask-q">با کدام نما شروع کنیم؟</div>
+            <div className="ask-opts">
+              <button className={dim === "2d" ? "on" : ""} onClick={() => setDim("2d")}>
+                <b>نقشه دوبعدی</b>
+                <span>تصویر ایزومتریک با تگ جوش — همان چیزی که QC چاپ می‌کند. خروجی SVG برداری.</span>
+              </button>
+              <button className={dim === "3d" ? "on" : ""} onClick={() => setDim("3d")}>
+                <b>مدل سه‌بعدی</b>
+                <span>چرخش آزاد، حالت شفاف و تک‌خط، اسپول باز. برای بررسی مسیر و تداخل.</span>
+              </button>
+            </div>
+            <label className="chk">
+              <input type="checkbox" checked={strictBom} onChange={(e) => setStrictBom(e.target.checked)} />
+              <span>فقط اقلامی رسم شود که در MTO وجود دارند
+                <em>اتصالی که هیچ ردیفی در لیست متریال ندارد از طراحی حذف و گزارش می‌شود</em>
+              </span>
+            </label>
+          </div>
+
+          <div className={"drop" + (dim ? "" : " locked")}
             onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer.files?.[0]); }}
-            onClick={() => !busy && fileRef.current?.click()}>
-            <div className="big">{busy || "نقشه ایزومتریک را اینجا رها کنید"}</div>
+            onDrop={(e) => { e.preventDefault(); if (dim) onFile(e.dataTransfer.files?.[0]); }}
+            onClick={() => dim && !busy && fileRef.current?.click()}>
+            <div className="big">{busy || (dim ? "نقشه ایزومتریک را اینجا رها کنید" : "اول نما را انتخاب کنید")}</div>
             <div className="muted">
               JPG یا PNG · هرچه رزولوشن بالاتر بهتر — تصویر در مرورگر شما به چند کاشی تقسیم و فشرده می‌شود
             </div>
@@ -351,7 +372,7 @@ export default function Page() {
                 </button>
               ))}
             </div>
-            <button className="ghost" onClick={loadDemo}>نمونه بدون کلید: SW 265022A</button>
+            <button className="ghost" disabled={!dim} onClick={loadDemo}>نمونه بدون کلید: SW 265022A</button>
           </div>
 
           {note && <div className="note mono">{note}</div>}
@@ -411,6 +432,10 @@ export default function Page() {
                   </div>
                 </>
               )}
+              <div className="row">
+                <button className={strictBom ? "on wide" : "wide"} onClick={() => setStrictBom(!strictBom)}
+                  title="اقلام خارج از MTO رسم نشوند">فقط اقلام MTO</button>
+              </div>
               <div className="row">
                 <span className="lbl">رنگ:</span>
                 {[["spool", "اسپول"], ["size", "قطر"], ["none", "خنثی"]].map(([k, t]) => (

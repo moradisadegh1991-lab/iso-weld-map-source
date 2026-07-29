@@ -136,11 +136,13 @@ export default function WeldMap2D({ model, meta, selected, onSelect, showDims, c
             const v = proj(e.v);
             return <path key={i} d={`M${a.x} ${a.y} Q${v.x} ${v.y} ${b.x} ${b.y}`}
               fill="none" stroke={c} strokeWidth={w} strokeLinecap="round"
-              opacity={e.kind === "pup" ? 0.7 : 1} />;
+              strokeDasharray={e.ghost ? `${S * 1.6} ${S * 1.6}` : undefined}
+              opacity={e.ghost ? 0.35 : e.kind === "pup" ? 0.7 : 1} />;
           }
           return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
             stroke={c} strokeWidth={e.kind === "pup" ? w * 0.72 : w}
-            strokeLinecap="round" opacity={e.kind === "pup" ? 0.75 : 1} />;
+            strokeDasharray={e.ghost ? `${S * 1.6} ${S * 1.6}` : undefined}
+            strokeLinecap="round" opacity={e.ghost ? 0.35 : e.kind === "pup" ? 0.75 : 1} />;
         })}
 
         {/* dimensions */}

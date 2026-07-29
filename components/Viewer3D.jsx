@@ -89,9 +89,9 @@ export default function Viewer3D({ model, selected, onSelect, exploded, showTags
             color: e.kind === "pup" ? base.clone().offsetHSL(0, -0.14, -0.14) : base,
             metalness: 0.45,
             roughness: e.kind === "fitting" ? 0.42 : 0.58,
-            transparent: renderMode === "xray",
-            opacity: renderMode === "xray" ? 0.26 : 1,
-            depthWrite: renderMode !== "xray",
+            transparent: renderMode === "xray" || e.ghost,
+            opacity: e.ghost ? 0.18 : renderMode === "xray" ? 0.26 : 1,
+            depthWrite: !(renderMode === "xray" || e.ghost),
             wireframe: renderMode === "wire",
           });
       const rBase = (e.nps ? OD_MM(e.nps) : model.diameter) / 2;

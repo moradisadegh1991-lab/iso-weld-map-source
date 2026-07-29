@@ -151,3 +151,20 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .models button span{font-size:10px;line-height:1.5}
 .models button.on{border-color:var(--ink);background:rgba(221,231,238,.07)}
 .models button.on b{color:var(--ink)}
+
+.ask{border:1px solid var(--rule);border-radius:6px;padding:16px}
+.ask-q{font-size:14px;margin-bottom:12px}
+.ask-opts{display:flex;gap:10px;flex-wrap:wrap}
+.ask-opts button{flex:1;min-width:210px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;
+  text-align:start;padding:14px;border:1px solid var(--rule);border-radius:5px;
+  background:transparent;color:var(--dim);cursor:pointer;transition:border-color .15s,background .15s}
+.ask-opts button:hover{border-color:var(--cy)}
+.ask-opts button.on{border-color:var(--ink);background:rgba(221,231,238,.07)}
+.ask-opts button b{font-size:13px;color:var(--ink)}
+.ask-opts button span{font-size:11px;line-height:1.7}
+.chk{display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:12px;color:var(--ink);cursor:pointer}
+.chk input{margin-top:3px;accent-color:var(--cy)}
+.chk em{display:block;font-style:normal;font-size:11px;color:var(--dim);margin-top:2px}
+.drop.locked{opacity:.45;cursor:not-allowed;border-color:var(--rule)}
+.drop.locked:hover{border-color:var(--rule);background:transparent}
+button.ghost:disabled{opacity:.4;cursor:not-allowed}
