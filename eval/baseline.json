@@ -1,16 +1,17 @@
 {
-  "recordedAt": "2026-09-21T21:13:09.651Z",
+  "recordedAt": "2026-09-21T21:56:35.911Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 22,
-    "pass": 22,
+    "cases": 25,
+    "draft": 1,
+    "pass": 24,
     "fail": 0,
     "xfail": 0,
     "xpass": 0,
     "passRate": 100,
     "weldCountExact": {
-      "ok": 21,
-      "of": 21,
+      "ok": 23,
+      "of": 23,
       "pct": 100
     },
     "fieldWeldsExact": {
@@ -19,23 +20,30 @@
       "pct": 100
     },
     "spoolCountExact": {
-      "ok": 12,
-      "of": 12,
+      "ok": 13,
+      "of": 13,
       "pct": 100
     },
     "registerExact": {
-      "ok": 7,
-      "of": 7,
+      "ok": 8,
+      "of": 8,
       "pct": 100
     },
     "registerFieldAccuracy": 100,
     "registerFields": {
-      "correct": 94,
-      "of": 94
+      "correct": 101,
+      "of": 101
     },
-    "warnings": 5
+    "warnings": 7
   },
   "cases": [
+    {
+      "id": "28-CWR-10-930065A",
+      "kind": "golden",
+      "status": "draft",
+      "file": "eval/cases/golden/28-CWR-10-930065A.json",
+      "failed": []
+    },
     {
       "id": "SW-265022A",
       "kind": "golden",
@@ -188,6 +196,20 @@
       "kind": "rule",
       "status": "pass",
       "file": "eval/cases/rules/R21-spool-over-transport-limit.json",
+      "failed": []
+    },
+    {
+      "id": "R22-cut-length-check",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R22-cut-length-check.json",
+      "failed": []
+    },
+    {
+      "id": "R23-cut-length-mismatch",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R23-cut-length-mismatch.json",
       "failed": []
     }
   ]

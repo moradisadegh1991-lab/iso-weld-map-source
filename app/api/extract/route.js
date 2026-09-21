@@ -52,6 +52,7 @@ Extract ONLY the title block, line data and bill of material. Do NOT output geom
   },
   "bom": [{ "pt": number, "group": string, "description": string,
             "diam": number, "stockCode": string, "qty": number }],
+  "cutLengths": [{ "piece": number|string, "lengthMm": number, "nps": number }],
   "notes": [string],
   "unreadable": [string]
 }
@@ -59,6 +60,12 @@ Extract ONLY the title block, line data and bill of material. Do NOT output geom
 "revDate" is the issue date of THIS revision, as printed in the revision block,
 in ISO form (YYYY-MM-DD). Convert a Gregorian date as printed; if the block shows
 only a Jamali date or nothing at all, use null rather than guessing.
+
+"cutLengths" is the CUT PIPE LENGTH table, when the drawing carries one: one entry per
+piece mark, with the cut length in millimetres and the nominal size. It is the sharpest
+check available - the MTO quantity is rounded and usually carries extra for field
+adjustment, so it hides errors that a cut length does not. Read it if it is there and
+leave the array empty if it is not; never derive it from the geometry.
 
 "pupLength" is set only when a DETAIL note adds short pipe pieces at every fitting
 (e.g. "pipe length 150 mm typ."). Otherwise null.
@@ -101,13 +108,17 @@ CRITICAL RULES
 8. IN-LINE COMPONENTS - a valve, a reducer, a weld-neck flange - have no centreline
    intersection, so their node goes at the CENTRE OF THE BODY, half its length from each
    of its two welds. (An elbow or a tee still goes on the centreline intersection.)
-9. "faceToFace" is the body length in mm of such an in-line component, read from the
+9. A WELD-NECK FLANGE is the exception: it has ONE weld, and its node goes on the FACE -
+   the point the drawing dimensions to and the point a continuation callout gives
+   coordinates for. Its "faceToFace" is the length through the hub, from that face to
+   the weld.
+10. "faceToFace" is the body length in mm of such an in-line component, read from the
    dimension printed across it on the drawing. Use null for every other node type, and
    null when the dimension is not shown - do NOT take it from a standards table and do
    NOT estimate it. The tables that would give it (B16.10 for valves, B16.9 for reducers,
    B16.5 for flange hubs) key on valve type, pressure class or reduction ratio, and this
    drawing may state none of them. A null here is handled downstream and reported.
-10. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
+11. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
    vertices, still output every tie-in node whose coordinates are printed on the drawing,
    and name what is missing in "unreadable". An incomplete node list is useful;
    prose is not. Your entire reply must be the JSON object and nothing else.`;

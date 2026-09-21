@@ -1,0 +1,155 @@
+{
+  "id": "28-CWR-10-930065A",
+  "kind": "golden",
+  "title": "Andimeshk EO plant — 28\" underground cooling water return, vertical run, one WN flange",
+  "source": {
+    "drawingNo": "28\"-CWR-10-930065A-DA01-UCW",
+    "revision": "A0",
+    "revisionDate": "2026-01-06",
+    "sheet": "1/1",
+    "project": "ANDIMESHK IBN SINA PETROCHEMICAL COMPANY — ETHYLENE OXIDE PLANT",
+    "pipingClass": "DA01",
+    "projectDocumentNo": "AISPC-10-DE-930-PI-ISO-0001",
+    "pdfPage": 4
+  },
+  "drawing": "drawings/28-CWR-10-930065A-DA01-UCW.png",
+  "resolution": {
+    "width": 4959,
+    "height": 3505,
+    "dpi": 300,
+    "source": "vector PDF"
+  },
+  "provenance": "Transcribed from the vector PDF by Claude, field by field. The register in `expect` is NOT verified: it must be confirmed against the contractor's weld register before this case is scored.",
+  "verifiedBy": "",
+  "verifiedAt": "",
+  "options": {
+    "spoolMaxLen": 12000,
+    "maxPipeLength": 12000,
+    "strictBom": true
+  },
+  "input": {
+    "meta": {
+      "drawingNo": "28\"-CWR-10-930065A-DA01-UCW",
+      "rev": "A0",
+      "revDate": "2026-01-06",
+      "sheet": "1/1",
+      "project": "ANDIMESHK IBN SINA PETROCHEMICAL COMPANY — ETHYLENE OXIDE PLANT",
+      "area": "1B",
+      "pipingClass": "DA01",
+      "nps": 28,
+      "schedule": "SCH 10",
+      "clLengthM": 3.336,
+      "testFluid": "FRESH WATER",
+      "testPressureBarg": 11.1,
+      "insulation": "—",
+      "heatTrace": "NONE",
+      "pipeSpec": "API 5L GR.B 100% RT, LSAW, BE, SCH 10, ASME B36.10M",
+      "fittingSpec": "ASTM A105N, Weld Neck, RF, SCH 10, 150#, ASME B16.47B",
+      "pupLength": null,
+      "mtoCoversWholeLine": true
+    },
+    "bom": [
+      {
+        "pt": 1,
+        "group": "PIPE",
+        "description": "Pipe, API 5L GR.B 100% RT, LSAW, BE, SCH 10, ASME B36.10M",
+        "diam": 28,
+        "stockCode": "125A1E29OWL",
+        "qty": 3.3
+      },
+      {
+        "pt": 2,
+        "group": "FLANGES",
+        "description": "Flange, ASTM A105N, Weld Neck, RF, SCH 10, 150#, ASME B16.47B",
+        "diam": 28,
+        "stockCode": "3625BAQ1CJ",
+        "qty": 1
+      }
+    ],
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "60\"-CWR-10-930002A-DA01-UCW",
+        "faceToFace": null,
+        "E": 837391,
+        "N": 1467586,
+        "EL": 292062
+      },
+      {
+        "id": "N2",
+        "type": "flange-wn",
+        "ref": "28\"-CWR-10-930066A-DA01-N",
+        "faceToFace": 125,
+        "E": 837391,
+        "N": 1467586,
+        "EL": 295398
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 28
+      }
+    ],
+    "notes": [
+      "NDT: 10%RT+10%MT · PWHT: — · Phase L",
+      "REF. P&ID: AISPC-10-DE-930-PR-PID-0001-(1 of 11)"
+    ],
+    "unreadable": [],
+    "cutLengths": [
+      {
+        "piece": 1,
+        "lengthMm": 3211,
+        "nps": 28
+      }
+    ]
+  },
+  "expect": {},
+  "_engineSays": {
+    "weldCount": 2,
+    "register": [
+      {
+        "no": "W-01",
+        "loc": "Field",
+        "kind": "Tie-in",
+        "role": "60\"-CWR-10-930002A-DA01-UCW",
+        "nps": 28,
+        "el": 292062,
+        "ndt": "RT 100%"
+      },
+      {
+        "no": "W-02",
+        "loc": "Shop",
+        "kind": "BW",
+        "role": "Pipe → Fitting",
+        "nps": 28,
+        "el": 295273,
+        "ndt": "RT 5% random"
+      }
+    ],
+    "spoolCount": 1,
+    "pipeLenMm": 3211,
+    "clCalcMm": 3336,
+    "warnings": []
+  },
+  "_drawingSays": {
+    "clLengthMm": 3336,
+    "cutPieces": [
+      {
+        "piece": 1,
+        "lengthMm": 3211,
+        "nps": 28
+      }
+    ],
+    "note": "CL 3336 minus CUT 3211 is 125 mm — the length through the hub of the 28\" 150# B16.47 Series B weld-neck flange. The drawing prints both numbers, so this one is self-checking."
+  },
+  "_todo": [
+    "expect را از روی رجیستر جوش پیمانکار پر کنید، نه از روی _engineSays.",
+    "تأیید کنید که پایین خط واقعاً tie-in جوشی به هدر ۶۰ اینچ است و نه چیز دیگر.",
+    "تأیید کنید F2 روی نقشه شمارهٔ جوش میدانی است و نه چیز دیگر — اگر هست، loc آن جوش Field می‌شود.",
+    "طول hub فلنج (۱۲۵ mm) از اختلاف CL و CUT استنتاج شده؛ با جدول B16.47 Series B بسنجید.",
+    "provenance و verifiedBy را پر کنید، بعد _engineSays و _drawingSays و _todo را حذف کنید."
+  ]
+}
