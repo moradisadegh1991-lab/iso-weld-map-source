@@ -13,79 +13,11 @@ import SessionBar from "../components/SessionBar";
 import ReviewQueue from "../components/ReviewQueue";
 import EditPanel from "../components/EditPanel";
 import { useSession } from "../lib/client/session.mjs";
+import { prepare, prepareSource } from "../lib/client/image-prep.mjs";
+import { isPdf, openPdf, renderPage } from "../lib/client/pdf.mjs";
+import PdfSheetPicker from "../components/PdfSheetPicker";
 import { getIdentity, setIdentity as persistIdentity, authHeaders } from "../lib/client/identity.mjs";
 import { DISCLAIMER_FA } from "../lib/disclaimer.mjs";
-
-/* ── client-side image prep ────────────────────────────────────
-   Vercel functions cap the request body at ~4.5 MB and the vision
-   model downsamples anything past ~1568 px on the long edge.
-   So: send the full sheet for routing plus overlapping quadrant
-   crops for the small text, each already scaled to a useful size. */
-
-function loadImage(file) {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    img.onload = () => res(img);
-    img.onerror = () => rej(new Error("تصویر باز نشد. فرمت JPG یا PNG باشد."));
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-function renderCrop(img, sx, sy, sw, sh, max, quality) {
-  const scale = Math.min(1, max / Math.max(sw, sh));
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(sw * scale));
-  c.height = Math.max(1, Math.round(sh * scale));
-  const ctx = c.getContext("2d");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, c.width, c.height);
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
-  return c.toDataURL("image/jpeg", quality).split(",")[1];
-}
-
-const ROW = ["TOP", "MIDDLE", "BOTTOM"];
-const COL = ["LEFT", "CENTRE", "RIGHT"];
-
-/* A dense A1 sheet loses its BOM text if sent whole — the vision model downsamples
-   anything past ~1568 px. So crop a grid: the finer the source, the finer the grid. */
-function tiles(img, max, quality, grid) {
-  const W = img.naturalWidth || img.width;
-  const H = img.naturalHeight || img.height;
-  const n = grid;
-  const ox = (W / n) * 0.14, oy = (H / n) * 0.14;
-  const defs = [["FULL SHEET", 0, 0, W, H]];
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      const sx = Math.max(0, (W / n) * c - ox);
-      const sy = Math.max(0, (H / n) * r - oy);
-      defs.push([
-        `${n === 2 ? ROW[r * 2] : ROW[r]}-${n === 2 ? COL[c * 2] : COL[c]} TILE`,
-        sx, sy, W / n + ox * 2, H / n + oy * 2,
-      ]);
-    }
-  }
-  return defs.map(([label, sx, sy, sw, sh]) => ({
-    label, mediaType: "image/jpeg",
-    data: renderCrop(img, sx, sy, Math.min(sw, W - sx), Math.min(sh, H - sy), max, quality),
-  }));
-}
-
-const LIMIT = 3_400_000; // keep well under the 4.5 MB body cap
-
-async function prepare(file) {
-  const img = await loadImage(file);
-  const long = Math.max(img.naturalWidth, img.naturalHeight);
-  const grid = long >= 3200 ? 3 : 2;          // 10 tiles for a real scan, 5 for a photo
-  const sum = (o) => o.reduce((a, i) => a + i.data.length, 0);
-  let out = tiles(img, 1500, 0.82, grid);
-  if (sum(out) > LIMIT) out = tiles(img, 1350, 0.7, grid);
-  if (sum(out) > LIMIT) out = tiles(img, 1150, 0.58, grid);
-  if (sum(out) > LIMIT && grid === 3) out = tiles(img, 1400, 0.75, 2);
-  if (sum(out) > LIMIT) out = out.slice(0, 3);
-  return { images: out, bytes: sum(out), w: img.naturalWidth, h: img.naturalHeight, grid, long };
-}
 
 export default function Page() {
   const [data, setData] = useState(null);
@@ -113,6 +45,10 @@ export default function Page() {
   // page is holding a fresh extraction that has not been saved yet — and that
   // distinction is what decides between "save" and "apply a correction".
   const [openRun, setOpenRun] = useState(null);
+  // An isometric PDF is a bundle of sheets, so opening one is two steps:
+  // choose the drawing, then extract it.
+  const [pdf, setPdf] = useState(null);
+  const [pdfPage, setPdfPage] = useState(null);
   const fileRef = useRef(null);
   const session = useSession();
 
@@ -227,12 +163,44 @@ export default function Page() {
   async function onFile(f) {
     if (!f) return;
     setErr(null); setNote(null); setSelected(null);
+
+    if (isPdf(f)) {
+      try {
+        setBusy("خواندن PDF…");
+        const { doc, pages } = await openPdf(f);
+        setSourceFile(f);
+        setPdf({ doc, pages, file: f });
+        setBusy("");
+        // One sheet needs no choosing.
+        if (pages.length === 1) await onPdfPage(1, { doc, pages, file: f });
+      } catch (e) {
+        setErr("PDF باز نشد: " + e.message);
+        setBusy("");
+      }
+      return;
+    }
+
     try {
       setBusy("آماده‌سازی تصویر…");
       setSourceFile(f);
       setPreview(URL.createObjectURL(f));
-      const { images, bytes, w, h, grid, long } = await prepare(f);
-      setNote(`${w}×${h} px → شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
+      setPdf(null);
+      setPdfPage(null);
+      await runExtraction(await prepare(f));
+    } catch (e) {
+      setErr(e.message);
+      setBusy("");
+    }
+  }
+
+  /**
+   * Everything downstream of having tiles: the two passes, the merge, the
+   * repair pass and the reporting. Shared, because a sheet rendered from a
+   * PDF and a photographed drawing differ only in how the pixels were made.
+   */
+  async function runExtraction({ images, bytes, w, h, grid, long }, { prefix = "" } = {}) {
+    try {
+      setNote(`${prefix}${w}×${h} px → شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
 
       setBusy("خواندن نقشه — دو پاس موازی…");
       const [ra, rb] = await Promise.allSettled([
@@ -265,7 +233,7 @@ export default function Page() {
       }
 
       const tok = (x) => (x && x.usage ? `${x.usage.input_tokens || "?"}/${x.usage.output_tokens || "?"}` : "?");
-      setNote(`${w}×${h} px · شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ` +
+      setNote(`${prefix}${w}×${h} px · شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ` +
         `${(a || b).model} · meta ${a ? (a.ms / 1000).toFixed(1) + "s " + tok(a) : "ناموفق"} · ` +
         `nodes ${b ? (b.ms / 1000).toFixed(1) + "s " + tok(b) : "ناموفق"}` +
         (fixes.length ? ` · اصلاح خودکار: ${fixes.join(" · ")}` : "") +
@@ -280,6 +248,24 @@ export default function Page() {
     } catch (e) {
       setErr(e.message);
     } finally {
+      setBusy("");
+    }
+  }
+
+  /** Render one sheet of an open PDF, then run the same pipeline an image takes. */
+  async function onPdfPage(index, source = pdf) {
+    if (!source) return;
+    setErr(null); setNote(null); setSelected(null);
+    try {
+      setBusy(`رندر برگ ${index} در ۳۰۰ DPI…`);
+      const { canvas, effectiveDpi } = await renderPage(source.doc, index, { dpi: 300 });
+      setPreview(canvas.toDataURL("image/jpeg", 0.6));
+      setPdfPage(index);
+      await runExtraction(prepareSource(canvas), {
+        prefix: `برگ ${index} · ${effectiveDpi} DPI · `,
+      });
+    } catch (e) {
+      setErr(e.message);
       setBusy("");
     }
   }
@@ -343,11 +329,11 @@ export default function Page() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => { e.preventDefault(); if (dim) onFile(e.dataTransfer.files?.[0]); }}
             onClick={() => dim && !busy && fileRef.current?.click()}>
-            <div className="big">{busy || (dim ? "نقشه ایزومتریک را اینجا رها کنید" : "اول نما را انتخاب کنید")}</div>
+            <div className="big">{busy || (dim ? "نقشه ایزومتریک را اینجا رها کنید (PDF یا تصویر)" : "اول نما را انتخاب کنید")}</div>
             <div className="muted">
-              JPG یا PNG · هرچه رزولوشن بالاتر بهتر — تصویر در مرورگر شما به چند کاشی تقسیم و فشرده می‌شود
+              PDF · JPG · PNG — PDF برداری بهترین ورودی است و در ۳۰۰ DPI رندر می‌شود. تقسیم به کاشی و فشرده‌سازی در مرورگر شما انجام می‌شود، پس فایل اصلی جایی نمی‌رود
             </div>
-            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden
+            <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden
               onChange={(e) => onFile(e.target.files?.[0])} />
           </div>
 
@@ -397,6 +383,13 @@ export default function Page() {
 
           {note && <div className="note mono">{note}</div>}
           {err && <div className="err">{err}</div>}
+
+          {pdf && pdf.pages.length > 1 && !data && (
+            <div className="queuebox">
+              <PdfSheetPicker doc={pdf.doc} pages={pdf.pages} busy={!!busy}
+                onPick={(i) => onPdfPage(i)} />
+            </div>
+          )}
 
           {session.projectId && (
             <div className="queuebox">

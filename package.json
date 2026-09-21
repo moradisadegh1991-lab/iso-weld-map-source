@@ -10,14 +10,16 @@
     "eval:check": "node --import ./tools/register.mjs eval/run.mjs --check",
     "eval:update": "node --import ./tools/register.mjs eval/run.mjs --update-baseline",
     "db:migrate": "node db/migrate-cli.mjs",
-    "db:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/run.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/api.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/llm.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/revisions.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/qualification.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/ndt.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/review.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/reporting.mjs",
+    "db:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/run.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/api.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/llm.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/revisions.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/qualification.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/ndt.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/review.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/reporting.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/pdf.mjs",
     "db:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/seed.mjs",
     "doctor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/doctor.mjs",
+    "pdfjs:worker": "cp node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs public/pdf.worker.min.mjs",
     "golden:add": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs eval/golden-add.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "next": "14.2.30",
+    "pdfjs-dist": "^6.3.289",
     "pg": "^8.16.3",
     "react": "18.3.1",
     "react-dom": "18.3.1",
