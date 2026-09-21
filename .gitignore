@@ -1,0 +1,5 @@
+
+# local PGlite data directory — a dev database, never source
+.pglite/
+node_modules/
+.next/

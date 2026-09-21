@@ -20,10 +20,10 @@ npm run eval:check     # همان، ولی با exit code غیرصفر در صو
 npm run eval:update    # ثبت مجدد baseline — فقط وقتی تغییر عمدی و تأییدشده است
 
 # اجرای یک مورد
-node --import ./eval/register.mjs eval/run.mjs --only SW-265022A
+node --import ./tools/register.mjs eval/run.mjs --only SW-265022A
 
 # خروجی ماشین‌خوان برای داشبورد روند
-node --import ./eval/register.mjs eval/run.mjs --json eval/results/run.json
+node --import ./tools/register.mjs eval/run.mjs --json eval/results/run.json
 ```
 
 ## ساختار
@@ -31,14 +31,17 @@ node --import ./eval/register.mjs eval/run.mjs --json eval/results/run.json
 ```
 eval/
   run.mjs               اجراکننده
-  register.mjs          ثبت loader — نقطهٔ ورود node --import
-  resolve-hook.mjs      اجازه می‌دهد lib/*.js بدون bundler در Node اجرا شود
   lib/metrics.mjs       محاسبهٔ امتیاز هر مورد و جمع‌بندی
   lib/report.mjs        رندر کنسول + مقایسه با baseline
   baseline.json         مرجع ثبت‌شده — هر اجرا با این سنجیده می‌شود (tracked)
   cases/golden/         نقشه‌های واقعی با رجیستر تأییدشده توسط مهندس
   cases/rules/          قواعد مستند موتور، به‌صورت موردی و ایزوله
   results/              خروجی اجرا — artefact، نه source
+
+tools/
+  register.mjs          ثبت loader — نقطهٔ ورود node --import
+  esm-compat.mjs        اجازه می‌دهد lib/*.js بدون bundler در Node اجرا شود
+                        (مشترک بین eval و تست‌های لایهٔ داده)
 ```
 
 ## دو نوع مورد آزمون
