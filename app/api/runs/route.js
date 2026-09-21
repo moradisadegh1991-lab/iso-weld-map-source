@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
-import { createRun, saveRegister, getRegister, latestRunForDocument } from "../../../lib/db/repos/runs.mjs";
+import { createRun, saveRegister, getRegister, latestRunForDocument, latestRunForDrawing }
+  from "../../../lib/db/repos/runs.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { buildModel } from "../../../lib/engine.js";
 
@@ -32,6 +33,14 @@ export async function POST(request) {
     const model = buildModel(payload, options);
 
     return await withProject(db, projectId, async () => {
+      // Look this up BEFORE creating the new run, or the "latest run for this
+      // drawing" is the row we are about to insert and nothing is ever carried.
+      const docNo = payload?.meta?.drawingNo;
+      const sheetNo = payload?.meta?.sheet || "1/1";
+      const previous = docNo
+        ? await latestRunForDrawing(db, { projectId, docNo, sheetNo })
+        : null;
+
       const run = await createRun(db, {
         projectId, documentId, lineId,
         modelName, modelVersion, passName, inputTokens, outputTokens, rawOutputUri,
@@ -47,15 +56,22 @@ export async function POST(request) {
         return Response.json({ run, register: [], engineError: model.error }, { status: 201 });
       }
 
-      await saveRegister(db, {
-        projectId, runId: run.id, documentId, lineId,
-        lineNo: lineNo || payload?.meta?.drawingNo || "unknown",
-        model,
+      // Carry weld identity forward from whatever was last extracted for the
+      // SAME DRAWING, across revisions. That is the whole point: a new
+      // revision is a new document row, and it is exactly then that the NDT
+      // records and ITRs hung off a weld must not be orphaned.
+      const carryFrom = previous
+        ? await getRegister(db, { projectId, runId: previous.id })
+        : null;
+
+      const saved = await saveRegister(db, {
+        projectId, runId: run.id, documentId, lineId, model, carryFrom,
       });
       const register = await getRegister(db, { projectId, runId: run.id });
       return Response.json({
         run,
         register,
+        carriedIdentities: saved.carried,
         totals: model.totals,
         spools: model.spoolIds,
         checks: model.checks,

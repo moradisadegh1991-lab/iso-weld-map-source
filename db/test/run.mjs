@@ -42,18 +42,15 @@ test("migrations are idempotent", async () => {
 });
 
 test("an edited migration that was already applied is refused", async () => {
+  const { rows: [{ checksum }] } = await db.query(
+    "SELECT checksum FROM schema_migrations WHERE version = '001_core'");
   await db.query("UPDATE schema_migrations SET checksum = $1 WHERE version = '001_core'",
     ["0".repeat(64)]);
   const e = await throws(() => migrate(db), "has changed since it was applied");
   assert(String(e.message).includes("Add a new migration"), "the error should say what to do");
-  // put it back so later tests run against a consistent record
-  const { rows } = await db.query("SELECT version FROM schema_migrations");
-  assert(rows.length === 1, "one migration recorded");
-  await db.query("DELETE FROM schema_migrations WHERE version = '001_core'");
-  await db.query("INSERT INTO schema_migrations (version, checksum) SELECT '001_core', $1", [
-    (await import("node:crypto")).createHash("sha256")
-      .update(await (await import("node:fs/promises")).readFile("db/migrations/001_core.sql", "utf8"))
-      .digest("hex")]);
+  // restore the recorded checksum so later tests see a consistent history
+  await db.query("UPDATE schema_migrations SET checksum = $1 WHERE version = '001_core'", [checksum]);
+  equal(await migrate(db), [], "and the suite is back to a clean record");
 });
 
 // ── story 1.5 · tenancy ──────────────────────────────────────────────────
@@ -190,18 +187,32 @@ test("the register saved matches the register the engine computed", async () => 
   });
 });
 
-test("weld_uid is stable when the drawing is re-extracted unchanged", async () => {
+test("weld identity is carried forward, and only when asked for", async () => {
   await withProject(db, kavian.id, async () => {
-    const before = (await runs.getRegister(db, { projectId: kavian.id, runId })).map((w) => w.weld_uid);
-    const run2 = await runs.createRun(db, {
-      projectId: kavian.id, documentId: docId, payload: DEMO, validationChecks: [],
-    });
+    const previous = await runs.getRegister(db, { projectId: kavian.id, runId });
+    const before = previous.map((w) => w.weld_uid);
+
+    // A uid is a surrogate, not a value derived from the weld: a run that is
+    // not told what came before it mints fresh identities, by design.
+    const fresh = await runs.createRun(db, {
+      projectId: kavian.id, documentId: docId, payload: DEMO, validationChecks: [] });
     await runs.saveRegister(db, {
-      projectId: kavian.id, runId: run2.id, documentId: docId,
-      lineNo: "36-P-001", model: buildModel(DEMO, {}),
-    });
-    const after = (await runs.getRegister(db, { projectId: kavian.id, runId: run2.id })).map((w) => w.weld_uid);
-    equal(after, before, "a second run over the same drawing must reuse the same weld identities");
+      projectId: kavian.id, runId: fresh.id, documentId: docId, model: buildModel(DEMO, {}) });
+    const minted = (await runs.getRegister(db, { projectId: kavian.id, runId: fresh.id }))
+      .map((w) => w.weld_uid);
+    assert(minted.every((u) => !before.includes(u)), "with nothing to carry from, identity is new");
+
+    // Given the previous register, every weld keeps the identity that NDT
+    // records and ITRs are hung off.
+    const carried = await runs.createRun(db, {
+      projectId: kavian.id, documentId: docId, payload: DEMO, validationChecks: [] });
+    const saved = await runs.saveRegister(db, {
+      projectId: kavian.id, runId: carried.id, documentId: docId,
+      model: buildModel(DEMO, {}), carryFrom: previous });
+    equal(saved.carried, 10);
+    const after = (await runs.getRegister(db, { projectId: kavian.id, runId: carried.id }))
+      .map((w) => w.weld_uid);
+    equal(after, before, "identity survives a re-extraction of the same drawing");
   });
 });
 

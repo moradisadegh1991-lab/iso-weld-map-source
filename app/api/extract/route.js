@@ -41,7 +41,7 @@ Extract ONLY the title block, line data and bill of material. Do NOT output geom
 
 {
   "meta": {
-    "drawingNo": string, "rev": string, "sheet": string, "project": string,
+    "drawingNo": string, "rev": string, "revDate": string|null, "sheet": string, "project": string,
     "unit": string, "area": string, "pipingClass": string,
     "nps": number, "schedule": string, "clLengthM": number|null,
     "testFluid": string, "testPressureBarg": number|null,
@@ -55,6 +55,10 @@ Extract ONLY the title block, line data and bill of material. Do NOT output geom
   "notes": [string],
   "unreadable": [string]
 }
+
+"revDate" is the issue date of THIS revision, as printed in the revision block,
+in ISO form (YYYY-MM-DD). Convert a Gregorian date as printed; if the block shows
+only a Jamali date or nothing at all, use null rather than guessing.
 
 "pupLength" is set only when a DETAIL note adds short pipe pieces at every fitting
 (e.g. "pipe length 150 mm typ."). Otherwise null.

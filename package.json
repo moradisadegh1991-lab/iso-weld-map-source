@@ -10,7 +10,7 @@
     "eval:check": "node --import ./tools/register.mjs eval/run.mjs --check",
     "eval:update": "node --import ./tools/register.mjs eval/run.mjs --update-baseline",
     "db:migrate": "node db/migrate-cli.mjs",
-    "db:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/run.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/api.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/llm.mjs"
+    "db:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/run.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/api.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/llm.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/revisions.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

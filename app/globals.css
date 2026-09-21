@@ -176,3 +176,11 @@ button.ghost:disabled{opacity:.4;cursor:not-allowed}
 .savebar input, .savebar select { flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px;
   background: #0d1519; color: inherit; border: 1px solid var(--line, #22303a); border-radius: 6px; }
 .savebar button { white-space: nowrap; }
+
+/* ── revision diff ───────────────────────────────────────────── */
+.revdiff { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px;
+  border: 1px solid var(--line, #22303a); border-radius: 8px; background: #0d1519; }
+.revdiff.alarm { border-color: #FF6B4A; background: #1a0f0c; }
+.revdiff .rework { display: flex; flex-direction: column; gap: 3px; margin-top: 6px;
+  padding-top: 6px; border-top: 1px solid #3a2420; color: #FFB4A2; }
+.revdiff .rework b { color: #FF6B4A; }

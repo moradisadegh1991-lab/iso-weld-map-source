@@ -25,6 +25,7 @@ export default function SaveBar({ data, model, sourceFile, strictBom }) {
   const [projectId, setProjectId] = useState("");
   const [state, setState] = useState({ phase: "idle" });
   const [saved, setSaved] = useState(null);
+  const [diff, setDiff] = useState(null);
 
   useEffect(() => { setIdentity(getIdentity()); }, []);
 
@@ -75,6 +76,7 @@ export default function SaveBar({ data, model, sourceFile, strictBom }) {
         method: "POST",
         body: JSON.stringify({
           projectId, docNo, revision,
+          revisionDate: data.meta.revDate || null,
           sheetNo: data.meta.sheet || "1/1",
           contentType: sourceFile?.type || "image/jpeg",
           fileBase64, fileSha256, byteSize,
@@ -92,6 +94,16 @@ export default function SaveBar({ data, model, sourceFile, strictBom }) {
       });
 
       setSaved({ doc, run });
+
+      // What this revision changed, and what of it is already welded. Only
+      // meaningful when there is an earlier run to compare against.
+      try {
+        const res = await fetch(`/api/runs/${run.run.id}/diff?projectId=${projectId}`,
+          { headers: authHeaders(identity) });
+        const d = await res.json();
+        setDiff(res.ok && d.diff ? d : null);
+      } catch { setDiff(null); }
+
       setState({
         phase: "done",
         msg: `${run.register.length} جوش ثبت شد` +
@@ -138,6 +150,36 @@ export default function SaveBar({ data, model, sourceFile, strictBom }) {
             <button className="ghost" onClick={save} disabled={busy || model?.error}>ذخیره در سامانه</button>
           </div>
         ) : <p className="muted sm">این کاربر عضو هیچ پروژه‌ای نیست.</p>
+      )}
+
+      {diff && (
+        <div className={"revdiff" + (diff.impact.rework.length ? " alarm" : "")}>
+          <b className="mono">
+            {diff.from.revision} → {diff.to.revision}
+          </b>
+          <span className="mono sm">
+            {diff.diff.summary.added} افزوده · {diff.diff.summary.removed} حذف ·
+            {" "}{diff.diff.summary.changed} تغییر · {diff.diff.summary.unchanged} بدون تغییر
+            {diff.diff.summary.renumbered ? ` · ${diff.diff.summary.renumbered} شماره‌گذاری مجدد` : ""}
+          </span>
+          {diff.diff.summary.rebased && (
+            <span className="muted sm">مبنای مختصات جابه‌جا شده — با tie-in تراز شد، پس تغییر واقعی شمرده نشد.</span>
+          )}
+          {diff.impact.rework.length > 0 ? (
+            <div className="rework">
+              <b>⚠ دوباره‌کاری</b>
+              {diff.impact.rework.map((s) => (
+                <span key={s.spool} className="mono sm">
+                  {s.spool} ({s.fabStatus}) — جوش‌های {s.welds.join("، ")}
+                </span>
+              ))}
+              <span className="sm">این اسپول‌ها ساخته شده‌اند و این رویژن آن‌ها را تغییر می‌دهد.
+                قبل از ادامه با کارگاه ساخت هماهنگ کنید.</span>
+            </div>
+          ) : (
+            <span className="muted sm">هیچ اسپول ساخته‌شده‌ای تحت تأثیر نیست.</span>
+          )}
+        </div>
       )}
 
       {saved && !approved && (
