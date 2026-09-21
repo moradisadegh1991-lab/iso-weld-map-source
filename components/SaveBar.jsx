@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { getIdentity, setIdentity as persistIdentity, authHeaders } from "../lib/client/identity.mjs";
 
 /**
  * Persistence for a computed register.
@@ -25,14 +26,10 @@ export default function SaveBar({ data, model, sourceFile, strictBom }) {
   const [state, setState] = useState({ phase: "idle" });
   const [saved, setSaved] = useState(null);
 
-  useEffect(() => {
-    try { setIdentity(localStorage.getItem("isoweld.identity") || ""); } catch { /* private mode */ }
-  }, []);
-
-  const auth = () => ({ authorization: `Bearer ${identity}`, "content-type": "application/json" });
+  useEffect(() => { setIdentity(getIdentity()); }, []);
 
   async function call(url, init = {}) {
-    const res = await fetch(url, { ...init, headers: auth() });
+    const res = await fetch(url, { ...init, headers: authHeaders(identity) });
     const body = await res.json().catch(() => ({ error: `پاسخ ${res.status}` }));
     if (!res.ok) throw new Error(body.error || `پاسخ ${res.status}`);
     return body;
@@ -41,7 +38,7 @@ export default function SaveBar({ data, model, sourceFile, strictBom }) {
   async function loadProjects() {
     setState({ phase: "busy", msg: "خواندن پروژه‌ها…" });
     try {
-      try { localStorage.setItem("isoweld.identity", identity); } catch { /* private mode */ }
+      persistIdentity(identity);
       const { projects } = await call("/api/projects");
       setProjects(projects);
       if (projects.length === 1) setProjectId(projects[0].id);

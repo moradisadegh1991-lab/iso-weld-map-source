@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Viewer3D, { SPOOL_COLORS } from "../components/Viewer3D";
 import WeldMap2D from "../components/WeldMap2D";
 import { exportWorkbook } from "../lib/excel";
@@ -9,6 +9,7 @@ import { TYPE_FA } from "../lib/standards";
 import { sanitize, score, acceptRepair } from "../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../lib/extraction/merge.mjs";
 import SaveBar from "../components/SaveBar";
+import { getIdentity, setIdentity as persistIdentity, authHeaders } from "../lib/client/identity.mjs";
 
 /* ── client-side image prep ────────────────────────────────────
    Vercel functions cap the request body at ~4.5 MB and the vision
@@ -66,14 +67,6 @@ function tiles(img, max, quality, grid) {
   }));
 }
 
-const MODELS = [
-  { id: "claude-opus-5", label: "Opus 5", note: "دقیق‌ترین — برای نقشه‌های شلوغ" },
-  { id: "claude-sonnet-5", label: "Sonnet 5", note: "پیش‌فرض — تعادل دقت و سرعت" },
-  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", note: "سریع — فقط برای نقشه‌های ساده" },
-];
-const DEFAULT_MODEL = "claude-sonnet-5";
-const DEFAULT_REPAIR = "claude-opus-5";   // repair output is small, so escalate freely
-
 const LIMIT = 3_400_000; // keep well under the 4.5 MB body cap
 
 async function prepare(file) {
@@ -95,9 +88,10 @@ export default function Page() {
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState(null);
   const [note, setNote] = useState(null);
-  const [apiKey, setApiKey] = useState("");
-  const [modelName, setModelName] = useState(DEFAULT_MODEL);
-  const [repairModel, setRepairModel] = useState(DEFAULT_REPAIR);
+  const [identity, setIdentity] = useState("");
+  const [catalogue, setCatalogue] = useState(null);
+  const [modelName, setModelName] = useState("");
+  const [repairModel, setRepairModel] = useState("");
   const [tab, setTab] = useState("weld");
   const [selected, setSelected] = useState(null);
   const [exploded, setExploded] = useState(false);
@@ -112,6 +106,28 @@ export default function Page() {
   const [sourceFile, setSourceFile] = useState(null);
   const fileRef = useRef(null);
 
+  useEffect(() => { setIdentity(getIdentity()); }, []);
+
+  /* What the server can actually run — see app/api/models/route.js. */
+  async function loadModels(who = identity) {
+    if (!who) return;
+    persistIdentity(who);
+    try {
+      const res = await fetch("/api/models", { headers: authHeaders(who) });
+      const c = await res.json();
+      if (!res.ok) throw new Error(c.error || `پاسخ ${res.status}`);
+      setCatalogue(c);
+      setModelName((m) => m || c.defaultModel);
+      setRepairModel((m) => m || c.repairModel || c.defaultModel);
+      setErr(null);
+    } catch (e) {
+      setCatalogue(null);
+      setErr("فهرست مدل‌ها خوانده نشد: " + e.message);
+    }
+  }
+
+  const MODELS = catalogue?.models || [];
+
   const model = useMemo(() => (data ? buildModel(data, { strictBom }) : null), [data, strictBom]);
   const sel = model && !model.error ? model.register.find((w) => w.no === selected) : null;
 
@@ -124,9 +140,9 @@ export default function Page() {
     try {
       const resp = await fetch("/api/extract", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: authHeaders(identity),
         signal: ctrl.signal,
-        body: JSON.stringify({ pass, images, ...extra, apiKey: apiKey || undefined,
+        body: JSON.stringify({ pass, images, ...extra,
           model: overrideModel || modelName || undefined }),
       });
       const raw = await resp.text();
@@ -304,32 +320,47 @@ export default function Page() {
           </div>
 
           <div className="key">
-            <label className="muted">کلید Anthropic API (اگر روی Vercel متغیر محیطی گذاشته‌اید خالی بگذارید)</label>
-            <input type="password" placeholder="sk-ant-…" value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)} className="mono" />
-            <label className="muted">مدل استخراج</label>
-            <div className="models">
-              {MODELS.map((m) => (
-                <button key={m.id} className={modelName === m.id ? "on" : ""}
-                  onClick={() => setModelName(m.id)}>
-                  <b className="mono">{m.label}</b>
-                  <span>{m.note}</span>
-                </button>
-              ))}
-            </div>
             <label className="muted">
-              مدل پاس اصلاح — فقط وقتی چک‌ها نخوانند اجرا می‌شود؛ خروجی‌اش کوچک است
-              پس ارتقا به مدل قوی‌تر تقریباً رایگان است
+              شناسه کاربر — کلید API روی سرور است و هرگز از مرورگر ارسال نمی‌شود
             </label>
-            <div className="models">
-              {MODELS.map((m) => (
-                <button key={m.id} className={repairModel === m.id ? "on" : ""}
-                  onClick={() => setRepairModel(m.id)}>
-                  <b className="mono">{m.label}</b>
-                </button>
-              ))}
+            <div className="row">
+              <input className="mono" placeholder="حالت dev: هر نامی" value={identity}
+                onChange={(e) => setIdentity(e.target.value)}
+                onBlur={(e) => loadModels(e.target.value)} />
+              <button className="ghost" disabled={!identity} onClick={() => loadModels()}>اتصال</button>
             </div>
-            <button className="ghost" disabled={!dim} onClick={loadDemo}>نمونه بدون کلید: SW 265022A</button>
+
+            {catalogue && (
+              <>
+                <div className="note mono">
+                  ارائه‌دهنده: {catalogue.provider}
+                  {catalogue.configured ? "" : " — روی سرور پیکربندی نشده"}
+                </div>
+                <label className="muted">مدل استخراج</label>
+                <div className="models">
+                  {MODELS.map((m) => (
+                    <button key={m.id} className={modelName === m.id ? "on" : ""}
+                      onClick={() => setModelName(m.id)}>
+                      <b className="mono">{m.label}</b>
+                      {m.note && <span>{m.note}</span>}
+                    </button>
+                  ))}
+                </div>
+                <label className="muted">
+                  مدل پاس اصلاح — فقط وقتی چک‌ها نخوانند اجرا می‌شود؛ خروجی‌اش کوچک است
+                  پس ارتقا به مدل قوی‌تر تقریباً رایگان است
+                </label>
+                <div className="models">
+                  {MODELS.map((m) => (
+                    <button key={m.id} className={repairModel === m.id ? "on" : ""}
+                      onClick={() => setRepairModel(m.id)}>
+                      <b className="mono">{m.label}</b>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <button className="ghost" disabled={!dim} onClick={loadDemo}>نمونه بدون سرور: SW 265022A</button>
           </div>
 
           {note && <div className="note mono">{note}</div>}

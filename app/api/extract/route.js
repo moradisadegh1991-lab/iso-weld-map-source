@@ -4,6 +4,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 import { ELL90, ELL45, TEE_C } from "../../../lib/standards";
+import { createLlmClient } from "../../../lib/llm/index.mjs";
+import { parseLoose, cleanJsonText } from "../../../lib/llm/parse.mjs";
+import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 
 /* Give the model the real B16.9 take-outs instead of one hard-coded size —
    it can then self-check every dimension it reads, at any diameter. */
@@ -137,40 +140,44 @@ const PASSES = {
   repair: { prompt: REPAIR_PROMPT, maxTokens: 5000 },
 };
 
-/** Parse JSON, and if it was cut off mid-structure, close it and retry. */
-function parseLoose(t) {
-  try { return JSON.parse(t); } catch { /* fall through */ }
-  let inStr = false, esc = false;
-  const stack = [];
-  for (let i = 0; i < t.length; i++) {
-    const ch = t[i];
-    if (esc) { esc = false; continue; }
-    if (ch === "\\") { esc = true; continue; }
-    if (ch === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (ch === "{" || ch === "[") stack.push(ch);
-    else if (ch === "}" || ch === "]") stack.pop();
-  }
-  let s = t;
-  if (inStr) s = s.slice(0, s.lastIndexOf('"'));
-  s = s.replace(/,\s*$/, "");
-  s = s.replace(/,\s*"[^"]*"?\s*:?\s*[^,{}[\]]*$/, "");
-  for (let i = stack.length - 1; i >= 0; i--) s += stack[i] === "{" ? "}" : "]";
-  try { return JSON.parse(s); } catch { return null; }
-}
+const MAX_IMAGE_BYTES = 4_000_000;
 
+/**
+ * One extraction pass.
+ *
+ * This handler now knows nothing about which model answers it: it builds the
+ * prompt and the images, hands them to whatever provider is configured, and
+ * parses what comes back. Swapping a hosted API for a vLLM cluster inside the
+ * plant is LLM_PROVIDER plus LLM_BASE_URL, with no change here.
+ *
+ * The API key is read from the server environment and never from the request.
+ * A key travelling in a request body is a key in the browser, in every proxy
+ * log along the way, and in anyone's devtools.
+ */
 export async function POST(req) {
   const started = Date.now();
   try {
+    // Now that the key lives on the server, an open endpoint would let anyone
+    // who can reach it spend it. Moving the key server-side without this
+    // check would have been a downgrade, not a fix.
+    try {
+      await authenticate(req);
+    } catch (e) {
+      return errorResponse(e);
+    }
+
     let body;
     try {
       body = await req.json();
     } catch {
-      return Response.json({ error: "بدنه درخواست خوانده نشد؛ احتمالاً از سقف ۴.۵ مگابایت Vercel رد شده." }, { status: 413 });
+      return Response.json(
+        { error: "بدنه درخواست خوانده نشد؛ احتمالاً از سقف ۴.۵ مگابایت Vercel رد شده." },
+        { status: 413 });
     }
 
-    const { images, imageBase64, mediaType, apiKey, model, pass, json, issues } = body || {};
+    const { images, imageBase64, mediaType, model, pass, json, issues } = body || {};
     const cfg = PASSES[pass] || PASSES.meta;
+    const label = pass || "meta";
 
     const list = Array.isArray(images) && images.length
       ? images
@@ -180,124 +187,79 @@ export async function POST(req) {
     if (!list.length) return Response.json({ error: "تصویری دریافت نشد." }, { status: 400 });
 
     const bytes = list.reduce((a, i) => a + (i.data ? i.data.length : 0), 0);
-    if (bytes > 4_000_000) {
-      return Response.json({ error: `حجم ارسالی ${(bytes / 1e6).toFixed(1)} MB و بیش از سقف Vercel است.` }, { status: 413 });
+    if (bytes > MAX_IMAGE_BYTES) {
+      return Response.json(
+        { error: `حجم ارسالی ${(bytes / 1e6).toFixed(1)} MB و بیش از سقف Vercel است.` },
+        { status: 413 });
     }
 
-    const keyToUse = apiKey || process.env.ANTHROPIC_API_KEY;
-    if (!keyToUse) {
+    const client = createLlmClient();
+    if (!client.configured) {
       return Response.json({
-        error: "کلید API تنظیم نشده. ANTHROPIC_API_KEY را در Vercel \u203a Settings \u203a Environment Variables بگذارید یا کلید را در صفحه وارد کنید.",
+        error: client.id === "anthropic"
+          ? "ANTHROPIC_API_KEY روی سرور تنظیم نشده. آن را در Environment Variables بگذارید."
+          : "LLM_BASE_URL تنظیم نشده. آدرس سرویس vLLM را در Environment Variables بگذارید.",
+        code: "LLM_NOT_CONFIGURED",
       }, { status: 400 });
     }
 
-    const content = [];
-    list.forEach((im) => {
-      content.push({ type: "text", text: `--- ${im.label || "IMAGE"} ---` });
-      content.push({ type: "image", source: { type: "base64", media_type: im.mediaType || "image/jpeg", data: im.data } });
-    });
-    content.push({ type: "text", text: cfg.prompt });
-    if (pass === "repair") {
-      content.push({ type: "text", text:
-        `CURRENT EXTRACTION:\n${JSON.stringify(json)}\n\nFAILED CHECKS:\n` +
-        (issues || []).map((i) => `- ${i}`).join("\n") });
-    }
+    const extraText = pass === "repair"
+      ? `CURRENT EXTRACTION:\n${JSON.stringify(json)}\n\nFAILED CHECKS:\n` +
+        (issues || []).map((i) => `- ${i}`).join("\n")
+      : null;
 
-    const chosen = model || process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-
-    // Stream so the upstream connection stays active for the whole generation.
-    let r;
+    let out;
     try {
-      r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": keyToUse, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({
-          model: chosen,
-          max_tokens: cfg.maxTokens,
-          temperature: 0,
-          stream: true,
-          messages: [
-            { role: "user", content },
-            // Prefilling the assistant turn with "{" makes prose physically
-            // impossible — the model can only continue the JSON object.
-            { role: "assistant", content: "{" },
-          ],
-        }),
+      out = await client.complete({
+        model, maxTokens: cfg.maxTokens, temperature: 0,
+        images: list, prompt: cfg.prompt, extraText,
       });
     } catch (e) {
-      return Response.json({ error: "اتصال به Anthropic API برقرار نشد: " + String(e.message || e) }, { status: 502 });
+      return Response.json({ error: hint(e), code: e.code || "LLM_ERROR" }, { status: e.status || 502 });
     }
 
-    if (!r.ok || !r.body) {
-      const t = await r.text().catch(() => "");
-      let hint = "";
-      if (r.status === 401) hint = " \u2014 کلید API نامعتبر است.";
-      else if (r.status === 429) hint = " \u2014 محدودیت نرخ؛ کمی بعد دوباره تلاش کنید.";
-      else if (/model/i.test(t)) hint = ` \u2014 نام مدل «${chosen}» پذیرفته نشد؛ در صفحه مدل دیگری وارد کنید.`;
-      return Response.json({ error: `Anthropic API ${r.status}: ${t.slice(0, 250)}${hint}` }, { status: 502 });
-    }
-
-    // Collect the SSE stream into the full text.
-    const reader = r.body.getReader();
-    const dec = new TextDecoder();
-    let buf = "", text = "", usage = null, stopReason = null;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop() || "";
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
-        let ev;
-        try { ev = JSON.parse(payload); } catch { continue; }
-        if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") text += ev.delta.text;
-        if (ev.type === "message_delta") {
-          if (ev.usage?.output_tokens != null) usage = { ...(usage || {}), output_tokens: ev.usage.output_tokens };
-          if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
-        }
-        if (ev.type === "message_start" && ev.message?.usage?.input_tokens != null) {
-          usage = { ...(usage || {}), input_tokens: ev.message.usage.input_tokens };
-        }
-        if (ev.type === "error") {
-          return Response.json({ error: "Anthropic stream error: " + JSON.stringify(ev.error).slice(0, 250) }, { status: 502 });
-        }
-      }
-    }
-
-    const label = pass || "meta";
-
-    if (!text.trim()) {
+    if (!out.text.trim()) {
       return Response.json({
-        error: `پاس «${label}»: مدل هیچ متنی برنگرداند (stop_reason: ${stopReason || "نامشخص"}).`,
+        error: `پاس «${label}»: مدل هیچ متنی برنگرداند (stop_reason: ${out.stopReason || "نامشخص"}).`,
       }, { status: 502 });
     }
 
-    // The assistant turn was prefilled with "{", so put it back.
-    let cleaned = ("{" + text).replace(/```json/gi, "").replace(/```/g, "").trim();
-    const s = cleaned.indexOf("{");
-    const e = cleaned.lastIndexOf("}");
-    if (e > s) cleaned = cleaned.slice(s, e + 1);
-    else cleaned = cleaned.slice(s);
-
+    const cleaned = cleanJsonText(out.text);
     const parsed = parseLoose(cleaned);
     if (!parsed) {
       return Response.json({
         error: `پاس «${label}»: خروجی مدل JSON معتبری نبود` +
-          (stopReason === "max_tokens" ? " و به سقف توکن خورد (بریده شد)." : `. stop_reason: ${stopReason || "نامشخص"}.`),
+          (out.stopReason === "max_tokens"
+            ? " و به سقف توکن خورد (بریده شد)."
+            : `. stop_reason: ${out.stopReason || "نامشخص"}.`),
         raw: cleaned.slice(0, 800),
-        stopReason,
+        stopReason: out.stopReason,
       }, { status: 502 });
     }
 
     return Response.json({
-      data: parsed, usage, model: chosen, ms: Date.now() - started,
-      pass: label, stopReason,
-      truncated: stopReason === "max_tokens",
+      data: parsed,
+      usage: Object.keys(out.usage || {}).length ? out.usage : null,
+      model: out.model,
+      provider: client.id,
+      ms: Date.now() - started,
+      pass: label,
+      stopReason: out.stopReason,
+      truncated: out.stopReason === "max_tokens",
     });
   } catch (err) {
-    return Response.json({ error: "خطای سرور: " + String(err && err.message ? err.message : err) }, { status: 500 });
+    return Response.json(
+      { error: "خطای داخلی: " + String(err?.message || err) },
+      { status: 500 });
   }
+}
+
+/** Turn an upstream failure into something a site engineer can act on. */
+function hint(e) {
+  if (e.code === "LLM_NOT_CONFIGURED") return e.message;
+  const s = e.upstreamStatus;
+  if (s === 401 || s === 403) return e.message + " — کلید API نامعتبر است.";
+  if (s === 429) return e.message + " — محدودیت نرخ؛ کمی بعد دوباره تلاش کنید.";
+  if (/model/i.test(e.raw || "")) return e.message + ` — نام مدل «${e.model}» پذیرفته نشد.`;
+  return e.message;
 }
