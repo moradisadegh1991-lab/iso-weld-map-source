@@ -3,3 +3,4 @@
 .pglite/
 node_modules/
 .next/
+.storage/

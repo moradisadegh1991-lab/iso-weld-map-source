@@ -6,6 +6,9 @@ import { exportWorkbook } from "../lib/excel";
 import { buildModel, registerCsv } from "../lib/engine";
 import { DEMO } from "../lib/demo";
 import { TYPE_FA } from "../lib/standards";
+import { sanitize, score, acceptRepair } from "../lib/extraction/sanitize.mjs";
+import { mergePasses } from "../lib/extraction/merge.mjs";
+import SaveBar from "../components/SaveBar";
 
 /* ── client-side image prep ────────────────────────────────────
    Vercel functions cap the request body at ~4.5 MB and the vision
@@ -86,37 +89,6 @@ async function prepare(file) {
   return { images: out, bytes: sum(out), w: img.naturalWidth, h: img.naturalHeight, grid, long };
 }
 
-/* Cheap deterministic guards that no model can talk its way past. */
-function sanitize(d) {
-  const notes = [];
-  d.meta = d.meta || {};
-  const bomSizes = [...new Set((d.bom || []).map((b) => Number(b.diam)).filter((n) => n > 0))]
-    .sort((a, b) => b - a);
-  if (bomSizes.length) {
-    const n = Number(d.meta.nps);
-    if (!n || !bomSizes.includes(n)) {
-      notes.push(`nps از ${n || "خالی"} به ${bomSizes[0]}" اصلاح شد (ستون DIAM در MTO)`);
-      d.meta.nps = bomSizes[0];
-    }
-    (d.edges || []).forEach((e) => { if (!bomSizes.includes(Number(e.nps))) e.nps = d.meta.nps; });
-  }
-  const before = (d.nodes || []).length;
-  const seen = new Set();
-  d.nodes = (d.nodes || []).filter((n) => {
-    if (![n.E, n.N, n.EL].every((v) => typeof v === "number" && isFinite(v))) return false;
-    const k = `${n.E}|${n.N}|${n.EL}`;
-    if (seen.has(k)) return false;
-    seen.add(k); return true;
-  });
-  if (d.nodes.length !== before) notes.push(`${before - d.nodes.length} گره تکراری یا بی‌مختصات حذف شد`);
-  const ids = new Set(d.nodes.map((n) => n.id));
-  if (Array.isArray(d.edges)) d.edges = d.edges.filter((e) => ids.has(e.from) && ids.has(e.to));
-  return notes;
-}
-
-/* error counts far more than a warning — a repair that breaks the model is never an improvement */
-const score = (m) => (m.error ? 1000 : 0) + ((m.checks || []).filter((c) => c.status === "warn").length);
-
 export default function Page() {
   const [data, setData] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -137,6 +109,7 @@ export default function Page() {
   const [renderMode, setRenderMode] = useState("solid");
   const [colorBy, setColorBy] = useState("spool");
   const [editing, setEditing] = useState("");
+  const [sourceFile, setSourceFile] = useState(null);
   const fileRef = useRef(null);
 
   const model = useMemo(() => (data ? buildModel(data, { strictBom }) : null), [data, strictBom]);
@@ -197,19 +170,8 @@ export default function Page() {
       sanitize(fixed);
       const after = buildModel(fixed);
 
-      // Accept ONLY a strict improvement that keeps the geometry intact.
-      // The old guard read an empty `checks` array on a broken model as "zero
-      // warnings" and happily accepted a repair that had deleted the route.
-      const lostGeometry = (fixed.nodes || []).length < (base.nodes || []).length;
-      const tooFew = (fixed.nodes || []).length < 2;
-      const better = score(after) < score(m);
-
-      if (tooFew || lostGeometry || !better) {
-        return { data: base, ran: true, kept: true,
-          why: tooFew ? "نتیجه کمتر از دو گره داشت"
-            : lostGeometry ? "پاس اصلاح گره حذف کرده بود"
-              : "چک‌ها بهتر نشدند" };
-      }
+      const verdict = acceptRepair(m, after, base, fixed);
+      if (!verdict.accept) return { data: base, ran: true, kept: true, why: verdict.why };
       return { data: fixed, ran: true, notes: r.data.repairNotes || [] };
     } catch (e) {
       return { data: base, ran: true, failed: true, why: e.message };
@@ -221,6 +183,7 @@ export default function Page() {
     setErr(null); setNote(null); setSelected(null);
     try {
       setBusy("آماده‌سازی تصویر…");
+      setSourceFile(f);
       setPreview(URL.createObjectURL(f));
       const { images, bytes, w, h, grid, long } = await prepare(f);
       setNote(`${w}×${h} px → شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
@@ -237,13 +200,7 @@ export default function Page() {
       const a = ra.status === "fulfilled" ? ra.value : null;
       const b = rb.status === "fulfilled" ? rb.value : null;
 
-      const merged = {
-        meta: { ...((a && a.data.meta) || {}), nps: (b && b.data.nps) ?? (a && a.data.meta?.nps) },
-        bom: (a && a.data.bom) || [],
-        nodes: (b && b.data.nodes) || [],
-        notes: (a && a.data.notes) || [],
-        unreadable: [...((a && a.data.unreadable) || []), ...((b && b.data.unreadable) || [])],
-      };
+      const merged = mergePasses(a, b);
 
       const fixes = sanitize(merged);
       let final = merged, rep = { ran: false };
@@ -281,7 +238,7 @@ export default function Page() {
   }
 
   function loadDemo() {
-    setErr(null); setNote(null); setPreview(null); setSelected(null);
+    setErr(null); setNote(null); setPreview(null); setSelected(null); setSourceFile(null);
     setData(DEMO);
     setEditing(JSON.stringify(DEMO, null, 2));
   }
@@ -506,6 +463,7 @@ export default function Page() {
                   <button className="ghost" onClick={() => exportWorkbook(model, data)}>دانلود Excel (۵ شیت)</button>
                   <button className="ghost" onClick={download}>CSV</button>
                 </div>
+                <SaveBar data={data} model={model} sourceFile={sourceFile} strictBom={strictBom} />
                 <p className="muted sm">
                   ستون‌های WPS No، Welder ID، NDT Report و Status در CSV خالی گذاشته شده تا QC پر کند.
                   درصد NDT پیش‌فرض بر مبنای ASME B31.3 §341.4.1 برای Normal Fluid Service است؛ Piping Class پروژه حاکم است.

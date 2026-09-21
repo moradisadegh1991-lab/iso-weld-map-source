@@ -168,3 +168,11 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .drop.locked{opacity:.45;cursor:not-allowed;border-color:var(--rule)}
 .drop.locked:hover{border-color:var(--rule);background:transparent}
 button.ghost:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── persistence bar ─────────────────────────────────────────── */
+.savebar { border-top: 1px solid var(--line, #22303a); margin-top: 12px; padding-top: 12px;
+  display: flex; flex-direction: column; gap: 8px; }
+.savebar .row { display: flex; gap: 6px; align-items: center; }
+.savebar input, .savebar select { flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px;
+  background: #0d1519; color: inherit; border: 1px solid var(--line, #22303a); border-radius: 6px; }
+.savebar button { white-space: nowrap; }
