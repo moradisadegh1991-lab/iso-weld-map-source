@@ -1,17 +1,17 @@
 {
-  "recordedAt": "2026-09-21T15:56:40.530Z",
+  "recordedAt": "2026-09-21T16:45:24.734Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 16,
-    "pass": 14,
+    "cases": 17,
+    "pass": 17,
     "fail": 0,
-    "xfail": 2,
+    "xfail": 0,
     "xpass": 0,
     "passRate": 100,
     "weldCountExact": {
-      "ok": 13,
-      "of": 15,
-      "pct": 86.67
+      "ok": 16,
+      "of": 16,
+      "pct": 100
     },
     "fieldWeldsExact": {
       "ok": 2,
@@ -19,21 +19,21 @@
       "pct": 100
     },
     "spoolCountExact": {
-      "ok": 9,
-      "of": 9,
+      "ok": 11,
+      "of": 11,
       "pct": 100
     },
     "registerExact": {
-      "ok": 4,
-      "of": 4,
+      "ok": 6,
+      "of": 6,
       "pct": 100
     },
     "registerFieldAccuracy": 100,
     "registerFields": {
-      "correct": 64,
-      "of": 64
+      "correct": 82,
+      "of": 82
     },
-    "warnings": 1
+    "warnings": 2
   },
   "cases": [
     {
@@ -102,20 +102,16 @@
     {
       "id": "R09-valve-bw",
       "kind": "rule",
-      "status": "xfail",
+      "status": "pass",
       "file": "eval/cases/rules/R09-valve-bw.json",
-      "failed": [
-        "weldCount"
-      ]
+      "failed": []
     },
     {
       "id": "R10-valve-flanged",
       "kind": "rule",
-      "status": "xfail",
+      "status": "pass",
       "file": "eval/cases/rules/R10-valve-flanged.json",
-      "failed": [
-        "weldCount"
-      ]
+      "failed": []
     },
     {
       "id": "R11-girth-long-run",
@@ -150,6 +146,13 @@
       "kind": "rule",
       "status": "pass",
       "file": "eval/cases/rules/R15-too-few-nodes.json",
+      "failed": []
+    },
+    {
+      "id": "R16-valve-bw-no-dimension",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R16-valve-bw-no-dimension.json",
       "failed": []
     }
   ]

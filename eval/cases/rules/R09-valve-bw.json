@@ -1,61 +1,31 @@
 {
   "id": "R09-valve-bw",
-  "title": "Butt-weld valve -> 2 welds",
+  "title": "Butt-weld valve with a face-to-face length -> 2 welds and a body",
   "rule": "شیر BW → ۲ جوش",
-  "expectedToFail": true,
-  "gap": "takeOut() returns 0 for valve-bw, so the valve has no face-to-face body. Both incident edges therefore emit their weld at the same coordinate and W() merges them inside WELD_TOL (2 mm), leaving one weld where the fabrication rule calls for two. The fix is not to emit two welds at one point: the valve needs a real face-to-face length (ASME B16.10) so the two welds land at distinct positions and the valve body becomes an element that spool-splitting can see.",
-  "gapTracked": "docs/epc-llm/04-engine-findings.md",
-  "options": {
-    "spoolMaxLen": 50000,
-    "maxPipeLength": 50000
-  },
+  "note": "faceToFace is read off the drawing, not from a table: ASME B16.10 keys it on valve type and pressure class, neither of which the extraction carries. The 450 mm here is illustrative — the case tests the mechanism, not a specific B16.10 row.",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
   "input": {
-    "meta": {
-      "nps": 12,
-      "schedule": "SCH 40",
-      "pupLength": 0
-    },
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
     "nodes": [
-      {
-        "id": "N1",
-        "type": "tie-in",
-        "ref": "TP-A",
-        "E": 0,
-        "N": 0,
-        "EL": 10000
-      },
-      {
-        "id": "N2",
-        "type": "valve-bw",
-        "ref": "",
-        "E": 0,
-        "N": 4000,
-        "EL": 10000
-      },
-      {
-        "id": "N3",
-        "type": "tie-in",
-        "ref": "TP-B",
-        "E": 0,
-        "N": 8000,
-        "EL": 10000
-      }
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "valve-bw", "ref": "", "faceToFace": 450, "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 8000, "EL": 10000 }
     ],
     "edges": [
-      {
-        "from": "N1",
-        "to": "N2",
-        "nps": 12
-      },
-      {
-        "from": "N2",
-        "to": "N3",
-        "nps": 12
-      }
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 12 }
     ]
   },
   "expect": {
     "weldCount": 4,
-    "fieldWeldCount": 2
+    "fieldWeldCount": 2,
+    "spoolCount": 1,
+    "maxWarnings": 0,
+    "register": [
+      { "no": "W-01", "loc": "Field", "kind": "Tie-in", "nps": 12 },
+      { "no": "W-02", "loc": "Shop", "kind": "BW", "nps": 12 },
+      { "no": "W-03", "loc": "Shop", "kind": "BW", "nps": 12 },
+      { "no": "W-04", "loc": "Field", "kind": "Tie-in", "nps": 12 }
+    ]
   }
 }

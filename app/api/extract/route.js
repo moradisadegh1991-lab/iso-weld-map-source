@@ -69,6 +69,7 @@ Extract ONLY the route geometry. Do NOT output the BOM or the title block.
   "nodes": [{ "id": string,
               "type": "tie-in"|"elbow90"|"elbow45"|"tee"|"reducer"|"flange-wn"|"valve-bw"|"valve-flanged",
               "ref": string,
+              "faceToFace": number|null,
               "E": number, "N": number, "EL": number }],
   "edges": [{ "from": string, "to": string, "nps": number }],
   "unreadable": [string]
@@ -90,7 +91,12 @@ CRITICAL RULES
    the run size and one branch edge at the branch size. Give each edge its correct "nps".
 7. Every "FOR CONT. SEE ..." callout is its own tie-in node, including continuations to
    another SHEET of the same drawing. A sheet with three callouts has three tie-in nodes.
-8. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
+8. "faceToFace" applies ONLY to a "valve-bw" node: the valve's face-to-face length in mm,
+   read from the dimension printed across the valve on the drawing. Use null for every
+   other node type, and null when the dimension is not shown - do NOT take it from a
+   standards table and do NOT estimate it, because B16.10 keys it on valve type and
+   pressure class which this drawing may not state. A null here is handled downstream.
+9. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
    vertices, still output every tie-in node whose coordinates are printed on the drawing,
    and name what is missing in "unreadable". An incomplete node list is useful;
    prose is not. Your entire reply must be the JSON object and nothing else.`;
