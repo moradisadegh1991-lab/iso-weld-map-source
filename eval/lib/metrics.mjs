@@ -16,6 +16,17 @@ export function evaluateCase(def, model) {
   const assertions = [];
   const expect = def.expect || {};
 
+  // A scaffolded case still carries its `_todo` list. It is not finished, so
+  // it neither passes nor fails — it is waiting on an engineer. Marking it
+  // failed would redden the suite for work in progress, and the pressure that
+  // creates is to fill `expect` from whatever the engine printed, which is
+  // exactly what this dataset must never contain.
+  if (Array.isArray(def._todo) && def._todo.length) {
+    return { id: def.id, kind: def.kind || "rule", title: def.title || def.id,
+             status: "draft", gap: null, assertions: [], errored: false, warnCount: 0,
+             todo: def._todo.length };
+  }
+
   const assert = (name, ok, expected, actual) =>
     assertions.push({ name, ok, expected, actual });
 
@@ -131,6 +142,7 @@ function finish(def, assertions, extra) {
 /** Roll per-case results up into the numbers the baseline gate compares. */
 export function aggregate(results) {
   const counted = (s) => results.filter((r) => r.status === s).length;
+  const live = results.filter((r) => r.status !== "draft");
   const rate = (name) => {
     const rel = results.filter((r) => r.assertions.some((a) => a.name === name));
     if (!rel.length) return null;
@@ -142,11 +154,12 @@ export function aggregate(results) {
 
   return {
     cases: results.length,
+    draft: counted("draft"),
     pass: counted("pass"),
     fail: counted("fail"),
     xfail: counted("xfail"),
     xpass: counted("xpass"),
-    passRate: round(counted("pass") / Math.max(1, results.length - counted("xfail") - counted("xpass")) * 100),
+    passRate: round(counted("pass") / Math.max(1, live.length - counted("xfail") - counted("xpass")) * 100),
     weldCountExact: rate("weldCount"),
     fieldWeldsExact: rate("fieldWelds"),
     spoolCountExact: rate("spoolCount"),

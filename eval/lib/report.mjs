@@ -10,6 +10,7 @@ const MARK = {
   fail: `${C.red}FAIL ${C.off}`,
   xfail: `${C.yellow}XFAIL${C.off}`,
   xpass: `${C.blue}XPASS${C.off}`,
+  draft: `${C.dim}DRAFT${C.off}`,
 };
 
 export function printResults(results) {
@@ -24,6 +25,10 @@ export function printResults(results) {
         const sign = a.ok ? `${C.green}+${C.off}` : `${C.red}-${C.off}`;
         console.log(`        ${sign} ${a.name}: expected ${C.bold}${a.expected}${C.off}, got ${C.bold}${a.actual}${C.off}`);
       }
+      if (r.status === "draft") {
+        console.log(`        ${C.dim}scaffolded — ${r.todo} item(s) left for an engineer, ` +
+          `not scored until _todo is removed${C.off}`);
+      }
       if (r.status === "xfail" && r.gap) console.log(`        ${C.dim}gap: ${r.gap}${C.off}`);
       if (r.status === "xpass") console.log(`        ${C.blue}this known gap now passes — remove expectedToFail from the case${C.off}`);
     }
@@ -35,7 +40,8 @@ export function printSummary(agg) {
   console.log(`\n${C.bold}SUMMARY${C.off}`);
   console.log(`  cases                    ${agg.cases}  ` +
     `${C.green}${agg.pass} pass${C.off} · ${agg.fail ? C.red : C.dim}${agg.fail} fail${C.off} · ` +
-    `${C.yellow}${agg.xfail} xfail${C.off} · ${agg.xpass ? C.blue : C.dim}${agg.xpass} xpass${C.off}`);
+    `${C.yellow}${agg.xfail} xfail${C.off} · ${agg.xpass ? C.blue : C.dim}${agg.xpass} xpass${C.off}` +
+    (agg.draft ? ` · ${C.dim}${agg.draft} draft${C.off}` : ""));
   console.log(`  weld count exact         ${pct(agg.weldCountExact)}`);
   console.log(`  field weld set exact     ${pct(agg.fieldWeldsExact)}`);
   console.log(`  spool count exact        ${pct(agg.spoolCountExact)}`);
@@ -61,6 +67,7 @@ export function compareToBaseline(agg, results, baseline) {
   for (const r of results) {
     const prev = was.get(r.id);
     if (prev === undefined) { notes.push(`new case ${r.id} (${r.status})`); continue; }
+    if (r.status === "draft") { notes.push(`${r.id}: still a draft`); continue; }
     if (prev === "pass" && r.status !== "pass") problems.push(`${r.id}: was pass, now ${r.status}`);
     if (prev === "xfail" && r.status === "fail") problems.push(`${r.id}: known gap widened`);
     if (prev !== "pass" && r.status === "pass") notes.push(`${r.id}: ${prev} -> pass`);
