@@ -1,6 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
-import { getIdentity, setIdentity as persistIdentity, authHeaders } from "../lib/client/identity.mjs";
+import { useState } from "react";
 
 /**
  * Persistence for a computed register.
@@ -19,35 +18,11 @@ async function sha256Hex(buf) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export default function SaveBar({ data, model, sourceFile, strictBom }) {
-  const [identity, setIdentity] = useState("");
-  const [projects, setProjects] = useState(null);
-  const [projectId, setProjectId] = useState("");
+export default function SaveBar({ session, data, model, sourceFile, strictBom, onSaved }) {
+  const { projectId, identity, call } = session;
   const [state, setState] = useState({ phase: "idle" });
   const [saved, setSaved] = useState(null);
   const [diff, setDiff] = useState(null);
-
-  useEffect(() => { setIdentity(getIdentity()); }, []);
-
-  async function call(url, init = {}) {
-    const res = await fetch(url, { ...init, headers: authHeaders(identity) });
-    const body = await res.json().catch(() => ({ error: `پاسخ ${res.status}` }));
-    if (!res.ok) throw new Error(body.error || `پاسخ ${res.status}`);
-    return body;
-  }
-
-  async function loadProjects() {
-    setState({ phase: "busy", msg: "خواندن پروژه‌ها…" });
-    try {
-      persistIdentity(identity);
-      const { projects } = await call("/api/projects");
-      setProjects(projects);
-      if (projects.length === 1) setProjectId(projects[0].id);
-      setState({ phase: "idle" });
-    } catch (e) {
-      setState({ phase: "error", msg: e.message });
-    }
-  }
 
   async function save() {
     if (!projectId) return setState({ phase: "error", msg: "اول پروژه را انتخاب کنید." });
@@ -94,14 +69,13 @@ export default function SaveBar({ data, model, sourceFile, strictBom }) {
       });
 
       setSaved({ doc, run });
+      onSaved?.(run.run.id);
 
       // What this revision changed, and what of it is already welded. Only
       // meaningful when there is an earlier run to compare against.
       try {
-        const res = await fetch(`/api/runs/${run.run.id}/diff?projectId=${projectId}`,
-          { headers: authHeaders(identity) });
-        const d = await res.json();
-        setDiff(res.ok && d.diff ? d : null);
+        const d = await call(`/api/runs/${run.run.id}/diff?projectId=${projectId}`);
+        setDiff(d.diff ? d : null);
       } catch { setDiff(null); }
 
       setState({
@@ -135,22 +109,11 @@ export default function SaveBar({ data, model, sourceFile, strictBom }) {
   return (
     <div className="savebar">
       <div className="row">
-        <input className="mono" placeholder="شناسه کاربر (حالت dev)" value={identity}
-          onChange={(e) => setIdentity(e.target.value)} disabled={busy} />
-        <button className="ghost" onClick={loadProjects} disabled={!identity || busy}>پروژه‌ها</button>
+        <button className="ghost" onClick={save} disabled={busy || !projectId || model?.error}>
+          ذخیره در سامانه
+        </button>
+        {!projectId && <span className="muted sm">اول پروژه را انتخاب کنید.</span>}
       </div>
-
-      {projects && (
-        projects.length ? (
-          <div className="row">
-            <select className="mono" value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={busy}>
-              <option value="">— پروژه —</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.role}</option>)}
-            </select>
-            <button className="ghost" onClick={save} disabled={busy || model?.error}>ذخیره در سامانه</button>
-          </div>
-        ) : <p className="muted sm">این کاربر عضو هیچ پروژه‌ای نیست.</p>
-      )}
 
       {diff && (
         <div className={"revdiff" + (diff.impact.rework.length ? " alarm" : "")}>

@@ -189,3 +189,31 @@ button.ghost:disabled{opacity:.4;cursor:not-allowed}
 .disclaimer { margin-top: 8px; padding: 8px 10px; font-size: 11px; line-height: 1.8;
   border: 1px solid #FF6B4A44; border-right: 3px solid #FF6B4A; border-radius: 6px;
   background: #1a0f0c; color: #FFB4A2; }
+
+/* ── session, review queue, edit panel ───────────────────────── */
+.sessionbar { display: flex; flex-direction: column; gap: 6px; }
+.sessionbar .row { display: flex; gap: 6px; align-items: center; }
+.sessionbar input, .sessionbar select { flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px;
+  background: #0d1519; color: inherit; border: 1px solid var(--line, #22303a); border-radius: 6px; }
+
+.queuebox { border: 1px solid var(--line, #22303a); border-radius: 10px; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px; }
+.queuebox .ask-q { font-weight: 600; }
+
+button.ghost.sm { padding: 2px 8px; font-size: 11px; }
+.warnish { color: #E8C468; }
+
+.editpanel { display: flex; flex-direction: column; gap: 8px; }
+.editpanel input { padding: 6px 8px; font-size: 12px; background: #0d1519; color: inherit;
+  border: 1px solid var(--line, #22303a); border-radius: 6px; }
+.editpanel .locked { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px;
+  border: 1px solid #2E7D5B; border-radius: 8px; background: #0c1713; color: #9FD8BE; }
+.editpanel .pendinghead { padding-top: 4px; }
+
+.difftable { width: 100%; border-collapse: collapse; }
+.difftable th { text-align: right; font-weight: 500; opacity: .6; font-size: 11px; }
+.difftable td { padding: 3px 4px; border-top: 1px solid var(--line, #22303a); vertical-align: top; }
+.difftable .was { color: #FF9C86; text-decoration: line-through; opacity: .75; }
+.difftable .now { color: #7FD6A8; }
+
+.editlog summary { cursor: pointer; font-size: 12px; opacity: .8; padding: 4px 0; }

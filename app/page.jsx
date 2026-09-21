@@ -9,6 +9,10 @@ import { TYPE_FA } from "../lib/standards";
 import { sanitize, score, acceptRepair } from "../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../lib/extraction/merge.mjs";
 import SaveBar from "../components/SaveBar";
+import SessionBar from "../components/SessionBar";
+import ReviewQueue from "../components/ReviewQueue";
+import EditPanel from "../components/EditPanel";
+import { useSession } from "../lib/client/session.mjs";
 import { getIdentity, setIdentity as persistIdentity, authHeaders } from "../lib/client/identity.mjs";
 import { DISCLAIMER_FA } from "../lib/disclaimer.mjs";
 
@@ -105,9 +109,34 @@ export default function Page() {
   const [colorBy, setColorBy] = useState("spool");
   const [editing, setEditing] = useState("");
   const [sourceFile, setSourceFile] = useState(null);
+  // The run currently open for review, loaded from the server. Null while the
+  // page is holding a fresh extraction that has not been saved yet — and that
+  // distinction is what decides between "save" and "apply a correction".
+  const [openRun, setOpenRun] = useState(null);
   const fileRef = useRef(null);
+  const session = useSession();
 
   useEffect(() => { setIdentity(getIdentity()); }, []);
+
+  /* Open a persisted run for review: its payload becomes what is on screen. */
+  async function openRunForReview(runId) {
+    setErr(null);
+    setBusy("خواندن اجرا…");
+    try {
+      const body = await session.call(`/api/runs/${runId}?projectId=${session.projectId}`);
+      setOpenRun(body);
+      setData(body.payload);
+      setEditing(JSON.stringify(body.payload, null, 2));
+      setSelected(null);
+      setSourceFile(null);
+      setTab("weld");
+      if (body.run.engineError) setErr(body.run.engineError);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy("");
+    }
+  }
 
   /* What the server can actually run — see app/api/models/route.js. */
   async function loadModels(who = identity) {
@@ -226,6 +255,7 @@ export default function Page() {
 
       setData(final);
       setEditing(JSON.stringify(final, null, 2));
+      setOpenRun(null);
 
       // A half-failure is recoverable: open the editor on the missing half.
       if (!a || !b) {
@@ -256,6 +286,7 @@ export default function Page() {
 
   function loadDemo() {
     setErr(null); setNote(null); setPreview(null); setSelected(null); setSourceFile(null);
+    setOpenRun(null);
     setData(DEMO);
     setEditing(JSON.stringify(DEMO, null, 2));
   }
@@ -324,12 +355,12 @@ export default function Page() {
             <label className="muted">
               شناسه کاربر — کلید API روی سرور است و هرگز از مرورگر ارسال نمی‌شود
             </label>
+            <SessionBar session={session} />
             <div className="row">
-              <input className="mono" placeholder="حالت dev: هر نامی" value={identity}
-                onChange={(e) => setIdentity(e.target.value)}
-                onBlur={(e) => loadModels(e.target.value)} />
-              <button className="ghost" disabled={!identity} onClick={() => loadModels()}>اتصال</button>
+              <button className="ghost" disabled={!session.identity}
+                onClick={() => loadModels(session.identity)}>خواندن مدل‌ها</button>
             </div>
+            {session.error && <div className="err">{session.error}</div>}
 
             {catalogue && (
               <>
@@ -366,6 +397,14 @@ export default function Page() {
 
           {note && <div className="note mono">{note}</div>}
           {err && <div className="err">{err}</div>}
+
+          {session.projectId && (
+            <div className="queuebox">
+              <div className="ask-q">صف بازبینی</div>
+              <ReviewQueue session={session} onOpen={openRunForReview}
+                currentRunId={openRun?.run?.id} />
+            </div>
+          )}
 
           <ol className="how">
             <li>تصویر در مرورگر به <b>یک نمای کامل + چهار کاشی هم‌پوشان</b> تقسیم می‌شود تا متن ریز BOM خوانده شود و حجم زیر سقف Vercel بماند.</li>
@@ -460,7 +499,8 @@ export default function Page() {
 
           <aside>
             <nav>
-              {[["weld", "سرجوش"], ["check", "اعتبارسنجی"], ["line", "Line Data"], ["mto", "MTO"], ["json", "JSON"]]
+              {[["weld", "سرجوش"], ["check", "اعتبارسنجی"], ["line", "Line Data"], ["mto", "MTO"],
+                ["json", "JSON"], ["review", "بازبینی"]]
                 .map(([k, t]) => (
                   <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{t}</button>
                 ))}
@@ -495,7 +535,8 @@ export default function Page() {
                   <button className="ghost" onClick={() => exportWorkbook(model, data)}>دانلود Excel (۵ شیت)</button>
                   <button className="ghost" onClick={download}>CSV</button>
                 </div>
-                <SaveBar data={data} model={model} sourceFile={sourceFile} strictBom={strictBom} />
+                <SaveBar session={session} data={data} model={model} sourceFile={sourceFile}
+                  strictBom={strictBom} onSaved={openRunForReview} />
                 <p className="muted sm">
                   ستون‌های WPS No، Welder ID، NDT Report و Status در CSV خالی گذاشته شده تا QC پر کند.
                 </p>
@@ -548,13 +589,43 @@ export default function Page() {
               </div>
             )}
 
+            {tab === "review" && (
+              <div className="pane">
+                {openRun ? (
+                  <>
+                    <div className="tot mono">
+                      {openRun.run.docNo} · REV {openRun.run.revision} · {openRun.run.status}
+                    </div>
+                    <EditPanel session={session} run={openRun} edited={editing}
+                      onApplied={() => openRunForReview(openRun.run.id)} />
+                  </>
+                ) : (
+                  <>
+                    <p className="muted sm">
+                      این نقشه هنوز در سامانه ذخیره نشده است. اول از تب سرجوش ذخیره‌اش کنید،
+                      یا یک اجرای موجود را از صف بازبینی باز کنید.
+                    </p>
+                    <ReviewQueue session={session} onOpen={openRunForReview} />
+                  </>
+                )}
+              </div>
+            )}
+
             {tab === "json" && (
               <div className="pane">
                 <textarea className="mono" value={editing} onChange={(e) => setEditing(e.target.value)} spellCheck={false} />
                 <div className="row">
-                  <button className="ghost" onClick={applyEdit}>اعمال</button>
-                  <button className="ghost" onClick={() => { setData(null); setPreview(null); setErr(null); setNote(null); }}>نقشه جدید</button>
+                  <button className="ghost" onClick={applyEdit}>اعمال محلی</button>
+                  <button className="ghost" onClick={() => {
+                    setData(null); setPreview(null); setErr(null); setNote(null); setOpenRun(null);
+                  }}>نقشه جدید</button>
                 </div>
+                {openRun && (
+                  <p className="muted sm">
+                    «اعمال محلی» فقط نمای همین مرورگر را تازه می‌کند. برای ثبت اصلاح روی سرور —
+                    با لاگ فیلدبه‌فیلد — به تب <b>بازبینی</b> بروید.
+                  </p>
+                )}
                 <p className="muted sm">
                   اگر هندسه ناقص ماند، معمولاً سریع‌ترین راه این است که آرایه <code>nodes</code> را
                   خودتان از روی نقشه بنویسید: هر گره یک <code>type</code> و مختصات

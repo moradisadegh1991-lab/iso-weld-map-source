@@ -277,4 +277,31 @@ test("a viewer may read the edit log but not write one", async () => {
   equal(write.status, 403);
 });
 
+const runRoute = await import("../../app/api/runs/[id]/route.js");
+
+test("a run opens for review with its payload, register and edit log", async () => {
+  const { status, body } = await json(await runRoute.GET(
+    req(`http://x/api/runs/${runId}?projectId=${project.id}`), { params: { id: runId } }));
+  equal(status, 200);
+  equal(body.run.docNo, "SW 265022A");
+  equal(body.run.revision, "0");
+  assert(body.run.lockedAt, "and says it is locked, so the UI can refuse to offer an edit");
+  equal(body.payload.meta.drawingNo, "SW 265022A", "the reviewer edits what the model produced");
+  // Asserted against the engine rather than a literal: an earlier test in this
+  // file corrected the geometry, which lengthened a run and added a girth
+  // weld. The invariant is that the stored register matches what the engine
+  // makes of the stored payload — not that it is any particular number.
+  equal(body.register.length, buildModel(body.payload, {}).register.length);
+  equal(body.edits.length, 3,
+    "reviewing without knowing somebody already fixed half of it wastes the scarcest resource");
+});
+
+test("a run from another project is not found", async () => {
+  const stranger = await projects.createProject(db, {
+    code: "OTHER", name: "Other", ownerUserId: alice.id });
+  const { status } = await json(await runRoute.GET(
+    req(`http://x/api/runs/${runId}?projectId=${stranger.id}`), { params: { id: runId } }));
+  equal(status, 404);
+});
+
 await run();
