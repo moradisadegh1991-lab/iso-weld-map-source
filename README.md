@@ -76,6 +76,22 @@ GET  /api/reports/edit-hotspots        کدام فیلد را مهندس‌ها 
 تغییر بعدی نیاز به **رویژن جدید نقشه** دارد، چون امضا در برابر همان بایت‌ها
 زده شده. جزئیات: [`lib/review/README.md`](lib/review/README.md)
 
+## گزارش‌دهی
+
+اسکیمای `reporting` یک **مدل ستاره** برای Power BI است: شش بعد، سه فکت، و پنج
+view آمادهٔ KPI (پیشرفت خط، عملکرد جوشکار، وضعیت اسپول، شکاف تحویل، دقت
+استخراج).
+
+```
+postgresql://app_report@host/isoweld?options=-c%20app.project_id%3D<PROJECT-UUID>
+```
+
+> هر view با `security_invoker = true` تعریف شده. یک view معمولی در PostgreSQL
+> با دسترسی **مالکش** اجرا می‌شود، یعنی RLS دور زده می‌شود و دادهٔ همهٔ
+> پروژه‌ها به گزارش می‌رود — نشتی که هیچ علامتی ندارد.
+
+راهنمای کامل: [`docs/powerbi/README.md`](docs/powerbi/README.md)
+
 ## سلب مسئولیت
 
 خروجی این ابزار **پیش‌نویس** است. قبل از ساخت باید توسط مهندس پایپینگ در برابر
