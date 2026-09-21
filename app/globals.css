@@ -184,3 +184,8 @@ button.ghost:disabled{opacity:.4;cursor:not-allowed}
 .revdiff .rework { display: flex; flex-direction: column; gap: 3px; margin-top: 6px;
   padding-top: 6px; border-top: 1px solid #3a2420; color: #FFB4A2; }
 .revdiff .rework b { color: #FF6B4A; }
+
+/* ── draft disclaimer, on screen as well as on every export ──── */
+.disclaimer { margin-top: 8px; padding: 8px 10px; font-size: 11px; line-height: 1.8;
+  border: 1px solid #FF6B4A44; border-right: 3px solid #FF6B4A; border-radius: 6px;
+  background: #1a0f0c; color: #FFB4A2; }

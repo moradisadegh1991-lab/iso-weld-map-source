@@ -7,6 +7,7 @@ import { createRun, saveRegister, getRegister, latestRunForDocument, latestRunFo
   from "../../../lib/db/repos/runs.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { buildModel } from "../../../lib/engine.js";
+import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
 
 /**
  * Persist an extraction and the register it produces.
@@ -33,6 +34,19 @@ export async function POST(request) {
     const model = buildModel(payload, options);
 
     return await withProject(db, projectId, async () => {
+      // A signed register is not re-extracted over. Correcting it means a new
+      // drawing revision, because that is what the signature was against.
+      const signed = await approvedRunFor(db, { projectId, documentId });
+      if (signed) {
+        return Response.json({
+          error: "برای این رویژن سند، رجیستر تأییدشده وجود دارد. " +
+            "برای تغییر، رویژن جدید نقشه را ثبت کنید.",
+          code: "REVISION_ALREADY_APPROVED",
+          approvedRunId: signed.id,
+          approvedAt: signed.approved_at,
+        }, { status: 409 });
+      }
+
       // Look this up BEFORE creating the new run, or the "latest run for this
       // drawing" is the row we are about to insert and nothing is ever carried.
       const docNo = payload?.meta?.drawingNo;

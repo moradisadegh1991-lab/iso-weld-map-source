@@ -10,6 +10,7 @@ import { sanitize, score, acceptRepair } from "../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../lib/extraction/merge.mjs";
 import SaveBar from "../components/SaveBar";
 import { getIdentity, setIdentity as persistIdentity, authHeaders } from "../lib/client/identity.mjs";
+import { DISCLAIMER_FA } from "../lib/disclaimer.mjs";
 
 /* ── client-side image prep ────────────────────────────────────
    Vercel functions cap the request body at ~4.5 MB and the vision
@@ -497,8 +498,8 @@ export default function Page() {
                 <SaveBar data={data} model={model} sourceFile={sourceFile} strictBom={strictBom} />
                 <p className="muted sm">
                   ستون‌های WPS No، Welder ID، NDT Report و Status در CSV خالی گذاشته شده تا QC پر کند.
-                  درصد NDT پیش‌فرض بر مبنای ASME B31.3 §341.4.1 برای Normal Fluid Service است؛ Piping Class پروژه حاکم است.
                 </p>
+                <div className="disclaimer">{DISCLAIMER_FA}</div>
               </div>
             )}
 
