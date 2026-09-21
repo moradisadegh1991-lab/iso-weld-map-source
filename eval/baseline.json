@@ -1,16 +1,16 @@
 {
-  "recordedAt": "2026-09-21T16:45:24.734Z",
+  "recordedAt": "2026-09-21T21:13:09.651Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 17,
-    "pass": 17,
+    "cases": 22,
+    "pass": 22,
     "fail": 0,
     "xfail": 0,
     "xpass": 0,
     "passRate": 100,
     "weldCountExact": {
-      "ok": 16,
-      "of": 16,
+      "ok": 21,
+      "of": 21,
       "pct": 100
     },
     "fieldWeldsExact": {
@@ -19,21 +19,21 @@
       "pct": 100
     },
     "spoolCountExact": {
-      "ok": 11,
-      "of": 11,
+      "ok": 12,
+      "of": 12,
       "pct": 100
     },
     "registerExact": {
-      "ok": 6,
-      "of": 6,
+      "ok": 7,
+      "of": 7,
       "pct": 100
     },
     "registerFieldAccuracy": 100,
     "registerFields": {
-      "correct": 82,
-      "of": 82
+      "correct": 94,
+      "of": 94
     },
-    "warnings": 2
+    "warnings": 5
   },
   "cases": [
     {
@@ -153,6 +153,41 @@
       "kind": "rule",
       "status": "pass",
       "file": "eval/cases/rules/R16-valve-bw-no-dimension.json",
+      "failed": []
+    },
+    {
+      "id": "R17-reducer-body-length",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R17-reducer-body-length.json",
+      "failed": []
+    },
+    {
+      "id": "R18-reducer-measured",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R18-reducer-measured.json",
+      "failed": []
+    },
+    {
+      "id": "R19-flange-hub-missing",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R19-flange-hub-missing.json",
+      "failed": []
+    },
+    {
+      "id": "R20-flange-hub-measured",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R20-flange-hub-measured.json",
+      "failed": []
+    },
+    {
+      "id": "R21-spool-over-transport-limit",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R21-spool-over-transport-limit.json",
       "failed": []
     }
   ]

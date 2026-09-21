@@ -98,12 +98,16 @@ CRITICAL RULES
    the run size and one branch edge at the branch size. Give each edge its correct "nps".
 7. Every "FOR CONT. SEE ..." callout is its own tie-in node, including continuations to
    another SHEET of the same drawing. A sheet with three callouts has three tie-in nodes.
-8. "faceToFace" applies ONLY to a "valve-bw" node: the valve's face-to-face length in mm,
-   read from the dimension printed across the valve on the drawing. Use null for every
-   other node type, and null when the dimension is not shown - do NOT take it from a
-   standards table and do NOT estimate it, because B16.10 keys it on valve type and
-   pressure class which this drawing may not state. A null here is handled downstream.
-9. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
+8. IN-LINE COMPONENTS - a valve, a reducer, a weld-neck flange - have no centreline
+   intersection, so their node goes at the CENTRE OF THE BODY, half its length from each
+   of its two welds. (An elbow or a tee still goes on the centreline intersection.)
+9. "faceToFace" is the body length in mm of such an in-line component, read from the
+   dimension printed across it on the drawing. Use null for every other node type, and
+   null when the dimension is not shown - do NOT take it from a standards table and do
+   NOT estimate it. The tables that would give it (B16.10 for valves, B16.9 for reducers,
+   B16.5 for flange hubs) key on valve type, pressure class or reduction ratio, and this
+   drawing may state none of them. A null here is handled downstream and reported.
+10. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
    vertices, still output every tie-in node whose coordinates are printed on the drawing,
    and name what is missing in "unreadable". An incomplete node list is useful;
    prose is not. Your entire reply must be the JSON object and nothing else.`;
