@@ -1,0 +1,29 @@
+{
+  "id": "R07-reducer",
+  "title": "Concentric reducer 12\" x 8\" -> 2 welds, multi-diameter edges",
+  "rule": "تبدیل → ۲ جوش",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "reducer", "ref": "", "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 10000, "EL": 10000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 8 }
+    ]
+  },
+  "expect": {
+    "weldCount": 4,
+    "fieldWeldCount": 2,
+    "girthWelds": 0,
+    "register": [
+      { "no": "W-01", "loc": "Field", "kind": "Tie-in", "nps": 12 },
+      { "no": "W-02", "nps": 12 },
+      { "no": "W-03", "nps": 8 },
+      { "no": "W-04", "loc": "Field", "kind": "Tie-in", "nps": 8 }
+    ]
+  }
+}

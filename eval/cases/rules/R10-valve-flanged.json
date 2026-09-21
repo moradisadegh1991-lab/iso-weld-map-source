@@ -1,0 +1,61 @@
+{
+  "id": "R10-valve-flanged",
+  "title": "Flanged valve -> 0 welds (bolted, not welded)",
+  "rule": "شیر فلنجی → ۰ جوش",
+  "expectedToFail": true,
+  "gap": "A flanged valve is bolted, not welded, but the toA/toB === 0 branch in buildModel emits a BW weld at every zero-take-out node unconditionally, so the valve gets one weld it should not have. The fix needs the node type to declare whether it is a welded joint at all; a complete model would also place the mating weld-neck flanges either side, each carrying its own single weld.",
+  "gapTracked": "docs/epc-llm/04-engine-findings.md",
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000
+  },
+  "input": {
+    "meta": {
+      "nps": 12,
+      "schedule": "SCH 40",
+      "pupLength": 0
+    },
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "TP-A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "valve-flanged",
+        "ref": "",
+        "E": 0,
+        "N": 4000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "tie-in",
+        "ref": "TP-B",
+        "E": 0,
+        "N": 8000,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 12
+      },
+      {
+        "from": "N2",
+        "to": "N3",
+        "nps": 12
+      }
+    ]
+  },
+  "expect": {
+    "weldCount": 2,
+    "fieldWeldCount": 2
+  }
+}

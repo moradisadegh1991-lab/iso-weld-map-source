@@ -2,7 +2,14 @@
   "name": "iso-weld-map",
   "version": "1.0.0",
   "private": true,
-  "scripts": { "dev": "next dev", "build": "next build", "start": "next start" },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "eval": "node --import ./eval/register.mjs eval/run.mjs",
+    "eval:check": "node --import ./eval/register.mjs eval/run.mjs --check",
+    "eval:update": "node --import ./eval/register.mjs eval/run.mjs --update-baseline"
+  },
   "dependencies": {
     "next": "14.2.30",
     "react": "18.3.1",

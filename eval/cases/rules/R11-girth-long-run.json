@@ -1,0 +1,15 @@
+{
+  "id": "R11-girth-long-run",
+  "title": "Straight run longer than maxPipeLength -> intermediate girth welds",
+  "rule": "ران مستقیم بلندتر از maxPipeLength → girth weld میانی",
+  "options": { "spoolMaxLen": 60000, "maxPipeLength": 12000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 30000, "EL": 10000 }
+    ],
+    "edges": [{ "from": "N1", "to": "N2", "nps": 12 }]
+  },
+  "expect": { "weldCount": 4, "girthWelds": 2, "fieldWeldCount": 2, "spoolCount": 1 }
+}

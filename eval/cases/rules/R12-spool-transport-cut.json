@@ -1,0 +1,21 @@
+{
+  "id": "R12-spool-transport-cut",
+  "title": "Spool longer than the transport limit -> Field Closure cuts",
+  "rule": "حد طول حمل — هرجا اسپول از سقف رد شود، closure بریده می‌شود و مرز اسپول روی جوش Field می‌نشیند",
+  "options": { "spoolMaxLen": 6000, "maxPipeLength": 6000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 24000, "EL": 10000 }
+    ],
+    "edges": [{ "from": "N1", "to": "N2", "nps": 12 }]
+  },
+  "expect": {
+    "weldCount": 5,
+    "girthWelds": 3,
+    "closureWelds": 3,
+    "fieldWeldCount": 5,
+    "spoolCount": 4
+  }
+}
