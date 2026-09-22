@@ -25,8 +25,14 @@ export default function TruthBar({ model, data }) {
   function read(raw) {
     setErr(null);
     try {
-      const { headers, rows } = parseDelimited(raw);
+      const { headers, rows, suspectDelimiter } = parseDelimited(raw);
       if (!headers.length) return setErr("چیزی خوانده نشد.");
+      if (suspectDelimiter) {
+        return setErr(
+          "جداکنندهٔ ستون‌ها شناخته نشد — کل سطر در یک ستون افتاد. " +
+          "از Excel کپی کنید (Tab می‌گذارد)، یا ستون‌ها را با «کاما» یا " +
+          "«دست‌کم دو فاصله» از هم جدا کنید.");
+      }
       const { mapping, unmapped } = guessMapping(headers);
       if (mapping.no == null) {
         return setErr(`ستون شمارهٔ جوش پیدا نشد. سرستون‌ها: ${headers.join(" · ")}`);
@@ -101,7 +107,8 @@ export default function TruthBar({ model, data }) {
         className="mono truth-paste"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder={"یا مستقیم از Excel کپی و اینجا Paste کنید:\n\nWeld No\tLocation\tType\tSize\nW-01\tField\tTie-in\t28"}
+        placeholder={"از Excel کپی کنید، یا ستون‌ها را با کاما یا دو فاصله جدا کنید:\n\n"
+          + "Weld No,Location,Type,Size\nW-01,Field,Tie-in,28\nW-02,Shop,BW,28"}
         spellCheck={false}
       />
 

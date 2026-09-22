@@ -23,6 +23,48 @@ test("a CSV, a TSV and an Excel paste all read the same", async () => {
   }
 });
 
+test("a register pasted as aligned columns reads correctly", async () => {
+  // What actually arrives when the register is copied out of a PDF, a
+  // terminal or a chat message: no tabs, columns lined up with spaces. The
+  // first version defaulted to a comma here, found none, and put the whole
+  // row in the weld-number cell — producing a golden file that was
+  // structurally valid and completely wrong.
+  const p = parseDelimited([
+    "Weld No   SHOP/FIELD   JOINT       NPS",
+    "W-01      FIELD        TIE IN      28",
+    "W-02      Shop         Butt Weld   28",
+  ].join("\n"));
+  equal(p.headers, ["Weld No", "SHOP/FIELD", "JOINT", "NPS"]);
+  equal(p.suspectDelimiter, false);
+
+  const { mapping } = guessMapping(p.headers);
+  const reg = toRegister(p.rows, mapping);
+  equal(reg[0], { no: "W-01", loc: "Field", kind: "Tie-in", nps: 28, spool: null, ndt: null });
+  equal(reg[1].kind, "BW", "and a single space inside a value does not split it");
+});
+
+test("a single space never splits a column", async () => {
+  // "Butt Weld", "Weld No" and "TIE IN" all contain one; two or more is the
+  // separator, one is part of the word.
+  const p = parseDelimited("Weld No   Joint Type\nW-01      Butt Weld");
+  equal(p.headers, ["Weld No", "Joint Type"]);
+  equal(p.rows[0], ["W-01", "Butt Weld"]);
+});
+
+test("a layout it cannot split says so instead of inventing a register", async () => {
+  // One column, but the header names several fields we know: the separator
+  // was missed. Silence here is what produced the broken golden file.
+  const p = parseDelimited("Weld No|Location|Type\nW-01|Field|Tie-in");
+  equal(p.headers.length, 1, "the pipe character is not a delimiter it knows");
+  equal(p.suspectDelimiter, true, "and it admits the row is really several columns");
+});
+
+test("a genuinely single-column file is not accused of being wide", async () => {
+  const p = parseDelimited("Weld No\nW-01\nW-02");
+  equal(p.headers, ["Weld No"]);
+  equal(p.suspectDelimiter, false, "one field name is not two");
+});
+
 test("a quoted cell containing the delimiter survives", async () => {
   const p = parseDelimited('Weld No,Note\nW-01,"tie-in, upper end"');
   equal(p.rows[0], ["W-01", "tie-in, upper end"]);
