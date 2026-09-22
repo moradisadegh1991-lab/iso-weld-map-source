@@ -122,6 +122,17 @@ test("an unreadable description yields null, not a default", async () => {
   equal(classifyKind("Widget 4000").kind, null, "an unknown word is not a vessel");
 });
 
+test("fired equipment is static, and a boiler feed pump is still a pump", async () => {
+  equal(classifyKind("Ethane Cracking Furnace").kind, "static");
+  equal(classifyKind("Fired Heater").kind, "static");
+  equal(classifyKind("کوره کراکینگ").kind, "static");
+  equal(classifyKind("Boiler Feed Water Pump").kind, "rotating",
+    "'boiler' must not make one of the most common pumps in a plant ambiguous");
+  equal(classifyKind("Induced Draft Fan").kind, "rotating");
+  equal(classifyKind("Cracked Gas Dryer").kind, "static");
+  equal(classifyKind("Product Air Cooler").kind, null, "and fin-fans stay with the engineer");
+});
+
 test("a definite word still wins over a generic one in the same description", async () => {
   equal(classifyKind("Feed Pump Unit").kind, "rotating",
     "'unit' must not make a pump ambiguous");

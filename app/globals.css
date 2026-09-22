@@ -481,3 +481,10 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
   .sidenav a .tail{display:none}
   :root{--tile:150px}
 }
+
+/* Codes in table cells render left-to-right, still aligned to the RTL column.
+   Without this, "28-CWR-10-930065A" in an RTL table is displayed as
+   "CWR-10-930065A-28": the bidi algorithm moves the leading number to the
+   other end. A wrong line number on an engineering screen is a defect, not
+   a style issue — and it was only visible in a screenshot. */
+.dtable td.mono{direction:ltr;text-align:right;unicode-bidi:isolate}

@@ -17,6 +17,7 @@ import { STAGES } from "../../lib/platform/workflow.mjs";
 import ReviewQueue from "../../components/ReviewQueue";
 import EditPanel from "../../components/EditPanel";
 import { useSession } from "../../lib/client/session.mjs";
+import { useProjectData } from "../../lib/client/platform.mjs";
 import { prepare, prepareSource } from "../../lib/client/image-prep.mjs";
 import { isPdf, openPdf, renderPage } from "../../lib/client/pdf.mjs";
 import PdfSheetPicker from "../../components/PdfSheetPicker";
@@ -93,7 +94,13 @@ export default function Page() {
 
   const MODELS = catalogue?.models || [];
 
-  const model = useMemo(() => (data ? buildModel(data, { strictBom }) : null), [data, strictBom]);
+  // The project's grade elevation, so the preview can say which welds are
+  // buried before anything is saved. Absent, the engine gives no verdict.
+  const profile = useProjectData((id) => `/api/project?projectId=${id}`, []);
+  const gradeElevationMm = profile.data?.project?.grade_elevation_mm ?? null;
+  const model = useMemo(
+    () => (data ? buildModel(data, { strictBom, gradeElevationMm }) : null),
+    [data, strictBom, gradeElevationMm]);
   const sel = model && !model.error ? model.register.find((w) => w.no === selected) : null;
 
   /* One serverless invocation per pass. Passes run in parallel so total wall
@@ -518,6 +525,9 @@ export default function Page() {
                   لوله {(model.totals.pipeLen / 1000).toFixed(2)} m ·
                   CL {(model.totals.clCalc / 1000).toFixed(2)} m
                   {model.totals.girth > 0 ? ` · ${model.totals.girth} girth` : ""}
+                  {model.totals.buried === null
+                    ? " · زیرزمینی: تراز گرید ثبت نشده"
+                    : ` · ${model.totals.buried} زیرزمینی / ${model.totals.aboveGround} روزمینی`}
                 </div>
                 <table>
                   <thead><tr><th>No</th><th>Spool</th><th>محل</th><th>نوع</th><th>اتصال</th><th>EL</th><th>NDT</th></tr></thead>
