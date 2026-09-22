@@ -10,6 +10,7 @@ import { sanitize, score, acceptRepair } from "../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../lib/extraction/merge.mjs";
 import SaveBar from "../components/SaveBar";
 import TabNav from "../components/TabNav";
+import TruthBar from "../components/TruthBar";
 import SessionBar from "../components/SessionBar";
 import ReviewQueue from "../components/ReviewQueue";
 import EditPanel from "../components/EditPanel";
@@ -598,6 +599,8 @@ export default function Page() {
                 )}
               </div>
             )}
+
+            {tab === "truth" && <TruthBar model={model} data={data} />}
 
             {tab === "json" && (
               <div className="pane">

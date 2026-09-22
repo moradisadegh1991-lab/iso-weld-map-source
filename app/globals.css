@@ -116,6 +116,18 @@ textarea:focus{border-color:var(--cy)}
   aside{width:100%;max-width:none;border-inline-start:none;border-top:1px solid var(--rule);max-height:52vh}
   .canvas{min-height:340px}
 }
+/* ── the contractor's register ────────────────────────────────────────── */
+/* A file input styled as a button: the native control is unreadable at this
+   size and cannot be made to match the others. */
+.filelabel{position:relative;overflow:hidden;display:inline-flex;align-items:center;
+  padding:6px 11px;border:1px solid var(--rule);border-radius:4px;color:var(--dim);
+  font-size:12px;cursor:pointer;transition:border-color .15s,color .15s}
+.filelabel:hover{border-color:var(--cy);color:var(--cy)}
+.filelabel input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+/* Shorter than the JSON editor: this is a paste target, not a workspace. */
+.truth-paste{min-height:140px}
+.err.sm{font-size:11px;line-height:1.7}
+
 /* ── the pane navigator ───────────────────────────────────────────────── */
 .tabnav{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
 .tabnav button{display:flex;align-items:center;gap:6px;font-family:inherit;font-size:12px;
