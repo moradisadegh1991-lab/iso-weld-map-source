@@ -25,6 +25,7 @@ import { recordActivity } from "../lib/db/repos/activities.mjs";
 import { createRun, saveRegister } from "../lib/db/repos/runs.mjs";
 import { upsertWelder, addQualification, assignWeld, recordNdt } from "../lib/db/repos/execution.mjs";
 import { recordSpoolActivity, upsertSupport, markSupport } from "../lib/db/repos/piping-execution.mjs";
+import { upsertFoundation, recordPour, recordSpecimens } from "../lib/db/repos/civil.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -115,6 +116,7 @@ try {
     grid_origin_e_mm: 0, grid_origin_n_mm: 0, plant_north_deg: 0,
     elevation_datum: "گرید ±0.00 = EL 100000 mm",
     grade_elevation_mm: 100000, min_cover_mm: 800,
+    concrete_curing_days: 7,
   }});
 
   await withProject(db, p.id, async () => {
@@ -165,8 +167,8 @@ try {
     // Some progress on the charge gas compressor, so its chain has a story.
     const { rows: [k2101] } = await db.query(
       "SELECT id FROM tag WHERE project_id = $1 AND tag_no = 'K-2101'", [p.id]);
-    for (const [code, d, ref] of [["foundation", "2026-07-10", "POUR-2101"],
-                                  ["set", "2026-08-20", "SET-2101"],
+    // Its foundation step is civil's (FDN-K-2101 below), not a tick here.
+    for (const [code, d, ref] of [["set", "2026-08-20", "SET-2101"],
                                   ["grout", "2026-08-27", "GRT-2101"]]) {
       await recordActivity(db, { projectId: p.id, tagId: k2101.id, code, doneAt: d,
         refNo: ref, userId: user.id });
@@ -234,6 +236,64 @@ try {
     } else {
       console.log("register: already present, left as it is");
     }
+    // ── civil: foundations, each showing one rule at work ──
+    //
+    //   FDN-K-2101   charge gas compressor: poured, cured, two samples for
+    //                180 m³, accepted, handed over — so K-2101 can be set
+    //   FDN-P-1203A  poured last week, only a 7-day break so far
+    //   FDN-F-1101A  furnace: a C25 truck on a C30 foundation — held
+    //   FDN-PR-01/02, FDN-P-1203B  three C30 tests each inside the individual
+    //                band whose three-test average is under 30 — all held
+    //   FDN-T-3102   demethanizer: rebar done, anchor bolts next
+    const tagId = async (no) => (await db.query(
+      "SELECT id FROM tag WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0]?.id || null;
+    const ticks = async (fid, codes, when) => {
+      for (const code of codes) {
+        await recordActivity(db, { projectId: p.id, tagId: fid, code, doneAt: when, userId: user.id });
+      }
+    };
+    const TO_PRE = ["excavation", "blinding", "rebar", "embedments", "pre_pour"];
+    const FOUNDATIONS = [
+      { no: "FDN-K-2101", carries: "K-2101", cls: "C35", fc: 35, vol: 180, ab: "VND-K2101-AB-C",
+        pre: "2026-06-18", pours: [["PC-2101", "2026-06-20", "C35", 35,
+          [["S1", 28, [38.5, 39.5]], ["S2", 28, [37.0, 38.0]], ["S1", 7, [26.0, 27.0]]]]],
+        after: ["backfill", "ready"], afterOn: "2026-07-25" },
+      { no: "FDN-P-1203A", carries: "P-1203A", cls: "C30", fc: 30, vol: 12,
+        pre: "2026-09-12", pours: [["PC-1203A", "2026-09-15", "C30", 30, [["S1", 7, [20.5, 21.5]]]]] },
+      { no: "FDN-F-1101A", carries: "F-1101A", cls: "C30", fc: 30, vol: 95,
+        pre: "2026-07-22", pours: [["PC-1101A", "2026-07-25", "C25", 25, [["S1", 28, [29.0, 30.0]]]]] },
+      { no: "FDN-PR-01", carries: null, cls: "C30", fc: 30, vol: 8,
+        pre: "2026-06-29", pours: [["PC-PR01", "2026-07-01", "C30", 30, [["S1", 28, [28.5, 29.0]]]]] },
+      { no: "FDN-PR-02", carries: null, cls: "C30", fc: 30, vol: 8,
+        pre: "2026-07-03", pours: [["PC-PR02", "2026-07-05", "C30", 30, [["S1", 28, [27.5, 28.5]]]]] },
+      { no: "FDN-P-1203B", carries: "P-1203B", cls: "C30", fc: 30, vol: 12,
+        pre: "2026-08-08", pours: [["PC-1203B", "2026-08-10", "C30", 30, [["S1", 28, [31.5, 32.5]]]]] },
+      { no: "FDN-T-3102", carries: "T-3102", cls: "C35", fc: 35, vol: 210, upTo: ["excavation", "blinding", "rebar"],
+        pre: "2026-09-10", pours: [] },
+    ];
+    for (const f of FOUNDATIONS) {
+      const fdn = await upsertFoundation(db, { projectId: p.id, tagNo: f.no,
+        carriesTagId: f.carries ? await tagId(f.carries) : null,
+        subsystemId: f.carries ? null : sub["21-01"].id,
+        concreteClass: f.cls, fcMpa: f.fc, volumeM3: f.vol, anchorBoltRef: f.ab || null,
+        description: f.carries ? `فونداسیون ${f.carries}` : "فونداسیون پایپ رک" });
+      await ticks(fdn.id, f.upTo || TO_PRE, f.pre);
+      for (const [pourNo, on, cls, fc, samples] of f.pours) {
+        const pour = await recordPour(db, { projectId: p.id, tagId: fdn.id, pourNo, pouredOn: on,
+          volumeM3: f.vol, concreteClass: cls, fcMpa: fc, contractorId: civil.id, userId: user.id });
+        const { rows: [n] } = await db.query(
+          "SELECT count(*)::int AS n FROM concrete_specimen WHERE pour_id = $1", [pour.id]);
+        if (n.n === 0) {                       // specimens insert, so only once
+          for (const [sampleNo, age, results] of samples) {
+            await recordSpecimens(db, { projectId: p.id, pourId: pour.id, sampleNo,
+              specimenType: "cyl150", ageDays: age, results, userId: user.id });
+          }
+        }
+      }
+      if (f.after) await ticks(fdn.id, f.after, f.afterOn);
+    }
+    console.log(`civil: ${FOUNDATIONS.length} foundations`);
+
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks
     // it up too.

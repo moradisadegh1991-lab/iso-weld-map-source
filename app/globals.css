@@ -434,7 +434,13 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
   padding:8px 10px;font:inherit;font-size:13px;outline:none;width:100%}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cy)}
 .field textarea{min-height:76px;resize:vertical}
-.field .hint{font-size:10px;color:var(--dim)}
+/* position:static is not decoration. The original single-page stylesheet has
+   `.hint{position:absolute;bottom:12px;left:12px}` for the caption over the
+   3D viewer, and it applied to every form hint in the shell: each one was
+   pinned to its form's bottom-left corner, on top of the others. Screenshots
+   missed it for three rounds because the full-page capture stopped at the
+   fold; measuring the hints' boxes found it. */
+.field .hint{position:static;display:block;font-size:10px;color:var(--dim)}
 
 .btn{background:var(--cy);border:1px solid var(--cy);color:#051015;border-radius:4px;
   padding:8px 16px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}

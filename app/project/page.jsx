@@ -50,6 +50,17 @@ const SITING = [
   ["min_cover_mm", "حداقل عمق پوشش لولهٔ مدفون — mm", "number", "1", "طبق spec پروژه"],
 ];
 
+/**
+ * The concrete specification. Curing days is not defaulted: it decides when
+ * every foundation's curing step completes, and it is the spec's number.
+ */
+const CONCRETE = [
+  ["concrete_curing_days", "مدت عمل‌آوری بتن (روز)", "number", "1",
+    "تا ثبت نشود، مرحلهٔ عمل‌آوری هیچ فونداسیونی حکم نمی‌گیرد"],
+  ["concrete_sample_per_m3", "حجم بتن به ازای هر نمونهٔ آزمون (m³)", "number", "0.1",
+    "خالی = معیار ACI 318 (۱۵۰ یارد مکعب ≈ ۱۱۵ m³)"],
+];
+
 export default function ProjectPage() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/project?projectId=${id}`, []);
@@ -63,7 +74,7 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!data?.project) return;
     const p = data.project;
-    setForm(Object.fromEntries([...FIELDS, ...SITING].map(([k]) => [k, p[k] ?? ""])
+    setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
       .concat([["description", p.description ?? ""]])));
   }, [data]);
 
@@ -140,6 +151,18 @@ export default function ProjectPage() {
           ))}
         </div>
         <GradeNote grade={form.grade_elevation_mm} cover={form.min_cover_mm} />
+
+        <h2 style={{ marginTop: 8 }}>مشخصات بتن</h2>
+        <div className="grid2">
+          {CONCRETE.map(([k, label, type, step, hint]) => (
+            <div className="field" key={k}>
+              <label htmlFor={k}>{label}</label>
+              <input id={k} type={type} step={step || undefined} disabled={!editable} dir="ltr"
+                     value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
+              {hint && <span className="hint">{hint}</span>}
+            </div>
+          ))}
+        </div>
 
         {saveErr && <p className="err">{saveErr}</p>}
         {saved && <p className="pill ok">ذخیره شد</p>}
