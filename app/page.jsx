@@ -11,6 +11,8 @@ import { mergePasses } from "../lib/extraction/merge.mjs";
 import SaveBar from "../components/SaveBar";
 import TabNav from "../components/TabNav";
 import TruthBar from "../components/TruthBar";
+import { ModuleBar, StageRail } from "../components/PlatformShell";
+import { STAGES } from "../lib/platform/workflow.mjs";
 import SessionBar from "../components/SessionBar";
 import ReviewQueue from "../components/ReviewQueue";
 import EditPanel from "../components/EditPanel";
@@ -304,6 +306,19 @@ export default function Page() {
           <span className="chip mono cy">{data.meta.pipingClass} · {data.meta.nps}&quot; · {data.meta.schedule}</span>
         )}
       </header>
+
+      <ModuleBar current="piping" />
+      {/* The stage is derived from what is actually true right now rather
+          than tracked separately, so it cannot drift out of step with the
+          screen: a saved-and-approved run is approved, a saved one is under
+          review, a computed one is extracted, an engine error is failed. */}
+      <StageRail stage={
+        model?.error ? STAGES.FAILED
+        : openRun?.run?.status === "approved" ? STAGES.APPROVED
+        : openRun ? STAGES.IN_REVIEW
+        : data ? STAGES.EXTRACTED
+        : STAGES.DRAFT
+      } />
 
       {!data && (
         <section className="intake">

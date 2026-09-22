@@ -135,6 +135,37 @@ textarea:focus{border-color:var(--cy)}
 .truth-paste{min-height:140px}
 .err.sm{font-size:11px;line-height:1.7}
 
+/* ── the platform shell ───────────────────────────────────────────────── */
+.modbar{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--rule);
+  flex-wrap:wrap;align-items:stretch}
+.modbar .mod{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  padding:7px 11px;border:1px solid var(--rule);border-radius:5px;background:transparent;
+  color:var(--dim);cursor:pointer;font-family:inherit;text-align:start;
+  transition:border-color .15s,color .15s,background .15s}
+.modbar .mod b{font-size:12px;color:var(--ink)}
+.modbar .mod span{font-size:10px;line-height:1.5}
+.modbar .mod:hover:not(:disabled){border-color:var(--cy)}
+.modbar .mod.on{background:var(--surf);border-color:var(--ink)}
+/* Planned, not hidden: visible so the direction is legible, dimmed and
+   disabled so nobody mistakes it for something they can use today. */
+.modbar .mod.soon{opacity:.42;cursor:not-allowed;border-style:dashed}
+.modbar .mod.soon b{color:var(--dim)}
+
+.rail{display:flex;flex-wrap:wrap;gap:4px 14px;list-style:none;margin:0;
+  padding:8px 12px;border-bottom:1px solid var(--rule);font-size:11px;color:var(--dim)}
+.rail li{display:flex;align-items:center;gap:5px}
+.rail li i{width:7px;height:7px;border-radius:50%;background:var(--rule);display:inline-block}
+.rail li.done i{background:var(--cy)}
+.rail li.now i{background:var(--ink);box-shadow:0 0 0 3px rgba(221,231,238,.14)}
+.rail li.now{color:var(--ink)}
+.rail.failed{color:var(--fld)}
+
+@media (max-width:560px){
+  .modbar{padding:8px 6px;gap:4px}
+  .modbar .mod{padding:7px 9px}
+  .rail{gap:4px 10px;padding:8px}
+}
+
 /* ── the pane navigator ───────────────────────────────────────────────── */
 .tabnav{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
 .tabnav button{display:flex;align-items:center;gap:6px;font-family:inherit;font-size:12px;
