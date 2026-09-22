@@ -118,17 +118,34 @@ fi
 [ -d node_modules/next ] || die "npm install کامل نشد"
 
 step "۳.۵ · کامپایلر WASM"
-# Not in package.json on purpose — 54 MB that only Android needs. Installed
-# here with --no-save so every other platform's install stays untouched.
-# Pinned to the exact Next version: SWC's wasm and native builds must match.
-NEXT_VER="$(node -p "require('./package.json').dependencies.next")"
-if [ -d node_modules/@next/swc-wasm-nodejs ]; then
-  ok "از قبل نصب است"
+# It has to live HERE, not in node_modules/@next, and that is not a detail.
+# Next loads the wasm package with:
+#
+#     await import(pathToFileURL(pkgPath).toString())
+#
+# where pkgPath is the bare name "@next/swc-wasm-nodejs". pathToFileURL on a
+# bare specifier does not resolve it — it turns it into a path relative to the
+# cwd, file:///.../<project>/@next/swc-wasm-nodejs, which never exists. So a
+# normally-installed copy in node_modules is invisible to Next no matter what:
+# it always falls through to downloading into node_modules/next/wasm instead.
+#
+# downloadWasmSwc() returns early when its output directory already exists, so
+# putting the files there ourselves makes startup work with no network at all.
+# Not in package.json on purpose — 54 MB that only Android needs.
+WASM_DIR="node_modules/next/wasm/@next/swc-wasm-nodejs"
+if [ -f "$WASM_DIR/wasm.js" ]; then
+  ok "از قبل سر جایش است"
 else
+  # Pinned to the exact Next version: the wasm and native builds must match.
+  NEXT_VER="$(node -p "require('./package.json').dependencies.next")"
   npm install --no-save --no-audit --no-fund "@next/swc-wasm-nodejs@${NEXT_VER}" \
     >/dev/null 2>&1 \
-    && ok "نصب شد (نسخهٔ ${NEXT_VER})" \
-    || die "نصب کامپایلر WASM شکست خورد — اتصال اینترنت را بررسی کنید"
+    || die "دانلود کامپایلر WASM شکست خورد — اتصال اینترنت را بررسی کنید"
+  mkdir -p "$(dirname "$WASM_DIR")"
+  cp -r node_modules/@next/swc-wasm-nodejs "$WASM_DIR" \
+    || die "کپی کامپایلر WASM شکست خورد"
+  [ -f "$WASM_DIR/wasm.js" ] || die "کامپایلر WASM سر جایش ننشست"
+  ok "نصب و جاگذاری شد (نسخهٔ ${NEXT_VER})"
 fi
 
 step "۴ · فایل پیکربندی"
@@ -185,7 +202,7 @@ npm run doctor
 # Whatever else a narrow terminal loses, this is the line worth keeping: it
 # answers, without scrolling, the three questions a failure here turns on.
 PG=down;   pg_ctl -D "$PGDATA" status >/dev/null 2>&1 && PG=up
-WASM=no;   [ -d node_modules/@next/swc-wasm-nodejs ] && WASM=yes
+WASM=no;   [ -f node_modules/next/wasm/@next/swc-wasm-nodejs/wasm.js ] && WASM=yes
 KEY=no;    grep -q '^ANTHROPIC_API_KEY=' .env.local 2>/dev/null && KEY=yes
 printf '\nSUMMARY: pg=%s wasm=%s mig=%s proj=%s key=%s log=%s/setup.log\n' \
   "$PG" "$WASM" "${MIG:-0}" "${PROJ:-0}" "$KEY" "$PWD" >&2
