@@ -70,17 +70,44 @@ test("code fences and preamble are stripped", async () => {
 
 const anthropicStream = [
   { type: "message_start", message: { usage: { input_tokens: 24000, output_tokens: 1 } } },
-  { type: "content_block_delta", delta: { type: "text_delta", text: '"meta":{"nps":36}' } },
+  { type: "content_block_delta", delta: { type: "text_delta", text: '{"meta":{"nps":36}' } },
   { type: "content_block_delta", delta: { type: "text_delta", text: "}" } },
   { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 3900 } },
 ];
 
-test("the assistant prefill is put back, so the text is a whole object", async () => {
+test("the request carries neither of the two things that are 400s now", async () => {
+  // Both were in this request and both are rejected outright — not ignored —
+  // by the models it actually runs on (Sonnet 5 by default, Opus 5 to repair):
+  // the sampling parameters were removed, and so was assistant prefill. Either
+  // one fails the call before a single drawing is read, which is why the
+  // caller still passing `temperature: 0` must not reach the wire.
   const fetchImpl = fakeSse(anthropicStream);
   const p = createAnthropicProvider({ apiKey: "k", fetchImpl });
-  const out = await p.complete({ maxTokens: 4000, prompt: "P", images: [{ label: "FULL", data: "AAA" }] });
+  const out = await p.complete({
+    maxTokens: 4000, temperature: 0, prompt: "P", images: [{ label: "FULL", data: "AAA" }],
+  });
+  const body = fetchImpl.calls[0].body;
+
+  assert(!("temperature" in body), "temperature must not be sent to Anthropic");
+  assert(!("top_p" in body) && !("top_k" in body), "nor any other sampling parameter");
+  equal(body.messages.length, 1, "one user turn, and no assistant turn to prefill");
+  equal(body.messages[0].role, "user");
+
+  // And the model's own braces are kept: nothing is prepended any more.
   equal(parseLoose(out.text), { meta: { nps: 36 } });
-  assert(fetchImpl.calls[0].body.messages[1].content === "{", "the assistant turn is prefilled with a brace");
+});
+
+test("a fenced or chatty reply still parses, which is why the prefill is not missed", async () => {
+  // What the prefill used to guarantee, cleanJsonText + parseLoose already do.
+  const chatty = [
+    { type: "message_start", message: { usage: { input_tokens: 10, output_tokens: 1 } } },
+    { type: "content_block_delta", delta: { type: "text_delta",
+      text: 'Here is the extraction:\n```json\n{"meta":{"nps":36}}\n```\nLet me know.' } },
+    { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 20 } },
+  ];
+  const p = createAnthropicProvider({ apiKey: "k", fetchImpl: fakeSse(chatty) });
+  const out = await p.complete({ maxTokens: 4000, prompt: "P", images: [{ data: "A" }] });
+  equal(parseLoose(cleanJsonText(out.text)), { meta: { nps: 36 } });
 });
 
 test("token counts are read only from the event that carries them", async () => {
