@@ -8,10 +8,19 @@
 #
 # WHAT IS DIFFERENT ON A PHONE
 #
-#   Next.js ships its compiler as a native binary per platform. Android is
-#   neither glibc nor musl, so that binary will not load and Next falls back
-#   to a WebAssembly build of the same compiler. It works; it is slower. The
-#   fallback is automatic and the warning it prints is expected, not a fault.
+#   Next.js ships its compiler (SWC) as a native binary per platform. Android
+#   has no such binary, and — this took two rounds to get right — Next does
+#   NOT reliably fall back to its WebAssembly build on its own: that fallback
+#   is gated behind next.config.mjs's experimental.useWasmBinary (set in this
+#   repo), and even with it set, Next's own first move is still to try
+#   requiring the WASM package from node_modules before it will use it — if
+#   that package is not there, what happens next depends on the device's
+#   network at that exact moment, and on this phone that path did not land
+#   cleanly. So this script installs @next/swc-wasm-nodejs directly: once it
+#   is sitting in node_modules, Next requires it locally and never touches
+#   the network for this at all. Verified directly here (not on Android, that
+#   package has no native code to differ by platform): the WASM binary
+#   compiles real JSX correctly.
 #
 #   PGlite is WebAssembly PostgreSQL and also runs here, but it holds the
 #   whole database in the process. Termux ships a real PostgreSQL, which is
@@ -73,6 +82,20 @@ npm install --no-audit --no-fund 2>&1 | tail -3
 [ -d node_modules/next ] || die "npm install کامل نشد"
 ok "node_modules"
 
+step "۳.۵ · کامپایلر WASM"
+# Not in package.json on purpose — 54 MB that only Android needs. Installed
+# here with --no-save so every other platform's install stays untouched.
+# Pinned to the exact Next version: SWC's wasm and native builds must match.
+NEXT_VER="$(node -p "require('./package.json').dependencies.next")"
+if [ -d node_modules/@next/swc-wasm-nodejs ]; then
+  ok "از قبل نصب است"
+else
+  npm install --no-save --no-audit --no-fund "@next/swc-wasm-nodejs@${NEXT_VER}" \
+    >/dev/null 2>&1 \
+    && ok "نصب شد (نسخهٔ ${NEXT_VER})" \
+    || die "نصب کامپایلر WASM شکست خورد — اتصال اینترنت را بررسی کنید"
+fi
+
 step "۴ · فایل پیکربندی"
 if [ -f .env.local ]; then
   ok ".env.local از قبل هست — دست نخورد"
@@ -112,4 +135,8 @@ cat <<'NEXT'
 
   پایگاه داده بعد از ری‌استارت ترماکس بالا نمی‌آید. دوباره:
     pg_ctl -D $PREFIX/var/lib/postgresql -o "-k $PREFIX/tmp" start
+
+  اگر بعداً "Failed to load SWC binary" دوباره دیدید — یعنی یک `npm install`
+  ساده (بدون --no-save) کامپایلر WASM را که این اسکریپت جدا نصب کرده بود
+  پاک کرده. همین اسکریپت را دوباره اجرا کنید؛ فقط همان قدم را تکرار می‌کند.
 NEXT
