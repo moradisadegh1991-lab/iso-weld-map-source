@@ -122,10 +122,11 @@ test("an unreadable description yields null, not a default", async () => {
   equal(classifyKind("Widget 4000").kind, null, "an unknown word is not a vessel");
 });
 
-test("fired equipment is static, and a boiler feed pump is still a pump", async () => {
-  equal(classifyKind("Ethane Cracking Furnace").kind, "static");
-  equal(classifyKind("Fired Heater").kind, "static");
-  equal(classifyKind("کوره کراکینگ").kind, "static");
+test("fired equipment gets its own kind, and a boiler feed pump is still a pump", async () => {
+  equal(classifyKind("Ethane Cracking Furnace").kind, "fired");
+  equal(classifyKind("Fired Heater").kind, "fired");
+  equal(classifyKind("کوره کراکینگ").kind, "fired");
+  equal(classifyKind("Furnace Feed Pump").kind, null, "a pump that feeds a furnace reads two ways");
   equal(classifyKind("Boiler Feed Water Pump").kind, "rotating",
     "'boiler' must not make one of the most common pumps in a plant ambiguous");
   equal(classifyKind("Induced Draft Fan").kind, "rotating");
@@ -235,6 +236,31 @@ test("an unclassified tag is imported, queued, and gets no fabricated chain", as
     const after = await acts.tagStatus(db, { projectId: proj.id, tagId: queue[0].id });
     equal(after.next.map((n) => n.code), ["foundation"], "and now it runs");
     equal((await equip.unclassifiedTags(db, { projectId: proj.id })).length, 0);
+  });
+});
+
+test("a change of kind that would strand recorded steps is refused", async () => {
+  // A static tag with its grout recorded, moved to the fired chain — which
+  // has no grout step — would leave that record read by nothing.
+  await withProject(db, proj.id, async () => {
+    const { rows: [v] } = await db.query(
+      "SELECT id FROM tag WHERE tag_no = 'V-2101' AND project_id = $1", [proj.id]);
+    for (const code of ["foundation", "set", "grout"]) {
+      await acts.recordActivity(db, { projectId: proj.id, tagId: v.id, code,
+        doneAt: "2026-08-01", userId: alice.id });
+    }
+    const e = await throws(() => equip.classifyTag(db, {
+      projectId: proj.id, tagId: v.id, kind: "fired" }), "CHAIN_CHANGE_STRANDS");
+    equal(e.status, 409);
+    equal(e.stranded.sort(), ["grout", "set"], "and it names exactly what would be stranded");
+
+    // A re-issued list that now reads it as a furnace keeps the old kind and says so.
+    const { tags } = parseEquipmentList("Tag No,Description\nV-2101,Feed Surge Drum Fired Heater");
+    const edited = tags.map((t) => ({ ...t, kind: "fired" }));
+    const r = await equip.importEquipmentList(db, { projectId: proj.id, tags: edited, userId: alice.id });
+    equal(r.kindKept.map((k) => k.tagNo), ["V-2101"]);
+    const { rows: [after] } = await db.query("SELECT kind FROM tag WHERE id = $1", [v.id]);
+    equal(after.kind, "static", "the import did not decide it; an engineer will");
   });
 });
 

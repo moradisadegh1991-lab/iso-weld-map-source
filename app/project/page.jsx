@@ -153,6 +153,9 @@ export default function ProjectPage() {
         )}
       </form>
 
+      <UnitsCard projectId={projectId} call={call} editable={editable}
+                 projectGrade={p.grade_elevation_mm} />
+
       <div className="card">
         <h2>کد پروژه</h2>
         <p className="muted sm">
@@ -190,5 +193,106 @@ function GradeNote({ grade, cover }) {
           خاک باشد، یعنی تاج لوله زیر <b className="mono">{(g - Number(cover)).toLocaleString("en-US")}</b></>
       )}.
     </p>
+  );
+}
+
+/**
+ * The plant's units, and the ones that sit on their own ground.
+ *
+ * One grade for the whole project is right for a flat site and wrong for a
+ * terraced one. A unit may override the project grade; leaving the field
+ * empty means the unit uses the project's. A drawing is attached to its unit
+ * by the unit code printed in its title block, matched exactly — so a code
+ * here must be written the way the drawings write it.
+ */
+function UnitsCard({ projectId, call, editable, projectGrade }) {
+  const { data, error, reload } = useProjectData((id) => `/api/units?projectId=${id}`, []);
+  const [draft, setDraft] = useState({});
+  const [f, setF] = useState({ code: "", name: "", grade: "" });
+  const [err, setErr] = useState(null);
+
+  async function save(code, name, grade) {
+    setErr(null);
+    try {
+      await call("/api/units", { method: "POST",
+        body: JSON.stringify({ projectId, code, name: name || null, gradeElevationMm: grade }) });
+      setDraft({});
+      reload();
+    } catch (e) { setErr(e.message); }
+  }
+
+  if (error) return <p className="err">{error}</p>;
+  const units = data?.units || [];
+
+  return (
+    <div className="card">
+      <h2>واحدها و گرید هر واحد</h2>
+      <p className="muted sm">
+        اگر همهٔ واحدها روی یک تراز باشند، گرید پروژه کافی است. واحدی که روی
+        سکوی دیگری است — مخازن، فلر، یوتیلیتی — گرید خودش را می‌گیرد. کد واحد را
+        دقیقاً همان‌طور بنویسید که در title block نقشه‌ها چاپ می‌شود؛ نقشه با همین
+        کد به واحد وصل می‌شود.
+      </p>
+      {units.length === 0 ? (
+        <p className="empty-note">هنوز واحدی تعریف نشده است؛ همهٔ جوش‌ها با گرید پروژه سنجیده می‌شوند.</p>
+      ) : (
+        <div className="wrap">
+          <table className="dtable">
+            <thead><tr><th>کد</th><th>نام</th><th>گرید واحد (mm)</th><th>گرید اعمال‌شده</th><th /></tr></thead>
+            <tbody>
+              {units.map((u) => {
+                const own = u.grade_elevation_mm;
+                const applied = own ?? projectGrade;
+                const editing = draft.code === u.code;
+                return (
+                  <tr key={u.id}>
+                    <td className="mono">{u.code}</td>
+                    <td>{u.name || "—"}</td>
+                    <td className="mono">
+                      {editing ? (
+                        <input type="number" step="0.1" dir="ltr" style={{ width: 130 }}
+                               value={draft.grade} onChange={(e) => setDraft({ ...draft, grade: e.target.value })} />
+                      ) : own == null ? <span className="muted">— (گرید پروژه)</span>
+                        : Number(own).toLocaleString("en-US")}
+                    </td>
+                    <td className="mono">
+                      {applied == null ? <span className="muted">ثبت نشده</span>
+                        : Number(applied).toLocaleString("en-US")}
+                    </td>
+                    <td>
+                      {editable && (editing ? (
+                        <button className="btn" style={{ padding: "3px 10px" }}
+                                onClick={() => save(u.code, u.name, draft.grade)}>ذخیره</button>
+                      ) : (
+                        <button className="btn ghost" style={{ padding: "3px 10px" }}
+                                onClick={() => setDraft({ code: u.code, grade: own ?? "" })}>ویرایش گرید</button>
+                      ))}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {err && <p className="err">{err}</p>}
+
+      {editable && (
+        <form className="grid2" style={{ alignItems: "end" }}
+              onSubmit={(e) => { e.preventDefault(); save(f.code, f.name, f.grade); setF({ code: "", name: "", grade: "" }); }}>
+          <div className="field"><label htmlFor="u-code">کد واحد</label>
+            <input id="u-code" dir="ltr" required value={f.code}
+                   onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
+          <div className="field"><label htmlFor="u-name">نام</label>
+            <input id="u-name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+          <div className="field"><label htmlFor="u-grade">گرید واحد (اختیاری)</label>
+            <input id="u-grade" type="number" step="0.1" dir="ltr" value={f.grade}
+                   onChange={(e) => setF({ ...f, grade: e.target.value })} />
+            <span className="hint">خالی = همان گرید پروژه</span></div>
+          <div><button className="btn" type="submit" disabled={!f.code}>افزودن واحد</button></div>
+        </form>
+      )}
+    </div>
   );
 }

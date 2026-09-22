@@ -96,8 +96,17 @@ export default function Page() {
 
   // The project's grade elevation, so the preview can say which welds are
   // buried before anything is saved. Absent, the engine gives no verdict.
+  //
+  // The grade is chosen by the same rule the database uses: the unit printed
+  // in the title block, matched EXACTLY to a declared unit, if that unit
+  // overrides the grade; otherwise the project grade. A preview that chose
+  // differently would promise one buried count and save another.
   const profile = useProjectData((id) => `/api/project?projectId=${id}`, []);
-  const gradeElevationMm = profile.data?.project?.grade_elevation_mm ?? null;
+  const units = useProjectData((id) => `/api/units?projectId=${id}`, []);
+  const printedUnit = data?.meta?.unit ? String(data.meta.unit).trim() : null;
+  const unitGrade = units.data?.units?.find((u) => u.code === printedUnit)?.grade_elevation_mm ?? null;
+  const gradeElevationMm = unitGrade ?? profile.data?.project?.grade_elevation_mm ?? null;
+  const gradeSource = unitGrade !== null ? `گرید واحد ${printedUnit}` : "گرید پروژه";
   const model = useMemo(
     () => (data ? buildModel(data, { strictBom, gradeElevationMm }) : null),
     [data, strictBom, gradeElevationMm]);
@@ -527,7 +536,7 @@ export default function Page() {
                   {model.totals.girth > 0 ? ` · ${model.totals.girth} girth` : ""}
                   {model.totals.buried === null
                     ? " · زیرزمینی: تراز گرید ثبت نشده"
-                    : ` · ${model.totals.buried} زیرزمینی / ${model.totals.aboveGround} روزمینی`}
+                    : ` · ${model.totals.buried} زیرزمینی / ${model.totals.aboveGround} روزمینی (${gradeSource})`}
                 </div>
                 <table>
                   <thead><tr><th>No</th><th>Spool</th><th>محل</th><th>نوع</th><th>اتصال</th><th>EL</th><th>NDT</th></tr></thead>

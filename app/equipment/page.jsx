@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { parseEquipmentList, summarise } from "../../lib/equipment/parse.mjs";
+import { EQUIPMENT_KINDS } from "../../lib/platform/precedence.mjs";
 
 /**
  * Equipment tags: import a list, then work the two queues it produces.
@@ -11,7 +12,8 @@ import { parseEquipmentList, summarise } from "../../lib/equipment/parse.mjs";
  * has a chain, and the useful question becomes which crew can move today.
  * Both are shown by name — a count sends nobody anywhere.
  */
-const KIND_FA = { rotating: "دوّار", static: "ثابت" };
+// One list, declared beside the chains — see EQUIPMENT_KINDS.
+const KIND_FA = EQUIPMENT_KINDS;
 const DISCIPLINE_FA = {
   piping: "پایپینگ", structural: "استراکچر", electrical: "برق",
   instrumentation: "ابزار دقیق", civil: "سیویل", equipment: "تجهیزات",
@@ -104,7 +106,7 @@ export default function EquipmentPage() {
         {sum && (
           <>
             <p className="mono sm">
-              {sum.total} تگ · دوّار {sum.rotating} · ثابت {sum.static}
+              {sum.total} تگ · {Object.entries(KIND_FA).map(([k, v]) => `${v} ${sum[k]}`).join(" · ")}
               {sum.unclassified > 0 && ` · نامشخص ${sum.unclassified}`} · {sum.pctClassified}% خودکار
               {parsed.skipped.length > 0 && ` · ${parsed.skipped.length} سطر تگ نبود`}
             </p>
@@ -144,10 +146,10 @@ export default function EquipmentPage() {
                     <td className="mono">{t.tag_no}</td>
                     <td>{t.description || "—"}</td>
                     <td style={{ display: "flex", gap: 6 }}>
-                      <button className="btn ghost" style={{ padding: "4px 10px" }}
-                              onClick={() => classify(t.id, "rotating")}>دوّار</button>
-                      <button className="btn ghost" style={{ padding: "4px 10px" }}
-                              onClick={() => classify(t.id, "static")}>ثابت</button>
+                      {Object.entries(KIND_FA).map(([k, v]) => (
+                        <button key={k} className="btn ghost" style={{ padding: "4px 10px" }}
+                                onClick={() => classify(t.id, k)}>{v}</button>
+                      ))}
                     </td>
                   </tr>
                 ))}

@@ -1,42 +1,24 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { authenticate, errorResponse } from "../../../../../lib/server/session.mjs";
-import { withProject } from "../../../../../lib/db/scope.mjs";
-import { setSpoolStatus } from "../../../../../lib/db/repos/runs.mjs";
-import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
-
-const ALLOWED = ["planned", "released", "fabricated", "tested", "painted", "shipped", "erected"];
-
 /**
- * Record that a spool has moved along the shop floor.
+ * Retired with migration 012.
  *
- * This is what turns a revision diff from a list into a bill: a spool still
- * marked `planned` absorbs a drawing change for free, one marked `fabricated`
- * absorbs it as cut-and-reweld. QC records it, because QC is who sees it
- * happen.
+ * This endpoint set a spool's fabrication status freely, one value at a
+ * time, beside the governed chain that now decides it. Two statuses for one
+ * spool is how a report says "fabricated" while the chain says "released".
+ *
+ * 410 rather than a silent redirect: a script still calling this should
+ * fail loudly and be pointed at the replacement, not appear to succeed
+ * while recording nothing.
  */
-export async function POST(request, { params }) {
-  try {
-    const { projectId, status, note = null } = await request.json();
-    if (!projectId || !status) {
-      return Response.json({ error: "projectId and status are required" }, { status: 400 });
-    }
-    if (!ALLOWED.includes(status)) {
-      return Response.json(
-        { error: `status must be one of: ${ALLOWED.join(", ")}` }, { status: 400 });
-    }
+const GONE = {
+  error: "این مسیر بازنشسته شده است. وضعیت اسپول حالا از زنجیرهٔ اجرای پایپینگ "
+    + "حساب می‌شود؛ مراحل را از POST /api/piping/execution (kind: \"activity\") ثبت کنید.",
+  code: "ENDPOINT_RETIRED",
+  replacement: "/api/piping/execution",
+};
 
-    const { db, user, membership } = await authenticate(request, { projectId });
-    if (!membership) return Response.json({ error: "not found" }, { status: 404 });
-    assertCan(membership, ACTIONS.RECORD_NDT);
-
-    return await withProject(db, projectId, async () => {
-      const spool = await setSpoolStatus(db, {
-        projectId, spoolId: params.id, status, note, userId: user.id });
-      return Response.json({ spool });
-    });
-  } catch (e) {
-    return errorResponse(e);
-  }
+export async function POST() {
+  return Response.json(GONE, { status: 410 });
 }

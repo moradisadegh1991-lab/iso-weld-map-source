@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { spoolStageTitle } from "../lib/platform/precedence.mjs";
 import { base64FromBuffer } from "../lib/client/base64.mjs";
 
 /**
@@ -68,6 +69,7 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
         method: "POST",
         body: JSON.stringify({
           projectId, docNo, revision,
+          unitCode: data.meta.unit || null,
           revisionDate: data.meta.revDate || null,
           sheetNo: data.meta.sheet || "1/1",
           contentType: sourceFile?.type || "image/jpeg",
@@ -150,7 +152,7 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
               <b>⚠ دوباره‌کاری</b>
               {diff.impact.rework.map((s) => (
                 <span key={s.spool} className="mono sm">
-                  {s.spool} ({s.fabStatus}) — جوش‌های {s.welds.join("، ")}
+                  {s.spool} ({spoolStageTitle(s.stage)}) — جوش‌های {s.welds.join("، ")}
                 </span>
               ))}
               <span className="sm">این اسپول‌ها ساخته شده‌اند و این رویژن آن‌ها را تغییر می‌دهد.

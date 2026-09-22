@@ -71,6 +71,24 @@ test("static equipment is never aligned", async () => {
     "a vessel has no coupling, so an alignment hold point would be a false one");
 });
 
+test("a furnace dries out last, on its own burners", async () => {
+  // Dry-out fires the heater's burners on a controlled curve, so it needs
+  // the burners, the fuel piping and the burner management system — and it
+  // is the first heat the refractory sees.
+  const f = CHAINS.fired;
+  const dry = f.find((s) => s.code === "dryout");
+  for (const need of ["refractory", "burners", "piping", "instrument"]) {
+    assert(dry.after.includes(need), `dry-out must wait for ${need}`);
+  }
+  assert(f.find((s) => s.code === TERMINAL).after.includes("dryout"));
+});
+
+test("a furnace coil is tested before process piping is connected to it", async () => {
+  assert(CHAINS.fired.find((s) => s.code === "piping").after.includes("coil_test"));
+  assert(CHAINS.fired.find((s) => s.code === "burners").after.includes("refractory"),
+    "and burner tiles go into the finished lining");
+});
+
 test("a kind nobody declared gets no chain rather than a guessed one", async () => {
   equal(chainFor("rotating").length, CHAINS.rotating.length);
   equal(chainFor("ROTATING").length, CHAINS.rotating.length, "case is not the user's problem");

@@ -31,7 +31,7 @@ export async function GET(request) {
       const [lines, welders, spools, gap, accuracy] = await Promise.all([
         db.query("SELECT * FROM reporting.kpi_line_progress ORDER BY line_no"),
         db.query("SELECT * FROM reporting.kpi_welder_performance ORDER BY stamp_no"),
-        db.query("SELECT * FROM reporting.kpi_spool_status ORDER BY fab_status"),
+        db.query("SELECT * FROM reporting.kpi_spool_status ORDER BY stage_seq"),
         db.query("SELECT * FROM reporting.kpi_handover_gap ORDER BY line_no, weld_no LIMIT 500"),
         db.query("SELECT * FROM reporting.kpi_extraction_accuracy ORDER BY corrections DESC LIMIT 20"),
       ]);

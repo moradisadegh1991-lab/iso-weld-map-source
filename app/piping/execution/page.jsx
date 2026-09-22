@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
-import { CHAINS } from "../../../lib/platform/precedence.mjs";
+import { CHAINS, spoolStageTitle } from "../../../lib/platform/precedence.mjs";
 
 /**
  * Piping execution: every spool's place in its chain, the supports, and
@@ -74,7 +74,7 @@ export default function PipingExecution() {
           <div className="wrap">
             <table className="dtable">
               <thead>
-                <tr><th>اسپول</th><th>خط</th><th>پیشرفت</th><th>امروز می‌شود</th>
+                <tr><th>اسپول</th><th>خط</th><th>مرحلهٔ فعلی</th><th>پیشرفت</th><th>امروز می‌شود</th>
                     <th>منتظرِ</th><th>زیرزمینی</th><th /></tr>
               </thead>
               <tbody>
@@ -102,6 +102,7 @@ function SpoolRow({ b, open, detail, onToggle, onRecord }) {
       <tr>
         <td className="mono">{b.spoolNo}</td>
         <td className="mono">{b.lineNo || "—"}</td>
+        <td className="sm">{spoolStageTitle(b.stage)}</td>
         <td><Bar pct={b.pct} /></td>
         <td className="sm">{b.ready ? <span className="pill ok">تحویل‌شده</span>
           : b.next.map((n) => n.title).join("، ") || "—"}</td>
@@ -114,7 +115,7 @@ function SpoolRow({ b, open, detail, onToggle, onRecord }) {
       </tr>
       {open && (
         <tr>
-          <td colSpan={7} style={{ background: "rgba(255,255,255,.02)" }}>
+          <td colSpan={8} style={{ background: "rgba(255,255,255,.02)" }}>
             {!detail ? <span className="muted sm">در حال بارگذاری…</span> : (
               <div style={{ display: "grid", gap: 6,
                 gridTemplateColumns: "repeat(auto-fill,minmax(210px,1fr))" }}>
@@ -155,7 +156,8 @@ function SpoolRow({ b, open, detail, onToggle, onRecord }) {
  * record it — rather than a column of zeros that reads as "nothing is buried".
  */
 function Buried({ data }) {
-  if (data.grade === null) {
+  const known = data.buried.some((r) => r.welds > r.unknown);
+  if (!known) {
     return (
       <div className="card" style={{ borderColor: "rgba(224,163,62,.5)" }}>
         <h2 style={{ color: "var(--warn)" }}>تراز گرید پلنت ثبت نشده</h2>
@@ -172,14 +174,16 @@ function Buried({ data }) {
     <div className="card">
       <h2>زیرزمینی و روزمینی</h2>
       <p className="muted sm">
-        نسبت به تراز گرید EL {data.grade.toLocaleString("en-US")} mm
-        {data.datum ? ` (${data.datum})` : ""}. جوش زیرزمینی باید پیش از
-        خاک‌ریزی تست و پوشش شود.
+        هر خط نسبت به گرید واحد خودش سنجیده می‌شود، و اگر واحد گرید جدا
+        نداشته باشد نسبت به گرید پروژه
+        {data.grade !== null ? ` (EL ${data.grade.toLocaleString("en-US")} mm${data.datum ? "، " + data.datum : ""})` : ""}.
+        جوش زیرزمینی باید پیش از خاک‌ریزی تست و پوشش شود.
       </p>
       {rows.length === 0 ? <p className="empty-note">هنوز جوشی ثبت نشده است.</p> : (
         <div className="wrap">
           <table className="dtable">
             <thead><tr><th>خط</th><th>جوش</th><th>زیرزمینی</th><th>روزمینی</th>
+                       <th>نامعلوم</th><th>گرید اعمال‌شده (mm)</th>
                        <th>عمیق‌ترین نقطه نسبت به گرید</th></tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -188,6 +192,12 @@ function Buried({ data }) {
                   <td className="mono">{r.welds}</td>
                   <td className="mono">{r.buried}</td>
                   <td className="mono">{r.aboveGround}</td>
+                  <td className="mono">{r.unknown || "—"}</td>
+                  <td className="mono">
+                    {r.gradeMinMm === null ? "ثبت نشده"
+                      : r.gradeMinMm === r.gradeMaxMm ? r.gradeMinMm.toLocaleString("en-US")
+                      : `${r.gradeMinMm.toLocaleString("en-US")} – ${r.gradeMaxMm.toLocaleString("en-US")}`}
+                  </td>
                   <td className="mono" dir="ltr">
                     {r.deepestMm === null ? "—" : `${(r.deepestMm / 1000).toFixed(2)} m`}
                   </td>

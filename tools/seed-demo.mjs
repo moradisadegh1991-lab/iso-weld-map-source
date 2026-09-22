@@ -16,7 +16,7 @@
 import "./env.mjs";
 import { getDb } from "../lib/server/db.mjs";
 import { withProject } from "../lib/db/scope.mjs";
-import { updateProjectProfile } from "../lib/db/repos/projects.mjs";
+import { updateProjectProfile, createUnit } from "../lib/db/repos/projects.mjs";
 import { upsertContractor, upsertPackage } from "../lib/db/repos/contractors.mjs";
 import { parseEquipmentList } from "../lib/equipment/parse.mjs";
 import { importEquipmentList } from "../lib/db/repos/equipment.mjs";
@@ -67,6 +67,18 @@ P-6101A,Boiler Feed Water Pump,Multistage,60-01,60
 PK-6102,Nitrogen Generation Package,Package,60-01,60
 TOTAL,,,,`;
 
+// Units, and the one that sits on its own ground. The utilities and cooling
+// water area is on a platform 1 m below the process area — the case a
+// single project grade gets wrong. (Demonstration values.)
+const UNITS = [
+  ["11", "کراکینگ", undefined],
+  ["12", "کوئنچ", undefined],
+  ["21", "کمپرسور گاز شکسته", undefined],
+  ["31", "بخش سرد و جداسازی", undefined],
+  ["51", "تبرید", undefined],
+  ["60", "یوتیلیتی و آب خنک", 99000],
+];
+
 const SUBSYSTEMS = [
   ["11-01", "کوره‌های کراکینگ", 1, "2027-09-30"],
   ["12-01", "کوئنچ روغن و آب", 2, "2027-10-31"],
@@ -113,10 +125,15 @@ try {
       "DELETE FROM tag WHERE project_id = $1 AND discipline = 'equipment' AND NOT (tag_no = ANY($2))",
       [p.id, keep]);
 
+    const unit = {};
+    for (const [code, name, grade] of UNITS) {
+      unit[code] = await createUnit(db, { projectId: p.id, code, name, gradeElevationMm: grade });
+    }
+
     const sub = {};
     for (const [code, name, seq, mc] of SUBSYSTEMS) {
       sub[code] = await upsertSubsystem(db, { projectId: p.id, code, name,
-        handoverSeq: seq, targetMcDate: mc });
+        unitId: unit[code.split("-")[0]]?.id || null, handoverSeq: seq, targetMcDate: mc });
     }
 
     const civil = await upsertContractor(db, { projectId: p.id, code: "C-01",
@@ -217,6 +234,11 @@ try {
     } else {
       console.log("register: already present, left as it is");
     }
+    // The cooling-water drawing belongs to the utilities unit, whose own grade
+    // then applies to it — set on every run so an older demo database picks
+    // it up too.
+    await db.query("UPDATE document SET unit_id = $1 WHERE project_id = $2 AND doc_no = 'SW 265022A'",
+      [unit["60"].id, p.id]);
   });
   console.log(`demo seeded into ${p.code}`);
 } finally {

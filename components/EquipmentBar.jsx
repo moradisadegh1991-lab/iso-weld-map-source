@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { parseEquipmentList, summarise } from "../lib/equipment/parse.mjs";
+import { EQUIPMENT_KINDS } from "../lib/platform/precedence.mjs";
 
 /**
  * Importing an equipment list.
@@ -16,7 +17,8 @@ import { parseEquipmentList, summarise } from "../lib/equipment/parse.mjs";
  * count, because "۳ مورد نامشخص" sends nobody anywhere.
  */
 
-const KIND_FA = { rotating: "دوّار", static: "ثابت" };
+// One list, declared beside the chains — see EQUIPMENT_KINDS.
+const KIND_FA = EQUIPMENT_KINDS;
 
 export default function EquipmentBar() {
   const [text, setText] = useState("");
@@ -100,7 +102,7 @@ export default function EquipmentBar() {
       {sum && (
         <>
           <div className="tot mono">
-            {sum.total} تگ · دوّار {sum.rotating} · ثابت {sum.static}
+            {sum.total} تگ · {Object.entries(KIND_FA).map(([k, v]) => `${v} ${sum[k]}`).join(" · ")}
             {sum.unclassified > 0 && ` · نامشخص ${sum.unclassified}`}
             {parsed.skipped.length > 0 && ` · ${parsed.skipped.length} سطر تگ نبود`}
           </div>

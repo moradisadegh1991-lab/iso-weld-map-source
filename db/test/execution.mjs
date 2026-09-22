@@ -228,6 +228,36 @@ test("a spool walks its chain, and welding answers itself", async () => {
   });
 });
 
+test("the database and the chain agree on every spool's stage", async () => {
+  // The chain is JavaScript; the reporting view is SQL. Both answer "how far
+  // along is this spool" — this is what stops them drifting apart.
+  await withProject(db, proj.id, async () => {
+    // Give the spools different histories so the comparison means something.
+    // Spool 0 gets fit-up AND every shop weld made, so the order in which
+    // SQL tests "fit_up" and "shop_weld" decides the answer — a fixture
+    // where only one of them is true would pass with the branches swapped,
+    // which is exactly what a first version of this test did.
+    await pe.recordSpoolActivity(db, { projectId: proj.id, spoolId: spools[1].id,
+      code: "released", doneAt: "2026-08-02", userId: alice.id });
+    const welder = await exec.upsertWelder(db, { projectId: proj.id, stampNo: "W-12", name: "رضایی" });
+    const { rows: pending } = await db.query(
+      `SELECT w.weld_uid FROM weld w LEFT JOIN weld_execution e ON e.weld_uid = w.weld_uid
+        WHERE w.spool_id = $1 AND w.shop_field = 'Shop' AND e.weld_uid IS NULL`, [spools[0].id]);
+    for (const w of pending) {
+      await exec.assignWeld(db, { projectId: proj.id, weldUid: w.weld_uid, welderId: welder.id,
+        weldedAt: "2026-08-06", process: "GTAW", position: "V", lineId });
+    }
+    const first = await pe.spoolStatus(db, { projectId: proj.id, spoolId: spools[0].id });
+    equal(first.headline, "shop_weld", "the fixture really puts spool 0 past fit-up");
+    for (const s of spools) {
+      const js = await pe.spoolStatus(db, { projectId: proj.id, spoolId: s.id });
+      const { rows: [sql] } = await db.query(
+        "SELECT stage FROM reporting.spool_stage WHERE spool_key = $1", [s.id]);
+      equal(sql.stage, js.headline, `${s.spool_no}: SQL says ${sql.stage}, chain says ${js.headline}`);
+    }
+  });
+});
+
 test("the board lists every spool short of ready, worst first", async () => {
   await withProject(db, proj.id, async () => {
     const board = await pe.spoolBoard(db, { projectId: proj.id });
@@ -278,6 +308,64 @@ test("a support cannot be inspected before it is installed", async () => {
 test("supports belong to one project", async () => {
   await withProject(db, other.id, async () => {
     equal((await pe.listSupports(db, { projectId: other.id })).length, 0);
+  });
+});
+
+// ── grade per unit ───────────────────────────────────────────────────────
+
+const exposure = async () => (await pe.buriedExposure(db, { projectId: proj.id }))[0];
+
+test("a drawing's unit grade overrides the project grade", async () => {
+  // A utilities platform 1 m lower than the process area: the same weld
+  // elevations read differently against it.
+  await withProject(db, proj.id, async () => {
+    const u = await projects.createUnit(db, { projectId: proj.id, code: "60",
+      name: "یوتیلیتی", gradeElevationMm: 99000 });
+    await db.query("UPDATE document SET unit_id = $1 WHERE project_id = $2", [u.id, proj.id]);
+    const row = await exposure();
+    equal([row.gradeMinMm, row.gradeMaxMm], [99000, 99000], "and the grade used is reported");
+    equal(row.buried, 7, "welds at EL 99 300 and 99 450 are above this platform");
+
+    const engine = buildModel(DEMO, { gradeElevationMm: 99000 });
+    equal(engine.totals.buried, row.buried, "the preview, given the same grade, agrees");
+  });
+});
+
+test("the line's unit wins over the drawing's, and an empty override falls back", async () => {
+  await withProject(db, proj.id, async () => {
+    const tank = await projects.createUnit(db, { projectId: proj.id, code: "70",
+      name: "مخازن", gradeElevationMm: 101000 });
+    await db.query("UPDATE line SET unit_id = $1 WHERE id = $2", [tank.id, lineId]);
+    let row = await exposure();
+    equal(row.gradeMinMm, 101000, "the most specific statement wins");
+    equal(row.buried, 10);
+
+    // Clearing the line unit's override: back to the drawing's unit.
+    await projects.createUnit(db, { projectId: proj.id, code: "70", gradeElevationMm: "" });
+    row = await exposure();
+    equal(row.gradeMinMm, 99000);
+
+    // Leaving the grade out of an update does NOT clear it.
+    await projects.createUnit(db, { projectId: proj.id, code: "60", name: "یوتیلیتی و آب خنک" });
+    row = await exposure();
+    equal(row.gradeMinMm, 99000, "renaming a unit is not a request to forget its grade");
+
+    await db.query("UPDATE line SET unit_id = NULL WHERE id = $1", [lineId]);
+    await db.query("UPDATE document SET unit_id = NULL WHERE project_id = $1", [proj.id]);
+    row = await exposure();
+    equal(row.gradeMinMm, 100000, "with no unit, the project grade");
+  });
+});
+
+test("a printed unit code is matched exactly and never creates a unit", async () => {
+  // The code comes from the model reading a title block; creating a unit
+  // from it would let one misread digit invent a unit with its own grade.
+  await withProject(db, proj.id, async () => {
+    equal((await projects.unitByCode(db, { projectId: proj.id, code: " 60 " }))?.code, "60");
+    equal(await projects.unitByCode(db, { projectId: proj.id, code: "060" }), null);
+    equal(await projects.unitByCode(db, { projectId: proj.id, code: "99" }), null);
+    const { rows } = await db.query("SELECT count(*)::int AS n FROM unit WHERE project_id = $1", [proj.id]);
+    equal(rows[0].n, 2, "no unit was created by looking one up");
   });
 });
 

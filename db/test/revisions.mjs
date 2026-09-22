@@ -113,15 +113,18 @@ test("impact separates spools already built from spools still on paper", async (
   fixed.nodes[3].N += 400;
   const d = diffRegisters(rev0, reg(fixed));
 
-  const status = new Map([["SP-01", "fabricated"], ["SP-02", "planned"], ["SP-03", "planned"]]);
+  const status = new Map([
+    ["SP-01", { stage: "shop_weld", built: true }],
+    ["SP-02", { stage: "released", built: false }],
+    ["SP-03", { stage: "planned", built: false }],
+  ]);
   const impact = spoolImpact(d, status);
   assert(impact.spools.length > 0, "the change lands somewhere");
   if (impact.rework.length) {
-    assert(impact.rework.every((s) => s.fabStatus === "fabricated"),
-      "only built spools are called rework");
+    assert(impact.rework.every((s) => s.built), "only built spools are called rework");
     assert(impact.rework.every((s) => s.welds.length > 0), "and each names the welds concerned");
   }
-  assert(impact.safe.every((s) => s.fabStatus !== "fabricated"));
+  assert(impact.safe.every((s) => !s.built));
 });
 
 test("a weld moving between spools damages both", async () => {
@@ -146,6 +149,7 @@ const documentsRoute = await import("../../app/api/documents/route.js");
 const runsRoute = await import("../../app/api/runs/route.js");
 const diffRoute = await import("../../app/api/runs/[id]/diff/route.js");
 const spoolStatusRoute = await import("../../app/api/spools/[id]/status/route.js");
+const executionRoute = await import("../../app/api/piping/execution/route.js");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 
@@ -212,11 +216,14 @@ test("a fabricated spool turns the diff into a rework warning", async () => {
       "SELECT id FROM spool WHERE extraction_run_id = $1 AND spool_no = 'SP-01'", [run0.run.id]);
     return rows[0].id;
   });
-  const marked = await json(await spoolStatusRoute.POST(
-    req(`http://x/api/spools/${spoolId}/status`, {
-      method: "POST", body: { projectId: project.id, status: "fabricated", note: "welded 1405-06-20" } }),
-    { params: { id: spoolId } }));
-  equal(marked.body.spool.fab_status, "fabricated");
+  // Steel exists once the spool is fitted up. Recorded through the chain,
+  // not set as a free status.
+  for (const code of ["released", "fit_up"]) {
+    const r = await json(await executionRoute.POST(req("http://x/api/piping/execution", {
+      method: "POST",
+      body: { projectId: project.id, kind: "activity", spoolId, code, doneAt: "2026-09-10" } })));
+    equal(r.status, 200, `recording ${code}`);
+  }
 
   // now a revision that actually moves geometry
   const changed = clone(DEMO);
@@ -230,9 +237,20 @@ test("a fabricated spool turns the diff into a rework warning", async () => {
   assert(body.diff.summary.changed > 0, "the revision moved welds");
   const sp01 = body.impact.spools.find((s) => s.spool === "SP-01");
   assert(sp01, "SP-01 is affected");
-  equal(sp01.fabStatus, "fabricated");
+  equal(sp01.stage, "fit_up", "the stage is derived from the chain");
+  equal(sp01.built, true);
   assert(body.impact.rework.some((s) => s.spool === "SP-01"),
     "and it is on the rework list, because that steel already exists");
+});
+
+test("the retired status endpoint refuses loudly and names its replacement", async () => {
+  // A script still calling it must fail, not appear to succeed while
+  // recording nothing.
+  const r = await json(await spoolStatusRoute.POST(req("http://x/api/spools/x/status", {
+    method: "POST", body: { status: "fabricated" } }), { params: { id: "x" } }));
+  equal(r.status, 410);
+  equal(r.body.code, "ENDPOINT_RETIRED");
+  equal(r.body.replacement, "/api/piping/execution");
 });
 
 test("comparing two different drawings is refused", async () => {

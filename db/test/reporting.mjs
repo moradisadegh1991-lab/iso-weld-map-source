@@ -169,17 +169,23 @@ test("the handover gap lists the welds, not just a count", async () => {
   assert(rows.every((r) => r.stamp_no), "each one names the welder, so somebody can chase it");
 });
 
-test("spool status rolls up by fabrication state", async () => {
-  await withProject(db, k110.id, async () => {
-    const { rows } = await db.query(
-      "SELECT id FROM spool WHERE extraction_run_id = $1 LIMIT 1", [k110Data.runId]);
-    await runsRepo.setSpoolStatus(db, {
-      projectId: k110.id, spoolId: rows[0].id, status: "fabricated", userId: alice.id });
-  });
-  const rows = await asReport(
-    "SELECT fab_status, spools FROM reporting.kpi_spool_status ORDER BY fab_status", [], k110.id);
-  const fab = rows.find((r) => r.fab_status === "fabricated");
-  equal(Number(fab.spools), 1);
+test("spool stage rolls up, derived from the work rather than set", async () => {
+  // Nobody has recorded a single chain step on this project; the welds were
+  // simply made. The stage and `built` must follow from that alone.
+  const stages = await asReport(
+    "SELECT stage, stage_seq, spools FROM reporting.kpi_spool_status ORDER BY stage_seq", [], k110.id);
+  const spoolRows = await asReport(
+    "SELECT spool_no, stage, built FROM reporting.dim_spool ORDER BY spool_no", [], k110.id);
+  equal(stages.reduce((a, r) => a + Number(r.spools), 0), spoolRows.length,
+    "every spool is in exactly one stage");
+
+  const welded = await asReport(
+    `SELECT DISTINCT spool_key FROM reporting.fact_weld WHERE is_welded`, [], k110.id);
+  assert(welded.length > 0, "the fixture welds something");
+  const builtCount = spoolRows.filter((r) => r.built).length;
+  equal(builtCount, welded.length,
+    "a spool with any weld made is built, even with no step ticked — "
+    + "missing it would drop real rework off the revision warning");
 });
 
 test("extraction accuracy aggregates by field, with the index stripped", async () => {

@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
+import { unitByCode } from "../../../lib/db/repos/projects.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { registerDocument, currentRevision, supersedePrevious } from "../../../lib/db/repos/documents.mjs";
 import { createLocalStore } from "../../../lib/storage/content-store.mjs";
@@ -21,7 +22,8 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { projectId, docNo, revision, sheetNo = "1/1", revisionDate = null,
-            unitId = null, contentType = "image/jpeg", fileBase64, supersede = true } = body;
+            unitId: givenUnitId = null, unitCode = null,
+            contentType = "image/jpeg", fileBase64, supersede = true } = body;
 
     if (!projectId || !docNo || !revision) {
       return Response.json({ error: "projectId, docNo and revision are required" }, { status: 400 });
@@ -55,6 +57,10 @@ export async function POST(request) {
     }
 
     return await withProject(db, projectId, async () => {
+      // The unit printed in the title block, matched to a DECLARED unit. An
+      // unmatched code attaches nothing — the project grade then applies,
+      // which is also what the preview used, so the two still agree.
+      const unitId = givenUnitId || (await unitByCode(db, { projectId, code: unitCode }))?.id || null;
       const { document, created } = await registerDocument(db, {
         projectId, unitId, docNo, revision, revisionDate, sheetNo,
         fileSha256: blob.digest, storageUri: blob.uri,
