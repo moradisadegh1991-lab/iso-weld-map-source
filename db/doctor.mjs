@@ -13,6 +13,7 @@
  *
  *   npm run doctor
  */
+import "../tools/env.mjs";           // the app reads .env.local; so must this
 import { createClient } from "../lib/db/client.mjs";
 import { createLlmClient } from "../lib/llm/index.mjs";
 import { access, constants } from "node:fs/promises";
@@ -27,7 +28,6 @@ const step = (n, title, status, detail, next = null) =>
   steps.push({ n, title, status, detail, next });
 
 const db = await createClient({ dataDir: process.env.PGLITE_DIR || ".pglite" });
-process.on("exit", () => { try { db.close(); } catch { /* already closing */ } });
 
 {
   // ── 1 · database ───────────────────────────────────────────────────────
@@ -144,6 +144,11 @@ process.on("exit", () => { try { db.close(); } catch { /* already closing */ } }
 
   report();
 }
+
+// Closed explicitly, not from a process "exit" handler: PGlite holds the event
+// loop open, so "exit" never fires and the doctor prints its report and then
+// hangs forever — a readiness tool that never returns is worse than none.
+await db.close();
 
 /** ── report ─────────────────────────────────────────────────────────── */
 function report() {

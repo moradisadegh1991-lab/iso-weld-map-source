@@ -281,4 +281,18 @@ test("identity resolution rejects a missing or subject-less token", async () => 
   equal((await throws(() => resolve("bad"), "UNAUTHENTICATED")).status, 401);
 });
 
+test("the test loader does not pull in the app's .env.local", async () => {
+  // tools/env.mjs exists so `npm run doctor` and `npm run db:seed` see the
+  // same configuration the server does. It must never reach the suites: a
+  // DATABASE_URL in .env.local outranks the temporary data directory each
+  // suite makes for itself, and these tests migrate, seed and write. That is
+  // somebody's real database, entered by accident.
+  const { readFile } = await import("node:fs/promises");
+  const loader = await readFile("tools/register.mjs", "utf8");
+  assert(!/env\.mjs/.test(loader),
+    "tools/register.mjs must not import tools/env.mjs — tests stay hermetic");
+  assert(!process.env.DATABASE_URL,
+    "a suite reached a configured DATABASE_URL; it must run on its own PGlite");
+});
+
 await run();

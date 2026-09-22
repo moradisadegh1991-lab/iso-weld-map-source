@@ -53,6 +53,22 @@ AUTH_MODE=dev            # لپ‌تاپ: توکن همان نام کاربر ا
 
 ## گام ۴ · ارائه‌دهندهٔ مدل
 
+**کلید کجا می‌رود:** فایل `.env.local` در ریشهٔ مخزن. این فایل gitignore شده
+است، پس کلید هرگز به GitHub نمی‌رسد. از روی `.env.example` بسازیدش:
+
+```bash
+cp .env.example .env.local     # یک بار
+# بعد خط ANTHROPIC_API_KEY را در .env.local از کامنت دربیاورید
+npm run dev                    # Next خودش .env.local را می‌خواند
+npm run doctor                 # باید گام ۴ را ✓ نشان دهد
+```
+
+کلید **فقط سمت سرور** خوانده می‌شود. هرگز در بدنهٔ درخواست نفرستیدش: کلیدی که
+در مرورگر باشد، در devtools و در لاگ هر پروکسی میان راه هم هست.
+
+روی سرور واقعی (Vercel / systemd / Docker) به‌جای فایل، همان نام را در
+Environment Variables ِ همان سرویس بگذارید.
+
 ```bash
 # امروز
 LLM_PROVIDER=anthropic

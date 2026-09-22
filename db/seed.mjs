@@ -14,6 +14,7 @@
  * fictional engineer who can approve weld registers is not a mistake worth
  * leaving available.
  */
+import "../tools/env.mjs";           // the app reads .env.local; so must this
 import { createClient } from "../lib/db/client.mjs";
 import { migrate } from "../lib/db/migrate.mjs";
 import { withProject } from "../lib/db/scope.mjs";
