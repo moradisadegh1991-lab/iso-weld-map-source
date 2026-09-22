@@ -98,6 +98,18 @@ test("a spool with no shop welds is not offered a shop fit-up", async () => {
   equal(notApplicable([]).size, 0, "no register, no claims either way");
 });
 
+test("an unreleased field-only spool is not flagged out of order, and N/A is not progress", async () => {
+  // N/A steps are stored as done so nothing waits on them. Until release,
+  // "done" fit-up after a not-done release read as recorded out of order —
+  // a false alarm on every straight length in the register.
+  const { CHAINS, walk, progress } = await import("../../lib/platform/precedence.mjs");
+  const na = notApplicable([{ is_field_weld: true }]);
+  const recorded = Object.fromEntries([...na].map((c) => [c, DONE]));
+  equal(walk(CHAINS.piping_spool, recorded, { na }).filter((x) => x.outOfOrder).map((x) => x.code), []);
+  const p = progress(CHAINS.piping_spool, recorded, { na });
+  equal([p.done, p.total], [0, 7], "three steps out of scope, none of the rest done");
+});
+
 test("a spool with no welds at all gets no verdict", async () => {
   // Different from "no shop welds": here the register itself is missing.
   equal(deriveFromWelds([]), { shop_weld: null, shop_ndt: null, field_weld: null });

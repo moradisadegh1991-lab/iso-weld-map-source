@@ -9,7 +9,7 @@ import {
   canTransition, stageProgress, STAGE_FA,
   assertTransition, assertEditable, isPersisted, PERSISTED_STAGES,
 } from "../../lib/platform/workflow.mjs";
-import { MODULES, byId, liveModules, modulesForRole } from "../../lib/platform/modules.mjs";
+import { MODULES, byId, liveModules, executionModules, modulesForRole } from "../../lib/platform/modules.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 
 // ── the lock that matters ────────────────────────────────────────────────
@@ -141,7 +141,9 @@ test("every stage has a label, so nothing renders as a raw key", async () => {
 
 test("exactly what is built is marked built", async () => {
   // A platform that shows planned work as live is a lie the first user finds.
-  equal(liveModules().map((m) => m.id), ["piping"]);
+  equal(liveModules().map((m) => m.id), ["piping"], "only piping reads its drawings");
+  equal(executionModules().map((m) => m.id).sort(), ["civil", "equipment", "piping", "structural"],
+    "site tracking is built for four; electrical and instrumentation are neither");
   assert(MODULES.length > 1, "and the rest are declared, not hidden");
 });
 

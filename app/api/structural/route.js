@@ -6,8 +6,8 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { tagStatus, recordActivity } from "../../../lib/db/repos/activities.mjs";
 import {
-  listFoundations, concreteClasses, poursOf, upsertFoundation, recordPour, recordSpecimens,
-} from "../../../lib/db/repos/civil.mjs";
+  listStructures, deriveStructureSteps, upsertStructure, recordPlumbReading, recordBolting,
+} from "../../../lib/db/repos/structural.mjs";
 
 export async function GET(request) {
   try {
@@ -21,36 +21,32 @@ export async function GET(request) {
 
     return await withProject(db, projectId, async () => {
       if (tagId) {
+        const steel = await deriveStructureSteps(db, { projectId, tagId });
         return Response.json({
           status: await tagStatus(db, { projectId, tagId }),
-          pours: await poursOf(db, { projectId, tagId }),
+          survey: steel.survey, bolting: steel.bolting,
         });
       }
-      const foundations = [];
-      for (const f of await listFoundations(db, { projectId })) {
-        const s = await tagStatus(db, { projectId, tagId: f.id });
-        const strength = s.steps?.find((x) => x.code === "strength");
-        foundations.push({
-          ...f, pct: s.progress?.pct ?? 0, ready: !!s.why?.ready,
+      const structures = [];
+      for (const t of await listStructures(db, { projectId })) {
+        const s = await tagStatus(db, { projectId, tagId: t.id });
+        const pick = (code) => {
+          const x = s.steps?.find((y) => y.code === code);
+          return x ? { status: x.status, note: x.note, na: x.na } : null;
+        };
+        structures.push({
+          ...t, pct: s.progress?.pct ?? 0, ready: !!s.why?.ready,
           next: (s.next || []).map(({ code, title }) => ({ code, title })),
-          waitingOn: (s.why?.rootCauses || []).map(({ code, title }) => ({ code, title })),
-          strength: strength ? { status: strength.status, note: strength.note } : null,
+          waitingOn: (s.why?.rootCauses || []).map(({ code, title, discipline }) => ({ code, title, discipline })),
+          foundation: pick("foundation"), plumb: pick("plumb"), bolting: pick("bolting"),
           outOfOrder: (s.steps || []).filter((x) => x.outOfOrder).map((x) => x.title),
         });
       }
-      const { rows: [spec] } = await db.query(
-        "SELECT concrete_curing_days, concrete_sample_per_m3 FROM project WHERE id = $1", [projectId]);
-      const { rows: equipment } = await db.query(
-        `SELECT id, tag_no, description, discipline FROM tag
-          WHERE project_id = $1 AND discipline IN ('equipment', 'structural') ORDER BY tag_no`,
-        [projectId]);
-      return Response.json({
-        foundations,
-        classes: await concreteClasses(db, { projectId }),
-        spec: { curingDays: spec?.concrete_curing_days ?? null,
-                samplePerM3: spec?.concrete_sample_per_m3 == null ? null : Number(spec.concrete_sample_per_m3) },
-        equipment,
-      });
+      const { rows: [p] } = await db.query(
+        "SELECT steel_erection_standard FROM project WHERE id = $1", [projectId]);
+      const { rows: subsystems } = await db.query(
+        "SELECT id, code FROM subsystem WHERE project_id = $1 ORDER BY code", [projectId]);
+      return Response.json({ structures, standard: p?.steel_erection_standard || null, subsystems });
     });
   } catch (e) { return errorResponse(e); }
 }
@@ -63,17 +59,16 @@ export async function POST(request) {
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
 
-    // Registering a foundation and its specified concrete is an engineering
-    // act; recording what happened on site is the grant that already means
-    // that — engineers and QC hold it, viewers do not.
-    assertCan(membership, kind === "foundation" ? ACTIONS.EDIT_EXTRACTION : ACTIONS.ASSIGN_WELD);
+    // Registering a structure and its counts is engineering; recording the
+    // survey and the bolting is site QC — the same split as civil.
+    assertCan(membership, kind === "structure" ? ACTIONS.EDIT_EXTRACTION : ACTIONS.ASSIGN_WELD);
 
     return await withProject(db, projectId, async () => {
       const args = { ...body, projectId, userId: user.id };
-      if (kind === "foundation") return Response.json({ foundation: await upsertFoundation(db, args) });
+      if (kind === "structure") return Response.json({ structure: await upsertStructure(db, args) });
       if (kind === "activity") return Response.json({ activity: await recordActivity(db, args) });
-      if (kind === "pour") return Response.json({ pour: await recordPour(db, args) });
-      if (kind === "specimens") return Response.json({ specimens: await recordSpecimens(db, args) });
+      if (kind === "plumb") return Response.json({ reading: await recordPlumbReading(db, args) });
+      if (kind === "bolting") return Response.json({ bolting: await recordBolting(db, args) });
       return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
     });
   } catch (e) { return errorResponse(e); }

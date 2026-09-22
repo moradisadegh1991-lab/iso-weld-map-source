@@ -86,7 +86,7 @@ export default function CivilPage() {
           <div className="wrap">
             <table className="dtable">
               <thead>
-                <tr><th>فونداسیون</th><th>تجهیز</th><th>ساب‌سیستم</th><th>بتن مشخصات</th>
+                <tr><th>فونداسیون</th><th>تجهیز / سازه</th><th>ساب‌سیستم</th><th>بتن مشخصات</th>
                     <th>پیشرفت</th><th>امروز می‌شود</th><th>مقاومت</th><th /></tr>
               </thead>
               <tbody>
@@ -156,6 +156,7 @@ function FoundationDetail({ f, detail, mayRecord, post }) {
             <span className="sm"><b>{s.derived ? "⚙ " : ""}{s.title}</b></span>
             <span className="sm muted">
               {s.status === "done" ? `انجام شد${s.doneAt ? " · " + fa(s.doneAt) : ""}`
+                : s.note?.level === "bad" ? "رد — اصلاح لازم است"
                 : s.status === "in_progress" ? "در حال انجام"
                 : s.blocked ? `منتظر: ${s.waitingOn.map((w) => w.title).join("، ")}`
                 : "آمادهٔ شروع"}
@@ -331,12 +332,12 @@ function AddFoundation({ equipment, post }) {
       <h2>فونداسیون جدید</h2>
       <div className="grid2">
         <Field id="f-no" label="شمارهٔ فونداسیون" value={f.tagNo} on={(v) => setF({ ...f, tagNo: v })} required />
-        <div className="field"><label htmlFor="f-carries">تجهیزی که روی آن می‌نشیند</label>
+        <div className="field"><label htmlFor="f-carries">تجهیز یا سازه‌ای که روی آن می‌نشیند</label>
           <select id="f-carries" value={f.carriesTagId} onChange={(e) => setF({ ...f, carriesTagId: e.target.value })}>
-            <option value="">— هیچ (مثلاً پایپ رک) —</option>
+            <option value="">— هیچ —</option>
             {equipment.map((t) => <option key={t.id} value={t.id}>{t.tag_no} — {t.description || ""}</option>)}
           </select>
-          <span className="hint">با انتخاب تجهیز، مرحلهٔ «فونداسیون» آن تجهیز از همین‌جا خوانده می‌شود.</span>
+          <span className="hint">مرحلهٔ «فونداسیون» تجهیز یا سازهٔ انتخاب‌شده از همین‌جا خوانده می‌شود.</span>
         </div>
         <Field id="f-cls" label="کلاس بتن مشخصات" value={f.concreteClass} on={(v) => setF({ ...f, concreteClass: v })} required />
         <Field id="f-fc" label="f′c (MPa، استوانه‌ای)" type="number" value={f.fcMpa} on={(v) => setF({ ...f, fcMpa: v })} required />

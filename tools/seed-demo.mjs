@@ -6,7 +6,8 @@
  * Fills the signed-in user's DEMO project (created by `npm run auth:admin`)
  * with a steam cracker: siting, subsystems, contractors and their packages,
  * an equipment list, one saved isometric register, spool progress and a
- * support schedule. Safe to run twice — everything upserts, and the register
+ * support schedule, foundations with their concrete, and steel structures
+ * with their survey and bolting. Safe to run twice — everything upserts, and the register
  * is only created if it is not already there.
  *
  * Every value here is DEMONSTRATION data. The coordinates are a round point
@@ -26,6 +27,7 @@ import { createRun, saveRegister } from "../lib/db/repos/runs.mjs";
 import { upsertWelder, addQualification, assignWeld, recordNdt } from "../lib/db/repos/execution.mjs";
 import { recordSpoolActivity, upsertSupport, markSupport } from "../lib/db/repos/piping-execution.mjs";
 import { upsertFoundation, recordPour, recordSpecimens } from "../lib/db/repos/civil.mjs";
+import { upsertStructure, recordPlumbReading, recordBolting } from "../lib/db/repos/structural.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -117,6 +119,7 @@ try {
     elevation_datum: "گرید ±0.00 = EL 100000 mm",
     grade_elevation_mm: 100000, min_cover_mm: 800,
     concrete_curing_days: 7,
+    steel_erection_standard: "AISC303",
   }});
 
   await withProject(db, p.id, async () => {
@@ -252,6 +255,64 @@ try {
         await recordActivity(db, { projectId: p.id, tagId: fid, code, doneAt: when, userId: user.id });
       }
     };
+    // ── structural: registered before the foundations so FDN-PR-01/02 can
+    //    carry the main rack ──
+    //
+    //   PR-2101  main pipe rack on FDN-PR-01/02 — waits on civil, whose C30
+    //            class is under a low-strength investigation
+    //   PR-1201  quench-area rack: plumb, fully bolted and grouted
+    //   PL-2101  compressor platform: column C3 out of plumb (14 mm on a
+    //            6 m column, 12 mm allowed) and one bolt lot short of Fp,C;
+    //            no fireproofing required, so that step does not apply
+    const STRUCTURES = [
+      { no: "PR-2101", type: "pipe_rack", sub: "21-01", columns: 4, joints: 64, fp: true, t: 48,
+        dwg: "ST-21-PR-001", desc: "Main pipe rack, compression" },
+      { no: "PR-1201", type: "pipe_rack", sub: "12-01", columns: 6, joints: 48, fp: true, t: 62,
+        dwg: "ST-12-PR-001", desc: "Pipe rack, quench area",
+        manual: [["foundation", "2026-07-10"], ["erection", "2026-08-05"]],
+        survey: [["A1", 7500, 4, -3], ["A2", 7500, 6, 2], ["A3", 7500, -5, 7], ["B1", 7500, 3, 3],
+                 ["B2", 7500, -8, 1], ["B3", 7500, 2, -6]], surveyedOn: "2026-08-12",
+        bolting: [{ jointType: "pretensioned", boltGrade: "A325M", boltSize: "M20",
+          method: "calibrated_wrench", joints: 48, verifiedKn: 152, lotRef: "L-2208", inspectedOn: "2026-08-16" }],
+        after: [["grout", "2026-08-20"]] },
+      { no: "PL-2101", type: "platform", sub: "21-01", columns: 4, joints: 24, fp: false, t: 9,
+        dwg: "ST-21-PL-004", desc: "K-2101 maintenance platform",
+        manual: [["foundation", "2026-08-01"], ["erection", "2026-08-25"]],
+        survey: [["C1", 6000, 5, 2], ["C2", 6000, -4, 6], ["C3", 6000, 14, 3], ["C4", 6000, 2, -2]],
+        surveyedOn: "2026-09-02",
+        bolting: [
+          { jointType: "slip_critical", boltGrade: "8.8", boltSize: "M20", method: "torque",
+            joints: 12, verifiedKn: 139, lotRef: "L-3301", inspectedOn: "2026-09-05" },
+          { jointType: "slip_critical", boltGrade: "8.8", boltSize: "M20", method: "torque",
+            joints: 12, verifiedKn: 131, lotRef: "L-3302", inspectedOn: "2026-09-06" }] },
+    ];
+    for (const st of STRUCTURES) {
+      const t = await upsertStructure(db, { projectId: p.id, tagNo: st.no, structureType: st.type,
+        subsystemId: sub[st.sub].id, description: st.desc, columns: st.columns, boltedJoints: st.joints,
+        fireproofingRequired: st.fp, tonnageT: st.t, drawingRef: st.dwg });
+      for (const [code, on] of st.manual || []) {
+        await recordActivity(db, { projectId: p.id, tagId: t.id, code, doneAt: on, userId: user.id });
+      }
+      // Readings and bolting records are insert-only (a re-shoot is a new
+      // row), so they are seeded once.
+      const { rows: [n] } = await db.query(
+        `SELECT (SELECT count(*) FROM plumb_reading WHERE tag_id = $1)::int
+              + (SELECT count(*) FROM bolting_record WHERE tag_id = $1)::int AS n`, [t.id]);
+      if (n.n === 0) {
+        for (const [columnMark, heightMm, dxMm, dyMm] of st.survey || []) {
+          await recordPlumbReading(db, { projectId: p.id, tagId: t.id, columnMark, heightMm, dxMm, dyMm,
+            surveyedOn: st.surveyedOn, surveyor: "نقشه‌بردار نمایشی", userId: user.id });
+        }
+        for (const b of st.bolting || []) {
+          await recordBolting(db, { projectId: p.id, tagId: t.id, ...b, userId: user.id });
+        }
+      }
+      for (const [code, on] of st.after || []) {
+        await recordActivity(db, { projectId: p.id, tagId: t.id, code, doneAt: on, userId: user.id });
+      }
+    }
+    console.log(`structural: ${STRUCTURES.length} structures`);
+
     const TO_PRE = ["excavation", "blinding", "rebar", "embedments", "pre_pour"];
     const FOUNDATIONS = [
       { no: "FDN-K-2101", carries: "K-2101", cls: "C35", fc: 35, vol: 180, ab: "VND-K2101-AB-C",
@@ -262,9 +323,9 @@ try {
         pre: "2026-09-12", pours: [["PC-1203A", "2026-09-15", "C30", 30, [["S1", 7, [20.5, 21.5]]]]] },
       { no: "FDN-F-1101A", carries: "F-1101A", cls: "C30", fc: 30, vol: 95,
         pre: "2026-07-22", pours: [["PC-1101A", "2026-07-25", "C25", 25, [["S1", 28, [29.0, 30.0]]]]] },
-      { no: "FDN-PR-01", carries: null, cls: "C30", fc: 30, vol: 8,
+      { no: "FDN-PR-01", carries: "PR-2101", cls: "C30", fc: 30, vol: 8,
         pre: "2026-06-29", pours: [["PC-PR01", "2026-07-01", "C30", 30, [["S1", 28, [28.5, 29.0]]]]] },
-      { no: "FDN-PR-02", carries: null, cls: "C30", fc: 30, vol: 8,
+      { no: "FDN-PR-02", carries: "PR-2101", cls: "C30", fc: 30, vol: 8,
         pre: "2026-07-03", pours: [["PC-PR02", "2026-07-05", "C30", 30, [["S1", 28, [27.5, 28.5]]]]] },
       { no: "FDN-P-1203B", carries: "P-1203B", cls: "C30", fc: 30, vol: 12,
         pre: "2026-08-08", pours: [["PC-1203B", "2026-08-10", "C30", 30, [["S1", 28, [31.5, 32.5]]]]] },
@@ -274,9 +335,8 @@ try {
     for (const f of FOUNDATIONS) {
       const fdn = await upsertFoundation(db, { projectId: p.id, tagNo: f.no,
         carriesTagId: f.carries ? await tagId(f.carries) : null,
-        subsystemId: f.carries ? null : sub["21-01"].id,
         concreteClass: f.cls, fcMpa: f.fc, volumeM3: f.vol, anchorBoltRef: f.ab || null,
-        description: f.carries ? `فونداسیون ${f.carries}` : "فونداسیون پایپ رک" });
+        description: `فونداسیون ${f.carries}` });
       await ticks(fdn.id, f.upTo || TO_PRE, f.pre);
       for (const [pourNo, on, cls, fc, samples] of f.pours) {
         const pour = await recordPour(db, { projectId: p.id, tagId: fdn.id, pourNo, pouredOn: on,

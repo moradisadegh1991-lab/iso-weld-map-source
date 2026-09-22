@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import { ERECTION_STANDARDS } from "../../lib/structural/steel.mjs";
 
 /**
  * The project's particulars.
@@ -75,7 +76,8 @@ export default function ProjectPage() {
     if (!data?.project) return;
     const p = data.project;
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
-      .concat([["description", p.description ?? ""]])));
+      .concat([["description", p.description ?? ""],
+               ["steel_erection_standard", p.steel_erection_standard ?? ""]])));
   }, [data]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setSaved(false); }
@@ -162,6 +164,24 @@ export default function ProjectPage() {
               {hint && <span className="hint">{hint}</span>}
             </div>
           ))}
+        </div>
+
+        <h2 style={{ marginTop: 8 }}>اسکلت فلزی</h2>
+        <div className="grid2">
+          <div className="field">
+            <label htmlFor="steel_erection_standard">استاندارد رواداری نصب اسکلت</label>
+            <select id="steel_erection_standard" disabled={!editable}
+                    value={form.steel_erection_standard ?? ""}
+                    onChange={(e) => set("steel_erection_standard", e.target.value)}>
+              <option value="">— ثبت نشده —</option>
+              {Object.entries(ERECTION_STANDARDS).map(([k, v]) => (
+                <option key={k} value={k}>{v.title}</option>
+              ))}
+            </select>
+            <span className="hint">
+              تا ثبت نشود، شاقولی هیچ ستونی حکم نمی‌گیرد — ۱:۵۰۰ و h/300 هر دو درست‌اند، برای قراردادهای متفاوت
+            </span>
+          </div>
         </div>
 
         {saveErr && <p className="err">{saveErr}</p>}
