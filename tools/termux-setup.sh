@@ -168,6 +168,16 @@ MIG="$(psql -h "$PREFIX/tmp" -d isoweld -tAc \
   && ok "migration ها اعمال شد ($MIG در پایگاه دادهٔ واقعی)" \
   || die "migration اجرا شد ولی در پایگاه دادهٔ واقعی چیزی نیست ($MIG) — DATABASE_URL را بررسی کنید"
 
+# The step is called "migration AND data" and until now only did the first
+# half, leaving the doctor to end on "no project defined" every single run.
+# Seeding is idempotent — it looks for K110 and returns early if it is there.
+npm run db:seed 2>&1 | sed 's/^/  /' || die "seed شکست خورد"
+PROJ="$(psql -h "$PREFIX/tmp" -d isoweld -tAc \
+  "SELECT count(*) FROM project" 2>/dev/null || echo 0)"
+[ "${PROJ:-0}" -ge 1 ] \
+  && ok "پروژه ساخته شد ($PROJ)" \
+  || warn "هیچ پروژه‌ای ساخته نشد — از UI یا POST /api/projects بسازید"
+
 step "۶ · بررسی"
 npm run doctor
 
@@ -177,8 +187,8 @@ npm run doctor
 PG=down;   pg_ctl -D "$PGDATA" status >/dev/null 2>&1 && PG=up
 WASM=no;   [ -d node_modules/@next/swc-wasm-nodejs ] && WASM=yes
 KEY=no;    grep -q '^ANTHROPIC_API_KEY=' .env.local 2>/dev/null && KEY=yes
-printf '\nSUMMARY: pg=%s wasm=%s mig=%s key=%s log=%s/setup.log\n' \
-  "$PG" "$WASM" "${MIG:-0}" "$KEY" "$PWD" >&2
+printf '\nSUMMARY: pg=%s wasm=%s mig=%s proj=%s key=%s log=%s/setup.log\n' \
+  "$PG" "$WASM" "${MIG:-0}" "${PROJ:-0}" "$KEY" "$PWD" >&2
 
 cat <<'NEXT'
 
