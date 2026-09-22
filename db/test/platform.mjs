@@ -7,6 +7,7 @@ import { test, run, assert, equal } from "./harness.mjs";
 import {
   STAGES, STAGE_ORDER, TRANSITIONS, isStage, transitionsFrom,
   canTransition, stageProgress, STAGE_FA,
+  assertTransition, assertEditable, isPersisted, PERSISTED_STAGES,
 } from "../../lib/platform/workflow.mjs";
 import { MODULES, byId, liveModules, modulesForRole } from "../../lib/platform/modules.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
@@ -55,6 +56,53 @@ test("a real role gets exactly the moves its actions allow", async () => {
   equal(canTransition(STAGES.DRAFT, STAGES.EXTRACTED, allows("viewer")).ok, false,
     "a viewer changes nothing");
 });
+
+test("the server's gate refuses with a status and a code, not just a message", async () => {
+  // A route that has to parse a sentence to decide on a status code will get
+  // it wrong. The machine hands it both.
+  equal(assertTransition(STAGES.EXTRACTED, STAGES.APPROVED).label, "تأیید");
+
+  const locked = throws(() => assertTransition(STAGES.APPROVED, STAGES.EXTRACTED));
+  equal(locked.status, 409);
+  equal(locked.code, "RUN_LOCKED", "the code the API and its tests already use");
+
+  const bad = throws(() => assertTransition(STAGES.FAILED, STAGES.APPROVED));
+  equal(bad.status, 409);
+  equal(bad.code, "INVALID_TRANSITION", "signing a failed extraction is a different fault");
+});
+
+test("a correction may be written to a live run and never to a signed one", async () => {
+  // This is the rule lib/db/repos/review.mjs used to keep its own copy of,
+  // spelled as `locked_at`. One rule, one home.
+  for (const s of [STAGES.EXTRACTED, STAGES.IN_REVIEW, STAGES.FAILED]) {
+    assertEditable(s);                 // throws on failure, so reaching here is the assertion
+  }
+  const e = throws(() => assertEditable(STAGES.APPROVED));
+  equal(e.code, "RUN_LOCKED");
+  equal(e.status, 409);
+  assert(/رویژن جدید/.test(e.message), "and it points at the only legitimate route");
+
+  equal(throws(() => assertEditable(STAGES.SUPERSEDED)).status, 409,
+    "a retired revision is not a scratchpad either");
+});
+
+test("the machine says which stages the database actually stores", async () => {
+  // `run_status` has four values. `draft` and `in_review` describe a screen,
+  // not a row, and a server-side check that validated against them would be
+  // checking something the database cannot hold.
+  equal(PERSISTED_STAGES.every(isStage), true);
+  equal(isPersisted(STAGES.DRAFT), false);
+  equal(isPersisted(STAGES.IN_REVIEW), false);
+  for (const s of [STAGES.EXTRACTED, STAGES.APPROVED, STAGES.SUPERSEDED, STAGES.FAILED]) {
+    equal(isPersisted(s), true, `${s} is stored, so it must be validatable`);
+  }
+});
+
+/** Run `fn`, expecting it to throw; hand back what it threw. */
+function throws(fn) {
+  try { fn(); } catch (e) { return e; }
+  throw new Error("expected this to be refused, and it was allowed");
+}
 
 // ── the shape of the machine ─────────────────────────────────────────────
 

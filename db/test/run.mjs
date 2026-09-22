@@ -237,6 +237,34 @@ test("approval records who signed and exactly what they signed", async () => {
   });
 });
 
+test("a second click of the approve button is not a failure", async () => {
+  // The run is already approved by the test above. Approving it again must
+  // read as success: the operator's finger is not a state machine, and an
+  // error here would send them looking for a problem that is not there.
+  await withProject(db, kavian.id, async () => {
+    const again = await runs.approveRun(db, { projectId: kavian.id, runId, userId: alice.id });
+    equal(again.status, "approved");
+    const { rows: [r] } = await db.query(
+      "SELECT approved_by FROM extraction_run WHERE id = $1", [runId]);
+    equal(r.approved_by, alice.id, "and it does not re-sign it under whoever clicked second");
+  });
+});
+
+test("a failed extraction cannot be signed", async () => {
+  // Signing is an engineer attesting to a register. A failed run has none,
+  // so there is nothing for a signature to attest to.
+  await withProject(db, kavian.id, async () => {
+    const broken = await runs.createRun(db, {
+      projectId: kavian.id, documentId: docId, payload: DEMO,
+      engineError: "geometry does not close",
+    });
+    equal(broken.status, "failed");
+    const e = await throws(() => runs.approveRun(db, {
+      projectId: kavian.id, runId: broken.id, userId: alice.id }), "INVALID_TRANSITION");
+    equal(e.status, 409);
+  });
+});
+
 test("the database refuses an approval with no signatory", async () => {
   // A fresh, unapproved run: the already-approved one carries a signatory, so
   // flipping its status would not exercise the constraint at all.
