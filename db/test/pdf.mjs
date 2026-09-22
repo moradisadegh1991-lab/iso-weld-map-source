@@ -12,6 +12,7 @@ import { test, run, assert, equal } from "./harness.mjs";
 import { tiles, sizeOf } from "../../lib/client/image-prep.mjs";
 import { fitCanvas } from "../../lib/client/pdf.mjs";
 import { base64FromBuffer } from "../../lib/client/base64.mjs";
+import { badgeFor } from "../../lib/client/tab-badges.mjs";
 import { readFile } from "node:fs/promises";
 
 /** A stand-in for anything drawable: the tiling only reads its dimensions. */
@@ -95,6 +96,51 @@ test("a device that refuses every size fails loudly instead of rendering blank",
 test("a canvas the device accepts is used unchanged", async () => {
   const fit = fitCanvas(1000, 800, { create: (w, h) => ({ canvas: { width: w, height: h }, ctx: {} }) });
   equal([fit.width, fit.height, fit.shrink], [1000, 800, 1]);
+});
+
+// ── what the navigator shows without being opened ────────────────────────
+
+test("a warning the engine raised is visible from the tab strip", async () => {
+  // The case this exists for, taken from the first live extraction: the MTO
+  // listed a weld-neck flange that the model had not placed in the geometry.
+  // The engine caught it; the strip has to say so, or nobody looks.
+  const model = {
+    totals: { welds: 2 },
+    checks: [
+      { label: "تعداد فلنج", status: "warn" },
+      { label: "لوله 28 در برابر MTO", status: "ok" },
+      { label: "CL Length", status: "ok" },
+      { label: "توپولوژی مسیر", status: "ok" },
+    ],
+  };
+  const data = { bom: [{ pt: 1 }, { pt: 2 }], unreadable: [] };
+
+  const check = badgeFor("check", model, data);
+  equal(check, { text: "1 !", tone: "warn" }, "one problem, and it is loud");
+  equal(badgeFor("weld", model, data), { text: "2", tone: "plain" }, "counts stay quiet");
+  equal(badgeFor("mto", model, data), { text: "2", tone: "plain" });
+});
+
+test("a value the model could not read counts as a problem too", async () => {
+  const model = { totals: { welds: 1 }, checks: [{ status: "ok" }] };
+  equal(badgeFor("check", model, { unreadable: ["CL length"] }), { text: "1 !", tone: "warn" });
+});
+
+test("a clean drawing is marked clean, not left blank", async () => {
+  // Blank would be ambiguous: nothing wrong, or nothing computed?
+  const model = { totals: { welds: 4 }, checks: [{ status: "ok" }, { status: "ok" }] };
+  equal(badgeFor("check", model, { unreadable: [] }), { text: "✓", tone: "plain" });
+});
+
+test("a BOM row the engine could not place is flagged on the MTO tab", async () => {
+  const model = { totals: { welds: 2 }, checks: [], bomDropped: [{ pt: 7 }], bomGhosted: [] };
+  equal(badgeFor("mto", model, { bom: [{}, {}, {}] }), { text: "3 · 1 !", tone: "warn" });
+});
+
+test("a failed engine run shows no counts at all", async () => {
+  // Numbers from a model that did not build would be fiction.
+  const broken = { error: "geometry incomplete" };
+  for (const k of ["weld", "check"]) equal(badgeFor(k, broken, { bom: [{}] }), null, k);
 });
 
 // ── encoding a whole file for upload ─────────────────────────────────────

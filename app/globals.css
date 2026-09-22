@@ -116,6 +116,33 @@ textarea:focus{border-color:var(--cy)}
   aside{width:100%;max-width:none;border-inline-start:none;border-top:1px solid var(--rule);max-height:52vh}
   .canvas{min-height:340px}
 }
+/* ── the pane navigator ───────────────────────────────────────────────── */
+.tabnav{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.tabnav button{display:flex;align-items:center;gap:6px;font-family:inherit;font-size:12px;
+  padding:7px 10px;border-radius:5px;border:1px solid transparent;background:transparent;
+  color:var(--dim);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.tabnav button:hover{border-color:var(--rule);color:var(--ink)}
+.tabnav button.on{background:var(--surf);border-color:var(--rule);color:var(--ink)}
+.tabnav-label{white-space:nowrap}
+
+/* Neutral by default. A count is information; only a real problem is loud,
+   because a badge that is always lit is a badge nobody reads. */
+.tabnav-badge{font-family:ui-monospace,monospace;font-size:10px;line-height:1;
+  padding:3px 5px;border-radius:3px;background:rgba(221,231,238,.09);color:var(--dim)}
+.tabnav button.on .tabnav-badge{color:var(--ink)}
+.tabnav-badge.warn{background:rgba(255,107,74,.15);color:var(--fld)}   /* the same colour a failed check already uses */
+
+/* The one-line description only appears where there is room for it; on a
+   phone the label and its count carry the meaning on their own. */
+.tabnav-hint{display:none}
+@media (min-width:1100px){
+  .tabnav button{flex-direction:column;align-items:flex-start;gap:2px;padding:7px 11px}
+  .tabnav button .tabnav-badge{position:absolute;top:6px;inset-inline-end:8px}
+  .tabnav button{position:relative;padding-inline-end:34px}
+  .tabnav-hint{display:block;font-size:10px;line-height:1.4;color:var(--dim);opacity:.75}
+  .tabnav button.on .tabnav-hint{opacity:1}
+}
+
 /* A phone, once the viewport meta lets the real width through. The 900px
    block above was written for a narrow window on a desktop; these are the
    things that still do not fit when the window is a 6-inch screen. */
@@ -130,6 +157,8 @@ textarea:focus{border-color:var(--cy)}
   .pane{padding:10px 8px}
   .pane table{display:block;overflow-x:auto;white-space:nowrap}
   aside nav button{font-size:12px;padding:7px 11px}   /* a thumb, not a mouse */
+  .tabnav{padding:8px 6px;gap:3px}
+  .tabnav button{padding:8px 9px}
   .canvas{min-height:260px}
 }
 /* Nothing should ever scroll the page sideways; if something overflows, it

@@ -9,6 +9,7 @@ import { TYPE_FA } from "../lib/standards";
 import { sanitize, score, acceptRepair } from "../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../lib/extraction/merge.mjs";
 import SaveBar from "../components/SaveBar";
+import TabNav from "../components/TabNav";
 import SessionBar from "../components/SessionBar";
 import ReviewQueue from "../components/ReviewQueue";
 import EditPanel from "../components/EditPanel";
@@ -491,13 +492,7 @@ export default function Page() {
           )}
 
           <aside>
-            <nav>
-              {[["weld", "سرجوش"], ["check", "اعتبارسنجی"], ["line", "Line Data"], ["mto", "MTO"],
-                ["json", "JSON"], ["review", "بازبینی"]]
-                .map(([k, t]) => (
-                  <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{t}</button>
-                ))}
-            </nav>
+            <TabNav tab={tab} setTab={setTab} model={model} data={data} />
 
             {tab === "weld" && !model.error && (
               <div className="pane">
