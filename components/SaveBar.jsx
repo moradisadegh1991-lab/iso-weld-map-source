@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { base64FromBuffer } from "../lib/client/base64.mjs";
 
 /**
  * Persistence for a computed register.
@@ -11,7 +12,18 @@ import { useState } from "react";
  * be this simple.
  */
 
-const MAX_INLINE_UPLOAD = 3_400_000; // same body ceiling the extraction passes respect
+/**
+ * The body ceiling, in BASE64 CHARACTERS — the same units and the same number
+ * the extraction passes measure themselves against in lib/client/image-prep.mjs,
+ * where `sum` adds up the length of each tile's base64 string.
+ *
+ * The raw-byte ceiling is derived from it rather than written down twice,
+ * because comparing a file's raw size against a base64 budget silently
+ * under-counts by a third: a 2.77 MB PDF is 3.69 MB once encoded, which is
+ * over this limit while looking comfortably under it.
+ */
+const MAX_INLINE_UPLOAD = 3_400_000;
+const MAX_INLINE_BYTES = Math.floor(MAX_INLINE_UPLOAD / 4) * 3;
 
 async function sha256Hex(buf) {
   const digest = await crypto.subtle.digest("SHA-256", buf);
@@ -42,8 +54,13 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
         // Above the body ceiling the bytes need a presigned upload straight to
         // object storage; until MinIO is wired the document is registered by
         // hash alone and says so, rather than silently storing nothing.
-        if (buf.byteLength <= MAX_INLINE_UPLOAD) {
-          fileBase64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        //
+        // base64FromBuffer rather than the one-line spread that was here: the
+        // spread passes every byte as its own argument, so a real multi-sheet
+        // PDF overflowed the call stack outright — the feature this branch
+        // exists to serve was the one size it could not handle.
+        if (buf.byteLength <= MAX_INLINE_BYTES) {
+          fileBase64 = base64FromBuffer(buf);
         }
       }
 

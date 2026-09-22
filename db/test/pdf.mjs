@@ -11,6 +11,7 @@
 import { test, run, assert, equal } from "./harness.mjs";
 import { tiles, sizeOf } from "../../lib/client/image-prep.mjs";
 import { fitCanvas } from "../../lib/client/pdf.mjs";
+import { base64FromBuffer } from "../../lib/client/base64.mjs";
 import { readFile } from "node:fs/promises";
 
 /** A stand-in for anything drawable: the tiling only reads its dimensions. */
@@ -94,6 +95,56 @@ test("a device that refuses every size fails loudly instead of rendering blank",
 test("a canvas the device accepts is used unchanged", async () => {
   const fit = fitCanvas(1000, 800, { create: (w, h) => ({ canvas: { width: w, height: h }, ctx: {} }) });
   equal([fit.width, fit.height, fit.shrink], [1000, 800, 1]);
+});
+
+// ── encoding a whole file for upload ─────────────────────────────────────
+
+test("a 2.7 MB PDF encodes to base64 instead of overflowing the stack", async () => {
+  // The one-line spread this replaced — String.fromCharCode(...bytes) — hands
+  // the engine one argument per byte. It survived development because every
+  // test drawing was a small JPEG; the first real isometric PDF, the input
+  // this whole feature exists for, was the size that broke it.
+  const pdf = await readFile("docs/AISPC-10-DE-930-PI-ISO-0001-REV A0 .pdf");
+  assert(pdf.byteLength > 2.5e6, "the fixture is still large enough to be the test");
+
+  // The old code, to show the failure is real and not hypothetical.
+  let threw = null;
+  try { String.fromCharCode(...new Uint8Array(pdf)); } catch (e) { threw = e; }
+  assert(threw && /call stack/i.test(threw.message),
+    "the spread must still be the trap this guards against");
+
+  const encoded = base64FromBuffer(pdf);
+  equal(encoded, pdf.toString("base64"), "and the chunked encoder is byte-for-byte correct");
+});
+
+test("a chunk boundary does not corrupt the encoding", async () => {
+  // 0x8000 bytes per call, so lengths either side of a multiple of it are
+  // where an off-by-one would show up; base64 groups by 3, so tri-alignment
+  // matters too.
+  for (const n of [0, 1, 2, 3, 0x8000 - 1, 0x8000, 0x8000 + 1, 0x8000 * 2 + 5]) {
+    const bytes = Buffer.from(Array.from({ length: n }, (_, i) => (i * 7 + 3) & 0xff));
+    equal(base64FromBuffer(bytes), bytes.toString("base64"), `length ${n}`);
+  }
+});
+
+test("the inline-upload ceiling is measured in the units actually sent", async () => {
+  // The body carries base64, which is 4 characters per 3 bytes. Comparing a
+  // file's RAW length against a base64 budget under-counts by a third: the
+  // project PDF is 2.77 MB raw and 3.69 MB encoded — over a 3.4 M ceiling
+  // while looking comfortably under it.
+  const CEILING = 3_400_000;
+  const rawCeiling = Math.floor(CEILING / 4) * 3;
+  const pdf = await readFile("docs/AISPC-10-DE-930-PI-ISO-0001-REV A0 .pdf");
+
+  assert(pdf.byteLength <= CEILING, "raw size alone would wave this file through");
+  assert(base64FromBuffer(pdf).length > CEILING, "but encoded it is over the ceiling");
+  assert(pdf.byteLength > rawCeiling, "so the derived raw ceiling must reject it");
+
+  // And the derived ceiling never admits anything that would exceed the body.
+  for (const n of [rawCeiling - 3, rawCeiling, rawCeiling + 3]) {
+    const encodedLen = 4 * Math.ceil(n / 3);
+    equal(n <= rawCeiling, encodedLen <= CEILING, `raw ${n} -> base64 ${encodedLen}`);
+  }
 });
 
 // ── the build we render with ─────────────────────────────────────────────
