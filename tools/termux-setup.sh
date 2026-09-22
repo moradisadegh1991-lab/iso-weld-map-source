@@ -28,10 +28,34 @@
 #
 set -u
 
-step() { printf '\n\033[1m── %s\033[0m\n' "$1"; }
-ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
-warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
-die()  { printf '  \033[31m×\033[0m %s\n' "$1" >&2; exit 1; }
+# ── why everything below prints to stderr, and to a file ──────────────────
+#
+# The phone terminal this was written for shows stderr and SWALLOWS stdout.
+# The first two runs of this script therefore looked like they printed almost
+# nothing: every step/ok/warn line went to stdout and vanished, while npm's
+# own notices — which npm writes to stderr — were the only thing visible. An
+# hour went into diagnosing a script that had very likely been working.
+#
+# So: progress goes to stderr, where a terminal that filters will still show
+# it, and a copy of everything goes to setup.log, because a phone's scrollback
+# is a few lines deep and the interesting part is always the part that
+# scrolled away. The markers are plain ASCII for the same reason — a terminal
+# that cannot render one glyph should not be able to hide a failure.
+
+if [ "${TERMUX_SETUP_LOGGING:-}" != "1" ]; then
+  export TERMUX_SETUP_LOGGING=1
+  LOG="$PWD/setup.log"
+  # Re-exec through tee rather than exec>(tee): a process substitution can be
+  # killed before it flushes, and the lines lost are the last ones — exactly
+  # the ones that say what went wrong.
+  bash "$0" "$@" 2>&1 | tee "$LOG" >&2
+  exit "${PIPESTATUS[0]}"
+fi
+
+step() { printf '\n== %s ==\n' "$1" >&2; }
+ok()   { printf '  [ ok ] %s\n' "$1" >&2; }
+warn() { printf '  [ !! ] %s\n' "$1" >&2; }
+die()  { printf '  [FAIL] %s\n' "$1" >&2; printf 'SUMMARY: FAILED\n' >&2; exit 1; }
 
 [ -f package.json ] || die "این اسکریپت را از ریشهٔ مخزن اجرا کنید."
 
@@ -123,6 +147,15 @@ npm run db:migrate >/dev/null 2>&1 && ok "migration ها اعمال شد" || die
 
 step "۶ · بررسی"
 npm run doctor
+
+# ── one line, pure ASCII, last ───────────────────────────────────────────
+# Whatever else a narrow terminal loses, this is the line worth keeping: it
+# answers, without scrolling, the three questions a failure here turns on.
+PG=down;   pg_ctl -D "$PGDATA" status >/dev/null 2>&1 && PG=up
+WASM=no;   [ -d node_modules/@next/swc-wasm-nodejs ] && WASM=yes
+KEY=no;    grep -q '^ANTHROPIC_API_KEY=' .env.local 2>/dev/null && KEY=yes
+printf '\nSUMMARY: pg=%s wasm=%s key=%s log=%s/setup.log\n' \
+  "$PG" "$WASM" "$KEY" "$PWD" >&2
 
 cat <<'NEXT'
 

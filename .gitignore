@@ -12,3 +12,6 @@ node_modules/
 .env.local
 .env.*.local
 !.env.example
+
+# written by tools/termux-setup.sh — a run log, not source
+setup.log
