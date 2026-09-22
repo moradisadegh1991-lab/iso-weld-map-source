@@ -102,9 +102,20 @@ step "۳ · وابستگی‌ها"
 # Optional native packages (@napi-rs/canvas, the platform SWC binaries) have no
 # Android build. They are optional; npm warns and carries on. --no-audit and
 # --no-fund keep a slow mobile connection from doing work nobody reads.
-npm install --no-audit --no-fund 2>&1 | tail -3
+#
+# Skipped when the tree is already current, and not only to save time: a plain
+# `npm install` PRUNES the WASM compiler that the next step installs with
+# --no-save, because an unsaved package is extraneous against the lockfile.
+# Re-running this script would otherwise throw away 54 MB and fetch it again
+# every single time. npm writes node_modules/.package-lock.json on each
+# install, so it being newer than package-lock.json means the tree is current.
+if [ node_modules/.package-lock.json -nt package-lock.json ]; then
+  ok "node_modules به‌روز است — رد شد"
+else
+  npm install --no-audit --no-fund 2>&1 | tail -3
+  ok "node_modules"
+fi
 [ -d node_modules/next ] || die "npm install کامل نشد"
-ok "node_modules"
 
 step "۳.۵ · کامپایلر WASM"
 # Not in package.json on purpose — 54 MB that only Android needs. Installed
@@ -143,7 +154,19 @@ grep -q '^ANTHROPIC_API_KEY=' .env.local \
   || warn "کلید تنظیم نشده — بدون آن همه‌چیز جز استخراج کار می‌کند"
 
 step "۵ · Migration و داده"
-npm run db:migrate >/dev/null 2>&1 && ok "migration ها اعمال شد" || die "migration شکست خورد"
+# Output shown, not swallowed. Hiding it is how a real failure stayed hidden:
+# db:migrate could not see DATABASE_URL, migrated a throwaway PGlite directory
+# instead, and printed "6 migration(s) applied" — while the doctor on the very
+# next line said "0 of 6". The driver it reports is the thing worth seeing.
+npm run db:migrate 2>&1 | sed 's/^/  /' || die "migration شکست خورد"
+
+# And verified against the database itself rather than an exit code, because
+# the failure above WAS a clean exit code.
+MIG="$(psql -h "$PREFIX/tmp" -d isoweld -tAc \
+  "SELECT count(*) FROM schema_migrations" 2>/dev/null || echo 0)"
+[ "${MIG:-0}" -ge 6 ] \
+  && ok "migration ها اعمال شد ($MIG در پایگاه دادهٔ واقعی)" \
+  || die "migration اجرا شد ولی در پایگاه دادهٔ واقعی چیزی نیست ($MIG) — DATABASE_URL را بررسی کنید"
 
 step "۶ · بررسی"
 npm run doctor
@@ -154,8 +177,8 @@ npm run doctor
 PG=down;   pg_ctl -D "$PGDATA" status >/dev/null 2>&1 && PG=up
 WASM=no;   [ -d node_modules/@next/swc-wasm-nodejs ] && WASM=yes
 KEY=no;    grep -q '^ANTHROPIC_API_KEY=' .env.local 2>/dev/null && KEY=yes
-printf '\nSUMMARY: pg=%s wasm=%s key=%s log=%s/setup.log\n' \
-  "$PG" "$WASM" "$KEY" "$PWD" >&2
+printf '\nSUMMARY: pg=%s wasm=%s mig=%s key=%s log=%s/setup.log\n' \
+  "$PG" "$WASM" "${MIG:-0}" "$KEY" "$PWD" >&2
 
 cat <<'NEXT'
 

@@ -281,6 +281,21 @@ test("identity resolution rejects a missing or subject-less token", async () => 
   equal((await throws(() => resolve("bad"), "UNAUTHENTICATED")).status, 401);
 });
 
+test("every operational script reads the same .env.local the app does", async () => {
+  // A script that talks to the database but cannot see DATABASE_URL does not
+  // fail — it quietly falls back to a local PGlite directory and succeeds
+  // against the wrong database. db:migrate did exactly that: it reported
+  // "6 migrations applied" while the doctor, one line later, reported "0 of 6",
+  // because only one of them was loading .env.local.
+  const { readFile } = await import("node:fs/promises");
+  for (const f of ["db/migrate-cli.mjs", "db/doctor.mjs", "db/seed.mjs"]) {
+    const src = await readFile(f, "utf8");
+    assert(/import ["']\.\.\/tools\/env\.mjs["']/.test(src),
+      `${f} must import tools/env.mjs — without it DATABASE_URL from ` +
+      `.env.local is invisible and it silently migrates a different database`);
+  }
+});
+
 test("the test loader does not pull in the app's .env.local", async () => {
   // tools/env.mjs exists so `npm run doctor` and `npm run db:seed` see the
   // same configuration the server does. It must never reach the suites: a
