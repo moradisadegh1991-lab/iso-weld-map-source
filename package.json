@@ -13,7 +13,7 @@
     "db:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/run.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/api.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/llm.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/revisions.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/qualification.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/ndt.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/review.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/reporting.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/pdf.mjs",
     "db:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/seed.mjs",
     "doctor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/doctor.mjs",
-    "pdfjs:worker": "cp node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs public/pdf.worker.min.mjs",
+    "pdfjs:assets": "node tools/pdfjs-assets.mjs",
     "golden:add": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs eval/golden-add.mjs"
   },
   "dependencies": {

@@ -10,6 +10,7 @@
  */
 import { test, run, assert, equal } from "./harness.mjs";
 import { tiles, sizeOf } from "../../lib/client/image-prep.mjs";
+import { fitCanvas } from "../../lib/client/pdf.mjs";
 import { readFile } from "node:fs/promises";
 
 /** A stand-in for anything drawable: the tiling only reads its dimensions. */
@@ -62,6 +63,39 @@ test("the project PDF is vector, which is why rendering it beats scanning it", a
   assert(pdf.length > 2e6 && pdf.length < 5e6, "about 2.7 MB for seventeen pages");
 });
 
+// ── what a phone will actually allocate ──────────────────────────────────
+
+test("a canvas the device refuses is detected, not rendered into", async () => {
+  // A phone capped at 2^24 px hands back a working-looking context that draws
+  // nothing. Reject it by its behaviour, not by guessing the device's limit.
+  const CAP = 16.7e6;
+  const tried = [];
+  const create = (w, h) => {
+    tried.push(w * h);
+    return w * h > CAP ? null : { canvas: { width: w, height: h }, ctx: {} };
+  };
+
+  // A3 at 300 DPI is just over the cap, so the first attempt must be refused.
+  const fit = fitCanvas(4958, 3505, { create });
+  assert(tried[0] > CAP, "it asks for the full size first");
+  assert(fit, "and settles for one the device accepts");
+  assert(fit.width * fit.height <= CAP, "the canvas it returns really fits");
+  assert(fit.shrink < 1, "and it reports having shrunk, so the DPI can be corrected");
+
+  // Still far above the ~2500 px the BOM text needs to stay readable.
+  assert(Math.max(fit.width, fit.height) > 3200,
+    `${fit.width}x${fit.height} must stay readable, not merely fit`);
+});
+
+test("a device that refuses every size fails loudly instead of rendering blank", async () => {
+  equal(fitCanvas(4958, 3505, { create: () => null }), null);
+});
+
+test("a canvas the device accepts is used unchanged", async () => {
+  const fit = fitCanvas(1000, 800, { create: (w, h) => ({ canvas: { width: w, height: h }, ctx: {} }) });
+  equal([fit.width, fit.height, fit.shrink], [1000, 800, 1]);
+});
+
 // ── the build we render with ─────────────────────────────────────────────
 
 test("pdf.js is taken from the legacy build, in the module and in public/", async () => {
@@ -83,8 +117,25 @@ test("pdf.js is taken from the legacy build, in the module and in public/", asyn
   assert(served.equals(legacy),
     "the worker served from public/ must be the legacy worker, byte for byte — " +
     "a modern worker paired with a legacy main thread fails the same way. " +
-    "After upgrading pdfjs-dist run `npm run pdfjs:worker`, then re-check a " +
+    "After upgrading pdfjs-dist run `npm run pdfjs:assets`, then re-check a " +
     "real render in a browser: this is the moment that breaks silently.");
+});
+
+test("the decoders and fonts pdf.js fetches at run time are served too", async () => {
+  // Without these a vector drawing still renders, so nothing looks wrong until
+  // somebody opens a SCANNED sheet — which is bitonal JBIG2 — and gets nothing.
+  for (const f of ["wasm/jbig2.wasm", "wasm/openjpeg.wasm", "standard_fonts/FoxitFixed.pfb"]) {
+    const served = await readFile(`public/pdfjs/${f}`).catch(() => null);
+    assert(served, `public/pdfjs/${f} is missing — run \`npm run pdfjs:assets\``);
+    const source = await readFile(`node_modules/pdfjs-dist/${f}`);
+    assert(served.equals(source), `public/pdfjs/${f} is stale against node_modules`);
+  }
+
+  // And the module must actually point pdf.js at them; copying is not enough.
+  const mod = await readFile("lib/client/pdf.mjs", "utf8");
+  assert(/wasmUrl:\s*"\/pdfjs\/wasm\/"/.test(mod), "getDocument must pass wasmUrl");
+  assert(/standardFontDataUrl:\s*"\/pdfjs\/standard_fonts\/"/.test(mod),
+    "getDocument must pass standardFontDataUrl");
 });
 
 await run();
