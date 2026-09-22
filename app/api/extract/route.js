@@ -153,10 +153,55 @@ HARD RULES FOR THIS PASS
 Return the corrected object with the same keys as the input, plus "repairNotes": [string]
 saying what you changed and why. Nothing else.`;
 
+/**
+ * The fallback for an equipment list that arrived as a scan.
+ *
+ * Deliberately NOT built on COMMON: that prompt is a piping isometric
+ * briefing, and telling a model about B16.9 take-outs while it reads a table
+ * is noise that invites it to be clever.
+ *
+ * It transcribes and nothing else. It does not decide whether something is
+ * rotating or static — lib/equipment/parse.mjs does, deterministically, from
+ * the same description this returns. Letting the model classify would put an
+ * alignment hold point on a vessel on the strength of a guess, and no one
+ * downstream would be able to tell which rows were read and which were
+ * inferred.
+ */
+const EQUIPMENT_PROMPT = `You are transcribing an EQUIPMENT LIST from a scanned document.
+
+Return ONLY a JSON object. No markdown fences, no preamble, no commentary.
+
+{
+  "headers": [string],
+  "rows": [[string]],
+  "unreadable": [string]
+}
+
+"headers" is the header row exactly as printed, left to right.
+"rows" is every data row, each an array of cells in the SAME order as "headers",
+padded with "" where a cell is blank.
+
+RULES
+1. TRANSCRIBE, DO NOT INTERPRET. Copy each cell as printed. Do not expand an
+   abbreviation, do not tidy a description, do not convert units.
+2. Do NOT classify anything. Do not add a column saying whether an item is
+   rotating or static, and do not reorder or merge columns. That is decided
+   downstream from the description you return.
+3. Skip nothing. Section headings, continuation rows and totals rows are
+   transcribed as they appear; they are filtered downstream by rule.
+4. A cell you genuinely cannot read is "" and its tag number and column name
+   go in "unreadable". Never invent a tag number - a tag that does not exist
+   on the plant becomes a subsystem that waits on it forever.
+5. NEVER refuse and NEVER explain. Your entire reply is the JSON object.`;
+
 const PASSES = {
   meta: { prompt: META_PROMPT, maxTokens: 4000 },
   nodes: { prompt: NODES_PROMPT, maxTokens: 4000 },
   repair: { prompt: REPAIR_PROMPT, maxTokens: 5000 },
+  // A list runs to hundreds of rows, so it gets a larger budget than a
+  // drawing pass; `truncated` in the response tells the caller when even
+  // that was not enough rather than handing back half a plant.
+  equipment: { prompt: EQUIPMENT_PROMPT, maxTokens: 8000 },
 };
 
 const MAX_IMAGE_BYTES = 4_000_000;

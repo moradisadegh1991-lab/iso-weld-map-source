@@ -11,6 +11,7 @@ import { mergePasses } from "../lib/extraction/merge.mjs";
 import SaveBar from "../components/SaveBar";
 import TabNav from "../components/TabNav";
 import TruthBar from "../components/TruthBar";
+import EquipmentBar from "../components/EquipmentBar";
 import { ModuleBar, StageRail } from "../components/PlatformShell";
 import { STAGES } from "../lib/platform/workflow.mjs";
 import SessionBar from "../components/SessionBar";
@@ -416,6 +417,15 @@ export default function Page() {
             </div>
           )}
 
+          {/* An equipment list is usually the FIRST document on a project —
+              it often arrives before a single isometric is issued. Putting
+              it only behind the drawing tabs would make it unreachable at
+              exactly the moment it is useful. */}
+          <details className="intake-more">
+            <summary>لیست تجهیزات دارید؟ تگ‌ها و زیرسیستم‌ها را همین‌جا بخوانید</summary>
+            <EquipmentBar />
+          </details>
+
           <ol className="how">
             <li>تصویر در مرورگر به <b>یک نمای کامل + چهار کاشی هم‌پوشان</b> تقسیم می‌شود تا متن ریز BOM خوانده شود و حجم زیر سقف Vercel بماند.</li>
             <li>مدل فقط <b>داده خام</b> برمی‌گرداند: title block، BOM، و مختصات گره‌ها.</li>
@@ -615,6 +625,7 @@ export default function Page() {
               </div>
             )}
 
+            {tab === "equip" && <EquipmentBar />}
             {tab === "truth" && <TruthBar model={model} data={data} />}
 
             {tab === "json" && (

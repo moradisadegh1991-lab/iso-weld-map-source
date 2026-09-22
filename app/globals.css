@@ -329,3 +329,11 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .sheet img { width: 100%; height: auto; background: #fff; border-radius: 4px; }
 .sheet-blank { width: 100%; aspect-ratio: 1.41; display: grid; place-items: center;
   background: #111c22; border-radius: 4px; opacity: .5; }
+
+/* The equipment-list import on the intake screen. Collapsed by default: it
+   is a real entry point, but it is not the one most people arrive for. */
+.intake-more{margin:14px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.intake-more>summary{cursor:pointer;padding:10px 12px;font-size:13px;user-select:none}
+.intake-more>summary:hover{background:rgba(255,255,255,.03)}
+.intake-more[open]>summary{border-bottom:1px solid var(--line)}
+.intake-more .pane{border:0;border-radius:0}

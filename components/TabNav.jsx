@@ -22,6 +22,7 @@ const TABS = [
   { k: "line",   label: "Line Data",   hint: "مشخصات خط" },
   { k: "mto",    label: "MTO",         hint: "لیست متریال" },
   { k: "json",   label: "JSON",        hint: "دادهٔ خام و ویرایش" },
+  { k: "equip",  label: "لیست تجهیزات", hint: "استخراج تگ و زیرسیستم" },
   { k: "truth",  label: "حقیقت مرجع",  hint: "رجیستر پیمانکار و دقت" },
   { k: "review", label: "بازبینی",     hint: "ثبت و تأیید" },
 ];
