@@ -65,6 +65,33 @@ test("the project PDF is vector, which is why rendering it beats scanning it", a
   assert(pdf.length > 2e6 && pdf.length < 5e6, "about 2.7 MB for seventeen pages");
 });
 
+// ── the resolution the model is actually given ───────────────────────────
+
+test("the tile ladder starts at native resolution, not below it", async () => {
+  // An A3 at 300 DPI is 4958x3504. With a 3x3 grid and the 14% overlap, one
+  // tile spans W/3 * 1.28 = 2115 px of the sheet. renderCrop clamps its
+  // scale at 1, so a first rung at or above that span means "do not
+  // resample"; below it, every sheet quietly loses resolution.
+  //
+  // It used to start at 1500 — scale 0.709, so 213 effective DPI. A BOM row
+  // is about 2.5 mm of text, 29 px tall on the render and 21 px by the time
+  // the model saw it. Nothing was bought with it: the real project sheet
+  // came out at 0.74 MB against a 3.4 MB budget.
+  const W = 4958, GRID = 3, OVERLAP = 0.14;
+  const tileSpan = (W / GRID) * (1 + OVERLAP * 2);
+
+  const src = await readFile("lib/client/image-prep.mjs", "utf8");
+  const rungs = [...src.matchAll(/tiles\(src,\s*(\d+)/g)].map((m) => Number(m[1]));
+  assert(rungs.length >= 2, "the ladder must still have fallbacks for a sheet that will not fit");
+  assert(rungs[0] >= tileSpan,
+    `the first rung is ${rungs[0]} but one tile spans ${Math.ceil(tileSpan)} px — ` +
+    `anything smaller resamples the BOM text down before the model sees it`);
+
+  // And it must still descend, or a sheet that genuinely overflows has
+  // nowhere to go.
+  assert(rungs[1] < rungs[0], "the rung below must be lower, so the ladder still falls back");
+});
+
 // ── what a phone will actually allocate ──────────────────────────────────
 
 test("a canvas the device refuses is detected, not rendered into", async () => {
