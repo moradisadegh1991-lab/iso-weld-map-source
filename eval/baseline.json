@@ -1,17 +1,17 @@
 {
-  "recordedAt": "2026-09-21T21:56:35.911Z",
+  "recordedAt": "2026-09-22T12:28:26.374Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 25,
+    "cases": 26,
     "draft": 1,
-    "pass": 24,
+    "pass": 25,
     "fail": 0,
     "xfail": 0,
     "xpass": 0,
     "passRate": 100,
     "weldCountExact": {
-      "ok": 23,
-      "of": 23,
+      "ok": 24,
+      "of": 24,
       "pct": 100
     },
     "fieldWeldsExact": {
@@ -20,8 +20,8 @@
       "pct": 100
     },
     "spoolCountExact": {
-      "ok": 13,
-      "of": 13,
+      "ok": 14,
+      "of": 14,
       "pct": 100
     },
     "registerExact": {
@@ -34,7 +34,7 @@
       "correct": 101,
       "of": 101
     },
-    "warnings": 7
+    "warnings": 9
   },
   "cases": [
     {
@@ -210,6 +210,13 @@
       "kind": "rule",
       "status": "pass",
       "file": "eval/cases/rules/R23-cut-length-mismatch.json",
+      "failed": []
+    },
+    {
+      "id": "R24-incomplete-geometry-invalidates-length",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R24-incomplete-geometry-invalidates-length.json",
       "failed": []
     }
   ]
