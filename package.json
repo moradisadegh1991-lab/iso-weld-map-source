@@ -14,6 +14,7 @@
     "db:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/seed.mjs",
     "doctor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/doctor.mjs",
     "pdfjs:assets": "node tools/pdfjs-assets.mjs",
+    "extraction:report": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs eval/extraction-report.mjs",
     "golden:add": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs eval/golden-add.mjs"
   },
   "dependencies": {

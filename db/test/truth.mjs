@@ -9,6 +9,7 @@
 import { test, run, assert, equal } from "./harness.mjs";
 import { parseDelimited, guessMapping, normalizeLoc, normalizeKind, toRegister } from "../../lib/truth/parse.mjs";
 import { compareRegister, toGoldenExpect, weldKey } from "../../lib/truth/compare.mjs";
+import { scoreOne, summarise } from "../../eval/extraction-report.mjs";
 
 // ── reading the file ─────────────────────────────────────────────────────
 
@@ -195,6 +196,70 @@ test("the expectation is written from the register, never from our output", asyn
 test("a field the register left blank does not become an expectation", async () => {
   const expect = toGoldenExpect([{ no: "W-01", loc: "Field", kind: null, nps: null }]);
   equal(expect.register[0], { no: "W-01", loc: "Field" }, "only what the register actually said");
+});
+
+// ── measuring extraction without waiting for the contractor ──────────────
+
+test("a route the model never produced is caught", async () => {
+  // edges: [] with real nodes means the geometry pass returned no path. The
+  // engine can recover a two-node run, so nothing downstream complains —
+  // which is exactly why it needs naming here.
+  const r = scoreOne({
+    meta: { drawingNo: "X", nps: 28, clLengthM: 3.3 },
+    bom: [{ pt: 1, group: "PIPE", description: "Pipe", diam: 28, qty: 3.3 }],
+    nodes: [{ id: "A", type: "tie-in", E: 0, N: 0, EL: 3336 },
+            { id: "B", type: "tie-in", E: 0, N: 0, EL: 0 }],
+    edges: [], unreadable: [],
+  });
+  assert(r.failures.includes("no-edges"), "an empty edge list is a failure, not a quirk");
+});
+
+test("a value the model admitted it could not read counts against it", async () => {
+  const r = scoreOne({
+    meta: { drawingNo: "X", nps: 28 }, bom: [],
+    nodes: [{ id: "A", type: "tie-in", E: 0, N: 0, EL: 1000 },
+            { id: "B", type: "tie-in", E: 0, N: 0, EL: 0 }],
+    edges: [{ from: "A", to: "B", nps: 28 }],
+    unreadable: ["CUT PIPE LENGTH"],
+  });
+  assert(r.failures.includes("unreadable"));
+});
+
+test("a well-extracted drawing scores clean", async () => {
+  // The instrument has to distinguish, or it measures nothing. This is the
+  // real 930065A with its flange present and dimensioned.
+  const r = scoreOne({
+    meta: { drawingNo: "28-CWR-10-930065A", nps: 28, schedule: "SCH 10", clLengthM: 3.336 },
+    bom: [{ pt: 1, group: "PIPE", description: "Pipe", diam: 28, qty: 3.3 },
+          { pt: 2, group: "FLANGES", description: "Flange, Weld Neck", diam: 28, qty: 1 }],
+    nodes: [{ id: "N1", type: "tie-in", E: 0, N: 0, EL: 292062 },
+            { id: "N2", type: "flange-wn", faceToFace: 125, E: 0, N: 0, EL: 295398 }],
+    edges: [{ from: "N1", to: "N2", nps: 28 }],
+    cutLengths: [{ piece: 1, lengthMm: 3211, nps: 28 }],
+    unreadable: [],
+  });
+  equal(r.failures, [], "a correct extraction must come out with nothing to reconcile");
+  equal(r.welds, 2);
+});
+
+test("an engine that throws is recorded, not allowed to abort the batch", async () => {
+  // One unparseable drawing must not cost the report on the other thirteen.
+  const r = scoreOne({ meta: {}, nodes: null, edges: null });
+  assert(r.failures.length > 0, "it is counted as a failure");
+  assert(typeof r.drawing === "string", "and still identified");
+});
+
+test("the summary counts drawings, not failures", async () => {
+  // A sheet with three problems is one bad sheet, not three.
+  const s = summarise([
+    { failures: [] },
+    { failures: ["no-edges", "تعداد فلنج", "تعداد فلنج"] },
+    { failures: ["unreadable"] },
+  ]);
+  equal(s.drawings, 3);
+  equal(s.clean, 1);
+  equal(Math.round(s.cleanRate * 100), 33);
+  equal(s.byFailure["تعداد فلنج"], 1, "the same failure twice on one sheet counts once");
 });
 
 await run();
