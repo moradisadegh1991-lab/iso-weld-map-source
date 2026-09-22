@@ -116,6 +116,26 @@ textarea:focus{border-color:var(--cy)}
   aside{width:100%;max-width:none;border-inline-start:none;border-top:1px solid var(--rule);max-height:52vh}
   .canvas{min-height:340px}
 }
+/* A phone, once the viewport meta lets the real width through. The 900px
+   block above was written for a narrow window on a desktop; these are the
+   things that still do not fit when the window is a 6-inch screen. */
+@media (max-width:560px){
+  /* 210px minimums put two of these side by side and push the page wider
+     than the screen — the horizontal scroll that clipped the text. */
+  .ask-opts button{min-width:100%}
+  .models button{min-width:calc(50% - 3px)}
+  .intake{padding:24px 16px;gap:14px}
+  /* Tables are the other thing that will not compress: let them scroll
+     inside their pane instead of stretching the document. */
+  .pane{padding:10px 8px}
+  .pane table{display:block;overflow-x:auto;white-space:nowrap}
+  aside nav button{font-size:12px;padding:7px 11px}   /* a thumb, not a mouse */
+  .canvas{min-height:260px}
+}
+/* Nothing should ever scroll the page sideways; if something overflows, it
+   scrolls inside its own box. */
+html,body{overflow-x:hidden}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 .note{margin:0;padding:8px 11px;border:1px solid var(--rule);border-inline-start:2px solid var(--cy);
