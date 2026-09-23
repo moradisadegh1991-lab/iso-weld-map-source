@@ -29,6 +29,9 @@ import { recordSpoolActivity, upsertSupport, markSupport } from "../lib/db/repos
 import { upsertFoundation, recordPour, recordSpecimens } from "../lib/db/repos/civil.mjs";
 import { upsertStructure, recordPlumbReading, recordBolting } from "../lib/db/repos/structural.mjs";
 import { importCableSchedule, recordCableActivity, recordIrTest } from "../lib/db/repos/electrical.mjs";
+import {
+  importInstrumentIndex, correctInstrument, recordCalibration, recordInstrumentActivity, recordLoopCheck,
+} from "../lib/db/repos/instrumentation.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -124,6 +127,7 @@ try {
     // LV circuits at 400 V. The MV IR criterion is deliberately left for the
     // commissioning spec, so the demo shows an MV cable held without a verdict.
     lv_system_voltage_v: 400,
+    calibration_tolerance_pct: 0.25,
   }});
 
   await withProject(db, p.id, async () => {
@@ -407,6 +411,61 @@ try {
     }
     console.log(`electrical: ${imp.imported} cables, ${imp.unmatched.length} without a tag, `
       + `${imp.problems.length} schedule problems`);
+
+    // ── instrumentation: an index read by ISA 5.1 ──
+    //
+    //   loop P-1203A  PT + PI calibrated, installed, connected, loop-checked
+    //   PSV-1203A     a person took it out of loop checks (no loop)
+    //   FT-2101       its datasheet says ±0.1%; 0.3% at mid-span — rejected
+    //   loop L-3102   level transmitter not yet wired — loop check waits
+    //   PT-A12        a typo the ISA table cannot read — for a person
+    const INDEX = [
+      "Tag No,Service,Type,Range,Equipment,Tolerance",
+      "PT-1203A,Quench oil pump discharge pressure,Smart transmitter,0-25 bar,P-1203A,",
+      "PI-1203A,Quench oil pump discharge local,Bourdon gauge,0-25 bar,P-1203A,",
+      "PSV-1203A,Quench oil pump casing relief,Safety valve,,P-1203A,",
+      "FT-2101,Charge gas suction flow,Coriolis,0-60000 kg/h,K-2101,0.1",
+      "TT-2101,Charge gas 1st stage discharge temperature,RTD transmitter,0-200 °C,K-2101,",
+      "FV-2101,Anti-surge valve,Control valve,,K-2101,",
+      "LT-3102,Demethanizer bottom level,Guided wave radar,0-100 %,T-3102,",
+      "LG-3102,Demethanizer bottom level local,Magnetic gauge,0-100 %,T-3102,",
+      "PT-A12,Unknown,Transmitter,0-10 bar,,",
+    ].join("\n");
+    const ii = await importInstrumentIndex(db, { projectId: p.id, text: INDEX });
+    const inst = async (no) => (await db.query(
+      "SELECT id FROM instrument WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0].id;
+    await correctInstrument(db, { projectId: p.id, instrumentId: await inst("PSV-1203A"), loopNo: "" });
+    const CAL = {
+      "PT-1203A": "0:4.01 6.25:8.00 12.5:12.02 18.75:16.01 25:19.99",
+      "PI-1203A": "0:0 6.25:6.3 12.5:12.5 18.75:18.7 25:25",
+      "FT-2101": "0:4.00 15000:8.01 30000:12.05 45000:16.02 60000:20.00",
+      "LT-3102": "0:4.00 25:8.00 50:12.01 75:16.00 100:20.01",
+    };
+    const INST_WORK = {
+      "PT-1203A": ["installed", "hookup", "wired"], "PI-1203A": ["installed", "hookup", "wired"],
+      "PSV-1203A": ["calibrated", "installed"], "FV-2101": ["calibrated"], "LT-3102": ["installed", "hookup"],
+    };
+    for (const [no, points] of Object.entries(CAL)) {
+      const id = await inst(no);
+      const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM calibration WHERE instrument_id = $1", [id]);
+      if (n.n === 0) {
+        await recordCalibration(db, { projectId: p.id, instrumentId: id, points, calibratedOn: "2026-08-25",
+          calibratorRef: "Fluke 754 / CAL-0311", userId: user.id });
+      }
+    }
+    for (const [no, codes] of Object.entries(INST_WORK)) {
+      for (const code of codes) {
+        await recordInstrumentActivity(db, { projectId: p.id, instrumentId: await inst(no), code,
+          doneAt: "2026-09-08", contractorId: elec.id, userId: user.id });
+      }
+    }
+    await recordLoopCheck(db, { projectId: p.id, loopNo: "P-1203A", checkedOn: "2026-09-15",
+      refNo: "LC-12-0007", witnessedBy: "نمایندهٔ کارفرما", userId: user.id });
+    for (const no of ["PT-1203A", "PI-1203A"]) {
+      await recordInstrumentActivity(db, { projectId: p.id, instrumentId: await inst(no), code: "ready",
+        doneAt: "2026-09-16", userId: user.id });
+    }
+    console.log(`instrumentation: ${ii.imported} instruments, ${ii.problems.length} index problems`);
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks

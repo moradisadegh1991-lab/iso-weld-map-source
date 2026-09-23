@@ -81,7 +81,7 @@ export default function ElectricalPage() {
       <div className="card">
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <h2 style={{ marginInlineEnd: "auto" }}>کابل‌ها</h2>
-          <input placeholder="جستجوی کابل، مبدأ، مقصد…" value={q} onChange={(e) => setQ(e.target.value)}
+          <input className="search" placeholder="جستجوی کابل، مبدأ، مقصد…" value={q} onChange={(e) => setQ(e.target.value)}
                  style={{ maxWidth: 260 }} aria-label="جستجو" />
           <label className="sm" style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} />

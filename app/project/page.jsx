@@ -75,6 +75,12 @@ const ELECTRICAL = [
     "IEC 60364-6 فشار متوسط را پوشش نمی‌دهد — عدد پروژه"],
 ];
 
+/** Instrument calibration tolerance, used where a datasheet gives none. */
+const INSTRUMENTS = [
+  ["calibration_tolerance_pct", "تلورانس کالیبراسیون (% اسپن)", "0.001",
+    "وقتی دیتاشیت ابزار تلورانس ندارد؛ مثلاً 0.25"],
+];
+
 export default function ProjectPage() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/project?projectId=${id}`, []);
@@ -91,7 +97,7 @@ export default function ProjectPage() {
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
       .concat([["description", p.description ?? ""],
                ["steel_erection_standard", p.steel_erection_standard ?? ""],
-               ...ELECTRICAL.map(([k]) => [k, p[k] ?? ""])])));
+               ...[...ELECTRICAL, ...INSTRUMENTS].map(([k]) => [k, p[k] ?? ""])])));
   }, [data]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setSaved(false); }
@@ -201,6 +207,18 @@ export default function ProjectPage() {
         <h2 style={{ marginTop: 8 }}>برق</h2>
         <div className="grid2">
           {ELECTRICAL.map(([k, label, step, hint]) => (
+            <div className="field" key={k}>
+              <label htmlFor={k}>{label}</label>
+              <input id={k} type="number" step={step} disabled={!editable} dir="ltr"
+                     value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
+              <span className="hint">{hint}</span>
+            </div>
+          ))}
+        </div>
+
+        <h2 style={{ marginTop: 8 }}>ابزار دقیق</h2>
+        <div className="grid2">
+          {INSTRUMENTS.map(([k, label, step, hint]) => (
             <div className="field" key={k}>
               <label htmlFor={k}>{label}</label>
               <input id={k} type="number" step={step} disabled={!editable} dir="ltr"

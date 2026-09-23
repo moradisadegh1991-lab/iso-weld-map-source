@@ -429,10 +429,10 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .grid2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 .field{display:flex;flex-direction:column;gap:5px}
 .field > label{font-size:11px;color:var(--dim)}
-.field input,.field select,.field textarea{
+.field input,.field select,.field textarea,input.search{
   background:#0A1116;border:1px solid var(--rule);border-radius:4px;color:var(--ink);
   padding:8px 10px;font:inherit;font-size:13px;outline:none;width:100%}
-.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cy)}
+.field input:focus,.field select:focus,.field textarea:focus,input.search:focus{border-color:var(--cy)}
 .field textarea{min-height:76px;resize:vertical}
 /* position:static is not decoration. The original single-page stylesheet has
    `.hint{position:absolute;bottom:12px;left:12px}` for the caption over the
