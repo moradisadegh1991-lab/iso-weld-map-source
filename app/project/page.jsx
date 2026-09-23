@@ -62,6 +62,19 @@ const CONCRETE = [
     "خالی = معیار ACI 318 (۱۵۰ یارد مکعب ≈ ۱۱۵ m³)"],
 ];
 
+/**
+ * The electrical spec. The LV circuit voltage picks the IEC 60364-6 test
+ * voltage and limit when a cable schedule does not say; MV acceptance is the
+ * commissioning spec's number, and without it no MV cable gets an IR verdict.
+ */
+const ELECTRICAL = [
+  ["lv_system_voltage_v", "ولتاژ نامی مدارهای فشار ضعیف (V)", "1",
+    "مثلاً 400 — آزمون 500 V DC و حداقل 1 MΩ طبق IEC 60364-6"],
+  ["mv_ir_test_voltage_v", "ولتاژ تست IR کابل فشار متوسط (V DC)", "1", "طبق مشخصات راه‌اندازی، مثلاً 5000"],
+  ["mv_ir_min_mohm", "حداقل مقاومت عایقی کابل فشار متوسط (MΩ)", "0.1",
+    "IEC 60364-6 فشار متوسط را پوشش نمی‌دهد — عدد پروژه"],
+];
+
 export default function ProjectPage() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/project?projectId=${id}`, []);
@@ -77,7 +90,8 @@ export default function ProjectPage() {
     const p = data.project;
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
       .concat([["description", p.description ?? ""],
-               ["steel_erection_standard", p.steel_erection_standard ?? ""]])));
+               ["steel_erection_standard", p.steel_erection_standard ?? ""],
+               ...ELECTRICAL.map(([k]) => [k, p[k] ?? ""])])));
   }, [data]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setSaved(false); }
@@ -182,6 +196,18 @@ export default function ProjectPage() {
               تا ثبت نشود، شاقولی هیچ ستونی حکم نمی‌گیرد — ۱:۵۰۰ و h/300 هر دو درست‌اند، برای قراردادهای متفاوت
             </span>
           </div>
+        </div>
+
+        <h2 style={{ marginTop: 8 }}>برق</h2>
+        <div className="grid2">
+          {ELECTRICAL.map(([k, label, step, hint]) => (
+            <div className="field" key={k}>
+              <label htmlFor={k}>{label}</label>
+              <input id={k} type="number" step={step} disabled={!editable} dir="ltr"
+                     value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
+              <span className="hint">{hint}</span>
+            </div>
+          ))}
         </div>
 
         {saveErr && <p className="err">{saveErr}</p>}

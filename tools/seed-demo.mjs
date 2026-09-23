@@ -28,6 +28,7 @@ import { upsertWelder, addQualification, assignWeld, recordNdt } from "../lib/db
 import { recordSpoolActivity, upsertSupport, markSupport } from "../lib/db/repos/piping-execution.mjs";
 import { upsertFoundation, recordPour, recordSpecimens } from "../lib/db/repos/civil.mjs";
 import { upsertStructure, recordPlumbReading, recordBolting } from "../lib/db/repos/structural.mjs";
+import { importCableSchedule, recordCableActivity, recordIrTest } from "../lib/db/repos/electrical.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -120,6 +121,9 @@ try {
     grade_elevation_mm: 100000, min_cover_mm: 800,
     concrete_curing_days: 7,
     steel_erection_standard: "AISC303",
+    // LV circuits at 400 V. The MV IR criterion is deliberately left for the
+    // commissioning spec, so the demo shows an MV cable held without a verdict.
+    lv_system_voltage_v: 400,
   }});
 
   await withProject(db, p.id, async () => {
@@ -147,7 +151,7 @@ try {
     const mech = await upsertContractor(db, { projectId: p.id, code: "C-02",
       name: "نصب گستر پارس (نمایشی)", disciplines: ["piping", "equipment"],
       contactName: "مهندس رضایی", prequalifiedUntil: "2026-05-01" });
-    await upsertContractor(db, { projectId: p.id, code: "C-03",
+    const elec = await upsertContractor(db, { projectId: p.id, code: "C-03",
       name: "برق و کنترل آریا (نمایشی)", disciplines: ["electrical", "instrumentation"],
       status: "prospective", prequalifiedUntil: "2028-01-01" });
 
@@ -353,6 +357,56 @@ try {
       if (f.after) await ticks(fdn.id, f.after, f.afterOn);
     }
     console.log(`civil: ${FOUNDATIONS.length} foundations`);
+
+    // ── electrical: a cable schedule, read by rule ──
+    //
+    //   EC-1203A-P   pump power: tested, continuity, ready to energise
+    //   EC-1203A-C   pump control: one core at 0.6 MΩ — IR rejected
+    //   EC-2101-P    compressor MV feeder: tested, but no MV criterion in
+    //                the project spec yet — no verdict
+    //   EC-LT-21     lighting panel: no tag of that number — for a person
+    //   EC-9001      no voltage rating in the schedule — class unknown
+    const SCHEDULE = [
+      "Cable No,From,To,Cable Type,Voltage,Length (m)",
+      "EC-1203A-P,MCC-12,P-1203A,3Cx35 XLPE/SWA/PVC,0.6/1kV,85",
+      "EC-1203A-C,LCS-1203A,P-1203A,4x2.5 XLPE/SWA,0.6/1kV,30",
+      "EC-1203B-P,MCC-12,P-1203B,3Cx35 XLPE/SWA/PVC,0.6/1kV,92",
+      "EC-1204A-P,MCC-12,P-1204A,3Cx25 XLPE/SWA/PVC,0.6/1kV,70",
+      "EC-2101-P,SWGR-21A,K-2101,3x1x240 XLPE/CWS,6/10kV,210",
+      "EC-1104-P,SWGR-11A,FN-1104,3x1x185 XLPE/CWS,6/10kV,160",
+      "EC-LT-21,DB-21,LP-21-04,4Cx16 XLPE/SWA,0.6/1kV,45",
+      "EC-9001,UPS-1,JB-IS-07,2x2x1.5 armoured,,60",
+    ].join("\n");
+    const imp = await importCableSchedule(db, { projectId: p.id, text: SCHEDULE });
+    const cable = async (no) => (await db.query(
+      "SELECT id FROM cable WHERE project_id = $1 AND cable_no = $2", [p.id, no])).rows[0].id;
+    const CABLE_WORK = [
+      ["EC-1203A-P", ["route", "pulled", "terminated"], [[500, [">2000", ">2000", ">2000"]]], ["continuity", "ready"]],
+      ["EC-1203A-C", ["route", "pulled", "terminated"], [[500, ["900", "900", "0.6", "900"]]], []],
+      ["EC-1203B-P", ["route", "pulled"], [], []],
+      ["EC-1204A-P", ["route"], [], []],
+      ["EC-2101-P", ["route", "pulled", "terminated"], [[5000, ["25000", "31000", "28000"]]], []],
+    ];
+    for (const [no, before, tests, after] of CABLE_WORK) {
+      const id = await cable(no);
+      for (const code of before) {
+        await recordCableActivity(db, { projectId: p.id, cableId: id, code, doneAt: "2026-09-10",
+          contractorId: elec.id, userId: user.id });
+      }
+      const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM ir_test WHERE cable_id = $1", [id]);
+      if (n.n === 0) {                         // tests insert, so only once
+        for (const [v, readings] of tests) {
+          await recordIrTest(db, { projectId: p.id, cableId: id, testVoltageV: v, readings,
+            testedOn: "2026-09-12", instrumentRef: "MIT-1025 / CAL-0426", userId: user.id });
+        }
+      }
+      for (const code of after) {
+        await recordCableActivity(db, { projectId: p.id, cableId: id, code, doneAt: "2026-09-14",
+          contractorId: elec.id, userId: user.id });
+      }
+    }
+    console.log(`electrical: ${imp.imported} cables, ${imp.unmatched.length} without a tag, `
+      + `${imp.problems.length} schedule problems`);
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks
