@@ -278,6 +278,83 @@ test("with no cookie at all, the dev header still works on a laptop", async () =
   equal(authMode, "dev");
 });
 
+// ── revocation, spraying, and what an error says ────────────────────────
+
+test("a new password ends every session issued before it", async () => {
+  const dave = await projects.ensureUser(db, { subject: "local|dave", email: "dave@kavian.ir" });
+  await creds.setPassword(db, { userId: dave.id, password: "dave-first-passphrase" });
+  const u = await creds.authenticatePassword(db, { email: "dave@kavian.ir", password: "dave-first-passphrase" });
+  const before = issue({ sub: dave.id, v: u.sessionVersion }, sessionSecret());
+  equal((await authenticate(req({ cookie: `${COOKIE_NAME}=${before}` }))).user.id, dave.id);
+  await creds.setPassword(db, { userId: dave.id, password: "dave-second-passphrase" });
+  const e = await throws(() => authenticate(req({ cookie: `${COOKIE_NAME}=${before}` })));
+  equal([e.code, e.status], ["SESSION_EXPIRED", 401], "the stolen cookie dies with the old password");
+  const u2 = await creds.authenticatePassword(db, { email: "dave@kavian.ir", password: "dave-second-passphrase" });
+  const after = issue({ sub: dave.id, v: u2.sessionVersion }, sessionSecret());
+  equal((await authenticate(req({ cookie: `${COOKIE_NAME}=${after}` }))).user.id, dave.id);
+});
+
+test("sign out everywhere revokes every cookie, and a forged version does not help", async () => {
+  const { rows: [dave] } = await db.query("SELECT id FROM app_user WHERE email = 'dave@kavian.ir'");
+  const v = await creds.currentSessionVersion(db, { userId: dave.id });
+  const token = issue({ sub: dave.id, v }, sessionSecret());
+  await creds.revokeSessions(db, { userId: dave.id });
+  equal((await throws(() => authenticate(req({ cookie: `${COOKIE_NAME}=${token}` })))).code, "SESSION_EXPIRED");
+  const ahead = issue({ sub: dave.id, v: v + 5 }, sessionSecret());
+  equal((await throws(() => authenticate(req({ cookie: `${COOKIE_NAME}=${ahead}` })))).code, "SESSION_EXPIRED",
+    "a version from the future is not the current one either");
+});
+
+test("a cookie for an account whose password was removed is refused", async () => {
+  const erin = await projects.ensureUser(db, { subject: "local|erin", email: "erin@kavian.ir" });
+  await creds.setPassword(db, { userId: erin.id, password: "erin-fine-passphrase" });
+  const token = issue({ sub: erin.id, v: 0 }, sessionSecret());
+  await db.query("DELETE FROM user_credential WHERE user_id = $1", [erin.id]);
+  equal((await throws(() => authenticate(req({ cookie: `${COOKIE_NAME}=${token}` })))).code, "SESSION_EXPIRED");
+});
+
+test("spraying one password across many accounts is stopped per source, not per account", async () => {
+  const src = "203.0.113.7";
+  for (let i = 0; i < creds.SOURCE_MAX_FAILURES; i++) {
+    const e = await throws(() => creds.authenticatePassword(db, {
+      email: `user${i}@kavian.ir`, password: "Summer2026!!", source: src }));
+    equal(e.code, "BAD_CREDENTIALS", "each account on its own is nowhere near its lockout");
+  }
+  const blocked = await throws(() => creds.authenticatePassword(db, {
+    email: "alice@kavian.ir", password: "a-perfectly-fine-passphrase", source: src }));
+  equal([blocked.code, blocked.status], ["TOO_MANY_ATTEMPTS", 429], "even a correct password, from that source");
+  const other = await creds.authenticatePassword(db, {
+    email: "alice@kavian.ir", password: "a-perfectly-fine-passphrase", source: "198.51.100.9" });
+  equal(other.id, alice.id, "another source is not punished");
+  const { rows: [{ n }] } = await db.query("SELECT count(*)::int AS n FROM login_failure WHERE source = $1", [src]);
+  equal(n, creds.SOURCE_MAX_FAILURES, "a refused attempt is not counted again");
+});
+
+test("the source is the first forwarded address", async () => {
+  equal(creds.loginSource(req({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" })), "203.0.113.7");
+  equal(creds.loginSource(req({ "x-real-ip": "198.51.100.9" })), "198.51.100.9");
+  equal(creds.loginSource(req({})), "direct");
+});
+
+test("an unexpected error says only that it failed; a database refusal says which rule", async () => {
+  const { errorResponse } = await import("../../lib/server/session.mjs");
+  const err = console.error; console.error = () => {};
+  try {
+    const r = errorResponse(new Error('relation "user_credential" column password_hash does not exist'));
+    const b = await r.json();
+    equal(r.status, 500);
+    assert(!/user_credential|password_hash/.test(b.error), "no table or column names");
+    equal([b.code, /^[0-9a-f]{8}$/.test(b.ref)], ["INTERNAL", true]);
+  } finally { console.error = err; }
+  const dup = errorResponse(Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505", constraint: "punch_item_project_id_punch_no_key" }));
+  equal([dup.status, (await dup.json()).code], [409, "DUPLICATE"]);
+  const chk = errorResponse(Object.assign(new Error("new row violates check constraint"), { code: "23514", constraint: "ncr_closed_with_cause" }));
+  const cb = await chk.json();
+  equal([chk.status, cb.code, cb.error.includes("ncr_closed_with_cause")], [400, "RULE", true]);
+  const mine = errorResponse(Object.assign(new Error("کد و عنوان لازم است."), { status: 400, code: "INVALID_INPUT" }));
+  equal((await mine.json()).error, "کد و عنوان لازم است.", "the platform's own refusals pass through unchanged");
+});
+
 /** throws(), for something synchronous. */
 function throwsSync(fn) {
   try { fn(); } catch (e) { return e; }

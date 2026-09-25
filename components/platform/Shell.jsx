@@ -64,8 +64,13 @@ export default function Shell({ children }) {
           <span className="avatar">{initials}</span>
           <span>{p.user?.displayName || p.user?.email}</span>
           {p.role && <span className="pill">{ROLE_FA[p.role] || p.role}</span>}
-          <button className="btn ghost" style={{ padding: "5px 10px" }} onClick={p.signOut}>
+          <button className="btn ghost" style={{ padding: "5px 10px" }} onClick={() => p.signOut()}>
             خروج
+          </button>
+          <button className="btn ghost" style={{ padding: "5px 10px" }}
+                  title="همهٔ نشست‌های این حساب (گوشی، رایانهٔ دیگر) باطل می‌شوند"
+                  onClick={() => { if (confirm("از همهٔ دستگاه‌ها خارج شوید؟")) p.signOut({ everywhere: true }); }}>
+            خروج از همه‌جا
           </button>
         </div>
       </header>

@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { getDb } from "../../../../lib/server/db.mjs";
 import { errorResponse } from "../../../../lib/server/session.mjs";
-import { authenticatePassword } from "../../../../lib/db/repos/credentials.mjs";
+import { authenticatePassword, loginSource } from "../../../../lib/db/repos/credentials.mjs";
 import { issue, cookieHeader, isLocal } from "../../../../lib/auth/cookie.mjs";
 import { listProjectsForUser } from "../../../../lib/db/repos/projects.mjs";
 
@@ -20,8 +20,8 @@ export async function POST(request) {
       return Response.json({ error: "ایمیل و رمز عبور لازم است." }, { status: 400 });
     }
     const db = await getDb();
-    const user = await authenticatePassword(db, { email, password });
-    const token = issue({ sub: user.id, name: user.displayName || user.email });
+    const user = await authenticatePassword(db, { email, password, source: loginSource(request) });
+    const token = issue({ sub: user.id, name: user.displayName || user.email, v: user.sessionVersion });
 
     return Response.json(
       {
