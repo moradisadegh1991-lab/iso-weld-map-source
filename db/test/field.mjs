@@ -12,6 +12,8 @@ import path from "node:path";
 import jsQR from "jsqr";
 import { fieldUrl, parseFieldCode, qrMatrix, qrSvg } from "../../lib/field/qr.mjs";
 import { opProblems, newOp, inCaptureOrder, parseCalPoints, splitReadings } from "../../lib/field/ops.mjs";
+import { sniffImage, photoProblems, MAX_PHOTO_BYTES } from "../../lib/quality/photo.mjs";
+import { createLocalStore } from "../../lib/storage/content-store.mjs";
 import { judgeIr } from "../../lib/electrical/cable.mjs";
 import { judgeCalibration } from "../../lib/instrumentation/isa.mjs";
 import { buildModel } from "../../lib/engine.js";
@@ -264,9 +266,102 @@ test("cable and instrument steps: recorded as at a desk, derived ones refused, t
   equal(after.cables[0].steps.find((x) => x.code === "ir").status, "done", "the latest IR test passed");
 });
 
+// ── site photos on punch items ───────────────────────────────────────────
+
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1]);
+const WEBP = Buffer.concat([Buffer.from("RIFF"), Buffer.from([4, 0, 0, 0]), Buffer.from("WEBPVP8 ")]);
+const storeRoot = await mkdtemp(path.join(tmpdir(), "fld-store-"));
+const store = createLocalStore({ root: storeRoot });
+const photos = await import("../../lib/db/repos/punch-photos.mjs");
+
+test("a photo is what its bytes say, not what it is called", async () => {
+  equal([sniffImage(PNG), sniffImage(JPEG), sniffImage(WEBP)], ["image/png", "image/jpeg", "image/webp"]);
+  equal([sniffImage(Buffer.from("<html><script>")), sniffImage(Buffer.from("RIFF\0\0\0\0WAVE")), sniffImage(PNG.subarray(0, 7)), sniffImage(null)],
+    [null, null, null, null]);
+  equal([sniffImage(Buffer.from([0xff, 0xd8, 0x00, 0xe0])), sniffImage(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0, 0]))], [null, null],
+    "the whole signature, not its first bytes");
+  equal(photoProblems({ bytes: PNG, stage: "raised", punchStatus: "open" }), []);
+  equal(photoProblems({ bytes: PNG, stage: "cleared", punchStatus: "cleared" }), []);
+  equal(photoProblems({ bytes: PNG, stage: "cleared", punchStatus: "open" }).length, 1, "a fix nobody has claimed");
+  equal(photoProblems({ bytes: Buffer.alloc(0), stage: "raised" }).length, 1);
+  equal(photoProblems({ bytes: Buffer.from("<html>"), stage: "raised" }).length, 1);
+  equal(photoProblems({ bytes: PNG, stage: "later" }).length, 1);
+  equal(photoProblems({ bytes: PNG, stage: "other", count: 19 }), []);
+  equal(photoProblems({ bytes: PNG, stage: "other", count: 20 }).length, 1);
+  const big = Buffer.concat([PNG, Buffer.alloc(MAX_PHOTO_BYTES - PNG.length)]);
+  equal(photoProblems({ bytes: big, stage: "other" }), [], "exactly the limit");
+  assert(/MB/.test(photoProblems({ bytes: Buffer.concat([big, Buffer.alloc(1)]), stage: "other" })[0]));
+  const ph = { ...base, kind: "punch_photo", payload: { punchId: "p", stage: "raised", takenOn: "2026-09-20" } };
+  equal(opProblems(ph, { today: "2026-09-25" }), []);
+  equal(opProblems({ ...ph, payload: { ...ph.payload, raiseOpId: ID } }).length, 1, "one item, not two");
+  equal(opProblems({ ...ph, payload: { stage: "raised", takenOn: "2026-09-20" } }).length, 1, "no item");
+  equal(opProblems({ ...ph, payload: { raiseOpId: "7", stage: "raised", takenOn: "2026-09-20" } }).length, 1);
+  equal(opProblems({ ...ph, payload: { ...ph.payload, stage: "later" } }).length, 1);
+  equal(opProblems({ ...ph, payload: { ...ph.payload, takenOn: "2026-09-26" } }, { today: "2026-09-25" }).length, 1);
+});
+
+test("a photo taken with a punch raised offline arrives with it; its bytes are kept once, outside the record", async () => {
+  const raise = op("punch_raise", { tagId: pump.id, category: "B", description: "Coupling guard bolt loose", raisedOn: TODAY }, 40);
+  const shot = op("punch_photo", { raiseOpId: raise.opId, stage: "raised", takenOn: TODAY, data: PNG.toString("base64") }, 41);
+  const r = await fld.applyOps(db, { projectId: P, userId: bob.id, membership: QC, ops: [shot, raise], store });
+  equal(r.map((x) => [x.opId, x.status]), [[raise.opId, "applied"], [shot.opId, "applied"]]);
+  equal(r[1].result.punchId, r[0].result.punchId, "the item the raise became");
+  const again = await fld.applyOps(db, { projectId: P, userId: bob.id, membership: QC,
+    ops: [{ ...op("punch_photo", { punchId: r[0].result.punchId, stage: "other", takenOn: TODAY, data: PNG.toString("base64") }) }], store });
+  equal([again[0].status, again[0].result.duplicate, again[0].result.photoId], ["applied", true, r[1].result.photoId],
+    "the same bytes on the same item are the one photo");
+  await withProject(db, P, async () => {
+    const { rows: [rec] } = await db.query("SELECT payload FROM field_op WHERE op_id = $1", [shot.opId]);
+    equal([rec.payload.data, rec.payload.bytes, rec.payload.stage], [undefined, PNG.length, "raised"], "the record names the photo, it does not hold it");
+    const list = await photos.listPhotos(db, { projectId: P, punchId: r[0].result.punchId });
+    equal(list.map((f) => [f.stage, f.content_type, f.byte_size]), [["raised", "image/png", PNG.length]]);
+    const back = await photos.readPhoto(db, { projectId: P, photoId: list[0].id, store });
+    assert(back.bytes.equals(PNG), "the bytes come back as sent");
+    const pack = await fld.fieldPack(db, { projectId: P });
+    equal(pack.punch.find((x) => x.id === r[0].result.punchId).photos.map((f) => f.stage), ["raised"]);
+    assert(pack.punch.filter((x) => x.id !== r[0].result.punchId).every((x) => x.photos.length === 0), "each item carries its own photos only");
+    await throws(() => photos.readPhoto(db, { projectId: P, photoId: uuid(), store }), "not found");
+    // Twenty photos is the most an item holds — counted by the repository, not trusted from the phone.
+    for (let i = 1; i < 20; i++) {
+      await photos.attachPhoto(db, { projectId: P, punchId: r[0].result.punchId, bytes: Buffer.concat([PNG, Buffer.from([i])]),
+        stage: "other", takenOn: TODAY, store });
+    }
+    await throws(() => photos.attachPhoto(db, { projectId: P, punchId: r[0].result.punchId, bytes: Buffer.concat([PNG, Buffer.from([99])]),
+      stage: "other", takenOn: TODAY, store }), "حداکثر");
+    await throws(() => db.query("DELETE FROM punch_photo"), "permission denied");
+    await throws(() => db.query("UPDATE punch_photo SET stage = 'other'"), "permission denied");
+  });
+});
+
+test("a photo that is not a photo, of a fix not yet claimed, or of an item never recorded is refused; one ahead of its item waits", async () => {
+  const { rows: [open] } = await withProject(db, P, () => db.query("SELECT id FROM punch_item WHERE status = 'open' ORDER BY punch_no LIMIT 1"));
+  const html = op("punch_photo", { punchId: open.id, stage: "raised", takenOn: TODAY, data: Buffer.from("<html><script>alert(1)</script>").toString("base64") }, 50);
+  const early = op("punch_photo", { punchId: open.id, stage: "cleared", takenOn: TODAY, data: JPEG.toString("base64") }, 51);
+  const refusedRaise = op("punch_raise", { tagId: pump.id, category: "Z", description: "x", raisedOn: TODAY }, 52);
+  const orphan = op("punch_photo", { raiseOpId: refusedRaise.opId, stage: "raised", takenOn: TODAY, data: JPEG.toString("base64") }, 53);
+  const ahead = op("punch_photo", { raiseOpId: uuid(), stage: "raised", takenOn: TODAY, data: JPEG.toString("base64") }, 54);
+  const empty = op("punch_photo", { punchId: open.id, stage: "raised", takenOn: TODAY }, 55);
+  const notRaise = op("punch_photo", { raiseOpId: html.opId, stage: "raised", takenOn: TODAY, data: JPEG.toString("base64") }, 56);
+  const r = await fld.applyOps(db, { projectId: P, userId: bob.id, membership: QC, ops: [html, early, refusedRaise, orphan, ahead, empty, notRaise], store });
+  equal(r.map((x) => x.status), ["rejected", "rejected", "rejected", "rejected", "retry", "rejected", "rejected"]);
+  assert(/عکس/.test(r[0].error) && /رفع/.test(r[1].error) && /ثبت نشد/.test(r[3].error) && /نرسیده/.test(r[4].error), JSON.stringify(r));
+  assert(/همراه/.test(r[5].error) && /غیر از ثبت Punch/.test(r[6].error), JSON.stringify(r));
+  await withProject(db, P, async () => {
+    equal((await db.query("SELECT count(*)::int AS n FROM field_op WHERE op_id = $1", [ahead.opId])).rows[0].n, 0, "not recorded: sent again next sync");
+    equal((await db.query("SELECT count(*)::int AS n FROM punch_photo WHERE punch_id = $1", [open.id])).rows[0].n, 0);
+    const { rows: [rec] } = await db.query("SELECT payload FROM field_op WHERE op_id = $1", [html.opId]);
+    assert(rec.payload.data === undefined, "a refused photo's bytes are not kept either");
+  });
+  const viewer = await fld.applyOps(db, { projectId: P, userId: bob.id, membership: VIEWER,
+    ops: [op("punch_photo", { punchId: open.id, stage: "raised", takenOn: TODAY, data: JPEG.toString("base64") })], store });
+  assert(/اجازه/.test(viewer[0].error));
+});
+
 test("field operations belong to one project", async () => {
   await withProject(db, other.id, async () => {
     equal((await fld.recentOps(db, { projectId: other.id })).length, 0);
+    equal((await db.query("SELECT count(*)::int AS n FROM punch_photo")).rows[0].n, 0, "no other project's photos");
   });
 });
 

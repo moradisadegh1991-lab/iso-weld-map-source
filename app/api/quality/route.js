@@ -7,6 +7,7 @@ import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import {
   qualityBoard, punchHistory, ncrHistory, raisePunch, punchAction, raiseNcr, ncrAction,
 } from "../../../lib/db/repos/quality.mjs";
+import { listPhotos } from "../../../lib/db/repos/punch-photos.mjs";
 
 export async function GET(request) {
   try {
@@ -19,7 +20,8 @@ export async function GET(request) {
     return await withProject(db, projectId, async () => {
       const punchId = url.searchParams.get("punchId");
       const ncrId = url.searchParams.get("ncrId");
-      if (punchId) return Response.json({ history: await punchHistory(db, { projectId, punchId }) });
+      if (punchId) return Response.json({ history: await punchHistory(db, { projectId, punchId }),
+        photos: await listPhotos(db, { projectId, punchId }) });
       if (ncrId) return Response.json({ history: await ncrHistory(db, { projectId, ncrId }) });
       const board = await qualityBoard(db, { projectId });
       const { rows: tags } = await db.query(

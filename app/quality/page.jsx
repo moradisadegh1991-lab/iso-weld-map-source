@@ -2,6 +2,10 @@
 import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import { newOp } from "../../lib/field/ops.mjs";
+import { PHOTO_STAGES } from "../../lib/quality/photo.mjs";
+import { compressPhoto, blobToBase64 } from "../../lib/client/photo.mjs";
+import PhotoStrip from "../../components/quality/PhotoStrip";
 
 /**
  * Punch list and NCRs, and what they hold against each subsystem's MC.
@@ -146,12 +150,44 @@ function PunchTab({ data, post, may }) {
 }
 
 function PunchPanel({ p, post, may, categories }) {
+  const { projectId, call } = usePlatform();
   const [note, setNote] = useState("");
   const [cat, setCat] = useState(p.category);
+  const [photos, setPhotos] = useState([]);
+  const [stage, setStage] = useState(p.status === "open" ? "raised" : "cleared");
+  const [shot, setShot] = useState(null);           // null | "busy" | error text
+  const [n, setN] = useState(0);
   const act = async (action, extra = {}) => { if (await post({ kind: "punch-action", punchId: p.id, action, note, ...extra })) setNote(""); };
+  // A photo from the desk goes the way a phone's does: one operation, with
+  // its own id, through the same sync — so a double click is one photo.
+  async function upload(file) {
+    if (!file) return;
+    setShot("busy");
+    try {
+      const blob = await compressPhoto(file);
+      const op = newOp("punch_photo", { punchId: p.id, stage, takenOn: today(), data: await blobToBase64(blob) }, { projectId });
+      const { results: [r] } = await call("/api/field", { method: "POST", body: JSON.stringify({ projectId, ops: [op] }) });
+      if (r.status !== "applied") throw new Error(r.error || "ثبت نشد");
+      setShot(null); setN(n + 1);
+    } catch (e) { setShot(e.message); }
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <History url={`punchId=${p.id}`} stamp={`${p.status}${p.category}${p.cleared_on}`} />
+      <History url={`punchId=${p.id}`} stamp={`${p.status}${p.category}${p.cleared_on}${n}`} onLoad={(r) => setPhotos(r.photos || [])} />
+      <PhotoStrip projectId={projectId} photos={photos} />
+      {may && p.status !== "closed" && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
+          <div className="field"><label htmlFor={`ps-${p.id}`}>مرحلهٔ عکس</label>
+            <select id={`ps-${p.id}`} value={stage} onChange={(e) => setStage(e.target.value)}>
+              {Object.entries(PHOTO_STAGES).filter(([k]) => k !== "cleared" || p.status !== "open")
+                .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select></div>
+          <label className="btn ghost photo-btn">{shot === "busy" ? "در حال ارسال…" : "افزودن عکس"}
+            <input type="file" accept="image/*" aria-label="افزودن عکس" disabled={shot === "busy"}
+                   onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; upload(f); }} /></label>
+          {shot && shot !== "busy" && <span className="err sm">{shot}</span>}
+        </div>
+      )}
       {may && p.status !== "closed" && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
           <div className="field" style={{ flex: "1 1 260px" }}><label htmlFor={`pn-${p.id}`}>یادداشت</label>
@@ -308,12 +344,13 @@ function NcrForm({ data, post }) {
 
 // ── shared ───────────────────────────────────────────────────────────────
 
-function History({ url, stamp }) {
+function History({ url, stamp, onLoad }) {
   const { projectId, call } = usePlatform();
   const [h, setH] = useState(null);
   useEffect(() => {
     let live = true;
-    call(`/api/quality?projectId=${projectId}&${url}`).then((r) => live && setH(r.history)).catch(() => live && setH([]));
+    call(`/api/quality?projectId=${projectId}&${url}`).then((r) => { if (live) { setH(r.history); onLoad?.(r); } })
+      .catch(() => live && setH([]));
     return () => { live = false; };
   }, [url, stamp, projectId, call]);
   if (!h) return <p className="muted sm">…</p>;

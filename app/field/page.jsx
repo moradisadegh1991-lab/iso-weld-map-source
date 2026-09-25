@@ -7,7 +7,9 @@ import { newOp, opProblems, splitReadings, parseCalPoints } from "../../lib/fiel
 import { judgeIr } from "../../lib/electrical/cable.mjs";
 import { judgeCalibration } from "../../lib/instrumentation/isa.mjs";
 import { savePack, loadPack, enqueue, listOps, updateOp, removeOp } from "../../lib/client/offline-store.mjs";
+import { compressPhoto, blobToBase64 } from "../../lib/client/photo.mjs";
 import Scanner from "../../components/field/Scanner";
+import PhotoStrip from "../../components/quality/PhotoStrip";
 
 /**
  * The field page: scan or type, see the item, record what was done —
@@ -81,23 +83,43 @@ export default function FieldPage() {
     const mine = all.filter((o) => o.state === "queued" && o.userId === user?.id);
     if (!mine.length) return;
     setBusy(true);
+    const wire = ({ state, error, userId, label, blob, ...op }) => op;
+    const results = [];
+    let failed = null;
     try {
-      const { results } = await P.call("/api/field", { method: "POST",
-        body: JSON.stringify({ projectId, ops: mine.map(({ state, error, userId, label, ...op }) => op) }) });
+      // Records first, in one batch; then each photo on its own — a photo
+      // is up to a few megabytes, and a punch item raised in that batch is
+      // on the server by the time its photo arrives.
+      const plain = mine.filter((o) => o.kind !== "punch_photo");
+      if (plain.length) {
+        const r = await P.call("/api/field", { method: "POST", body: JSON.stringify({ projectId, ops: plain.map(wire) }) });
+        results.push(...r.results);
+      }
+      for (const o of mine.filter((x) => x.kind === "punch_photo")) {
+        if (!o.blob) { results.push({ opId: o.opId, status: "rejected", error: "فایل عکس روی گوشی پیدا نشد" }); continue; }
+        const op = wire(o);
+        const r = await P.call("/api/field", { method: "POST",
+          body: JSON.stringify({ projectId, ops: [{ ...op, payload: { ...op.payload, data: await blobToBase64(o.blob) } }] }) });
+        results.push(...r.results);
+      }
+    } catch (e) { failed = e; }
+    try {
       for (const r of results) {
         const o = mine.find((x) => x.opId === r.opId);
         if (!o) continue;
         if (r.status === "applied") await removeOp(o.opId);
         else if (r.status === "rejected") await updateOp({ ...o, state: "rejected", error: r.error });
-        // "retry": a server fault; it stays queued.
+        // "retry": a server fault, or a photo whose item has not arrived; it stays queued.
       }
       const applied = results.filter((r) => r.status === "applied").length;
       const refused = results.filter((r) => r.status === "rejected").length;
-      setMsg(`همگام‌سازی: ${applied} ثبت شد${refused ? ` · ${refused} رد شد (دلیل پایین صفحه)` : ""}.`);
-      await fetchPack();
-    } catch (e) {
-      setMsg(e?.res?.status === 401 ? "نشست منقضی شده — دوباره وارد شوید؛ صف روی گوشی حفظ شده است."
-        : `همگام‌سازی انجام نشد (${e.message}) — صف حفظ شد.`);
+      if (failed) {
+        setMsg(failed?.res?.status === 401 ? "نشست منقضی شده — دوباره وارد شوید؛ صف روی گوشی حفظ شده است."
+          : `همگام‌سازی کامل نشد (${failed.message})${applied ? ` — ${applied} ثبت شد` : ""}؛ بقیهٔ صف حفظ شد.`);
+      } else {
+        setMsg(`همگام‌سازی: ${applied} ثبت شد${refused ? ` · ${refused} رد شد (دلیل پایین صفحه)` : ""}.`);
+      }
+      if (results.length) await fetchPack();
     } finally { setBusy(false); await refreshOps(); }
   }, [projectId, user, P, fetchPack, refreshOps]);
 
@@ -115,8 +137,8 @@ export default function FieldPage() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", seen); };
   }, [ops, user, sync]);
 
-  async function capture(kind, payload, label) {
-    const op = { ...newOp(kind, payload, { projectId }), userId: user?.id, label };
+  async function capture(kind, payload, label, extra = {}) {
+    const op = { ...newOp(kind, payload, { projectId }), userId: user?.id, label, ...extra };
     const problems = opProblems(op, { today: today() });
     if (problems.length) { setMsg(problems.join(" · ")); return; }
     try { await enqueue(op); } catch (e) { setMsg(`روی گوشی ذخیره نشد: ${e.message}`); return; }
@@ -169,7 +191,8 @@ export default function FieldPage() {
       {!p ? (
         <div className="card"><p className="empty-note">{online ? "در حال گرفتن بستهٔ سایت…" : "بسته‌ای روی این گوشی نیست. یک بار با شبکه این صفحه را باز کنید."}</p></div>
       ) : found ? (
-        <ItemCard found={found} p={p} ops={queued} day={day} capture={capture} mayStep={mayStep} mayPunch={mayPunch} onBack={() => setItem(null)} />
+        <ItemCard found={found} p={p} ops={queued} rejected={rejected} day={day} capture={capture} mayStep={mayStep} mayPunch={mayPunch}
+                  projectId={projectId} setMsg={setMsg} onBack={() => setItem(null)} />
       ) : item ? (
         <div className="card"><p className="err">«{item.no}» در بستهٔ این گوشی نیست{pack?.pack?.subsystemId ? " (بسته فقط یک ساب‌سیستم است)" : ""}.</p>
           <button className="btn ghost" onClick={() => setItem(null)}>فهرست</button></div>
@@ -239,7 +262,7 @@ function Browse({ p, ops, open }) {
   );
 }
 
-function ItemCard({ found, p, ops, day, capture, mayStep, mayPunch, onBack }) {
+function ItemCard({ found, p, ops, rejected, day, capture, mayStep, mayPunch, projectId, setMsg, onBack }) {
   const { kind, row } = found;
   const [punch, setPunch] = useState({ category: "B", description: "" });
   const [clearNote, setClearNote] = useState({});
@@ -247,6 +270,16 @@ function ItemCard({ found, p, ops, day, capture, mayStep, mayPunch, onBack }) {
   const stepKind = { t: "tag_step", s: "spool_step", c: "cable_step", i: "instrument_step" }[kind];
   const mine = ops.filter((o) => o.payload[idKey] === row.id);
   const openPunch = kind === "t" ? p.punch.filter((x) => x.tag_id === row.id) : [];
+  // Photos wait in the queue by the item they belong to — one on the server,
+  // or one raised on this phone and not sent yet.
+  const photosOf = (ref) => [...ops, ...rejected].filter((o) => o.kind === "punch_photo"
+    && (ref.punchId ? o.payload.punchId === ref.punchId : o.payload.raiseOpId === ref.raiseOpId));
+  async function shoot(file, ref, stage, label) {
+    if (!file) return;
+    let blob;
+    try { blob = await compressPhoto(file); } catch (e) { setMsg(e.message); return; }
+    await capture("punch_photo", { ...ref, stage, takenOn: day }, label, { blob });
+  }
   return (
     <div className="card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -293,21 +326,36 @@ function ItemCard({ found, p, ops, day, capture, mayStep, mayPunch, onBack }) {
           {openPunch.length === 0 && <p className="muted sm">ندارد</p>}
           {openPunch.map((x) => {
             const q = mine.find((o) => o.kind === "punch_clear" && o.payload.punchId === x.id);
+            // A photo of the fix once the fix is claimed (on the server or in
+            // this queue); before that, a photo of the defect.
+            const fixed = x.status === "cleared" || !!q;
             return (
-              <div key={x.id} className="field-step">
-                <span className="sm"><span className={`pill ${x.category === "A" ? "bad" : "warn"}`}>{x.category}</span> {x.punch_no} — {x.description}</span>
-                {x.status === "cleared" ? <span className="muted sm">رفع‌شده، منتظر تأیید</span>
-                  : q ? <span className="queued">رفع در صف</span>
-                  : mayPunch && <span style={{ display: "flex", gap: 6 }}>
-                      <input aria-label="شرح رفع" dir="auto" placeholder="چه کاری انجام شد" value={clearNote[x.id] || ""}
-                             onChange={(e) => setClearNote({ ...clearNote, [x.id]: e.target.value })} />
-                      <button className="btn ghost" onClick={() => capture("punch_clear", { punchId: x.id, note: clearNote[x.id] || "", clearedOn: day },
-                        `${x.punch_no}: رفع`)}>رفع شد</button>
-                    </span>}
+              <div key={x.id} style={{ borderBottom: "1px solid var(--rule)", padding: "4px 0" }}>
+                <div className="field-step" style={{ borderBottom: 0 }}>
+                  <span className="sm"><span className={`pill ${x.category === "A" ? "bad" : "warn"}`}>{x.category}</span> {x.punch_no} — {x.description}</span>
+                  {x.status === "cleared" ? <span className="muted sm">رفع‌شده، منتظر تأیید</span>
+                    : q ? <span className="queued">رفع در صف</span>
+                    : mayPunch && <span style={{ display: "flex", gap: 6 }}>
+                        <input aria-label="شرح رفع" dir="auto" placeholder="چه کاری انجام شد" value={clearNote[x.id] || ""}
+                               onChange={(e) => setClearNote({ ...clearNote, [x.id]: e.target.value })} />
+                        <button className="btn ghost" onClick={() => capture("punch_clear", { punchId: x.id, note: clearNote[x.id] || "", clearedOn: day },
+                          `${x.punch_no}: رفع`)}>رفع شد</button>
+                      </span>}
+                </div>
+                <PhotoStrip projectId={projectId} photos={x.photos || []} queued={photosOf({ punchId: x.id })} />
+                {mayPunch && <PhotoButton label={fixed ? "عکس رفع" : "عکس نقص"}
+                  onFile={(f) => shoot(f, { punchId: x.id }, fixed ? "cleared" : "raised", `${x.punch_no}: ${fixed ? "عکس رفع" : "عکس نقص"}`)} />}
               </div>
             );
           })}
-          {mine.filter((o) => o.kind === "punch_raise").map((o) => <p key={o.opId} className="queued">Punch در صف: {o.payload.category} — {o.payload.description}</p>)}
+          {mine.filter((o) => o.kind === "punch_raise").map((o) => (
+            <div key={o.opId} style={{ padding: "4px 0" }}>
+              <p className="queued" style={{ margin: 0 }}>Punch در صف: {o.payload.category} — {o.payload.description}</p>
+              <PhotoStrip projectId={projectId} queued={photosOf({ raiseOpId: o.opId })} />
+              {mayPunch && <PhotoButton label="عکس نقص"
+                onFile={(f) => shoot(f, { raiseOpId: o.opId }, "raised", `${row.no}: عکس Punch جدید`)} />}
+            </div>
+          ))}
           {mayPunch && (
             <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
               <select aria-label="دسته" value={punch.category} onChange={(e) => setPunch({ ...punch, category: e.target.value })}>
@@ -324,6 +372,16 @@ function ItemCard({ found, p, ops, day, capture, mayStep, mayPunch, onBack }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** The camera, one tap: on a phone it opens straight to the back camera. */
+function PhotoButton({ label, onFile }) {
+  return (
+    <label className="btn ghost photo-btn">📷 {label}
+      <input type="file" accept="image/*" capture="environment" aria-label={label}
+             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; onFile(f); }} />
+    </label>
   );
 }
 

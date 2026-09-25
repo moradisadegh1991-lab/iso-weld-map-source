@@ -15,7 +15,7 @@
  * VERSION changes with every release that changes this file; the old
  * caches are dropped on activation.
  */
-const VERSION = "epc-field-v2";
+const VERSION = "epc-field-v3";
 const SHELL = "/field";
 
 self.addEventListener("install", (event) => {
