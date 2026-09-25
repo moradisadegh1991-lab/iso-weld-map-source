@@ -75,6 +75,12 @@ const ELECTRICAL = [
     "IEC 60364-6 فشار متوسط را پوشش نمی‌دهد — عدد پروژه"],
 ];
 
+/** Painting application limits. The margin defaults to 3 °C only when empty. */
+const COATING = [
+  ["coating_dewpoint_margin_c", "فاصلهٔ دمای فولاد از نقطهٔ شبنم (°C)", "0.1", "خالی = 3 °C (ISO 8502-4)"],
+  ["coating_max_rh_pct", "حداکثر رطوبت نسبی هنگام رنگ (%)", "0.1", "خالی = رطوبت سنجیده نمی‌شود؛ طبق دیتاشیت رنگ"],
+];
+
 /** Instrument calibration tolerance, used where a datasheet gives none. */
 const INSTRUMENTS = [
   ["calibration_tolerance_pct", "تلورانس کالیبراسیون (% اسپن)", "0.001",
@@ -97,7 +103,7 @@ export default function ProjectPage() {
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
       .concat([["description", p.description ?? ""],
                ["steel_erection_standard", p.steel_erection_standard ?? ""],
-               ...[...ELECTRICAL, ...INSTRUMENTS].map(([k]) => [k, p[k] ?? ""])])));
+               ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING].map(([k]) => [k, p[k] ?? ""])])));
   }, [data]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setSaved(false); }
@@ -207,6 +213,18 @@ export default function ProjectPage() {
         <h2 style={{ marginTop: 8 }}>برق</h2>
         <div className="grid2">
           {ELECTRICAL.map(([k, label, step, hint]) => (
+            <div className="field" key={k}>
+              <label htmlFor={k}>{label}</label>
+              <input id={k} type="number" step={step} disabled={!editable} dir="ltr"
+                     value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
+              <span className="hint">{hint}</span>
+            </div>
+          ))}
+        </div>
+
+        <h2 style={{ marginTop: 8 }}>رنگ و عایق</h2>
+        <div className="grid2">
+          {COATING.map(([k, label, step, hint]) => (
             <div className="field" key={k}>
               <label htmlFor={k}>{label}</label>
               <input id={k} type="number" step={step} disabled={!editable} dir="ltr"

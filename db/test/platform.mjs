@@ -143,8 +143,8 @@ test("exactly what is built is marked built", async () => {
   // A platform that shows planned work as live is a lie the first user finds.
   equal(liveModules().map((m) => m.id), ["piping"], "only piping reads its drawings");
   equal(executionModules().map((m) => m.id).sort(),
-    ["civil", "electrical", "equipment", "instrumentation", "piping", "structural"],
-    "site tracking is built for all six; drawing extraction only for piping");
+    ["civil", "coating", "electrical", "equipment", "instrumentation", "piping", "structural"],
+    "site tracking is built for all seven; drawing extraction only for piping");
   assert(MODULES.length > 1, "and the rest are declared, not hidden");
 });
 

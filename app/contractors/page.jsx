@@ -14,7 +14,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
  */
 const DISCIPLINE_FA = {
   piping: "پایپینگ", structural: "استراکچر", electrical: "برق",
-  instrumentation: "ابزار دقیق", civil: "سیویل", equipment: "تجهیزات",
+  instrumentation: "ابزار دقیق", civil: "سیویل", equipment: "تجهیزات", coating: "رنگ و عایق",
 };
 const STATUS_FA = {
   prospective: "در دست بررسی", active: "فعال",

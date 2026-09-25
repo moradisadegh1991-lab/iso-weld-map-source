@@ -32,6 +32,10 @@ import { importCableSchedule, recordCableActivity, recordIrTest } from "../lib/d
 import {
   importInstrumentIndex, correctInstrument, recordCalibration, recordInstrumentActivity, recordLoopCheck,
 } from "../lib/db/repos/instrumentation.mjs";
+import {
+  upsertSystem, assignCoating, recordCoating, recordCoatingActivity,
+} from "../lib/db/repos/coating.mjs";
+import { minReadings } from "../lib/coating/coating.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -466,6 +470,63 @@ try {
         doneAt: "2026-09-16", userId: user.id });
     }
     console.log(`instrumentation: ${ii.imported} instruments, ${ii.problems.length} index problems`);
+
+    // ── painting and insulation ──
+    //
+    //   spool 1  PS-3 painted and handed over before its leak test — B31.3
+    //            allows paint before the test, so it is not flagged
+    //   spool 2  PS-HOT with 50 mm hot insulation — held until the test
+    //   spool 3  primer applied with the steel 1 °C over the dew point
+    //   PR-1201  prepared to St 3 where the system asks for Sa 2½
+    const ps3 = await upsertSystem(db, { projectId: p.id, code: "PS-3", title: "Zinc epoxy / epoxy MIO / PU — atmospheric C5",
+      prepGrade: "Sa 2½", profileMinUm: 50, profileMaxUm: 85, maxDftUm: 500,
+      coats: [{ name: "Zinc-rich epoxy primer", ndftUm: 75 }, { name: "Epoxy MIO", ndftUm: 125 },
+              { name: "Polyurethane finish", ndftUm: 50 }] });
+    const psHot = await upsertSystem(db, { projectId: p.id, code: "PS-HOT", title: "Inorganic zinc under insulation, ≤ 400 °C",
+      prepGrade: "Sa 2½", profileMinUm: 40, profileMaxUm: 75, maxDftUm: 150,
+      coats: [{ name: "Inorganic zinc silicate", ndftUm: 75 }] });
+    const { rows: cwSpools } = await db.query(
+      `SELECT sp.id, sp.spool_no FROM spool sp JOIN document d ON d.project_id = sp.project_id
+         JOIN extraction_run r ON r.id = sp.extraction_run_id AND r.document_id = d.id
+        WHERE sp.project_id = $1 AND d.doc_no = 'SW 265022A' ORDER BY sp.spool_no`, [p.id]);
+    const pr1201 = await tagId("PR-1201");
+    if (cwSpools.length >= 3) {
+      await assignCoating(db, { projectId: p.id, systemId: ps3.id, spoolIds: [cwSpools[0].id, cwSpools[2].id] });
+      await assignCoating(db, { projectId: p.id, systemId: psHot.id, spoolIds: [cwSpools[1].id],
+        insulation: "hot", insulationThkMm: 50 });
+    }
+    await assignCoating(db, { projectId: p.id, systemId: ps3.id, tagIds: [pr1201], areaM2: 310 });
+    const item = async (col, id) => (await db.query(
+      `SELECT id, area_m2 FROM coating_item WHERE project_id = $1 AND ${col} = $2`, [p.id, id])).rows[0];
+    const gauge = (area, base) => Array.from({ length: minReadings(Number(area)) },
+      (_, k) => base + ((k * 7) % 25)).join(" ");
+    const good = { airC: 31, rh: 55, steelC: 34 };
+    const WORK = cwSpools.length >= 3 ? [
+      ["spool_id", cwSpools[0].id, [["prep", { grade: "Sa 2½", profile: "62 70 66" }],
+        ["coat", { coatNo: 1, ...good, base: 80 }], ["coat", { coatNo: 2, ...good, base: 205 }],
+        ["coat", { coatNo: 3, ...good, base: 255 }]], ["final_inspection", "ready"]],
+      ["spool_id", cwSpools[1].id, [["prep", { grade: "Sa 2½", profile: "55 60" }],
+        ["coat", { coatNo: 1, ...good, base: 80 }], ["insulation", { thicknessMm: "50 52 51 50" }]], ["final_inspection"]],
+      ["spool_id", cwSpools[2].id, [["prep", { grade: "Sa 2½", profile: "64 72" }],
+        ["coat", { coatNo: 1, airC: 31, rh: 88, steelC: 30, base: 80 }]], []],
+    ] : [];
+    WORK.push(["tag_id", pr1201, [["prep", { grade: "St 3", profile: "" }]], []]);
+    for (const [col, id, records, marks] of WORK) {
+      const it = await item(col, id);
+      const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM coating_record WHERE item_id = $1", [it.id]);
+      if (n.n === 0) {
+        for (const [kind, d] of records) {
+          const { base, ...rest } = d;
+          await recordCoating(db, { projectId: p.id, itemId: it.id, kind, recordedOn: "2026-09-14",
+            inspector: "بازرس رنگ نمایشی", userId: user.id,
+            ...(base !== undefined ? { ...rest, readings: gauge(it.area_m2, base) } : rest) });
+        }
+      }
+      for (const code of marks) {
+        await recordCoatingActivity(db, { projectId: p.id, itemId: it.id, code, doneAt: "2026-09-18", userId: user.id });
+      }
+    }
+    console.log(`coating: 2 systems, ${WORK.length} items`);
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks
