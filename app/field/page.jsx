@@ -37,6 +37,7 @@ export default function FieldPage() {
   const [subsystemId, setSubsystemId] = useState("");
   const mayStep = can({ role }, ACTIONS.ASSIGN_WELD);
   const mayPunch = can({ role }, ACTIONS.RECORD_QUALITY);
+  const mayInspect = can({ role }, ACTIONS.RECORD_INSPECTION);
 
   // A label opened this page: /field?p=<project>&k=<kind>&n=<no>.
   useEffect(() => {
@@ -192,12 +193,15 @@ export default function FieldPage() {
         <div className="card"><p className="empty-note">{online ? "در حال گرفتن بستهٔ سایت…" : "بسته‌ای روی این گوشی نیست. یک بار با شبکه این صفحه را باز کنید."}</p></div>
       ) : found ? (
         <ItemCard found={found} p={p} ops={queued} rejected={rejected} day={day} capture={capture} mayStep={mayStep} mayPunch={mayPunch}
-                  projectId={projectId} setMsg={setMsg} onBack={() => setItem(null)} />
+                  mayInspect={mayInspect} projectId={projectId} setMsg={setMsg} onBack={() => setItem(null)} />
       ) : item ? (
         <div className="card"><p className="err">«{item.no}» در بستهٔ این گوشی نیست{pack?.pack?.subsystemId ? " (بسته فقط یک ساب‌سیستم است)" : ""}.</p>
           <button className="btn ghost" onClick={() => setItem(null)}>فهرست</button></div>
       ) : (
-        <Browse p={p} ops={queued} open={(kind, no) => setItem({ kind, no })} />
+        <>
+          <AwaitingInspections p={p} ops={queued} open={(kind, no) => setItem({ kind, no })} />
+          <Browse p={p} ops={queued} open={(kind, no) => setItem({ kind, no })} />
+        </>
       )}
 
       {(queued.length > 0 || rejected.length > 0) && (
@@ -262,7 +266,7 @@ function Browse({ p, ops, open }) {
   );
 }
 
-function ItemCard({ found, p, ops, rejected, day, capture, mayStep, mayPunch, projectId, setMsg, onBack }) {
+function ItemCard({ found, p, ops, rejected, day, capture, mayStep, mayPunch, mayInspect, projectId, setMsg, onBack }) {
   const { kind, row } = found;
   const [punch, setPunch] = useState({ category: "B", description: "" });
   const [clearNote, setClearNote] = useState({});
@@ -296,7 +300,7 @@ function ItemCard({ found, p, ops, rejected, day, capture, mayStep, mayPunch, pr
 
       {row.steps && row.steps.map((s) => {
         const q = mine.find((o) => o.payload.code === s.code);
-        const canRecord = mayStep && !s.derived && !s.na && s.status !== "done" && !q;
+        const canRecord = mayStep && !s.derived && !s.na && s.status !== "done" && !q && !s.hold;
         return (
           <div key={s.code} className="field-step">
             <span>{s.title}</span>
@@ -305,6 +309,9 @@ function ItemCard({ found, p, ops, rejected, day, capture, mayStep, mayPunch, pr
                 : <span className={`pill ${s.status === "done" ? "ok" : ""}`}>{STATUS_FA[s.status] || s.status}</span>}
               {s.derived && <span className="muted"> · از داده</span>}
               {q && <span className="queued"> در صف ({q.payload.doneOn})</span>}
+              {s.hold && !q && <span className="pill warn" title={`${s.hold.itpNo} ردیف ${s.hold.seq}: ${s.hold.title}`}>
+                {s.hold.state === "awaiting" ? `منتظر بازرسی ${s.hold.irNo}` : s.hold.state === "rejected" ? `بازرسی ${s.hold.irNo} رد شد`
+                  : "نقطهٔ بازرسی ITP — درخواست ثبت نشده"}</span>}
             </span>
             {canRecord && <button className="btn ghost" onClick={() => capture(stepKind, { [idKey]: row.id, code: s.code, doneOn: day },
               `${row.no}: ${s.title}`)}>انجام شد</button>}
@@ -319,6 +326,11 @@ function ItemCard({ found, p, ops, rejected, day, capture, mayStep, mayPunch, pr
       {kind === "i" && row.calRequirement?.reason && <p className="muted sm">کالیبراسیون: {row.calRequirement.reason}</p>}
       {kind === "i" && row.loopNo && <LoopCard loop={p.loops?.find((l) => l.loopNo === row.loopNo)} day={day} capture={capture}
         ops={ops} mayStep={mayStep} />}
+
+      {(p.inspections || []).filter((ir) => ir.itemKind === ITEM_KIND[kind] && ir.itemId === row.id).map((ir) => (
+        <InspectionCard key={ir.id} ir={ir} myParty={p.myParty} may={mayInspect} capture={capture}
+          queued={ops.filter((o) => o.kind === "ir_result" && o.payload.irId === ir.id)} />
+      ))}
 
       {kind === "t" && (
         <div style={{ marginTop: 10 }}>
@@ -371,6 +383,72 @@ function ItemCard({ found, p, ops, rejected, day, capture, mayStep, mayPunch, pr
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+const ITEM_KIND = { t: "tag", s: "spool", c: "cable", i: "instrument" };
+const KIND_OF = { tag: "t", spool: "s", cable: "c", instrument: "i" };
+const PARTY_FA = { contractor: "پیمانکار", company: "کارفرما", tpi: "TPI" };
+const OUTCOME_FA = { accepted: "پذیرفته", accepted_comments: "پذیرفته با ملاحظات", rejected: "رد", not_attended: "حاضر نشد" };
+
+/** What waits for an inspector on the items this phone carries. */
+function AwaitingInspections({ p, ops, open }) {
+  const list = p.inspections || [];
+  if (!list.length) return null;
+  return (
+    <div className="card">
+      <h2>بازرسی‌های منتظر ({list.length})</h2>
+      {list.slice(0, 30).map((ir) => {
+        const q = ops.filter((o) => o.kind === "ir_result" && o.payload.irId === ir.id).length;
+        const k = KIND_OF[ir.itemKind];
+        return (
+          <button key={ir.id} className="field-step" disabled={!k} onClick={() => k && open(k, ir.itemLabel)}
+                  style={{ width: "100%", background: "none", border: 0, color: "inherit", cursor: k ? "pointer" : "default", textAlign: "start" }}>
+            <span><span className="mono">{ir.itemLabel}</span> <span className="sm">{ir.title}</span></span>
+            <span className="sm muted"><bdi>{new Date(ir.plannedAt).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" })}</bdi>
+              {q ? <span className="pill warn"> {q} در صف</span> : null}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * One inspection request, and the signature this person may give on it.
+ * Which party they sign for is their membership's; the server checks it
+ * again, with the rules on who may accept, reject or record an absence.
+ */
+function InspectionCard({ ir, myParty, may, capture, queued }) {
+  const [f, setF] = useState({ comments: "", inspectorName: "" });
+  const mine = ir.parties.find((x) => x.party === myParty);
+  const absent = ir.parties.filter((x) => x.party !== "contractor" && !x.outcome);
+  const sign = (outcome, extra = {}) => capture("ir_result", { irId: ir.id, outcome, ...f, ...extra },
+    `${ir.irNo} ${ir.itemLabel}: ${OUTCOME_FA[outcome]}${extra.aboutParty ? ` (${PARTY_FA[extra.aboutParty]})` : ""}`);
+  return (
+    <div style={{ marginTop: 10, border: "1px solid var(--rule)", borderRadius: 4, padding: 8 }}>
+      <b className="sm">بازرسی {ir.irNo} — {ir.title}</b>
+      <p className="sm muted" style={{ margin: "4px 0" }}>{ir.itpNo} · ردیف {ir.seq} · <bdi>{new Date(ir.plannedAt).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" })}</bdi>
+        {ir.location && ` · ${ir.location}`}{ir.criteria && <><br />معیار: {ir.criteria}</>}</p>
+      <p className="sm" style={{ margin: "4px 0" }}>{ir.parties.map((x) => (
+        <span key={x.party} style={{ marginInlineEnd: 10 }}><b className="mono">{x.point}</b> {PARTY_FA[x.party]}: {x.outcome ? OUTCOME_FA[x.outcome] : "—"}</span>))}</p>
+      {queued.map((o) => <p key={o.opId} className="queued">امضا در صف: <bdi>{o.label}</bdi></p>)}
+      {may && !queued.length && (!myParty ? <p className="muted sm">طرف بازرسی شما تعیین نشده.</p> : <>
+        {mine && !mine.outcome && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "end" }}>
+            <input aria-label="نام بازرس" placeholder="نام بازرس" value={f.inspectorName} onChange={(e) => setF({ ...f, inspectorName: e.target.value })} />
+            <input aria-label="ملاحظات" dir="auto" style={{ flex: 1 }} placeholder="ملاحظات (برای رد لازم)" value={f.comments} onChange={(e) => setF({ ...f, comments: e.target.value })} />
+            <button className="btn" onClick={() => sign(f.comments.trim() ? "accepted_comments" : "accepted")}>پذیرفته</button>
+            <button className="btn ghost" onClick={() => sign("rejected")}>رد</button>
+          </div>
+        )}
+        {myParty === "contractor" && absent.map((x) => (
+          <button key={x.party} className="btn ghost" style={{ marginTop: 6 }} onClick={() => sign("not_attended", { aboutParty: x.party })}>
+            {PARTY_FA[x.party]} ({x.point}) حاضر نشد</button>
+        ))}
+        {!mine && myParty !== "contractor" && <p className="muted sm">{PARTY_FA[myParty]} در این فعالیت نقطهٔ بازرسی ندارد.</p>}
+      </>)}
     </div>
   );
 }

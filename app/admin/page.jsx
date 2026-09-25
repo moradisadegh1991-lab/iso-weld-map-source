@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import { ROLES, ACTIONS, can } from "../../lib/authz.mjs";
 
@@ -16,11 +17,49 @@ const ACTION_FA = {
   APPROVE_REGISTER: "تأیید رجیستر", ASSIGN_WELD: "تخصیص جوش",
   RECORD_NDT: "ثبت NDT", MANAGE_WELDERS: "مدیریت جوشکاران",
   MANAGE_PIPING_CLASS: "مدیریت کلاس پایپینگ", DRAW_NDT_SAMPLE: "نمونه‌گیری NDT",
-  MANAGE_MEMBERS: "مدیریت اعضا",
+  MANAGE_MEMBERS: "مدیریت اعضا", RECORD_HSE: "ثبت HSE", ISSUE_PERMIT: "صدور مجوز کار",
+  MANAGE_CONTROLS: "کنترل پروژه", RECORD_QUALITY: "ثبت Punch و NCR", APPROVE_CONCESSION: "تأیید ارفاق (NCR)",
+  RECORD_COMPLETIONS: "ثبت تکمیل", SIGN_MC: "امضای MC", MANAGE_PROCUREMENT: "خرید", CONTROL_DOCUMENTS: "کنترل مدارک",
+  MANAGE_HANDOVER: "تحویل به نگهداری", RECORD_INSPECTION: "درخواست و امضای بازرسی", MANAGE_ITP: "تهیه و تأیید ITP",
 };
+const PARTY_FA = { contractor: "پیمانکار", company: "کارفرما", tpi: "بازرس شخص ثالث (TPI)" };
+
+/**
+ * The members, and the party each signs inspections for. Role says what a
+ * person may do; party says on whose behalf they sign an inspection — a
+ * company inspector and a contractor's QC can hold the same role.
+ */
+function Members({ projectId, call }) {
+  const [rows, setRows] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const load = () => call(`/api/project/members?projectId=${projectId}`).then((r) => setRows(r.members)).catch((e) => setMsg(e.message));
+  useEffect(() => { if (projectId) load(); }, [projectId]);   // eslint-disable-line react-hooks/exhaustive-deps
+  if (!rows) return msg ? <p className="err">{msg}</p> : null;
+  return (
+    <div className="card">
+      <h2>اعضا و طرف بازرسی</h2>
+      <p className="muted sm">طرف بازرسی تعیین می‌کند هر نفر نتیجهٔ بازرسی را از طرف چه کسی امضا می‌کند. بدون آن، شخص درخواست یا امضای بازرسی ثبت نمی‌کند.</p>
+      {msg && <p className="err">{msg}</p>}
+      <div className="wrap"><table className="dtable">
+        <thead><tr><th>نام</th><th>ایمیل</th><th>نقش</th><th>طرف بازرسی</th></tr></thead>
+        <tbody>{rows.map((m) => (
+          <tr key={m.user_id}>
+            <td>{m.display_name || "—"}</td><td className="mono sm">{m.email || "—"}</td><td>{ROLE_FA[m.role] || m.role}</td>
+            <td><select aria-label={`طرف بازرسی ${m.display_name || m.email}`} value={m.inspection_party || ""} onChange={async (e) => {
+              setMsg(null);
+              try { await call("/api/project/members", { method: "POST", body: JSON.stringify({ projectId, userId: m.user_id, party: e.target.value || null }) }); load(); }
+              catch (err) { setMsg(err.message); }
+            }}>
+              <option value="">— هیچ —</option>{Object.entries(PARTY_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select></td>
+          </tr>))}</tbody>
+      </table></div>
+    </div>
+  );
+}
 
 export default function AdminPage() {
-  const { project, role } = usePlatform();
+  const { project, role, projectId, call } = usePlatform();
 
   return (
     <div className="page">
@@ -61,6 +100,8 @@ export default function AdminPage() {
           </table>
         </div>
       </div>
+
+      {can({ role }, ACTIONS.MANAGE_MEMBERS) && <Members projectId={projectId} call={call} />}
 
       <div className="card">
         <h2>افزودن کاربر</h2>

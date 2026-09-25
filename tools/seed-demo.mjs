@@ -48,6 +48,7 @@ import {
   upsertAccount, setBaseline, reportProgress, postCost, upsertRisk, closeRisk, listRisks,
 } from "../lib/db/repos/controls.mjs";
 import { raisePunch, punchAction, raiseNcr, ncrAction } from "../lib/db/repos/quality.mjs";
+import * as insp from "../lib/db/repos/inspection.mjs";
 import { ensureUser } from "../lib/db/repos/projects.mjs";
 import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
 import * as prc from "../lib/db/repos/procurement.mjs";
@@ -967,6 +968,93 @@ try {
       }
     }
     console.log("handover: FLOC {plant}-{unit}-{tag}, criticality A/B/C, 3 asset masters (K-2101 held only by MC)");
+
+    // ── inspection ────────────────────────────────────────────────────────
+    //
+    //   ITP-CIV-001  foundations: rebar (W company), pre-pour (H contractor
+    //                and company, W TPI), delivery tickets (R), backfill (S)
+    //   ITP-PIP-001  spools: fit-up (W company), supports (W company)
+    //   FDN-P-1203A  pre-pour released last week (TPI absent after 48 h notice)
+    //   FDN-T-3102   rebar done — pre-pour requested for tomorrow morning
+    //   spool 3      fit-up rejected (gap over tolerance), NCR raised,
+    //                re-inspection requested
+    //   spool 2      fit-up requested for this afternoon
+    //
+    //   The seeding account signs for the contractor; a company inspector
+    //   and a TPI who cannot log in sign the rest.
+    await db.query("UPDATE project SET inspection_notice_hours = COALESCE(inspection_notice_hours, 24) WHERE id = $1", [p.id]);
+    const coInsp = await ensureUser(db, { subject: "demo|company-inspector", displayName: "بازرس کارفرما (دمو)" });
+    const tpiInsp = await ensureUser(db, { subject: "demo|tpi-inspector", displayName: "بازرس TPI (دمو)" });
+    for (const [u, role, party] of [[user, null, "contractor"], [qcInsp, "qc", "contractor"], [coInsp, "qc", "company"], [tpiInsp, "qc", "tpi"]]) {
+      if (role) await db.query(`INSERT INTO project_member (project_id, user_id, role) VALUES ($1,$2,$3)
+                                ON CONFLICT (project_id, user_id) DO NOTHING`, [p.id, u.id, role]);
+      await db.query("UPDATE project_member SET inspection_party = COALESCE(inspection_party, $3) WHERE project_id = $1 AND user_id = $2",
+        [p.id, u.id, party]);
+    }
+    const { rows: [haveItp] } = await db.query("SELECT count(*)::int AS n FROM itp WHERE project_id = $1", [p.id]);
+    if (haveItp.n === 0) {
+      const civ = await insp.createItp(db, { projectId: p.id, itpNo: "ITP-CIV-001", revision: "0", title: "Foundations — reinforced concrete",
+        scope: "foundation", userId: qcInsp.id });
+      for (const a of [
+        { seq: 10, title: "Excavation and formation level", stepCode: "excavation", reference: "Spec CV-01 §5", criteria: "level ±25 mm, no soft spots",
+          record: "ITR-C-01", points: { contractor: "H", company: "S" } },
+        { seq: 20, title: "Reinforcement and formwork", stepCode: "rebar", reference: "ACI 318 §26.6 · drawing", criteria: "bar size, spacing, laps, cover",
+          record: "ITR-C-02", points: { contractor: "H", company: "W" } },
+        { seq: 30, title: "Pre-pour inspection (embedments, anchor bolts, cover)", stepCode: "pre_pour", reference: "ACI 318 §26.5 · vendor AB template",
+          criteria: "anchor bolts ±3 mm, projection per drawing, cover blocks in place", record: "ITR-C-03", points: { contractor: "H", company: "H", tpi: "W" } },
+        { seq: 40, title: "Concrete delivery tickets and slump", reference: "ASTM C143", criteria: "slump per mix design", record: "Delivery tickets",
+          points: { contractor: "H", company: "R" } },
+        { seq: 50, title: "Backfill and compaction", stepCode: "backfill", reference: "Spec CV-01 §9", criteria: "95 % MDD", record: "ITR-C-05",
+          points: { contractor: "H", company: "S" } },
+      ]) await insp.saveActivity(db, { projectId: p.id, itpId: civ.id, ...a });
+      await insp.approveItp(db, { projectId: p.id, itpId: civ.id, userId: user.id, onDate: dd(-60) });
+      const pip = await insp.createItp(db, { projectId: p.id, itpNo: "ITP-PIP-001", revision: "0", title: "Piping — spool fabrication and erection",
+        scope: "piping_spool", userId: qcInsp.id });
+      for (const a of [
+        { seq: 10, title: "Fit-up (gap, alignment, bevel)", stepCode: "fit_up", reference: "ASME B31.3 §328.4", criteria: "root gap per WPS, hi-lo ≤ 1.5 mm",
+          record: "ITR-P-01", points: { contractor: "H", company: "W" } },
+        { seq: 20, title: "Visual inspection of welds", reference: "ASME B31.3 §341.4", criteria: "Table 341.3.2", record: "ITR-P-02",
+          points: { contractor: "H", company: "S" } },
+        { seq: 30, title: "Permanent supports", stepCode: "supports", reference: "Support drawings", criteria: "type and location per drawing",
+          record: "ITR-P-05", points: { contractor: "H", company: "W" } },
+      ]) await insp.saveActivity(db, { projectId: p.id, itpId: pip.id, ...a });
+      await insp.approveItp(db, { projectId: p.id, itpId: pip.id, userId: user.id, onDate: dd(-60) });
+
+      const acts = await insp.listItps(db, { projectId: p.id });
+      const act = (no, seq) => acts.find((i) => i.itp_no === no).activities.find((a) => a.seq === seq).id;
+      const contractor = { inspection_party: "contractor" };
+      const at = (days, hour) => { const d = new Date(Date.now() + days * 86_400_000); d.setHours(hour, 0, 0, 0); return d; };
+      const sign = (irId, m, outcome, when, extra = {}) =>
+        insp.recordResult(db, { projectId: p.id, irId, outcome, membership: { inspection_party: m.party }, userId: m.id, now: when, ...extra });
+      const CON = { id: qcInsp.id, party: "contractor" }, CO = { id: coInsp.id, party: "company" };
+
+      const f1203 = await tagId("FDN-P-1203A");
+      const done = await insp.raiseIr(db, { projectId: p.id, activityId: act("ITP-CIV-001", 30), itemKind: "tag", itemId: f1203,
+        plannedAt: at(-13, 9), location: "Unit 12, pump row", membership: contractor, userId: qcInsp.id, now: at(-15, 9) });
+      await sign(done.id, CON, "accepted", at(-13, 9));
+      await sign(done.id, CON, "not_attended", at(-13, 10), { aboutParty: "tpi" });
+      await sign(done.id, CO, "accepted_comments", at(-13, 10), { comments: "Cover 45 mm at the north face — within tolerance", inspectorName: "M. Rahimi" });
+
+      const t3102 = await tagId("FDN-T-3102");
+      await insp.raiseIr(db, { projectId: p.id, activityId: act("ITP-CIV-001", 30), itemKind: "tag", itemId: t3102,
+        plannedAt: at(1, 9), location: "Unit 31, demethanizer", note: "Pour planned for the afternoon if released",
+        membership: contractor, userId: qcInsp.id, now: at(-1, 8) });
+
+      const { rows: spoolsNow } = await db.query("SELECT id FROM spool WHERE project_id = $1 ORDER BY spool_no", [p.id]);
+      if (spoolsNow[2]) {
+        const rej = await insp.raiseIr(db, { projectId: p.id, activityId: act("ITP-PIP-001", 10), itemKind: "spool", itemId: spoolsNow[2].id,
+          plannedAt: at(-2, 10), location: "Fabrication shop bay 2", membership: contractor, userId: qcInsp.id, now: at(-4, 10) });
+        await sign(rej.id, CO, "rejected", at(-2, 11), { comments: "Root gap 4.5 mm at joint 3, WPS allows 2–3 mm", inspectorName: "M. Rahimi" });
+        await insp.ncrFromIr(db, { projectId: p.id, irId: rej.id, severity: "minor", userId: qcInsp.id, raiseNcr });
+        await insp.raiseIr(db, { projectId: p.id, activityId: act("ITP-PIP-001", 10), itemKind: "spool", itemId: spoolsNow[2].id,
+          plannedAt: at(1, 14), location: "Fabrication shop bay 2", reinspectionOf: rej.id, membership: contractor, userId: qcInsp.id, now: at(-1, 9) });
+      }
+      if (spoolsNow[1]) {
+        await insp.raiseIr(db, { projectId: p.id, activityId: act("ITP-PIP-001", 10), itemKind: "spool", itemId: spoolsNow[1].id,
+          plannedAt: at(0, 23), location: "Fabrication shop bay 1", membership: contractor, userId: qcInsp.id, now: at(-1, 15) });
+      }
+    }
+    console.log("inspection: 2 ITPs, 24 h notice; pre-pour released on FDN-P-1203A, requested on FDN-T-3102; a rejected fit-up with its NCR and re-inspection");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks

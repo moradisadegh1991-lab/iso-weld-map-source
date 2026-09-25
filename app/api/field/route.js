@@ -27,7 +27,8 @@ export async function GET(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
     return await withProject(db, projectId, async () => {
       if (url.searchParams.get("recent")) return Response.json({ ops: await recentOps(db, { projectId }) });
-      return Response.json(await fieldPack(db, { projectId, subsystemId: url.searchParams.get("subsystemId") || null }),
+      return Response.json({ ...(await fieldPack(db, { projectId, subsystemId: url.searchParams.get("subsystemId") || null })),
+        myParty: membership.inspection_party || null },
         { headers: { "Cache-Control": "no-store" } });
     });
   } catch (e) { return errorResponse(e); }
