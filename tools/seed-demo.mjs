@@ -49,6 +49,7 @@ import {
 } from "../lib/db/repos/controls.mjs";
 import { raisePunch, punchAction, raiseNcr, ncrAction } from "../lib/db/repos/quality.mjs";
 import * as insp from "../lib/db/repos/inspection.mjs";
+import { upsertTemplate } from "../lib/db/repos/precom.mjs";
 import { ensureUser } from "../lib/db/repos/projects.mjs";
 import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
 import * as prc from "../lib/db/repos/procurement.mjs";
@@ -1055,6 +1056,21 @@ try {
       }
     }
     console.log("inspection: 2 ITPs, 24 h notice; pre-pour released on FDN-P-1203A, requested on FDN-T-3102; a rejected fit-up with its NCR and re-inspection");
+
+    // ── pre-commissioning checklists ──────────────────────────────────────
+    //
+    //   Declared from the (demo) commissioning procedure. No subsystem has an
+    //   accepted MC yet, so nothing is recorded against them: the RFSU board
+    //   shows every subsystem waiting on MC, which is where the plant is.
+    for (const t of [
+      { code: "B-SYS-01", title: "Flushing and air blowing", appliesTo: "subsystem", criteria: "Target plate clean after 3 blows (procedure CP-03 §4)" },
+      { code: "B-PIP-01", title: "Reinstatement after test (blinds out, gaskets per class)", appliesTo: "line", criteria: "Blind list closed out" },
+      { code: "B-MEC-01", title: "Motor solo run", appliesTo: "rotating", criteria: "4 h; vibration per vendor limit; direction checked" },
+      { code: "B-MEC-02", title: "Internal inspection and box-up", appliesTo: "static", criteria: "Internals per GA, clean, witnessed closure" },
+      { code: "B-ELE-01", title: "Energisation check", appliesTo: "cable", criteria: "Protection settings applied, phase rotation" },
+      { code: "B-INS-01", title: "Loop function test with DCS", appliesTo: "loop", criteria: "Alarms and trips at set points, graphics tag correct" },
+    ]) await upsertTemplate(db, { projectId: p.id, ...t });
+    console.log("pre-commissioning: 6 checklists declared; nothing recorded until a subsystem's MC is accepted");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks
