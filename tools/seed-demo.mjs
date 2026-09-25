@@ -52,6 +52,7 @@ import { ensureUser } from "../lib/db/repos/projects.mjs";
 import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
 import * as prc from "../lib/db/repos/procurement.mjs";
 import * as dcr from "../lib/db/repos/doc-control.mjs";
+import { setAssetMaster } from "../lib/db/repos/handover.mjs";
 import { upsertPackage as upsertTestPackage, addLines as addPackLines } from "../lib/db/repos/completions.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
@@ -936,6 +937,36 @@ try {
         discipline: "mechanical", docType: "GA", originator: "vendor", subsystemId: sub["11-01"].id, plannedIfcOn: dd(-20) });
     }
     console.log("documents: 4 in the register — the demo isometric superseded by Rev 1, one client response overdue");
+
+    // ── handover to maintenance ───────────────────────────────────────────
+    //
+    //   The CMMS conventions are set only where the project has none, so an
+    //   owner's own settings survive a re-seed.
+    //   K-2101   complete nameplate, IOM accepted — held only by MC
+    //   P-1203A  class and criticality, no serial yet, IOM not approved
+    //   P-6101A  class only
+    await db.query(
+      `UPDATE project SET cmms_plant_code = COALESCE(cmms_plant_code, 'KPC-OLF'),
+                          floc_template = COALESCE(floc_template, '{plant}-{unit}-{tag}'),
+                          criticality_levels = COALESCE(criticality_levels, 'A, B, C')
+        WHERE id = $1`, [p.id]);
+    const { rows: [haveMaster] } = await db.query("SELECT count(*)::int AS n FROM asset_master WHERE project_id = $1", [p.id]);
+    if (haveMaster.n === 0) {
+      const tid = async (no) => (await db.query("SELECT id FROM tag WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0].id;
+      await setAssetMaster(db, { projectId: p.id, tagId: await tid("K-2101"), isoClass: "CO", criticality: "A",
+        criticalityBasis: "Criticality assessment CA-OLF-2026-03 (production loss, single train)", manufacturer: "Compressor vendor (demo)",
+        model: "5-stage centrifugal, barrel", serialNo: "C-2101-0417", yearBuilt: 2026, userId: user.id });
+      await setAssetMaster(db, { projectId: p.id, tagId: await tid("P-1203A"), isoClass: "PU", criticality: "A",
+        criticalityBasis: "CA-OLF-2026-03", manufacturer: "Pump vendor (demo)", model: "API 610 OH2", userId: user.id });
+      await setAssetMaster(db, { projectId: p.id, tagId: await tid("P-6101A"), isoClass: "PU", userId: user.id });
+      const { rows: [po102] } = await db.query("SELECT id FROM purchase_order WHERE project_id = $1 AND po_no = 'PO-M-0102'", [p.id]);
+      if (po102) {
+        const d = await prc.addVendorDoc(db, { projectId: p.id, poId: po102.id, docCode: "IOM", title: "Operation and maintenance manual", dueOn: dd(-60) });
+        await prc.submitDoc(db, { projectId: p.id, docId: d.id, revision: "0", submittedOn: dd(-70), userId: user.id });
+        await prc.returnDoc(db, { projectId: p.id, docId: d.id, returnedOn: dd(-55), code: 1 });
+      }
+    }
+    console.log("handover: FLOC {plant}-{unit}-{tag}, criticality A/B/C, 3 asset masters (K-2101 held only by MC)");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks

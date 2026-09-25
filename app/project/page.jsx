@@ -98,6 +98,13 @@ const QUALITY = [
   ["vdrl_resubmit_days", "مهلت ارسال مجدد مدرک فروشندهٔ کد ۳ (روز)", "1", "طبق قرارداد خرید؛ بعد از آن مدرک معوق است"],
 ];
 
+/** Handover to maintenance: the CMMS's own conventions. Text; no defaults. */
+const CMMS = [
+  ["cmms_plant_code", "کد کارخانه در CMMS", "مثلاً KPC-OLF"],
+  ["floc_template", "الگوی Functional Location", "نشانه‌ها: {plant} {unit} {system} {subsystem} {tag} — مثلاً {plant}-{unit}-{tag}"],
+  ["criticality_levels", "سطوح Criticality (سیاست شرکت)", "با ویرگول، مثلاً A, B, C"],
+];
+
 /** Instrument calibration tolerance, used where a datasheet gives none. */
 const INSTRUMENTS = [
   ["calibration_tolerance_pct", "تلورانس کالیبراسیون (% اسپن)", "0.001",
@@ -120,7 +127,7 @@ export default function ProjectPage() {
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
       .concat([["description", p.description ?? ""],
                ["steel_erection_standard", p.steel_erection_standard ?? ""],
-               ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING, ...HSE, ...QUALITY].map(([k]) => [k, p[k] ?? ""])])));
+               ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING, ...HSE, ...QUALITY, ...CMMS].map(([k]) => [k, p[k] ?? ""])])));
   }, [data]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setSaved(false); }
@@ -270,6 +277,17 @@ export default function ProjectPage() {
               <label htmlFor={k}>{label}</label>
               <input id={k} type="number" step={step} disabled={!editable} dir="ltr"
                      value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
+              <span className="hint">{hint}</span>
+            </div>
+          ))}
+        </div>
+
+        <h2 style={{ marginTop: 8 }}>تحویل به نگهداری (CMMS)</h2>
+        <div className="grid2">
+          {CMMS.map(([k, label, hint]) => (
+            <div className="field" key={k}>
+              <label htmlFor={k}>{label}</label>
+              <input id={k} type="text" dir="ltr" disabled={!editable} value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
               <span className="hint">{hint}</span>
             </div>
           ))}

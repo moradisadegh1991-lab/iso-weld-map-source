@@ -139,6 +139,10 @@ function Thread({ t, open }) {
             mid={`${t.coating.pct}% · ${t.coating.next.join("، ") || "—"}`}
             right={t.coating.ready ? <span className="pill ok">تحویل‌شده</span> : null} />}
         </Section>
+        <Section title="شناسنامهٔ نگهداری (CMMS)" href="/handover" empty={!t.master}>
+          {t.master && <Line left={<span className="mono">{t.master.iso_class || "—"} · {t.master.criticality || "—"}</span>}
+            mid={[t.master.manufacturer, t.master.model, t.master.serial_no].map((x) => x || "—").join(" / ")} />}
+        </Section>
         <Section title="خرید" href="/procurement" empty={!t.purchase.length}>
           {t.purchase.map((l) => (
             <Line key={l.id} left={<span className="mono">{l.po_no}</span>}
