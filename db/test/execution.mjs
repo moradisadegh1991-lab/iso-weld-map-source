@@ -88,6 +88,20 @@ test("derived steps follow the welds on the spool", async () => {
     "a field weld made but not examined is not ready for the test");
 });
 
+test("NDT is done when it is accepted, not when a film was shot (F11)", async () => {
+  // A weld examined and REJECTED (or still pending) has been examined; it
+  // has not passed. The shop NDT step, and field welding before the
+  // pressure test, wait for acceptance. Started is still "examined".
+  const w = (field, welded, examined, accepted) =>
+    ({ is_field_weld: field, is_welded: welded, is_examined: examined, is_accepted: accepted });
+  equal(deriveFromWelds([w(false, true, true, true), w(false, true, true, false)]).shop_ndt, IN_PROGRESS,
+    "one shop weld rejected: shop NDT is under way, not done");
+  equal(deriveFromWelds([w(false, true, true, true), w(false, true, true, true)]).shop_ndt, DONE);
+  equal(deriveFromWelds([w(false, true, false, false)]).shop_ndt, null, "nothing examined: not started");
+  equal(deriveFromWelds([w(true, true, true, false)]).field_weld, IN_PROGRESS, "a field weld rejected is not ready for the test");
+  equal(deriveFromWelds([w(true, true, true, true)]).field_weld, DONE);
+});
+
 test("a spool with no shop welds is not offered a shop fit-up", async () => {
   // A single straight length has nothing to fit up in the shop. Offering it
   // was noise; waiting on it would be a false hold. Not applicable is not
@@ -267,6 +281,78 @@ test("the database and the chain agree on every spool's stage", async () => {
         "SELECT stage FROM reporting.spool_stage WHERE spool_key = $1", [s.id]);
       equal(sql.stage, js.headline, `${s.spool_no}: SQL says ${sql.stage}, chain says ${js.headline}`);
     }
+  });
+});
+
+test("a rejected shot keeps shop NDT open — in the chain and in SQL — until the repair is accepted", async () => {
+  await withProject(db, proj.id, async () => {
+    const { rows: shop } = await db.query(
+      `SELECT w.weld_uid FROM weld w WHERE w.spool_id = $1 AND w.shop_field = 'Shop' ORDER BY w.weld_no`, [spools[0].id]);
+    for (const [i, w] of shop.entries()) {
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: w.weld_uid, method: "RT", result: i === 0 ? "reject" : "accept" });
+    }
+    const stage = async () => (await db.query("SELECT stage FROM reporting.spool_stage WHERE spool_key = $1", [spools[0].id])).rows[0].stage;
+    const js = async () => pe.spoolStatus(db, { projectId: proj.id, spoolId: spools[0].id });
+    let s = await js();
+    equal([s.steps.find((x) => x.code === "shop_ndt").status, s.headline, await stage()], [IN_PROGRESS, "shop_weld", "shop_weld"],
+      "a rejected film is not a passed weld");
+    const { rows: [f] } = await db.query("SELECT is_examined, is_accepted FROM reporting.fact_weld WHERE weld_uid = $1", [shop[0].weld_uid]);
+    equal([f.is_examined, f.is_accepted], [true, false]);
+    // A second method on another weld, rejected at its first cycle while RT
+    // passed at its second: acceptance is per method, at each method's own latest cycle.
+    await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[0].weld_uid, method: "RT", result: "accept" });
+    if (shop[1]) {
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[1].weld_uid, method: "RT", result: "reject" });
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[1].weld_uid, method: "RT", result: "accept" });
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[1].weld_uid, method: "PT", result: "reject" });
+      const { rows: [g] } = await db.query("SELECT is_accepted FROM reporting.fact_weld WHERE weld_uid = $1", [shop[1].weld_uid]);
+      equal(g.is_accepted, false, "RT passed at cycle 2 does not hide PT rejected at cycle 1");
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[1].weld_uid, method: "PT", result: "accept" });
+    }
+    s = await js();
+    equal([s.steps.find((x) => x.code === "shop_ndt").status, s.headline, await stage()], [DONE, "shop_ndt", "shop_ndt"], "repaired and accepted");
+  });
+});
+
+test("a rejected field weld holds the spool's field welding and its machine's piping step until repaired", async () => {
+  const acts = await import("../../lib/db/repos/activities.mjs");
+  const spine = await import("../../lib/db/repos/spine.mjs");
+  await withProject(db, proj.id, async () => {
+    const tag = await spine.upsertTag(db, { projectId: proj.id, tagNo: "P-900", discipline: "equipment", kind: "rotating" });
+    await db.query("UPDATE line SET tag_id = $1 WHERE id = $2", [tag.id, lineId]);
+    const welder = await exec.upsertWelder(db, { projectId: proj.id, stampNo: "W-12", name: "رضایی" });
+    const { rows: all } = await db.query(
+      `SELECT w.weld_uid, w.shop_field, w.spool_id, (e.weld_uid IS NOT NULL) AS made FROM weld w
+         LEFT JOIN weld_execution e ON e.weld_uid = w.weld_uid WHERE w.line_id = $1 ORDER BY w.weld_no`, [lineId]);
+    const fieldWeld = all.find((w) => w.shop_field === "Field");
+    assert(fieldWeld, "the fixture has a field weld");
+    for (const w of all) {
+      if (!w.made) await exec.assignWeld(db, { projectId: proj.id, weldUid: w.weld_uid, welderId: welder.id,
+        weldedAt: "2026-08-06", process: "GTAW", position: "V", lineId });
+      const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM ndt_record WHERE weld_uid = $1", [w.weld_uid]);
+      if (!n.n) await exec.recordNdt(db, { projectId: proj.id, weldUid: w.weld_uid, method: "RT",
+        result: w.weld_uid === fieldWeld.weld_uid ? "reject" : "accept" });
+    }
+    const { createLoader } = await import("../../lib/db/loader.mjs");
+    // Both ways the platform asks: one tag, and a board's primed batch.
+    const piping = async () => {
+      const one = (await acts.tagStatus(db, { projectId: proj.id, tagId: tag.id })).steps.find((x) => x.code === "piping").status;
+      const loader = createLoader(db, proj.id);
+      await loader.prime([tag.id]);
+      const batch = (await acts.tagStatus(db, { projectId: proj.id, tagId: tag.id, loader })).steps.find((x) => x.code === "piping").status;
+      equal(batch, one, "primed and single agree");
+      return one;
+    };
+    const fieldStep = async () => (await pe.spoolStatus(db, { projectId: proj.id, spoolId: fieldWeld.spool_id })).steps.find((x) => x.code === "field_weld").status;
+    const sqlStage = async () => (await db.query("SELECT stage FROM reporting.spool_stage WHERE spool_key = $1", [fieldWeld.spool_id])).rows[0].stage;
+    const jsStage = async () => (await pe.spoolStatus(db, { projectId: proj.id, spoolId: fieldWeld.spool_id })).headline;
+    equal([await piping(), await fieldStep()], [IN_PROGRESS, IN_PROGRESS], "every weld made and shot, one field weld rejected");
+    assert(await sqlStage() !== "field_weld", "SQL does not report field welding done either");
+    equal(await sqlStage(), await jsStage());
+    await exec.recordNdt(db, { projectId: proj.id, weldUid: fieldWeld.weld_uid, method: "RT", result: "accept" });
+    equal([await piping(), await fieldStep()], [DONE, DONE], "the repair accepted");
+    equal(await sqlStage(), await jsStage());
+    await db.query("UPDATE line SET tag_id = NULL WHERE id = $1", [lineId]);
   });
 });
 
