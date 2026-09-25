@@ -44,6 +44,9 @@ import {
   recordManhours, reportIncident, updateIncident, requestPermit, recordGasTest, activatePermit, recordObservation,
   closeObservation,
 } from "../lib/db/repos/hse.mjs";
+import {
+  upsertAccount, setBaseline, reportProgress, postCost, upsertRisk, closeRisk, listRisks,
+} from "../lib/db/repos/controls.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -671,6 +674,74 @@ try {
         contractorId: mech.id, description: "Radiography barricade and signage exemplary", userId: user.id });
     }
     console.log("hse: 30 days of hours, 4 incidents, 4 permits (one expired, one SIMOPS), 4 observations");
+
+    // ── project controls: accounts, S-curves around today, cost, risks ──
+    //
+    //   civil and furnace mechanical: EV reported (progress report no.)
+    //   CW piping, electrical, instruments: EV counted by the platform under
+    //   a stated rule of credit (piping 70/30, E&I 60/40)
+    //   one invoice reversed as a duplicate
+    const dd = (k) => new Date(day0.getTime() + k * 86_400_000).toISOString().slice(0, 10);
+    const scurve = (start, end) => {
+      const span = end - start;
+      return [[0, 0], [0.1, 3], [0.25, 12], [0.45, 35], [0.65, 62], [0.85, 88], [1, 100]]
+        .map(([f, v]) => ({ date: dd(Math.round(start + f * span)), pct: v }));
+    };
+    const ACCOUNTS = [
+      ["CA-10-CIV", "Civil works & foundations", civil, 95_000_000, "manual", null, null, -330, 180],
+      ["CA-11-MEC", "Cracking furnaces — mechanical erection", mech, 180_000_000, "manual", null, null, -160, 330],
+      ["CA-60-PIP", "Cooling water piping (U-60)", mech, 42_000_000, "platform", "piping", 70, -150, 150],
+      ["CA-70-ELE", "Electrical installation", elec, 36_000_000, "platform", "electrical", 60, -200, 150],
+      ["CA-80-INS", "Instrumentation", elec, 28_000_000, "platform", "instrumentation", 60, -190, 150],
+    ];
+    const acc = {};
+    for (const [code, title, c, bac, evMethod, evDiscipline, credit, s0, s1] of ACCOUNTS) {
+      acc[code] = await upsertAccount(db, { projectId: p.id, code, title, contractorId: c.id, bac, evMethod, evDiscipline,
+        creditInstalledPct: credit });
+      if (!acc[code].baseline_rev) {
+        acc[code] = await setBaseline(db, { projectId: p.id, accountId: acc[code].id, points: scurve(s0, s1),
+          revision: "0", reason: "Level-3 schedule, IFC issue", userId: user.id });
+      }
+    }
+    const { rows: [haveCost] } = await db.query("SELECT count(*)::int AS n FROM cost_entry WHERE project_id = $1", [p.id]);
+    if (haveCost.n === 0) {
+      const COSTS = [
+        ["CA-10-CIV", -300, 6_500_000, "INV-C01-001"], ["CA-10-CIV", -210, 14_200_000, "INV-C01-004"],
+        ["CA-10-CIV", -120, 19_800_000, "INV-C01-007"], ["CA-10-CIV", -30, 16_400_000, "INV-C01-010"],
+        ["CA-11-MEC", -130, 9_000_000, "INV-C02-002"], ["CA-11-MEC", -40, 27_500_000, "INV-C02-005"],
+        ["CA-60-PIP", -90, 5_800_000, "INV-C02-003"], ["CA-60-PIP", -20, 8_300_000, "INV-C02-006"],
+        ["CA-70-ELE", -120, 4_600_000, "INV-C03-001"], ["CA-70-ELE", -30, 8_900_000, "INV-C03-004"],
+        ["CA-80-INS", -100, 3_700_000, "INV-C03-002"], ["CA-80-INS", -25, 6_600_000, "INV-C03-005"],
+      ];
+      for (const [code, k, amount, refNo] of COSTS) {
+        await postCost(db, { projectId: p.id, accountId: acc[code].id, postedOn: dd(k), amount, refNo, userId: user.id });
+      }
+      await postCost(db, { projectId: p.id, accountId: acc["CA-11-MEC"].id, postedOn: dd(-10), amount: -2_500_000,
+        refNo: "CN-C02-001", note: "INV-C02-005 line 4 billed twice (scaffolding)", userId: user.id });
+      for (const [code, k, pct, source] of [["CA-10-CIV", -35, 58, "PR-W32"], ["CA-10-CIV", -7, 64, "PR-W36"],
+        ["CA-11-MEC", -7, 18, "PR-W36"]]) {
+        await reportProgress(db, { projectId: p.id, accountId: acc[code].id, asOf: dd(k), pct, source, userId: user.id });
+      }
+    }
+    const RISKS = [
+      ["R-01", "Late delivery of furnace radiant coils (centrifugally cast alloy, long lead)", "Procurement", "Procurement manager",
+        "CA-11-MEC", 4, 5, "Expedite at foundry; weekly vendor inspection; re-sequence convection module erection", dd(-4), 3, 4],
+      ["R-02", "Summer heat and dust storms cut productivity (Asalouyeh, Jun–Sep)", "Site", "Construction manager",
+        null, 4, 3, "Night shift for heavy lifts and concrete pours; shaded rest areas", dd(40), 3, 2],
+      ["R-03", "Charge gas compressor vendor data late — foundation design on hold", "Engineering", "Rotating equipment lead",
+        "CA-10-CIV", 3, 4, null, null, null, null],
+      ["R-04", "EUR/IRR movement on local purchases", "Commercial", "Project controls manager",
+        null, 3, 3, "Price local packages in EUR where possible; monthly exposure report", dd(25), 2, 3],
+      ["R-05", "Shortage of 6G GTAW-qualified welders for alloy piping", "Resources", "Welding coordinator",
+        "CA-60-PIP", 3, 4, "Qualify 12 additional welders at site test shop", dd(-20), 1, 4],
+    ];
+    for (const [code, title, category, owner, a, P, I, response, dueOn, rp, ri] of RISKS) {
+      await upsertRisk(db, { projectId: p.id, code, title, category, owner, accountId: a ? acc[a].id : null,
+        probability: P, impact: I, response, dueOn, residualP: rp, residualI: ri });
+    }
+    const r5 = (await listRisks(db, { projectId: p.id, today: dd(0) })).find((r) => r.code === "R-05");
+    if (r5.status === "open") await closeRisk(db, { projectId: p.id, riskId: r5.id, closedOn: dd(-18) });
+    console.log("controls: 5 accounts (2 reported, 3 platform-counted), cost with one reversal, 5 risks");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks

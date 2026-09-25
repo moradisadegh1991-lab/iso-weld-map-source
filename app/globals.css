@@ -503,3 +503,4 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .kpi .l{font-size:11px;color:var(--dim)}
 .kpi .b{font-size:10px;color:var(--dim)}
 .kpi.bad .v{color:var(--bad)} .kpi.warn .v{color:var(--warn)} .kpi.ok .v{color:var(--ok)}
+.dtable td.ok{color:var(--ok)} .dtable td.warn{color:var(--warn)} .dtable td.bad{color:var(--bad)}
