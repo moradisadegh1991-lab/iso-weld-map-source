@@ -100,7 +100,7 @@ function Shortages({ rows }) {
       <p className="muted sm">موجودی قرنطینه (بدون MIR یا MTC پذیرفته) از کسری کم نمی‌شود — لوله‌ای که نمی‌شود جوش داد موجودی نیست.</p>
       <div className="wrap">
         <table className="dtable">
-          <thead><tr><th>کالا</th><th>منبع</th><th>نیاز</th><th>حواله‌شده</th><th>قابل حواله</th><th>قرنطینه</th><th>کسری</th><th>دسترسی</th></tr></thead>
+          <thead><tr><th>کالا</th><th>منبع</th><th>نیاز</th><th>حواله‌شده</th><th>قابل حواله</th><th>قرنطینه</th><th>کسری</th><th>دسترسی</th><th>در راه (PO)</th></tr></thead>
           <tbody>
             {rows.filter((r) => r.required > 0).map((r) => (
               <tr key={r.itemId}>
@@ -109,6 +109,9 @@ function Shortages({ rows }) {
                 <td className="mono">{r.issuable}</td><td className="mono">{r.held}</td>
                 <td className="mono">{r.shortfall > 0 ? <span className="pill bad">{r.shortfall}</span> : <span className="pill ok">0</span>}</td>
                 <td className="mono">{r.availabilityPct}%</td>
+                <td className="mono sm">{r.onOrder?.qty > 0
+                  ? <a href="/procurement">{r.onOrder.qty} {r.uom}{r.onOrder.nextOn && ` · ${new Date(r.onOrder.nextOn).toLocaleDateString("fa-IR")}`}</a>
+                  : r.shortfall > 0 ? <span className="pill bad">سفارشی نیست</span> : "—"}</td>
               </tr>
             ))}
           </tbody>

@@ -139,6 +139,14 @@ function Thread({ t, open }) {
             mid={`${t.coating.pct}% · ${t.coating.next.join("، ") || "—"}`}
             right={t.coating.ready ? <span className="pill ok">تحویل‌شده</span> : null} />}
         </Section>
+        <Section title="خرید" href="/procurement" empty={!t.purchase.length}>
+          {t.purchase.map((l) => (
+            <Line key={l.id} left={<span className="mono">{l.po_no}</span>}
+                  mid={`${l.vendor_code} · تحویل ${fa(l.forecast_on || l.promised_on)}${l.float_days !== null ? ` · شناوری ${l.float_days} روز` : ""}`}
+                  right={l.received_qty >= l.qty ? <span className="pill ok">رسید سایت</span>
+                    : l.float_days !== null && l.float_days < 0 ? <span className="pill bad">دیرتر از نیاز</span> : null} />
+          ))}
+        </Section>
         <Section title="Punch و NCR" href="/quality" empty={!t.punch.length && !t.ncrs.length}>
           {t.punch.map((p) => (
             <Line key={p.id} left={<span className="mono">{p.punch_no}</span>} mid={`${p.category} · ${p.description}`}
@@ -187,3 +195,5 @@ function Link({ no, open }) {
   return <a href={`/asset?tag=${encodeURIComponent(no)}`} className="mono cy"
             onClick={(e) => { e.preventDefault(); open(no); }}>{no}</a>;
 }
+
+const fa = (d) => (d ? new Date(d).toLocaleDateString("fa-IR") : "—");

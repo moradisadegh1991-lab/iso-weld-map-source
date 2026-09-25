@@ -77,7 +77,8 @@ test("readiness scores identity; an absent link is 'none recorded', not a failur
 test("what the platform does not hold yet is named, not shown as complete", async () => {
   await withProject(db, P, async () => {
     const t = await assetThread(db, { projectId: P, tagNo: "P-1203A" });
-    equal(t.notHeld.map((n) => n.key), ["vendor", "procurement", "cmms", "dcs"]);
+    equal(t.notHeld.map((n) => n.key), ["vendor", "cmms", "dcs"], "procurement is held now (migration 025)");
+    equal(t.purchase, [], "and a tag nobody has ordered shows no purchase, not a missing module");
   });
 });
 

@@ -50,6 +50,8 @@ import {
 import { raisePunch, punchAction, raiseNcr, ncrAction } from "../lib/db/repos/quality.mjs";
 import { ensureUser } from "../lib/db/repos/projects.mjs";
 import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
+import * as prc from "../lib/db/repos/procurement.mjs";
+import * as dcr from "../lib/db/repos/doc-control.mjs";
 import { upsertPackage as upsertTestPackage, addLines as addPackLines } from "../lib/db/repos/completions.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
@@ -831,6 +833,109 @@ try {
     if (!packed.has(cwLine.id)) await addPackLines(db, { projectId: p.id, packageId: tp1.id, lineIds: [cwLine.id] });
     if (!packed.has(iaLine.id)) await addPackLines(db, { projectId: p.id, packageId: tp2.id, lineIds: [iaLine.id] });
     console.log("completions: class A1CW (10 barg), TP-60-001 (15 barg, held by the walkdown), TP-60-002 (no Rr, no drawing)");
+
+    // ── procurement: POs behind the warehouse receipts and the machines ──
+    //
+    //   PO-P-0031  10" pipe, 300 m: the two receipts already in the
+    //              warehouse (96 + 72 m) are linked to it; 132 m still coming
+    //   PO-E-0007  cable, fully received
+    //   PO-M-0101  quench-oil pumps: ITP returned code 3 and not resubmitted,
+    //              so no FAT; forecast after the site's need — float negative
+    //   PO-M-0102  charge gas compressor: FAT passed, shipped, arrived
+    //   PO-M-0103  propylene compressor: no need date — float unknown
+    const { rows: [havePo] } = await db.query("SELECT count(*)::int AS n FROM purchase_order WHERE project_id = $1", [p.id]);
+    if (havePo.n === 0) {
+      const V = {};
+      for (const [code, name, country] of [["V-PIPE", "Supplier A (demo)", "IR"], ["V-CBL", "Supplier C (demo)", "IR"],
+        ["V-PUMP", "Pump vendor (demo)", "IT"], ["V-COMP", "Compressor vendor (demo)", "DE"]]) {
+        V[code] = await prc.upsertVendor(db, { projectId: p.id, code, name, country });
+      }
+      const mkPo = (poNo, v, title, currency, placed) => prc.createPo(db, { projectId: p.id, poNo, vendorId: V[v].id, title,
+        currency, placedOn: dd(placed), userId: user.id });
+      const tagOf2 = async (no) => (await db.query("SELECT id FROM tag WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0].id;
+
+      const poPipe = await mkPo("PO-P-0031", "V-PIPE", "Carbon steel pipe, CW system", "EUR", -120);
+      const lPipe = await prc.addPoLine(db, { projectId: p.id, poId: poPipe.id, itemId: it["PIPE-10-S40-A106B"].id, qty: 300,
+        unitPrice: 118, promisedOn: dd(-40), needOn: dd(10) });
+      await prc.setForecast(db, { projectId: p.id, poLineId: lPipe.id, forecastOn: dd(12), source: "Mill schedule, week 38", userId: user.id });
+      await db.query("UPDATE material_lot SET po_line_id = $2 WHERE project_id = $1 AND po_ref = 'PO-P-0031'", [p.id, lPipe.id]);
+
+      const poCbl = await mkPo("PO-E-0007", "V-CBL", "LV power cable", "EUR", -90);
+      const lCbl = await prc.addPoLine(db, { projectId: p.id, poId: poCbl.id, itemId: it["CBL-3C35-XLPE"].id, qty: 1000,
+        promisedOn: dd(-30), needOn: dd(-10) });
+      await db.query("UPDATE material_lot SET po_line_id = $2 WHERE project_id = $1 AND po_ref = 'PO-E-0007'", [p.id, lCbl.id]);
+
+      const poPump = await mkPo("PO-M-0101", "V-PUMP", "Quench oil circulation pumps", "EUR", -200);
+      const pumpLines = [];
+      for (const no of ["P-1203A", "P-1203B"]) {
+        pumpLines.push(await prc.addPoLine(db, { projectId: p.id, poId: poPump.id, tagId: await tagOf2(no), qty: 1,
+          unitPrice: 412000, promisedOn: dd(-5), needOn: dd(10), fatRequired: true }));
+      }
+      for (const l of pumpLines) {
+        await prc.setForecast(db, { projectId: p.id, poLineId: l.id, forecastOn: dd(6), source: "Vendor progress report #7", userId: user.id });
+        await prc.setForecast(db, { projectId: p.id, poLineId: l.id, forecastOn: dd(20), source: "Casting re-poured after RT — expediting visit", userId: user.id });
+      }
+      const ds = await prc.addVendorDoc(db, { projectId: p.id, poId: poPump.id, docCode: "DS", title: "Pump datasheet", dueOn: dd(-150) });
+      await prc.submitDoc(db, { projectId: p.id, docId: ds.id, revision: "0", submittedOn: dd(-155), userId: user.id });
+      await prc.returnDoc(db, { projectId: p.id, docId: ds.id, returnedOn: dd(-140), code: 1 });
+      const itp = await prc.addVendorDoc(db, { projectId: p.id, poId: poPump.id, docCode: "ITP", title: "Inspection and test plan (API 610 performance test)",
+        dueOn: dd(-60), beforeFat: true });
+      await prc.submitDoc(db, { projectId: p.id, docId: itp.id, revision: "A", submittedOn: dd(-50), userId: user.id });
+      await prc.returnDoc(db, { projectId: p.id, docId: itp.id, returnedOn: dd(-35), code: 3, comment: "NPSH test and 4-hour mechanical run missing" });
+      await prc.addVendorDoc(db, { projectId: p.id, poId: poPump.id, docCode: "IOM", title: "Installation, operation and maintenance manual", dueOn: dd(-3) });
+
+      const poComp = await mkPo("PO-M-0102", "V-COMP", "Charge gas compressor train", "EUR", -400);
+      const lComp = await prc.addPoLine(db, { projectId: p.id, poId: poComp.id, tagId: await tagOf2("K-2101"), qty: 1,
+        promisedOn: dd(-60), needOn: dd(-45), fatRequired: true });
+      const ga = await prc.addVendorDoc(db, { projectId: p.id, poId: poComp.id, docCode: "ITP", title: "Inspection and test plan", dueOn: dd(-300), beforeFat: true });
+      await prc.submitDoc(db, { projectId: p.id, docId: ga.id, revision: "0", submittedOn: dd(-310), userId: user.id });
+      await prc.returnDoc(db, { projectId: p.id, docId: ga.id, returnedOn: dd(-290), code: 2, comment: "Minor comments" });
+      await prc.recordFat(db, { projectId: p.id, poLineId: lComp.id, inspectedOn: dd(-90), result: "pass", irnNo: "IRN-M-0102-01",
+        inspector: "TPI (demo)", userId: user.id });
+      const shp = await prc.createShipment(db, { projectId: p.id, shipmentNo: "BL-HAM-2026-0417", poId: poComp.id, mode: "sea",
+        shippedOn: dd(-80), etaOn: dd(-50), lines: [{ poLineId: lComp.id, qty: 1 }], userId: user.id });
+      await prc.arriveShipment(db, { projectId: p.id, shipmentId: shp.id, arrivedOn: dd(-48) });
+
+      const poRef = await mkPo("PO-M-0103", "V-COMP", "Propylene refrigeration compressor", "EUR", -150);
+      await prc.addPoLine(db, { projectId: p.id, poId: poRef.id, tagId: await tagOf2("K-5101"), qty: 1, promisedOn: dd(120), fatRequired: true });
+    }
+    console.log("procurement: 5 POs, pipe and cable receipts linked, pump ITP returned code 3, compressor arrived");
+
+    // ── document control: the register the uploaded drawing is checked against ──
+    //
+    //   SW 265022A      the demo isometric: Rev 0 IFC two months ago, Rev 1
+    //                   IFC five days ago — the saved weld register was
+    //                   extracted from Rev 0, and the page says so
+    //   60-PID-001      client approval required: IFA returned code 2, then IFC
+    //   21-PID-001      IFA sent, the client's response is overdue
+    //   11-GA-F1101A    vendor GA, planned IFC passed with nothing issued
+    const { rows: [haveMdr] } = await db.query("SELECT count(*)::int AS n FROM mdr_document WHERE project_id = $1", [p.id]);
+    if (haveMdr.n === 0) {
+      const iso = await dcr.upsertMdr(db, { projectId: p.id, docNo: "SW 265022A", title: "Isometric — cooling water return 28\"",
+        discipline: "piping", docType: "ISO", originator: "EPC", subsystemId: sub["60-01"].id, plannedIfcOn: dd(-70) });
+      await dcr.issueRevision(db, { projectId: p.id, mdrId: iso.id, revision: "0", purpose: "IFC", issuedOn: dd(-60), userId: user.id });
+      await dcr.issueRevision(db, { projectId: p.id, mdrId: iso.id, revision: "1", purpose: "IFC", issuedOn: dd(-5),
+        note: "Support SH-0933 moved 600 mm; field weld FW-3 relocated", userId: user.id });
+
+      const pid60 = await dcr.upsertMdr(db, { projectId: p.id, docNo: "60-PID-001", title: "P&ID — cooling water supply and return",
+        discipline: "process", docType: "P&ID", originator: "EPC", subsystemId: sub["60-01"].id, approvalRequired: true, plannedIfcOn: dd(-90) });
+      const rB = await dcr.issueRevision(db, { projectId: p.id, mdrId: pid60.id, revision: "B", purpose: "IFA", issuedOn: dd(-120), userId: user.id });
+      const t1 = await dcr.createTransmittal(db, { projectId: p.id, transmittalNo: "TR-EPC-CL-0041", toParty: "Client",
+        purpose: "approval", sentOn: dd(-119), responseDue: dd(-105), revisionIds: [rB.id], userId: user.id });
+      const [i1] = (await dcr.transmittals(db, { projectId: p.id })).find((x) => x.id === t1.id).items;
+      await dcr.recordReturn(db, { projectId: p.id, itemId: i1.id, code: 2, returnedOn: dd(-100), comment: "Add high-point vents" });
+      await dcr.issueRevision(db, { projectId: p.id, mdrId: pid60.id, revision: "0", purpose: "IFC", issuedOn: dd(-85), userId: user.id });
+
+      const pid21 = await dcr.upsertMdr(db, { projectId: p.id, docNo: "21-PID-001", title: "P&ID — charge gas compressor first stage",
+        discipline: "process", docType: "P&ID", originator: "EPC", subsystemId: sub["21-01"].id, approvalRequired: true, plannedIfcOn: dd(-10) });
+      const r21 = await dcr.issueRevision(db, { projectId: p.id, mdrId: pid21.id, revision: "A", purpose: "IFA", issuedOn: dd(-30), userId: user.id });
+      await dcr.createTransmittal(db, { projectId: p.id, transmittalNo: "TR-EPC-CL-0057", toParty: "Client", purpose: "approval",
+        sentOn: dd(-29), responseDue: dd(-15), revisionIds: [r21.id], userId: user.id });
+
+      await dcr.upsertMdr(db, { projectId: p.id, docNo: "11-GA-F1101A", title: "General arrangement — cracking furnace F-1101A",
+        discipline: "mechanical", docType: "GA", originator: "vendor", subsystemId: sub["11-01"].id, plannedIfcOn: dd(-20) });
+    }
+    console.log("documents: 4 in the register — the demo isometric superseded by Rev 1, one client response overdue");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks

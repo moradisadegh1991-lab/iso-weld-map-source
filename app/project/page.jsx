@@ -95,6 +95,7 @@ const HSE = [
 /** Quality: when an overdue NCR goes to the project manager. No default. */
 const QUALITY = [
   ["ncr_escalation_days", "مهلت تشدید NCR معوق (روز)", "1", "بعد از این تعداد روز تأخیر، NCR به مدیر پروژه می‌رود"],
+  ["vdrl_resubmit_days", "مهلت ارسال مجدد مدرک فروشندهٔ کد ۳ (روز)", "1", "طبق قرارداد خرید؛ بعد از آن مدرک معوق است"],
 ];
 
 /** Instrument calibration tolerance, used where a datasheet gives none. */
@@ -262,7 +263,7 @@ export default function ProjectPage() {
           ))}
         </div>
 
-        <h2 style={{ marginTop: 8 }}>کیفیت — Punch و NCR</h2>
+        <h2 style={{ marginTop: 8 }}>کیفیت و خرید — مهلت‌ها</h2>
         <div className="grid2">
           {QUALITY.map(([k, label, step, hint]) => (
             <div className="field" key={k}>
