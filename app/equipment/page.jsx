@@ -143,7 +143,7 @@ export default function EquipmentPage() {
               <tbody>
                 {data.unclassified.map((t) => (
                   <tr key={t.id}>
-                    <td className="mono">{t.tag_no}</td>
+                    <td className="mono"><a className="cy" href={`/asset?tag=${encodeURIComponent(t.tag_no)}`}>{t.tag_no}</a></td>
                     <td>{t.description || "—"}</td>
                     <td style={{ display: "flex", gap: 6 }}>
                       {Object.entries(KIND_FA).map(([k, v]) => (
@@ -201,7 +201,7 @@ export default function EquipmentPage() {
               <tbody>
                 {data.tags.map((t) => (
                   <tr key={t.id}>
-                    <td className="mono">{t.tag_no}</td>
+                    <td className="mono"><a className="cy" href={`/asset?tag=${encodeURIComponent(t.tag_no)}`}>{t.tag_no}</a></td>
                     <td>{t.description || "—"}</td>
                     <td className={t.kind ? "" : "muted"}>{KIND_FA[t.kind] || "نامشخص"}</td>
                     <td className="mono">{t.subsystem || "—"}</td>

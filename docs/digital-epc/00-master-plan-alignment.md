@@ -1,0 +1,82 @@
+# Digital EPC Master Plan — نقشهٔ تطبیق با آنچه ساخته شده
+
+مجتمع اتیلن ۵۰۰ هزار تن در سال، خوراک اتان، Utilities داخلی، ذخیره‌سازی و صادرات.
+
+این سند Master Plan کارفرما/مشاور را بخش‌به‌بخش با پلتفرم فعلی مقایسه می‌کند:
+چه چیزی **ساخته و آزموده شده**، چه چیزی **نیمه‌کاره** است و چه چیزی **شروع نشده**.
+هر ادعای «ساخته شده» به یک فایل و یک تست اشاره می‌کند؛ چیزی که تست ندارد
+ساخته‌شده حساب نمی‌شود.
+
+قواعد حاکم Master Plan (Data First، یک Asset یک شناسه، UNKNOWN به‌جای حدس،
+Assumption Register، امضای انسانی، AI فقط Decision Support، سیستم موجود اول)
+در `.claude/skills/epc-platform/SKILL.md` به قواعد کار این مخزن اضافه شده‌اند.
+
+---
+
+## ۱. آنچه با Master Plan هم‌راستاست و ساخته شده
+
+| بخش Master Plan | در پلتفرم | فایل / تست |
+|---|---|---|
+| §3 یک Asset ID واحد، §55 Digital Thread | ستون فقرات `tag` / `subsystem`؛ هر آیتم هر رشته با **id** به تگ وصل است، نه با کپی رشتهٔ تگ | `007_spine.sql`، `db/test/spine.mjs` |
+| §5 سلسله‌مراتب | پروژه → واحد (با تراز گرید اختصاصی) → سیستم/ساب‌سیستم → تگ | `009`، `012` |
+| §7، §11 (C-31) Isometric → Joint Register | استخراج با مدل + موتور قطعی B31.3، رجیستر جوش امضاشده با هش و رویژن | `lib/engine.js`، `db/test/run.mjs` |
+| §12 Joint History، §13 Welder | جوشکار، صلاحیت، ثبت جوش، NDT، تعمیر؛ سیکل تعمیر | `003`، `db/test/execution.mjs` |
+| C17 Spool Tracking | زنجیرهٔ اسپول: صدور → فیت‌آپ → جوش کارگاهی* → NDT* → ارکشن → جوش سایت* → ساپورت → تست → رنگ و عایق* → تحویل (*از داده خوانده می‌شود) | `precedence.mjs`، `piping-execution.mjs` |
+| §21 MC readiness (پایه) | موتور پیش‌نیاز: «چه کاری امروز شروع می‌شود» و «چرا آماده نیست» تا ریشه، برای هر تگ | `db/test/precedence.mjs` |
+| C41 فونداسیون و بتن | فونداسیون روی ستون فقرات؛ پذیرش مقاومت ACI 318؛ فونداسیون، مرحلهٔ «فونداسیون» تجهیز و سازه را جواب می‌دهد | `lib/civil/concrete.mjs`، `db/test/civil.mjs` |
+| سازهٔ فلزی | شاقولی AISC 303 / EN 1090-2؛ پیش‌تنیدگی پیچ AISC 360 / RCSC / EN 1090-2 | `lib/structural/steel.mjs` |
+| §10، C-33 لیست کابل | ورود لیست کابل با قاعده؛ IR طبق IEC 60364-6؛ مرحلهٔ «برق» تجهیز از کابل‌هایش | `lib/electrical/cable.mjs` |
+| §9، C-32 Instrument Index | خواندن تگ با جدول ISA 5.1؛ لوپ؛ کالیبراسیون؛ لوپ چک یک‌بار برای لوپ | `lib/instrumentation/isa.mjs` |
+| رنگ و عایق | ISO 8501-1، نقطهٔ شبنم، ISO 19840، نگه‌داشت عایق تا تست (B31.3 §345.3.1) | `lib/coating/coating.mjs` |
+| §33 احراز هویت و نقش‌ها | ورود، نقش‌ها، RLS جداسازی پروژه در خود دیتابیس | `010`، `db/test/auth.mjs` |
+| §37 Power BI | لایهٔ `reporting.*` با `security_invoker`؛ `fact_progress` چندرشته‌ای (جوش، کابل، ابزار) و `kpi_subsystem_readiness` | `006`، `015`، `016` |
+| §65 No-Hallucination | هر موتور در نبود داده حکم نمی‌دهد (F-10) و دلیلش را می‌گوید | `docs/epc-llm/04-engine-findings.md` |
+
+## ۲. نیمه‌کاره
+
+| بخش Master Plan | وضعیت | کمبود |
+|---|---|---|
+| §4 Asset Master | تگ با شرح، نوع، ساب‌سیستم | کلاس ISO 14224، Criticality، سازنده، مدل، سریال، شرایط طراحی، شناسه‌های CMMS/DCS/Historian |
+| §8 Document Control / CDE | جدول `document` با شماره و رویژن برای ایزومتریک | متادیتای کامل، وضعیت‌ها (IFA/IFC/As-Built)، ذخیرهٔ فایل (MinIO)، «در تاریخ X کدام رویژن معتبر بود» |
+| §22 Commissioning | آمادگی ساب‌سیستم از روی داده | Test Pack، چک‌لیست، MC Certificate، RFC/RFSU |
+| §18 QA/QC | NDT، رد/قبول موتورها | ITP، MIR/WIR، **NCR** و **Punch** |
+| §47 EVM | پیشرفت فیزیکی از داده | وزن‌دهی WBS، PV/EV/AC، SPI/CPI |
+
+## ۳. شروع نشده (به ترتیب پیشنهادی Master Plan)
+
+1. ~~Assumption Register + Missing Information (§2.51–2.53)~~ — **ساخته شد**:
+   `018_assumptions.sql`، `lib/db/repos/assumptions.mjs`، `/assumptions`، `db/test/assumptions.mjs`.
+   فرض با رویژن و تصمیم امضاشده؛ تاریخچه append-only در سطح دیتابیس؛ اطلاعات ناقص از همان
+   داده‌ای حساب می‌شود که موتورها با آن حکم می‌دهند.
+2. ~~صفحهٔ Asset / Digital Readiness (§60، §79)~~ — **ساخته شد**: `lib/db/repos/asset.mjs`، `/asset?tag=`،
+   `db/test/asset.mjs`. امتیاز فقط روی «هویت» (ساب‌سیستم، نوع، شرح)؛ حوزهٔ بی‌داده «ثبت نشده» است نه
+   «ناقص»، و حوزه‌هایی که ماژولشان ساخته نشده (Vendor، Procurement، CMMS، DCS) جدا نام برده می‌شوند.
+3. Punch و NCR با تشدید خودکار (§19، C8–C9، C26).
+4. QR برای تگ، اسپول، کابل، ابزار (§17) و PWA آفلاین برای سایت (§15، C11).
+5. Test Pack و MC Package خودکار از پیش‌نیازها (§20–21، C19–C21).
+6. Procurement: MR → PO → FAT → حمل → رسید سایت (§11، §29)، و Vendor Data Template با اعتبارسنجی (§12–13).
+7. Material Traceability: Heat Number / MTC تا اسپول و جوش (§14).
+8. Handover به CMMS با ساختار ISO 14224 (§24–27، §43–44).
+9. خواندن P&ID و SLD (C-32، C-33) — همان الگوی ایزومتریک: مدل می‌خواند، موتور تصمیم می‌گیرد، انسان امضا می‌کند.
+10. خاکبرداری، داربست (C-37 تا C-40) — «Preliminary / Calculated / Survey-Verified» جدا.
+11. Historian/OPC UA، انرژی، Production Accounting، ذخیره و صادرات (§24–38) — فاز بهره‌برداری.
+12. RAG با قاعدهٔ «بدون منبع، بدون جواب» (§16–17، §41).
+
+## ۴. تفاوت فناوری با Master Plan — آگاهانه
+
+Master Plan پشتهٔ FastAPI + React + n8n + MinIO + Qdrant را پیشنهاد می‌کند. این
+پلتفرم روی Next.js (Node) + PostgreSQL ساخته شده است. طبق قاعدهٔ خود Master
+Plan («سیستم موجود اول»، «بدون بازنویسی بی‌دلیل») بازنویسی نمی‌شود:
+
+- **PostgreSQL مرکزی** — همان تصمیم Master Plan؛ با RLS برای جداسازی پروژه.
+- **REST API** — همهٔ ماژول‌ها از `app/api/*` در دسترس‌اند؛ n8n می‌تواند
+  مستقیم آنها را صدا بزند (Webhook / HTTP Request) بدون تغییر معماری.
+- **Python** جایی اضافه می‌شود که واقعاً بهتر است: پردازش نقشه (Vector/OCR)،
+  یادگیری ماشین نگهداری پیشگویانه — به‌صورت سرویس جدا کنار همین دیتابیس.
+- **MinIO** هنگام ساخت ماژول مدارک و عکس‌ها اضافه می‌شود؛ فایل‌های بزرگ هرگز در
+  PostgreSQL ذخیره نمی‌شوند (قاعدهٔ §48).
+
+## ۵. آنچه عمداً انجام نمی‌شود (§62)
+
+Digital Twin گران پیش از Asset Master؛ AI پیش از کیفیت داده؛ اتصال هر چیز به
+DCS/SIS؛ Agent با اجازهٔ نوشتن روی داده‌های مهندسی بدون تأیید انسانی.

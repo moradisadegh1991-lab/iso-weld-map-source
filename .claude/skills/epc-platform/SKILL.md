@@ -68,3 +68,48 @@ engine's output — otherwise every future run agrees with today's bugs.
 `npm run db:test` · `npm run eval:check` · `npm run build`.
 A new engine gap gets its eval case **before** the fix, then
 `npm run eval:update`, then a row in `docs/epc-llm/04-engine-findings.md`.
+
+## The Digital EPC master plan these rules serve
+
+The owner's master plan (docs/digital-epc/00-master-plan-alignment.md maps
+it section by section against what is built) sets the direction. Its rules
+that bind every change here:
+
+- **Data first, then automation, then analytics, then AI.** A feature that
+  needs data the platform does not yet hold reliably is not started by
+  bolting a model on; the data model comes first.
+- **One asset, one identity, one thread.** Every discipline's item hangs off
+  the spine (`tag`, `subsystem`) by id — never by a copied tag string. A
+  new module that keeps its own tag list is the "each department has its own
+  tag" failure the plan names as risk 01.
+- **One entry, many outputs.** If a value already exists anywhere in the
+  database, a screen that asks a person to type it again is a defect. Steps
+  the data answers are derived and refuse a hand tick (as welds, pours,
+  surveys, IR tests, calibrations and coatings already do).
+- **UNKNOWN, never a guess.** A missing project fact is recorded as unknown
+  and appears in the missing-information register with the discipline that
+  owns it and what it blocks. Do not default a spec value (curing period,
+  erection standard, circuit voltage, tolerances…); do not infer design
+  parameters from capacity, tag prefixes or tag letters beyond what ISA 5.1
+  itself states.
+- **Assumptions are data.** A project assumption lives in the assumption
+  register with a status (Proposed → Approved / Rejected / Superseded),
+  an owner and a revision history; changing one is a new revision, never a
+  silent edit.
+- **Label what a value is.** Verified project data, engineering input,
+  calculated value, AI-generated result, user-provided data and pending
+  validation are different things, and a screen must not present an
+  estimate as a verified quantity.
+- **Human sign-off stays human.** Engineering release, test acceptance, NCR
+  closure, mechanical completion, commissioning readiness, scaffold and
+  structural adequacy: the platform prepares and checks, a person signs.
+  Sign-off steps (`ready`, loop checks) are refused while anything they
+  certify is open.
+- **AI is decision support.** It never writes setpoints, commands DCS/SIS,
+  or closes a record on its own. A retrieval answer with no source is not
+  an answer ("No source → no answer").
+- **Existing systems first.** Integrate with the project's ERP, CMMS, DMS,
+  historian and schedule before replacing any of them; this platform is
+  authoritative only for what it owns.
+- **OT stays segregated.** Nothing here connects to a control or safety
+  network; operational data arrives through the historian/DMZ layer.

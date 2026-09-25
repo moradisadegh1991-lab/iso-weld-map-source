@@ -36,6 +36,7 @@ import {
   upsertSystem, assignCoating, recordCoating, recordCoatingActivity,
 } from "../lib/db/repos/coating.mjs";
 import { minReadings } from "../lib/coating/coating.mjs";
+import { addBaseline, decideAssumption, listAssumptions } from "../lib/db/repos/assumptions.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -527,6 +528,14 @@ try {
       }
     }
     console.log(`coating: 2 systems, ${WORK.length} items`);
+
+    // ── the master plan's baseline assumptions; the feed one approved ──
+    await addBaseline(db, { projectId: p.id, userId: user.id });
+    const feed = (await listAssumptions(db, { projectId: p.id })).find((a) => a.code === "A-003");
+    if (feed.status === "proposed") {
+      await decideAssumption(db, { projectId: p.id, assumptionId: feed.id, status: "approved", userId: user.id });
+    }
+    console.log("assumptions: master plan baseline");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks
