@@ -11,7 +11,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import jsQR from "jsqr";
 import { fieldUrl, parseFieldCode, qrMatrix, qrSvg } from "../../lib/field/qr.mjs";
-import { opProblems, newOp, inCaptureOrder } from "../../lib/field/ops.mjs";
+import { opProblems, newOp, inCaptureOrder, parseCalPoints, splitReadings } from "../../lib/field/ops.mjs";
+import { judgeIr } from "../../lib/electrical/cable.mjs";
+import { judgeCalibration } from "../../lib/instrumentation/isa.mjs";
 import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
 
@@ -73,6 +75,22 @@ test("an operation is checked on the phone as it will be on the server", async (
   equal([op.opId, op.capturedAt], [ID, "2026-09-20T09:00:00.000Z"]);
   equal(inCaptureOrder([{ capturedAt: "2026-09-20T10:00Z" }, { capturedAt: "2026-09-20T09:00Z" }]).map((o) => o.capturedAt),
     ["2026-09-20T09:00Z", "2026-09-20T10:00Z"]);
+});
+
+test("IR readings and calibration points are read on the phone as the server reads them", async () => {
+  equal(splitReadings("2000, >2000  ∞"), ["2000", ">2000", "∞"]);
+  equal(parseCalPoints("0:4.01 12.5:12"), [{ applied: 0, output: 4.01 }, { applied: 12.5, output: 12 }]);
+  equal([parseCalPoints("0:4 12.5"), parseCalPoints("0:x"), parseCalPoints(":4"), parseCalPoints(""), parseCalPoints("0:4:5")],
+    [null, null, null, null, null], "a typo like 0:4:5 is refused, not read as 0:4");
+  const ir = { ...base, kind: "cable_ir", payload: { cableId: "c", testVoltageV: 500, readings: "2000 2000 2000", testedOn: "2026-09-20" } };
+  equal(opProblems(ir, { today: "2026-09-25" }), []);
+  equal(opProblems({ ...ir, payload: { ...ir.payload, testVoltageV: -5 } }).length, 1);
+  equal(opProblems({ ...ir, payload: { ...ir.payload, testedOn: "2026-09-26" } }, { today: "2026-09-25" }).length, 1, "a test in the future");
+  equal(opProblems({ ...base, kind: "loop_check", payload: { loopNo: "L", checkedOn: "2026-09-26" } }, { today: "2026-09-25" }).length, 1);
+  equal(opProblems({ ...ir, payload: { ...ir.payload, readings: " , " } }).length, 1);
+  const cal = { ...base, kind: "instrument_cal", payload: { instrumentId: "i", points: "0:4 5:8", calibratedOn: "2026-09-20" } };
+  equal(opProblems(cal), []);
+  equal(opProblems({ ...cal, payload: { ...cal.payload, points: "0:4 5" } }).length, 1, "a half-typed point");
 });
 
 // ── against the database ─────────────────────────────────────────────────
@@ -181,6 +199,69 @@ test("an error inside an operation's transaction is its refusal, and the batch g
   assert(/قالب/.test(r[1].error), r[1].error);
   const { rows: [who] } = await db.query("SELECT current_user AS u, current_setting('app.project_id', true) AS p");
   equal(who.p || "", "", "no project left bound after the batch");
+});
+
+// ── cables and instruments ───────────────────────────────────────────────
+
+const elec = await import("../../lib/db/repos/electrical.mjs");
+const inst = await import("../../lib/db/repos/instrumentation.mjs");
+const SCHEDULE = "Cable No,From,To,Cable Type,Voltage,Length (m)\nEC-1203A-P,MCC-12,P-1203A,3Cx35 XLPE/SWA,0.6/1kV,85";
+const INDEX = "Tag No,Service,Type,Range,Equipment\nPT-1203A,discharge pressure,Smart transmitter,0-25 bar,P-1203A\nPI-1203A,discharge local,Bourdon gauge,0-25 bar,P-1203A";
+let cable, pt, pi, pack2;
+const TX_OK = "0:4.00 6.25:8.01 12.5:12.00 18.75:15.99 25:20.00";
+const GAUGE_OK = "0:0 6.25:6.3 12.5:12.5 18.75:18.7 25:25";
+
+test("the pack carries each cable's and instrument's chain and what its test must meet", async () => {
+  await withProject(db, P, async () => {
+    await projects.updateProjectProfile(db, { projectId: P, patch: { lv_system_voltage_v: 400, calibration_tolerance_pct: 0.5 } });
+    await elec.importCableSchedule(db, { projectId: P, text: SCHEDULE });
+    await inst.importInstrumentIndex(db, { projectId: P, text: INDEX });
+    pack2 = await fld.fieldPack(db, { projectId: P });
+    cable = pack2.cables.find((c) => c.no === "EC-1203A-P");
+    pt = pack2.instruments.find((i) => i.no === "PT-1203A");
+    pi = pack2.instruments.find((i) => i.no === "PI-1203A");
+    equal([cable.cores, cable.irRequirement.testV, cable.irRequirement.minMohm], [3, 500, 1]);
+    assert(cable.steps.find((x) => x.code === "ir").derived, "IR is the test's to answer");
+    equal([pt.calRequirement.tolerancePct, pt.calRequirement.output, pi.calRequirement.output], [0.5, "mA", "eu"]);
+    equal(pack2.loops.map((l) => [l.loopNo, l.signed, l.members.length]), [[pt.loopNo, false, 2]]);
+  });
+});
+
+test("the phone's provisional verdict is the server's, from the same engine and requirement", async () => {
+  const phone = judgeIr({ testVoltageV: 500, readings: splitReadings("0.8 2000 >2000") }, { cores: cable.cores }, cable.irRequirement);
+  equal([phone.valid, phone.ok], [true, false]);
+  const bad = op("cable_ir", { cableId: cable.id, testVoltageV: 500, readings: "0.8 2000 >2000", testedOn: TODAY });
+  const good = op("cable_ir", { cableId: cable.id, testVoltageV: 500, readings: "2000 >2000 1500", testedOn: TODAY }, 1);
+  const r = await fld.applyOps(db, { projectId: P, userId: bob.id, membership: QC, ops: [bad, good] });
+  equal(r.map((x) => [x.status, x.result.ok]), [["applied", false], ["applied", true]],
+    "a failed test is a record too — the verdict says it failed");
+  const calPhone = judgeCalibration(parseCalPoints(TX_OK), pt.calRequirement);
+  const c = await fld.applyOps(db, { projectId: P, userId: bob.id, membership: QC,
+    ops: [op("instrument_cal", { instrumentId: pt.id, points: TX_OK, calibratedOn: TODAY, calibratorRef: "CAL-07" })] });
+  equal([calPhone.ok, c[0].status, c[0].result.ok], [true, "applied", true]);
+});
+
+test("cable and instrument steps: recorded as at a desk, derived ones refused, the loop signed only when every member is ready", async () => {
+  const steps = ["route", "pulled", "terminated", "continuity"].map((code, n) =>
+    op("cable_step", { cableId: cable.id, code, doneOn: TODAY }, n));
+  const irTick = op("cable_step", { cableId: cable.id, code: "ir", doneOn: TODAY }, 5);
+  const calTick = op("instrument_step", { instrumentId: pt.id, code: "calibrated", doneOn: TODAY }, 6);
+  const early = op("loop_check", { loopNo: pt.loopNo, checkedOn: TODAY, refNo: "LC-01" }, 7);
+  let r = await fld.applyOps(db, { projectId: P, userId: bob.id, membership: QC, ops: [...steps, irTick, calTick, early] });
+  equal(r.map((x) => x.status), ["applied", "applied", "applied", "applied", "rejected", "rejected", "rejected"]);
+  assert(/IR/.test(r[4].error) && /کالیبراسیون/.test(r[5].error), r[4].error + " | " + r[5].error);
+  assert(/هنوز آمادهٔ لوپ چک نیست/.test(r[6].error) && r[6].error.includes("PI-1203A"), r[6].error);
+  const work = [];
+  for (const i of [pt, pi]) for (const code of ["installed", "hookup", "wired"]) work.push(op("instrument_step", { instrumentId: i.id, code, doneOn: TODAY }, work.length));
+  work.push(op("instrument_cal", { instrumentId: pi.id, points: GAUGE_OK, calibratedOn: TODAY }, work.length));
+  const sign = op("loop_check", { loopNo: pt.loopNo, checkedOn: TODAY, refNo: "LC-01", witnessedBy: "Client" }, 30);
+  r = await fld.applyOps(db, { projectId: P, userId: bob.id, membership: QC, ops: [...work, sign] });
+  assert(r.every((x) => x.status === "applied"), JSON.stringify(r.filter((x) => x.status !== "applied")));
+  const after = await withProject(db, P, () => fld.fieldPack(db, { projectId: P }));
+  equal(after.loops[0].signed, true);
+  equal(after.instruments.find((i) => i.no === "PT-1203A").steps.find((x) => x.code === "loop_check").status, "done",
+    "every instrument of the loop takes its step from the one signature");
+  equal(after.cables[0].steps.find((x) => x.code === "ir").status, "done", "the latest IR test passed");
 });
 
 test("field operations belong to one project", async () => {

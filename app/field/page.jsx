@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { parseFieldCode, KINDS } from "../../lib/field/qr.mjs";
-import { newOp, opProblems } from "../../lib/field/ops.mjs";
+import { newOp, opProblems, splitReadings, parseCalPoints } from "../../lib/field/ops.mjs";
+import { judgeIr } from "../../lib/electrical/cable.mjs";
+import { judgeCalibration } from "../../lib/instrumentation/isa.mjs";
 import { savePack, loadPack, enqueue, listOps, updateOp, removeOp } from "../../lib/client/offline-store.mjs";
 import Scanner from "../../components/field/Scanner";
 
@@ -179,10 +181,10 @@ export default function FieldPage() {
         <div className="card">
           <h2>صف روی این گوشی</h2>
           {foreign.length > 0 && <p className="err sm">{foreign.length} ثبت مال کاربر دیگری روی این گوشی است و با حساب شما ارسال نمی‌شود.</p>}
-          {queued.map((o) => <p key={o.opId} className="queued">در صف — {o.label} · {new Date(o.capturedAt).toLocaleString("fa-IR")}</p>)}
+          {queued.map((o) => <p key={o.opId} className="queued">در صف — <bdi>{o.label}</bdi> · {new Date(o.capturedAt).toLocaleString("fa-IR")}</p>)}
           {rejected.map((o) => (
             <div key={o.opId} className="sm" style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0" }}>
-              <span><span className="pill bad">رد شد</span> {o.label}: {o.error}</span>
+              <span><span className="pill bad">رد شد</span> <bdi>{o.label}</bdi>: {o.error}</span>
               <button className="btn ghost" onClick={async () => { await removeOp(o.opId); refreshOps(); }}>دیدم، حذف از فهرست</button>
             </div>
           ))}
@@ -209,18 +211,27 @@ export default function FieldPage() {
 
 function Browse({ p, ops, open }) {
   const [f, setF] = useState("");
-  const rows = p.tags.filter((t) => !f || t.no.includes(f.toUpperCase())).slice(0, 60);
+  const [k, setK] = useState("t");
+  const list = { t: p.tags, s: p.spools, c: p.cables, i: p.instruments }[k] || [];
+  const idKey = { t: "tagId", s: "spoolId", c: "cableId", i: "instrumentId" }[k];
+  const rows = list.filter((t) => !f || String(t.no).includes(f.toUpperCase())).slice(0, 60);
   return (
     <div className="card">
-      <div className="field"><label htmlFor="ff">فیلتر تگ‌ها</label><input id="ff" dir="ltr" value={f} onChange={(e) => setF(e.target.value)} /></div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }} role="tablist">
+        {Object.entries(KINDS).map(([key, title]) => (
+          <button key={key} role="tab" aria-selected={k === key} className={`btn ${k === key ? "" : "ghost"}`} onClick={() => setK(key)}>
+            {title} ({({ t: p.tags, s: p.spools, c: p.cables, i: p.instruments }[key] || []).length})</button>
+        ))}
+      </div>
+      <div className="field"><label htmlFor="ff">فیلتر شماره</label><input id="ff" dir="ltr" value={f} onChange={(e) => setF(e.target.value)} /></div>
       {rows.map((t) => {
-        const q = ops.filter((o) => o.payload.tagId === t.id).length;
+        const q = ops.filter((o) => o.payload[idKey] === t.id).length;
         return (
           <button key={t.id} className="field-step" style={{ width: "100%", background: "none", border: 0, color: "inherit", cursor: "pointer", textAlign: "start" }}
-                  onClick={() => open("t", t.no)}>
+                  onClick={() => open(k, t.no)}>
             <span className="mono">{t.no}</span>
-            <span className="muted sm">{t.description}</span>
-            <span className="sm">{t.pct === null ? "—" : `${t.pct}%`}{q ? <span className="pill warn"> {q} در صف</span> : null}</span>
+            <span className="muted sm">{t.description || t.line || t.tag || ""}</span>
+            <span className="sm">{t.pct === null || t.pct === undefined ? "—" : `${t.pct}%`}{q ? <span className="pill warn"> {q} در صف</span> : null}</span>
           </button>
         );
       })}
@@ -232,10 +243,10 @@ function ItemCard({ found, p, ops, day, capture, mayStep, mayPunch, onBack }) {
   const { kind, row } = found;
   const [punch, setPunch] = useState({ category: "B", description: "" });
   const [clearNote, setClearNote] = useState({});
-  const mine = ops.filter((o) => (kind === "t" && o.payload.tagId === row.id) || (kind === "s" && o.payload.spoolId === row.id));
+  const idKey = { t: "tagId", s: "spoolId", c: "cableId", i: "instrumentId" }[kind];
+  const stepKind = { t: "tag_step", s: "spool_step", c: "cable_step", i: "instrument_step" }[kind];
+  const mine = ops.filter((o) => o.payload[idKey] === row.id);
   const openPunch = kind === "t" ? p.punch.filter((x) => x.tag_id === row.id) : [];
-  const stepKind = kind === "t" ? "tag_step" : "spool_step";
-  const idKey = kind === "t" ? "tagId" : "spoolId";
   return (
     <div className="card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -246,11 +257,9 @@ function ItemCard({ found, p, ops, day, capture, mayStep, mayPunch, onBack }) {
       <p className="sm">وضعیت طبق بسته ({new Date(p.generatedAt).toLocaleString("fa-IR")}): {row.pct !== undefined && row.pct !== null ? `${row.pct}%` : "—"}
         {row.ready ? <span className="pill ok"> آماده</span> : null}{kind === "t" && <> · <a href={`/asset?tag=${encodeURIComponent(row.no)}`}>شناسنامه</a></>}</p>
 
-      {(kind === "c" || kind === "i") && (
-        <p className="sm">{kind === "c" ? `کشش: ${row.is_pulled ? "بله" : "نه"} · آمادهٔ برق‌دار شدن: ${row.is_ready ? "بله" : "نه"}`
-          : `نصب: ${row.is_installed ? "بله" : "نه"} · لوپ چک: ${row.is_loop_checked ? "بله" : "نه"} · آماده: ${row.is_ready ? "بله" : "نه"}`}
-          {row.tag && ` · تجهیز ${row.tag}`} <span className="muted">(ثبت کابل و ابزار از صفحهٔ رشتهٔ خودش)</span></p>
-      )}
+      {kind === "c" && <p className="sm muted">{row.voltageClass || "کلاس ولتاژ ؟"} · {row.cores ?? "؟"} رشته{row.tag && ` · تجهیز ${row.tag}`}
+        {row.lastIr && <> · آخرین IR: <span className={`pill ${row.lastIr.ok ? "ok" : "bad"}`}>{row.lastIr.ok ? "قبول" : row.lastIr.reason || "رد"}</span></>}</p>}
+      {kind === "i" && <p className="sm muted">{row.category || "نوع ؟"}{row.range && ` · رنج ${row.range}`}{row.loopNo && ` · لوپ ${row.loopNo}`}{row.tag && ` · تجهیز ${row.tag}`}</p>}
 
       {row.steps && row.steps.map((s) => {
         const q = mine.find((o) => o.payload.code === s.code);
@@ -270,6 +279,13 @@ function ItemCard({ found, p, ops, day, capture, mayStep, mayPunch, onBack }) {
         );
       })}
       {row.steps === null && kind === "t" && <p className="muted sm">برای نوع این تگ زنجیرهٔ پیش‌نیاز تعریف نشده.</p>}
+
+      {kind === "c" && mayStep && <IrForm row={row} day={day} capture={capture} queued={mine.filter((o) => o.kind === "cable_ir")} />}
+      {kind === "i" && mayStep && row.calRequirement && !row.calRequirement.reason &&
+        <CalForm row={row} day={day} capture={capture} queued={mine.filter((o) => o.kind === "instrument_cal")} />}
+      {kind === "i" && row.calRequirement?.reason && <p className="muted sm">کالیبراسیون: {row.calRequirement.reason}</p>}
+      {kind === "i" && row.loopNo && <LoopCard loop={p.loops?.find((l) => l.loopNo === row.loopNo)} day={day} capture={capture}
+        ops={ops} mayStep={mayStep} />}
 
       {kind === "t" && (
         <div style={{ marginTop: 10 }}>
@@ -307,6 +323,102 @@ function ItemCard({ found, p, ops, day, capture, mayStep, mayPunch, onBack }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * An IR test as the megger showed it. The verdict under the form is the
+ * engine's own function on the requirement the server packed — shown as
+ * provisional: the record is the server's, and it may judge differently
+ * if the cable's data changed since the pack was made.
+ */
+function IrForm({ row, day, capture, queued }) {
+  const req = row.irRequirement || {};
+  const [f, setF] = useState({ testVoltageV: req.testV ? String(req.testV) : "", readings: "", instrumentRef: "" });
+  const readings = splitReadings(f.readings);
+  const preview = readings.length ? judgeIr({ testVoltageV: Number(f.testVoltageV), readings }, { cores: row.cores }, req) : null;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <b className="sm">تست مقاومت عایق (IR)</b>
+      <p className="muted sm">{req.reason ? req.reason : `معیار: حداقل ${req.minMohm} MΩ با ${req.testV} V DC — ${req.cite}`}</p>
+      {queued.map((o) => <p key={o.opId} className="queued">IR در صف: <bdi dir="ltr">{o.payload.readings} @ {o.payload.testVoltageV} V</bdi></p>)}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "end" }}>
+        <div className="field"><label htmlFor={`irv-${row.id}`}>ولتاژ تست (V)</label>
+          <input id={`irv-${row.id}`} type="number" dir="ltr" value={f.testVoltageV} onChange={(e) => setF({ ...f, testVoltageV: e.target.value })} /></div>
+        <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor={`irr-${row.id}`}>قرائت‌ها (MΩ، یکی برای هر رشته)</label>
+          <input id={`irr-${row.id}`} dir="ltr" placeholder="2000 >2000 1500" value={f.readings} onChange={(e) => setF({ ...f, readings: e.target.value })} /></div>
+        <div className="field"><label htmlFor={`iri-${row.id}`}>شمارهٔ دستگاه</label>
+          <input id={`iri-${row.id}`} dir="ltr" value={f.instrumentRef} onChange={(e) => setF({ ...f, instrumentRef: e.target.value })} /></div>
+        <button className="btn ghost" onClick={async () => {
+          await capture("cable_ir", { cableId: row.id, testVoltageV: f.testVoltageV, readings: f.readings, instrumentRef: f.instrumentRef, testedOn: day },
+            `${row.no}: IR \u2066${f.readings}\u2069`);
+          setF({ ...f, readings: "" });
+        }}>ثبت تست</button>
+      </div>
+      {preview && <p className="sm">پیش‌داوری روی گوشی (نهایی با سرور): {preview.valid
+        ? <span className={`pill ${preview.ok ? "ok" : "bad"}`}>{preview.ok ? `قبول — کمترین ${preview.minMohm} MΩ` : preview.reason}</span>
+        : <span className="pill warn">{preview.reason}</span>}</p>}
+    </div>
+  );
+}
+
+/** A bench calibration, with the same provisional verdict. */
+function CalForm({ row, day, capture, queued }) {
+  const req = row.calRequirement;
+  const [f, setF] = useState({ points: "", calibratorRef: "" });
+  const pts = parseCalPoints(f.points);
+  const preview = pts ? judgeCalibration(pts, req) : null;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <b className="sm">کالیبراسیون</b>
+      <p className="muted sm">رنج {req.lo}–{req.hi} · خروجی {req.output === "mA" ? "4–20 mA" : "مقدار مهندسی"} · تلورانس {req.tolerancePct}% اسپن · دست‌کم ۵ نقطه تا دو سر رنج</p>
+      {queued.map((o) => <p key={o.opId} className="queued">کالیبراسیون در صف: <bdi dir="ltr">{o.payload.points}</bdi></p>)}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "end" }}>
+        <div className="field" style={{ flex: "1 1 220px" }}><label htmlFor={`cp-${row.id}`}>نقاط «اعمالی:خروجی»</label>
+          <input id={`cp-${row.id}`} dir="ltr" placeholder="0:4.00 6.25:8.00 12.5:12.00 18.75:16.00 25:20.00" value={f.points}
+                 onChange={(e) => setF({ ...f, points: e.target.value })} /></div>
+        <div className="field"><label htmlFor={`cr-${row.id}`}>کالیبراتور</label>
+          <input id={`cr-${row.id}`} dir="ltr" value={f.calibratorRef} onChange={(e) => setF({ ...f, calibratorRef: e.target.value })} /></div>
+        <button className="btn ghost" onClick={async () => {
+          await capture("instrument_cal", { instrumentId: row.id, points: f.points, calibratorRef: f.calibratorRef, calibratedOn: day }, `${row.no}: کالیبراسیون`);
+          setF({ ...f, points: "" });
+        }}>ثبت کالیبراسیون</button>
+      </div>
+      {f.points && !pts && <p className="err sm">نقاط را به شکل «اعمالی:خروجی» با فاصله بنویسید.</p>}
+      {preview && <p className="sm">پیش‌داوری روی گوشی (نهایی با سرور): {preview.valid
+        ? <span className={`pill ${preview.ok ? "ok" : "bad"}`}>{preview.ok ? `قبول — بیشترین خطا ${preview.worstPct}%` : preview.reason}</span>
+        : <span className="pill warn">{preview.reason}</span>}</p>}
+    </div>
+  );
+}
+
+/**
+ * The loop: every member and what it still lacks, from the pack. The
+ * signature is offered only when the pack shows nothing open — and the
+ * server checks again, because a member may have changed since.
+ */
+function LoopCard({ loop, day, capture, ops, mayStep }) {
+  const [f, setF] = useState({ refNo: "", witnessedBy: "" });
+  if (!loop) return null;
+  const q = ops.find((o) => o.kind === "loop_check" && o.payload.loopNo === loop.loopNo);
+  const open = loop.members.filter((m) => m.open.length);
+  return (
+    <div style={{ marginTop: 10 }}>
+      <b className="sm">لوپ {loop.loopNo}</b> {loop.signed && <span className="pill ok">امضاشده</span>}
+      {loop.members.map((m) => (
+        <p key={m.no} className="sm"><span className="mono">{m.no}</span> — {m.open.length ? <span className="warn">باز: {m.open.join("، ")}</span> : <span className="ok">آماده</span>}</p>
+      ))}
+      {q && <p className="queued">امضای لوپ در صف ({q.payload.checkedOn})</p>}
+      {mayStep && !loop.signed && !q && (open.length ? <p className="muted sm">تا همهٔ ابزارهای لوپ آماده نشوند، لوپ چک امضا نمی‌شود.</p> : (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "end" }}>
+          <div className="field"><label htmlFor={`lr-${loop.loopNo}`}>شمارهٔ برگهٔ لوپ چک</label>
+            <input id={`lr-${loop.loopNo}`} dir="ltr" value={f.refNo} onChange={(e) => setF({ ...f, refNo: e.target.value })} /></div>
+          <div className="field"><label htmlFor={`lw-${loop.loopNo}`}>شاهد</label>
+            <input id={`lw-${loop.loopNo}`} dir="auto" value={f.witnessedBy} onChange={(e) => setF({ ...f, witnessedBy: e.target.value })} /></div>
+          <button className="btn ghost" onClick={() => capture("loop_check", { loopNo: loop.loopNo, checkedOn: day, ...f }, `لوپ ${loop.loopNo}: امضا`)}>امضای لوپ چک</button>
+        </div>
+      ))}
     </div>
   );
 }
