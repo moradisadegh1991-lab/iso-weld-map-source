@@ -1,5 +1,6 @@
 "use client";
 import { useProjectData } from "../../lib/client/platform.mjs";
+import TableKit from "../../components/ui/TableKit";
 
 /**
  * Quality control: what has been welded and not yet examined.
@@ -33,7 +34,7 @@ export default function QcPage() {
         {gap.length === 0 ? (
           <p className="empty-note">شکافی نیست.</p>
         ) : (
-          <div className="wrap">
+          <TableKit name="qc">
             <table className="dtable">
               <thead><tr><th>جوش</th><th>خط</th><th>محل</th><th>NDT لازم</th><th>جوشکار</th></tr></thead>
               <tbody>
@@ -48,7 +49,7 @@ export default function QcPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
@@ -60,7 +61,7 @@ export default function QcPage() {
             دو بار بابت یک عیب جریمه می‌کند و آن‌که ریجکتش دوباره تست نشده را
             پاداش می‌دهد.
           </p>
-          <div className="wrap">
+          <TableKit name="qc">
             <table className="dtable">
               <thead><tr><th>مهر</th><th>نام</th><th>فرایند</th><th>جوش</th>
                          <th>شات</th><th>ریجکت</th><th>نرخ تعمیر</th></tr></thead>
@@ -80,7 +81,7 @@ export default function QcPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         </div>
       )}
     </div>

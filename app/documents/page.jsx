@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * The master document register.
@@ -75,7 +77,7 @@ export default function DocumentsPage() {
       <div className="card">
         <h2>رجیستر مدارک (MDR)</h2>
         {docs.length === 0 ? <p className="empty-note">مدرکی ثبت نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="documents">
             <table className="dtable">
               <thead><tr><th>شماره</th><th>عنوان</th><th>رشته</th><th>رویژن جاری</th><th>رویژن ساخت</th><th>IFC برنامه</th><th /></tr></thead>
               <tbody>
@@ -95,9 +97,9 @@ export default function DocumentsPage() {
                 ])}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
-        {may && <MdrForm data={data} post={post} />}
+        {may && <Fold title="مدرک جدید در رجیستر"><MdrForm data={data} post={post} /></Fold>}
       </div>
 
       <div className="card">
@@ -105,7 +107,7 @@ export default function DocumentsPage() {
         {data.transmittals.length === 0 ? <p className="empty-note">ترانسمیتالی ارسال نشده است.</p> : data.transmittals.map((t) => (
           <div key={t.id} style={{ marginBottom: 10 }}>
             <p className="sm"><b className="mono">{t.transmittalNo}</b> به {t.toParty} · {t.purpose} · {fa(t.sentOn)}{t.responseDue && ` · مهلت پاسخ ${fa(t.responseDue)}`}</p>
-            <div className="wrap"><table className="dtable">
+            <TableKit name="documents"><table className="dtable">
               <thead><tr><th>مدرک</th><th>رویژن</th><th>وضعیت</th><th>پاسخ</th><th /></tr></thead>
               <tbody>{t.items.map((i) => {
                 const [tone, label] = ITEM_STATE[i.state];
@@ -118,10 +120,10 @@ export default function DocumentsPage() {
                   </tr>
                 );
               })}</tbody>
-            </table></div>
+            </table></TableKit>
           </div>
         ))}
-        {may && <TransmittalForm data={data} post={post} />}
+        {may && <Fold title="ترانسمیتال جدید"><TransmittalForm data={data} post={post} /></Fold>}
       </div>
     </div>
   );

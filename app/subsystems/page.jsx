@@ -1,5 +1,6 @@
 "use client";
 import { useProjectData } from "../../lib/client/platform.mjs";
+import TableKit from "../../components/ui/TableKit";
 
 /**
  * Readiness per subsystem, across every discipline that has filed anything.
@@ -38,7 +39,7 @@ export default function SubsystemsPage() {
             شکست کار ناقص‌تر باشد بالاتر می‌رود</b> — و همان عدد است که در جلسه
             خوانده می‌شود.
           </p>
-          <div className="wrap">
+          <TableKit name="subsystems">
             <table className="dtable">
               <thead><tr><th>رشته</th><th>اقلام</th></tr></thead>
               <tbody>
@@ -50,7 +51,7 @@ export default function SubsystemsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         </div>
       )}
 
@@ -62,7 +63,7 @@ export default function SubsystemsPage() {
             لیست تجهیزات وارد می‌شود.
           </p>
         ) : (
-          <div className="wrap">
+          <TableKit name="subsystems">
             <table className="dtable">
               <thead>
                 <tr>
@@ -93,7 +94,7 @@ export default function SubsystemsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
     </div>

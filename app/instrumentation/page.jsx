@@ -3,6 +3,8 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { CATEGORIES } from "../../lib/instrumentation/isa.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Instrumentation: the instrument index read by ISA 5.1, each instrument
@@ -80,7 +82,7 @@ export default function InstrumentationPage() {
                  style={{ maxWidth: 260 }} aria-label="جستجو" />
         </div>
         {list.length === 0 ? <p className="empty-note">هنوز لیست ابزاری وارد نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="instrumentation">
             <table className="dtable">
               <thead>
                 <tr><th>تگ</th><th>نوع (ISA 5.1)</th><th>سرویس</th><th>لوپ</th><th>تجهیز</th><th>رنج</th>
@@ -94,11 +96,11 @@ export default function InstrumentationPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
-      {mayRegister && <Import post={post} />}
+      {mayRegister && <Fold title="ورود لیست ابزار (Instrument Index)"><Import post={post} /></Fold>}
     </div>
   );
 }
@@ -110,7 +112,7 @@ function Loops({ loops, mayRecord, post }) {
     <div className="card">
       <h2>لوپ‌ها</h2>
       <p className="muted sm">لوپ چک یک‌بار برای کل لوپ امضا می‌شود و فقط وقتی همهٔ ابزارهای لوپ کالیبره، نصب، هوک‌آپ و سیم‌بندی شده باشند.</p>
-      <div className="wrap">
+      <TableKit name="instrumentation">
         <table className="dtable">
           <thead><tr><th>لوپ</th><th>ابزارها</th><th>وضعیت</th><th /></tr></thead>
           <tbody>
@@ -134,7 +136,7 @@ function Loops({ loops, mayRecord, post }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableKit>
     </div>
   );
 }
@@ -217,7 +219,7 @@ function Detail({ i, s, mayRecord, mayRegister, post, tags }) {
             {req.reason || `رنج ${req.lo}–${req.hi} · خروجی ${req.output === "mA" ? "4–20 mA" : "واحد مهندسی"} · تلورانس ±${req.tolerancePct}% اسپن · دست‌کم ۵ نقطه تا دو سر رنج. آخرین کالیبراسیون حکم می‌گیرد.`}
           </p>
           {v?.points && (
-            <div className="wrap">
+            <TableKit name="instrumentation">
               <table className="dtable">
                 <thead><tr><th>اعمالی</th><th>انتظار</th><th>خروجی</th><th>خطا % اسپن</th></tr></thead>
                 <tbody>
@@ -230,7 +232,7 @@ function Detail({ i, s, mayRecord, mayRegister, post, tags }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableKit>
           )}
           {mayRecord && !req.reason && (
             <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {

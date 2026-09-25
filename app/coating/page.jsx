@@ -3,6 +3,8 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { PREP_GRADES, INSULATION, dewPoint, minReadings } from "../../lib/coating/coating.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Painting and insulation: the systems from the painting specification, the
@@ -65,7 +67,7 @@ export default function CoatingPage() {
       <div className="card">
         <h2>آیتم‌ها</h2>
         {items.length === 0 ? <p className="empty-note">هنوز به هیچ اسپول یا سازه‌ای سیستم رنگ داده نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="coating">
             <table className="dtable">
               <thead>
                 <tr><th>آیتم</th><th>سیستم</th><th>عایق</th><th>مساحت m²</th><th>پیشرفت</th><th>امروز می‌شود</th>
@@ -79,11 +81,11 @@ export default function CoatingPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
-      {mayRegister && data.systems.length > 0 && <Assign data={data} post={post} />}
+      {mayRegister && data.systems.length > 0 && <Fold title="تخصیص سیستم رنگ و عایق"><Assign data={data} post={post} /></Fold>}
     </div>
   );
 }
@@ -100,7 +102,7 @@ function Systems({ systems, mayRegister, post, spec }) {
         DFT طبق ISO 19840 (قاعدهٔ ۸۰/۲۰) و روی قرائت تجمعی پس از هر لایه.
       </p>
       {systems.length > 0 && (
-        <div className="wrap">
+        <TableKit name="coating">
           <table className="dtable">
             <thead><tr><th>کد</th><th>شرح</th><th>آماده‌سازی</th><th>پروفیل µm</th><th>لایه‌ها (DFT اسمی µm)</th><th>حداکثر DFT</th></tr></thead>
             <tbody>
@@ -117,7 +119,7 @@ function Systems({ systems, mayRegister, post, spec }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
       {mayRegister && (
         <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
@@ -245,7 +247,7 @@ function Coats({ i, s, mayRecord, post, spec, need }) {
   return (
     <div className="card" style={{ padding: 12 }}>
       <h2>لایه‌ها — DFT و شرایط اعمال</h2>
-      <div className="wrap">
+      <TableKit name="coating">
         <table className="dtable">
           <thead><tr><th>لایه</th><th>DFT اسمی تجمعی</th><th>نقطهٔ شبنم / فاصلهٔ فولاد</th><th>میانگین / کمینه / بیشینه</th><th>قرائت</th><th>حکم</th></tr></thead>
           <tbody>
@@ -264,7 +266,7 @@ function Coats({ i, s, mayRecord, post, spec, need }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableKit>
       {mayRecord && (
         <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
           e.preventDefault();

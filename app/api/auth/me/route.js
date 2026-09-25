@@ -9,7 +9,7 @@ export async function GET(request) {
   try {
     const { db, user, authMode } = await authenticate(request);
     return Response.json({
-      user: { id: user.id, email: user.email, displayName: user.display_name },
+      user: { id: user.id, email: user.email, displayName: user.display_name, isDeveloper: !!user.is_developer },
       projects: await listProjectsForUser(db, user.id),
       authMode,
     });

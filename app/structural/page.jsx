@@ -6,6 +6,8 @@ import { STRUCTURE_TYPES } from "../../lib/platform/precedence.mjs";
 import {
   ERECTION_STANDARDS, JOINT_TYPES, BOLT_GRADES, STRESS_AREA, METHODS, minPretension,
 } from "../../lib/structural/steel.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Structural steel: pipe racks, platforms and shelters, from the foundation
@@ -79,7 +81,7 @@ export default function StructuralPage() {
       <div className="card">
         <h2>سازه‌ها</h2>
         {list.length === 0 ? <p className="empty-note">هنوز سازه‌ای ثبت نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="structural">
             <table className="dtable">
               <thead>
                 <tr><th>سازه</th><th>نوع</th><th>ساب‌سیستم</th><th>فونداسیون‌ها</th><th>پیشرفت</th>
@@ -93,13 +95,13 @@ export default function StructuralPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
       <PretensionTable />
 
-      {mayRegister && <AddStructure subsystems={data.subsystems} post={post} />}
+      {mayRegister && <Fold title="ثبت سازهٔ جدید"><AddStructure subsystems={data.subsystems} post={post} /></Fold>}
     </div>
   );
 }
@@ -200,7 +202,7 @@ function Survey({ s, survey, mayRecord, post, standard }) {
         {" · "}آخرین قرائت هر ستون حکم می‌گیرد؛ قرائت پیشین در سابقه می‌ماند.
       </p>
       {survey.columns.length > 0 && (
-        <div className="wrap">
+        <TableKit name="structural">
           <table className="dtable">
             <thead><tr><th>ستون</th><th>ارتفاع mm</th><th>ΔE mm</th><th>ΔN mm</th><th>مجاز mm</th><th>تاریخ</th><th>حکم</th></tr></thead>
             <tbody>
@@ -220,7 +222,7 @@ function Survey({ s, survey, mayRecord, post, standard }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
       {mayRecord && (
         <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
@@ -260,7 +262,7 @@ function Bolting({ s, bolting, mayRecord, post }) {
         {" · "}اتصال پیش‌تنیده بدون آزمون پیش از نصب روی کالیبراتور کشش پذیرفته نمی‌شود.
       </p>
       {bolting.records.length > 0 && (
-        <div className="wrap">
+        <TableKit name="structural">
           <table className="dtable">
             <thead><tr><th>تاریخ</th><th>نوع اتصال</th><th>پیچ</th><th>روش</th><th>تعداد</th><th>آزمون kN</th><th>لات</th><th>حکم</th></tr></thead>
             <tbody>
@@ -280,7 +282,7 @@ function Bolting({ s, bolting, mayRecord, post }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
       {mayRecord && (
         <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
@@ -334,7 +336,7 @@ function PretensionTable() {
         ASTM: جدول J3.1M از AISC 360 — آزمون پیش از نصب ≥ ۱٫۰۵ برابر (RCSC). ·
         ISO/EN: Fp,C = 0.7·fub·As (EN 1090-2) — آزمون ≥ Fp,C. خانهٔ خالی یعنی استاندارد عددی نداده و سامانه هم فرض نمی‌کند.
       </p>
-      <div className="wrap">
+      <TableKit name="structural">
         <table className="dtable">
           <thead><tr><th>گرید</th>{sizes.map((z) => <th key={z}>{z}</th>)}</tr></thead>
           <tbody>
@@ -346,7 +348,7 @@ function PretensionTable() {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableKit>
     </div>
   );
 }

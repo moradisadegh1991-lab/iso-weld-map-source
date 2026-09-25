@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Procurement and expediting.
@@ -59,7 +61,7 @@ export default function ProcurementPage() {
       <div className="card">
         <h2>فهرست پیگیری — به ترتیب شناوری</h2>
         {ex.length === 0 ? <p className="empty-note">ردیف بازی نیست.</p> : (
-          <div className="wrap">
+          <TableKit name="procurement">
             <table className="dtable">
               <thead><tr><th>PO / ردیف</th><th>چه چیزی</th><th>مقدار</th><th>حمل / رسید</th><th>تعهد</th><th>پیش‌بینی</th><th>نیاز سایت</th><th>تأخیر</th><th>شناوری</th><th>مرحله</th></tr></thead>
               <tbody>
@@ -79,7 +81,7 @@ export default function ProcurementPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
         <p className="muted sm">* پیش‌بینی ثبت نشده؛ تاریخ تعهد PO به‌جای آن آمده است.</p>
       </div>
@@ -94,7 +96,7 @@ export default function ProcurementPage() {
         </div>
       ))}
 
-      {may && <NewPo data={data} post={post} />}
+      {may && <Fold title="PO یا فروشندهٔ جدید"><NewPo data={data} post={post} /></Fold>}
     </div>
   );
 }
@@ -109,7 +111,7 @@ function PoDetail({ o, data, post, may, role }) {
   const mayReceive = can({ role }, ACTIONS.ASSIGN_WELD);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-      <div className="wrap">
+      <TableKit name="procurement">
         <table className="dtable">
           <thead><tr><th>ردیف</th><th>چه چیزی</th><th>مقدار</th><th>FAT</th><th>حمل / رسید</th><th>مرحله</th><th /></tr></thead>
           <tbody>
@@ -133,10 +135,10 @@ function PoDetail({ o, data, post, may, role }) {
             ])}
           </tbody>
         </table>
-      </div>
+      </TableKit>
 
       {o.shipments.length > 0 && (
-        <div className="wrap"><table className="dtable">
+        <TableKit name="procurement"><table className="dtable">
           <thead><tr><th>محموله</th><th>حمل</th><th>ETA</th><th>ورود</th><th>ردیف‌ها</th><th /></tr></thead>
           <tbody>{o.shipments.map((s) => (
             <tr key={s.id}>
@@ -145,13 +147,13 @@ function PoDetail({ o, data, post, may, role }) {
               <td className="mono sm">{(s.lines || []).map((x) => `${x.lineNo}×${Number(x.qty)}`).join("، ")}</td>
               <td>{may && !s.arrived_on && <button className="btn ghost" onClick={() => post({ kind: "arrive", shipmentId: s.id, arrivedOn: today() })}>ورود به سایت (امروز)</button>}</td>
             </tr>))}</tbody>
-        </table></div>
+        </table></TableKit>
       )}
 
       <div>
         <b className="sm">مدارک فروشنده (VDRL)</b>
         {o.docs.length === 0 ? <p className="muted sm">ثبت نشده</p> : (
-          <div className="wrap"><table className="dtable">
+          <TableKit name="procurement"><table className="dtable">
             <thead><tr><th>کد</th><th>عنوان</th><th>موعد</th><th>آخرین ارسال</th><th>کد بررسی</th><th>وضعیت</th><th /></tr></thead>
             <tbody>{o.docs.map((d) => {
               const [tone, label] = DOC_STATE[d.state];
@@ -167,7 +169,7 @@ function PoDetail({ o, data, post, may, role }) {
                 </tr>
               );
             })}</tbody>
-          </table></div>
+          </table></TableKit>
         )}
       </div>
 

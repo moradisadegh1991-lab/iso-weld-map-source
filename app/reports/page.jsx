@@ -1,5 +1,6 @@
 "use client";
 import { useProjectData } from "../../lib/client/platform.mjs";
+import TableKit from "../../components/ui/TableKit";
 
 /**
  * Progress and KPI.
@@ -27,7 +28,7 @@ export default function ReportsPage() {
         {lines.length === 0 ? (
           <p className="empty-note">هنوز رجیستری ثبت نشده است.</p>
         ) : (
-          <div className="wrap">
+          <TableKit name="reports">
             <table className="dtable">
               <thead>
                 <tr><th>خط</th><th>کلاس</th><th>جوش</th><th>زده‌شده</th>
@@ -54,7 +55,7 @@ export default function ReportsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 

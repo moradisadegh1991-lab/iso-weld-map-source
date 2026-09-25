@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { parseEquipmentList, summarise } from "../../lib/equipment/parse.mjs";
 import { EQUIPMENT_KINDS } from "../../lib/platform/precedence.mjs";
+import TableKit from "../../components/ui/TableKit";
 
 /**
  * Equipment tags: import a list, then work the two queues it produces.
@@ -137,7 +138,7 @@ export default function EquipmentPage() {
             پارسر عمداً حدس نزده. یک ماشین دوّار الایمنت و کنترل تنش لوله دارد و
             یک تجهیز ثابت ندارد؛ حدسِ غلط یعنی برداشتن یک hold point واقعی.
           </p>
-          <div className="wrap">
+          <TableKit name="equipment">
             <table className="dtable">
               <thead><tr><th>تگ</th><th>شرح</th><th>تعیین نوع</th></tr></thead>
               <tbody>
@@ -155,7 +156,7 @@ export default function EquipmentPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         </div>
       )}
 
@@ -166,7 +167,7 @@ export default function EquipmentPage() {
             «بسته» ذخیره نمی‌شود — هر بار از روی پیش‌نیازها حساب می‌شود، پس لحظه‌ای
             که پیش‌نیاز تمام شود این فهرست خودش عوض می‌شود.
           </p>
-          <div className="wrap">
+          <TableKit name="equipment">
             <table className="dtable">
               <thead><tr><th>تگ</th><th>پیشرفت</th><th>منتظرِ</th><th>رشته</th></tr></thead>
               <tbody>
@@ -188,14 +189,14 @@ export default function EquipmentPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         </div>
       )}
 
       {data?.tags?.length > 0 && (
         <div className="card">
           <h2>تگ‌ها</h2>
-          <div className="wrap">
+          <TableKit name="equipment">
             <table className="dtable">
               <thead><tr><th>تگ</th><th>شرح</th><th>نوع</th><th>ساب‌سیستم</th></tr></thead>
               <tbody>
@@ -209,7 +210,7 @@ export default function EquipmentPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         </div>
       )}
     </div>

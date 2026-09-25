@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * HSE: hours worked, what went wrong, the permits that let work start, and
@@ -76,7 +78,7 @@ export default function HsePage() {
 
       <div className="card">
         <h2>به تفکیک پیمانکار</h2>
-        <div className="wrap">
+        <TableKit name="hse">
           <table className="dtable">
             <thead><tr><th>پیمانکار</th><th>نفرساعت</th><th>LTI</th><th>TRC</th><th>LTIF (IOGP)</th><th>TRIR (IOGP)</th><th>TRIR (OSHA)</th></tr></thead>
             <tbody>
@@ -86,7 +88,7 @@ export default function HsePage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
         {mayRecord && <Manhours contractors={data.contractors} post={post} />}
       </div>
 
@@ -99,47 +101,47 @@ export default function HsePage() {
           </p>
         )}
         {data.permits.length === 0 ? <p className="empty-note">مجوزی ثبت نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="hse">
             <table className="dtable">
               <thead><tr><th>شماره</th><th>نوع</th><th>محدوده</th><th>اعتبار</th><th>وضعیت</th><th>تست گاز</th><th>آمادگی / SIMOPS</th><th /></tr></thead>
               <tbody>
                 {data.permits.map((p) => <PermitRow key={p.id} p={p} post={post} mayRecord={mayRecord} mayIssue={mayIssue} />)}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
-        {mayRecord && <PermitForm data={data} post={post} />}
+        {mayRecord && <Fold title="درخواست مجوز کار"><PermitForm data={data} post={post} /></Fold>}
       </div>
 
       <div className="card">
         <h2>رویدادها</h2>
         <p className="muted sm">طبقه انتخاب نمی‌شود؛ از واقعیت‌ها (فوت، روز غیبت، روز کار محدود، نوع درمان) طبق IOGP به دست می‌آید. هر تغییر واقعیت با دلیلش ثبت می‌شود.</p>
         {data.incidents.length === 0 ? <p className="empty-note">رویدادی ثبت نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="hse">
             <table className="dtable">
               <thead><tr><th>شماره</th><th>زمان</th><th>پیمانکار</th><th>محدوده</th><th>شرح</th><th>طبقه</th><th /></tr></thead>
               <tbody>
                 {data.incidents.map((i) => <IncidentRow key={i.id} i={i} data={data} post={post} mayRecord={mayRecord} call={call} projectId={projectId} />)}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
-        {mayRecord && <IncidentForm data={data} post={post} />}
+        {mayRecord && <Fold title="گزارش رویداد"><IncidentForm data={data} post={post} /></Fold>}
       </div>
 
       <div className="card">
         <h2>مشاهدات ایمنی</h2>
         {data.observations.length === 0 ? <p className="empty-note">مشاهده‌ای ثبت نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="hse">
             <table className="dtable">
               <thead><tr><th>تاریخ</th><th>نوع</th><th>شدت</th><th>محدوده</th><th>شرح</th><th>اقدام</th><th>مهلت</th><th>وضعیت</th><th /></tr></thead>
               <tbody>
                 {data.observations.map((o) => <ObservationRow key={o.id} o={o} data={data} post={post} mayRecord={mayRecord} />)}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
-        {mayRecord && <ObservationForm data={data} post={post} />}
+        {mayRecord && <Fold title="ثبت مشاهدهٔ ایمنی"><ObservationForm data={data} post={post} /></Fold>}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
 
 /**
  * Handover to maintenance.
@@ -70,7 +71,7 @@ export default function HandoverPage() {
           </div>
         </div>
         <p className="muted sm">کلاس از ISO 14224 پیوست A و به انتخاب مهندس — از پیشوند تگ حدس زده نمی‌شود. «نامعلوم» یعنی پلتفرم منبعی برای قضاوت ندارد و مثل «ناقص» تحویل را نگه می‌دارد.</p>
-        <div className="wrap">
+        <TableKit name="handover">
           <table className="dtable">
             <thead><tr><th>تگ</th><th>Functional Location</th><th>کلاس</th><th>Crit.</th><th>سازنده / مدل / سریال</th><th>باز</th><th /></tr></thead>
             <tbody>
@@ -91,7 +92,7 @@ export default function HandoverPage() {
               ])}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       </div>
 
       {data.exports.length > 0 && (

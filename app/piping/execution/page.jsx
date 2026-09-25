@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { CHAINS, spoolStageTitle } from "../../../lib/platform/precedence.mjs";
+import TableKit from "../../../components/ui/TableKit";
 
 /**
  * Piping execution: every spool's place in its chain, the supports, and
@@ -71,7 +72,7 @@ export default function PipingExecution() {
             هنوز رجیستری ذخیره نشده است. اسپول‌ها از رجیستر جوش هر ایزومتریک ساخته می‌شوند.
           </p>
         ) : (
-          <div className="wrap">
+          <TableKit name="execution">
             <table className="dtable">
               <thead>
                 <tr><th>اسپول</th><th>خط</th><th>مرحلهٔ فعلی</th><th>پیشرفت</th><th>امروز می‌شود</th>
@@ -86,7 +87,7 @@ export default function PipingExecution() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
@@ -180,7 +181,7 @@ function Buried({ data }) {
         جوش زیرزمینی باید پیش از خاک‌ریزی تست و پوشش شود.
       </p>
       {rows.length === 0 ? <p className="empty-note">هنوز جوشی ثبت نشده است.</p> : (
-        <div className="wrap">
+        <TableKit name="execution">
           <table className="dtable">
             <thead><tr><th>خط</th><th>جوش</th><th>زیرزمینی</th><th>روزمینی</th>
                        <th>نامعلوم</th><th>گرید اعمال‌شده (mm)</th>
@@ -205,7 +206,7 @@ function Buried({ data }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
     </div>
   );
@@ -248,7 +249,7 @@ function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
       {data.supports.length === 0 ? (
         <p className="empty-note">هنوز ساپورتی ثبت نشده است.</p>
       ) : (
-        <div className="wrap">
+        <TableKit name="execution">
           <table className="dtable">
             <thead><tr><th>شماره</th><th>نوع</th><th>خط</th><th>اسپول</th><th>بار kN</th>
                        <th>نصب</th><th>بازرسی</th></tr></thead>
@@ -270,7 +271,7 @@ function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
 
       {mayRecord && (

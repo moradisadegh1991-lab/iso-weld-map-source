@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { ERECTION_STANDARDS } from "../../lib/structural/steel.mjs";
+import TableKit from "../../components/ui/TableKit";
 
 /**
  * The project's particulars.
@@ -400,7 +401,7 @@ function UnitsCard({ projectId, call, editable, projectGrade }) {
       {units.length === 0 ? (
         <p className="empty-note">هنوز واحدی تعریف نشده است؛ همهٔ جوش‌ها با گرید پروژه سنجیده می‌شوند.</p>
       ) : (
-        <div className="wrap">
+        <TableKit name="project">
           <table className="dtable">
             <thead><tr><th>کد</th><th>نام</th><th>گرید واحد (mm)</th><th>گرید اعمال‌شده</th><th /></tr></thead>
             <tbody>
@@ -437,7 +438,7 @@ function UnitsCard({ projectId, call, editable, projectGrade }) {
               })}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
 
       {err && <p className="err">{err}</p>}

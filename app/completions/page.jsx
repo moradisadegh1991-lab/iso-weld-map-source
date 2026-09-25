@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Mechanical completion, subsystem by subsystem, and the pressure-test
@@ -61,7 +63,7 @@ export default function CompletionsPage() {
       <div className="card">
         <h2>ساب‌سیستم‌ها — آنچه MC را نگه داشته</h2>
         <p className="muted sm">امضای MC فقط وقتی ممکن است که این فهرست خالی باشد: همهٔ تگ‌ها آماده، همهٔ خطوط در پکیج با تست پذیرفته، همهٔ کابل‌ها و ابزارها تست‌شده، و هیچ Punch A و NCR بازی نمانده. امضاکننده و پذیرندهٔ کارفرما دو نفرند.</p>
-        <div className="wrap">
+        <TableKit name="completions">
           <table className="dtable">
             <thead><tr><th>ساب‌سیستم</th><th>MC هدف</th><th>محدوده</th><th>باز</th><th>وضعیت</th><th /></tr></thead>
             <tbody>
@@ -91,14 +93,14 @@ export default function CompletionsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       </div>
 
       <div className="card">
         <h2>پکیج‌های تست فشار</h2>
         <p className="muted sm">فشار تست طبق ASME B31.3: هیدرو ۱٫۵ × P × Rr (§345.4.2)، پنوماتیک ۱٫۱ × P (§345.5.4)، نگه‌داشت حداقل ۱۰ دقیقه. P از کلاس لولهٔ هر خط؛ Rr = ST/S ورودی مهندسی پکیج است و پیش‌فرض ندارد.</p>
         {packs.length === 0 ? <p className="empty-note">پکیجی تعریف نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="completions">
             <table className="dtable">
               <thead><tr><th>پکیج</th><th>ساب‌سیستم</th><th>نوع</th><th>خطوط</th><th>فشار تست</th><th>وضعیت</th><th /></tr></thead>
               <tbody>
@@ -124,9 +126,9 @@ export default function CompletionsPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
-        {mayRecord && <PackForm data={data} post={post} />}
+        {mayRecord && <Fold title="پکیج تست جدید"><PackForm data={data} post={post} /></Fold>}
       </div>
     </div>
   );
@@ -143,7 +145,7 @@ function PackDetail({ p, data, post, may }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {p.pressure.basis && <p className="mono sm">{p.pressure.basis} = {p.pressure.barg} barg</p>}
-      <div className="wrap">
+      <TableKit name="completions">
         <table className="dtable">
           <thead><tr><th>خط</th><th>کلاس</th><th>P طراحی</th><th>جوش</th><th>انجام</th><th>NDT پذیرفته</th><th>PWHT</th><th>ساپورت</th><th /></tr></thead>
           <tbody>
@@ -161,14 +163,14 @@ function PackDetail({ p, data, post, may }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableKit>
       {p.blockers.length > 0 && (
         <div className="sm"><b>آنچه تست را نگه داشته:</b>
           <ul style={{ margin: 0 }}>{p.blockers.map((b, i) => <li key={i}>{b.line && <span className="mono">{b.line}: </span>}{b.what}</li>)}</ul>
         </div>
       )}
       {p.tests.length > 0 && (
-        <div className="wrap"><table className="dtable">
+        <TableKit name="completions"><table className="dtable">
           <thead><tr><th>تاریخ</th><th>لازم</th><th>اعمال‌شده</th><th>نگه‌داشت</th><th>گیج</th><th>شاهد</th><th>نتیجه</th><th /></tr></thead>
           <tbody>{p.tests.map((r) => (
             <tr key={r.id}>
@@ -180,7 +182,7 @@ function PackDetail({ p, data, post, may }) {
                 {r.accepted_by_name && <div className="muted sm">پذیرش: {r.accepted_by_name}</div>}</td>
               <td>{may && r.verdict === "pass" && !r.accepted_by && <button className="btn" onClick={() => post({ kind: "test-accept", recordId: r.id })}>پذیرش</button>}</td>
             </tr>))}</tbody>
-        </table></div>
+        </table></TableKit>
       )}
       {may && !p.accepted && (
         <div className="grid2">

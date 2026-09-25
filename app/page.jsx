@@ -16,7 +16,7 @@ import { can } from "../lib/authz.mjs";
  */
 export default function Home() {
   const { project, role, projectId } = usePlatform();
-  const nav = navigationFor({ role }, can);
+  const nav = navigationFor({ role, areas: project?.areas || [] }, can);
 
   const overview = useProjectData((id) => `/api/overview?projectId=${id}`, []);
   const o = overview.data;

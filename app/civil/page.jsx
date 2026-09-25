@@ -3,6 +3,8 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { SPECIMENS, individualLimit } from "../../lib/civil/concrete.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Civil: foundations from excavation to handover, and the concrete that
@@ -83,7 +85,7 @@ export default function CivilPage() {
         {data.foundations.length === 0 ? (
           <p className="empty-note">هنوز فونداسیونی ثبت نشده است.</p>
         ) : (
-          <div className="wrap">
+          <TableKit name="civil">
             <table className="dtable">
               <thead>
                 <tr><th>فونداسیون</th><th>تجهیز / سازه</th><th>ساب‌سیستم</th><th>بتن مشخصات</th>
@@ -97,13 +99,13 @@ export default function CivilPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
       <Classes classes={data.classes} />
 
-      {mayRegister && <AddFoundation equipment={data.equipment} post={post} />}
+      {mayRegister && <Fold title="ثبت فونداسیون جدید"><AddFoundation equipment={data.equipment} post={post} /></Fold>}
     </div>
   );
 }
@@ -192,7 +194,7 @@ function Pours({ f, pours, mayRecord, post }) {
     <div className="card" style={{ padding: 12 }}>
       <h2>بتن‌ریزی و نتایج</h2>
       {pours.length === 0 ? <p className="empty-note">هنوز بتن‌ریزی ثبت نشده است.</p> : (
-        <div className="wrap">
+        <TableKit name="civil">
           <table className="dtable">
             <thead><tr><th>پور کارت</th><th>تاریخ</th><th>حجم m³</th><th>کلاس تحویلی</th><th>نمونه‌ها</th></tr></thead>
             <tbody>
@@ -213,7 +215,7 @@ function Pours({ f, pours, mayRecord, post }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
 
       {mayRecord && (
@@ -290,7 +292,7 @@ function Classes({ classes }) {
             {c.satisfactory === false && <span className="pill bad">سطح مقاومت کلاس رضایت‌بخش نیست</span>}
             {c.satisfactory === null && <span className="pill">کمتر از سه آزمون — هنوز قابل قضاوت نیست</span>}
           </div>
-          <div className="wrap">
+          <TableKit name="civil">
             <table className="dtable">
               <thead><tr><th>پور / نمونه</th><th>تاریخ</th><th>آزمون MPa</th><th>میانگین سه‌تایی</th><th>حکم</th></tr></thead>
               <tbody>
@@ -313,7 +315,7 @@ function Classes({ classes }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         </div>
       ))}
     </div>

@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Pre-commissioning and RFSU, per subsystem, after MC.
@@ -54,7 +56,7 @@ export default function PrecomPage() {
 
       <div className="card">
         <h2>ساب‌سیستم‌ها</h2>
-        <div className="wrap"><table className="dtable">
+        <TableKit name="precom"><table className="dtable">
           <thead><tr><th>ساب‌سیستم</th><th>MC</th><th>چک‌لیست‌ها</th><th>آنچه RFSU را نگه داشته</th><th>RFSU</th><th /></tr></thead>
           <tbody>{b.map((s) => [
             <tr key={s.id}>
@@ -68,7 +70,7 @@ export default function PrecomPage() {
             </tr>,
             open === s.id && <tr key={s.id + "-x"}><td colSpan={6}><SubsystemPanel id={s.id} row={s} data={data} post={post} may={may} stamp={n} /></td></tr>,
           ])}</tbody>
-        </table></div>
+        </table></TableKit>
       </div>
 
       <Templates data={data} post={post} may={may} />
@@ -90,13 +92,13 @@ function SubsystemPanel({ id, row, data, post, may, stamp }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {!s.subsystem.mc_accepted_at && <p className="muted sm">پیش‌راه‌اندازی پس از پذیرش MC این ساب‌سیستم ثبت می‌شود.</p>}
       {s.checks.length === 0 ? <p className="empty-note">چک‌لیستی به آیتم‌های این ساب‌سیستم اعمال نمی‌شود.</p> : (
-        <div className="wrap"><table className="dtable">
+        <TableKit name="precom"><table className="dtable">
           <thead><tr><th>چک‌لیست</th><th>آیتم</th><th>وضعیت</th><th>آخرین رکورد</th><th /></tr></thead>
           <tbody>{s.checks.map((c) => (
             <CheckRow key={`${c.templateId}:${c.itemRef}`} c={c} subsystemId={id} post={post} may={may}
               canRecord={may.record && !!s.subsystem.mc_accepted_at && !locked} me={user?.id} />
           ))}</tbody>
-        </table></div>
+        </table></TableKit>
       )}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         {may.sign && !row.rfsu_signed_at && (
@@ -159,7 +161,7 @@ function Templates({ data, post, may }) {
       <h2>چک‌لیست‌های پیش‌راه‌اندازی پروژه</h2>
       <p className="muted sm">از رویهٔ راه‌اندازی پروژه: هر چک‌لیست به یک نوع آیتم اعمال می‌شود و برای همهٔ آیتم‌های آن نوع در هر ساب‌سیستم لازم است.
         بدون چک‌لیست، RFSU امضا نمی‌شود — پیش‌راه‌اندازیِ تعریف‌نشده «کامل» نیست.</p>
-      {data.templates.length > 0 && <div className="wrap"><table className="dtable">
+      {data.templates.length > 0 && <TableKit name="precom"><table className="dtable">
         <thead><tr><th>کد</th><th>عنوان</th><th>اعمال به</th><th>معیار</th><th>فعال</th></tr></thead>
         <tbody>{data.templates.map((t) => (
           <tr key={t.id} onClick={() => may.sign && setF({ code: t.code, title: t.title, appliesTo: t.appliesTo, criteria: t.criteria || "", active: t.active })}
@@ -167,9 +169,11 @@ function Templates({ data, post, may }) {
             <td><bdi dir="ltr" className="mono">{t.code}</bdi></td><td>{t.title}</td><td>{t.appliesTitle}</td><td className="sm">{t.criteria || "—"}</td>
             <td>{t.active ? "✓" : <span className="muted">—</span>}</td>
           </tr>))}</tbody>
-      </table></div>}
+      </table></TableKit>}
       {may.sign && (
-        <form style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end", marginTop: 8 }} onSubmit={async (e) => {
+        <Fold title={f.code && data.templates.some((t) => t.code === f.code) ? `ویرایش چک‌لیست ${f.code}` : "چک‌لیست جدید"}
+              key={f.code || "new"} defaultOpen={!!f.code}>
+        <form style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }} onSubmit={async (e) => {
           e.preventDefault();
           if (await post({ kind: "template", ...f })) setF(blank);
         }}>
@@ -182,6 +186,7 @@ function Templates({ data, post, may }) {
           {"active" in f && <label className="sm"><input type="checkbox" checked={f.active !== false} onChange={(e) => setF({ ...f, active: e.target.checked })} /> فعال</label>}
           <button className="btn ghost" type="submit">ذخیرهٔ چک‌لیست</button>
         </form>
+        </Fold>
       )}
     </div>
   );

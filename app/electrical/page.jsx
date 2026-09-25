@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Electrical: the cable schedule, each cable from route to energisation, and
@@ -89,7 +91,7 @@ export default function ElectricalPage() {
           </label>
         </div>
         {cables.length === 0 ? <p className="empty-note">هنوز لیست کابلی وارد نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="electrical">
             <table className="dtable">
               <thead>
                 <tr><th>کابل</th><th>از → به</th><th>تجهیز</th><th>مشخصات</th><th>رده</th><th>طول m</th>
@@ -103,11 +105,11 @@ export default function ElectricalPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
-      {mayRegister && <Import post={post} />}
+      {mayRegister && <Fold title="ورود لیست کابل"><Import post={post} /></Fold>}
     </div>
   );
 }
@@ -184,7 +186,7 @@ function Detail({ c, s, mayRecord, mayRegister, post, tags }) {
             : `ولتاژ تست ≥ ${req.testV} V DC · حداقل ${req.minMohm} MΩ · ${c.cores ?? "?"} قرائت (هر رشته). آخرین تست حکم می‌گیرد.`}
         </p>
         {s.ir.tests.length > 0 && (
-          <div className="wrap">
+          <TableKit name="electrical">
             <table className="dtable">
               <thead><tr><th>تاریخ</th><th>ولتاژ تست V</th><th>قرائت‌ها MΩ</th><th>دستگاه</th></tr></thead>
               <tbody>
@@ -198,7 +200,7 @@ function Detail({ c, s, mayRecord, mayRegister, post, tags }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
         {mayRecord && (
           <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {

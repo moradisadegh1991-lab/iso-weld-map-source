@@ -6,6 +6,8 @@ import { newOp } from "../../lib/field/ops.mjs";
 import { PHOTO_STAGES } from "../../lib/quality/photo.mjs";
 import { compressPhoto, blobToBase64 } from "../../lib/client/photo.mjs";
 import PhotoStrip from "../../components/quality/PhotoStrip";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Punch list and NCRs, and what they hold against each subsystem's MC.
@@ -66,7 +68,7 @@ export default function QualityPage() {
 
       <div className="card">
         <h2>آنچه هر ساب‌سیستم را نگه داشته</h2>
-        <div className="wrap">
+        <TableKit name="quality">
           <table className="dtable">
             <thead><tr><th>ساب‌سیستم</th><th>Punch A (مانع MC)</th><th>A+B (مانع RFSU)</th><th>C (به تحویل)</th><th>NCR باز</th></tr></thead>
             <tbody>
@@ -81,7 +83,7 @@ export default function QualityPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       </div>
 
       <div className="tabs" role="tablist" style={{ display: "flex", gap: 8 }}>
@@ -115,7 +117,7 @@ function PunchTab({ data, post, may }) {
         </div>
       </div>
       {rows.length === 0 ? <p className="empty-note">آیتمی نیست.</p> : (
-        <div className="wrap">
+        <TableKit name="quality">
           <table className="dtable">
             <thead><tr><th>شماره</th><th>دسته</th><th>شرح</th><th>تگ</th><th>پیمانکار</th><th>مهلت</th><th>وضعیت</th><th /></tr></thead>
             <tbody>
@@ -142,9 +144,9 @@ function PunchTab({ data, post, may }) {
               })}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
-      {may && <PunchForm data={data} post={post} />}
+      {may && <Fold title="ثبت Punch جدید"><PunchForm data={data} post={post} /></Fold>}
     </div>
   );
 }
@@ -242,7 +244,7 @@ function NcrTab({ data, post, may, role }) {
     <div className="card">
       <h2>عدم انطباق (NCR)</h2>
       {data.ncrs.length === 0 ? <p className="empty-note">NCR ثبت نشده است.</p> : (
-        <div className="wrap">
+        <TableKit name="quality">
           <table className="dtable">
             <thead><tr><th>شماره</th><th>عنوان</th><th>شدت</th><th>ساب‌سیستم / تگ</th><th>پیمانکار</th><th>دیسپوزیشن</th><th>مهلت پاسخ</th><th>وضعیت</th><th /></tr></thead>
             <tbody>
@@ -272,9 +274,9 @@ function NcrTab({ data, post, may, role }) {
               })}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
-      {may && <NcrForm data={data} post={post} />}
+      {may && <Fold title="ثبت NCR جدید"><NcrForm data={data} post={post} /></Fold>}
     </div>
   );
 }

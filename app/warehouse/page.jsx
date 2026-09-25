@@ -4,6 +4,8 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { CATEGORIES } from "../../lib/warehouse/stock.mjs";
 import { spoolStageTitle } from "../../lib/platform/precedence.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Warehouse: what arrived, what inspection and the certificates allow out,
@@ -68,7 +70,7 @@ export default function WarehousePage() {
       <div className="card">
         <h2>موجودی به تفکیک لات</h2>
         {data.lots.length === 0 ? <p className="empty-note">هنوز رسیدی ثبت نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="warehouse">
             <table className="dtable">
               <thead><tr><th>کالا</th><th>رسید</th><th>Heat</th><th>MIR</th><th>MTC</th><th>دریافتی</th><th>پذیرفته</th>
                 <th>حواله خالص</th><th>موجود</th><th>قابل حواله</th><th /></tr></thead>
@@ -79,14 +81,14 @@ export default function WarehousePage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
       <HeatTrace call={call} projectId={projectId} />
-      {mayRecord && data.items.length > 0 && <Receive items={data.items} post={post} />}
-      {mayEngineer && <ItemForm post={post} />}
-      {mayEngineer && data.items.length > 0 && <Requirement items={data.items} post={post} />}
+      {mayRecord && data.items.length > 0 && <Fold title="رسید کالا (MRR)"><Receive items={data.items} post={post} /></Fold>}
+      {mayEngineer && <Fold title="کالای جدید"><ItemForm post={post} /></Fold>}
+      {mayEngineer && data.items.length > 0 && <Fold title="نیاز از MTO"><Requirement items={data.items} post={post} /></Fold>}
     </div>
   );
 }
@@ -98,7 +100,7 @@ function Shortages({ rows }) {
     <div className="card">
       <h2>نیاز MTO در برابر موجودی</h2>
       <p className="muted sm">موجودی قرنطینه (بدون MIR یا MTC پذیرفته) از کسری کم نمی‌شود — لوله‌ای که نمی‌شود جوش داد موجودی نیست.</p>
-      <div className="wrap">
+      <TableKit name="warehouse">
         <table className="dtable">
           <thead><tr><th>کالا</th><th>منبع</th><th>نیاز</th><th>حواله‌شده</th><th>قابل حواله</th><th>قرنطینه</th><th>کسری</th><th>دسترسی</th><th>در راه (PO)</th></tr></thead>
           <tbody>
@@ -116,7 +118,7 @@ function Shortages({ rows }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableKit>
     </div>
   );
 }
@@ -222,7 +224,7 @@ function LotDetail({ l, data, post, mayRecord, mayInspect, call, projectId }) {
 function Recall({ list }) {
   if (!list.length) return <p className="muted sm">چیزی از این لات در کار نیست.</p>;
   return (
-    <div className="wrap">
+    <TableKit name="warehouse">
       <table className="dtable">
         <thead><tr><th>خط / اسپول</th><th>تگ / مصرف</th><th>مقدار</th><th>مرحلهٔ اسپول</th></tr></thead>
         <tbody>
@@ -236,7 +238,7 @@ function Recall({ list }) {
           ))}
         </tbody>
       </table>
-    </div>
+    </TableKit>
   );
 }
 

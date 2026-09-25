@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * Inspection: the ITP (who holds, who witnesses, what is checked against
@@ -71,7 +73,12 @@ export default function InspectionPage() {
       </div>
 
       {tab === "board" && <>
-        {may.record && data.myParty === "contractor" && <RaiseForm data={data} post={post} from={raiseFrom} onDone={() => setRaiseFrom(null)} />}
+        {may.record && data.myParty === "contractor" && (
+          // Re-inspecting a rejected request opens the form, filled in.
+          <Fold key={raiseFrom?.id || "new"} title={raiseFrom ? `بازرسی دوباره پس از رد ${raiseFrom.ir_no}` : "درخواست بازرسی جدید"} defaultOpen={!!raiseFrom}>
+            <RaiseForm data={data} post={post} from={raiseFrom} onDone={() => setRaiseFrom(null)} />
+          </Fold>
+        )}
         <Board data={data} post={post} may={may} onReinspect={(r) => { setRaiseFrom(r); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
       </>}
       {tab === "itp" && <ItpTab data={data} post={post} may={may} />}
@@ -101,7 +108,7 @@ function Board({ data, post, may, onReinspect }) {
         </div>
       </div>
       {rows.length === 0 ? <p className="empty-note">درخواستی نیست.</p> : (
-        <div className="wrap">
+        <TableKit name="inspection">
           <table className="dtable">
             <thead><tr><th>شماره</th><th>آیتم</th><th>فعالیت ITP</th><th>زمان بازرسی</th><th>طرف‌ها</th><th>وضعیت</th><th className="no-print" /></tr></thead>
             <tbody>
@@ -125,7 +132,7 @@ function Board({ data, post, may, onReinspect }) {
               })}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
     </div>
   );
@@ -294,7 +301,7 @@ function ItpTab({ data, post, may }) {
       <div className="card">
         <h2>ITPها</h2>
         {data.itps.length === 0 ? <p className="empty-note">ITP تعریف نشده است. تا ITP تأییدشده‌ای نباشد، هیچ مرحله‌ای به بازرسی گره نمی‌خورد.</p> : (
-          <div className="wrap"><table className="dtable">
+          <TableKit name="inspection"><table className="dtable">
             <thead><tr><th>شماره</th><th>رویژن</th><th>عنوان</th><th>نوع کار</th><th>ردیف</th><th>H/W</th><th>وضعیت</th><th>تهیه / تأیید</th></tr></thead>
             <tbody>{data.itps.map((i) => (
               <tr key={i.id} onClick={() => setSel(i.id)} style={{ cursor: "pointer", background: sel === i.id ? "var(--raise)" : undefined }}>
@@ -305,10 +312,11 @@ function ItpTab({ data, post, may }) {
                   {{ approved: "در حال اجرا", draft: "پیش‌نویس", superseded: "منسوخ" }[i.status]}</span></td>
                 <td className="sm">{i.prepared_by_name || "—"}{i.approved_by_name && ` / ${i.approved_by_name} (${fa(i.approved_on)})`}</td>
               </tr>))}</tbody>
-          </table></div>
+          </table></TableKit>
         )}
         {may.itp && (
-          <form style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end", marginTop: 8 }} onSubmit={async (e) => {
+          <Fold title="ITP یا رویژن جدید" hint="رویژن جدید از رویژن قبلی کپی می‌شود">
+          <form style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }} onSubmit={async (e) => {
             e.preventDefault();
             const r = await post({ kind: "itp", ...nf });
             if (r?.itp) setSel(r.itp.id);
@@ -321,6 +329,7 @@ function ItpTab({ data, post, may }) {
                 {Object.entries(data.scopes).map(([k, v]) => <option key={k} value={k}>{v.title}</option>)}</select></div>
             <button className="btn ghost" type="submit">ITP یا رویژن جدید</button>
           </form>
+          </Fold>
         )}
         {may.itp && (
           <div style={{ display: "flex", gap: 8, alignItems: "end", marginTop: 8 }}>
@@ -354,7 +363,7 @@ function ItpMatrix({ itp, data, post, may }) {
       </div>
       <p className="muted sm">{itp.status === "draft" ? "پیش‌نویس: تا تأیید، هیچ مرحله‌ای به آن گره نمی‌خورد. تأییدکننده نباید تهیه‌کننده باشد."
         : itp.status === "approved" ? "در حال اجرا و ثابت؛ برای تغییر، رویژن جدید بسازید." : "منسوخ؛ درخواست‌های قبلی همچنان به آن ارجاع دارند."}</p>
-      <div className="wrap"><table className="dtable">
+      <TableKit name="inspection"><table className="dtable">
         <thead><tr><th>ردیف</th><th>فعالیت</th><th>مرحلهٔ زنجیره</th><th>مرجع</th><th>معیار پذیرش</th><th>سند</th>
           {Object.keys(data.parties).map((p) => <th key={p}>{data.parties[p]}</th>)}{draft && <th />}</tr></thead>
         <tbody>{itp.activities.map((a) => (
@@ -368,7 +377,7 @@ function ItpMatrix({ itp, data, post, may }) {
                 record: a.record || "", points: { contractor: a.points.contractor || "", company: a.points.company || "", tpi: a.points.tpi || "" } })}>ویرایش</button>
               <button className="btn ghost" onClick={() => post({ kind: "activity-remove", itpId: itp.id, id: a.id })}>حذف</button></td>}
           </tr>))}</tbody>
-      </table></div>
+      </table></TableKit>
       {draft && (
         <form style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end", marginTop: 8 }} onSubmit={async (e) => {
           e.preventDefault();
@@ -427,7 +436,7 @@ function ItemTab({ data }) {
       {file && (file.activities.length === 0 ? <p className="empty-note">برای این نوع کار ITP تأییدشده‌ای نیست.</p> : <>
         <p className="sm">{file.activities.length - owed.length} از {file.activities.length} فعالیت آزاد شده
           {owed.length > 0 && <> · <span className="warn">مانده: {owed.map((a) => a.seq).join("، ")}</span></>}</p>
-        <div className="wrap"><table className="dtable">
+        <TableKit name="inspection"><table className="dtable">
           <thead><tr><th>ITP · ردیف</th><th>فعالیت</th><th>نقاط</th><th>آخرین درخواست</th><th>وضعیت</th></tr></thead>
           <tbody>{file.activities.map((a) => {
             const st = a.latest?.state.state;
@@ -442,7 +451,7 @@ function ItemTab({ data }) {
                 <td><span className={`pill ${tone}`}>{label}</span></td>
               </tr>);
           })}</tbody>
-        </table></div>
+        </table></TableKit>
       </>)}
     </div>
   );

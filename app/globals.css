@@ -2,11 +2,29 @@
   --bg:#070B0E; --surf:#0D141A; --rule:#1F2C36; --ink:#DDE7EE; --dim:#6F8492;
   --cy:#43A0B4; --fld:#FF6B4A;
   --mono: ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  /* Theme tokens: every colour a component uses comes from here, so the
+     light theme at the end of this file is one block, not a hunt. */
+  --surf2:#0A1116;          /* inputs, bars */
+  --panel:#0d1519;          /* nested panels */
+  --th-bg:#0A1014;          /* sticky table heads */
+  --line:#22303a;
+  --rule-soft:rgba(31,44,54,.55);
+  --hover:rgba(255,255,255,.04);
+  --hover-strong:rgba(221,231,238,.08);
+  --ink-strong:#fff;
+  --on-cy:#051015;
+  --bg-grad:radial-gradient(120% 90% at 30% 8%,#101A21 0%,#060A0D 70%);
+  --warn-bg:#2b2210;
+  --bad-bg:#1a0f0c; --bad-ink:#FFB4A2;
+  --ok-bg:#0c1713; --ok-ink:#9FD8BE;
+  --cy-soft:rgba(67,160,180,.10);
+  --overlay:rgba(7,11,14,.78);
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
 body{
-  background:radial-gradient(120% 90% at 30% 8%,#101A21 0%,#060A0D 70%) fixed;
+  background:var(--bg-grad) fixed;
   color:var(--ink);
   font:14px/1.6 ui-sans-serif,system-ui,"Segoe UI",Tahoma,sans-serif;
   -webkit-font-smoothing:antialiased;
@@ -47,7 +65,7 @@ header .sub{font-size:11px;color:var(--dim)}
 .wm-tag{position:absolute;top:0;left:0;font:600 10px/1 var(--mono);letter-spacing:.06em;
   padding:4px 6px;border:1px solid;border-radius:3px;white-space:nowrap}
 .wm-dim{position:absolute;top:0;left:0;font:500 10px/1 var(--mono);color:var(--cy);
-  background:rgba(7,11,14,.78);padding:3px 5px;border-radius:2px;white-space:nowrap}
+  background:var(--overlay);padding:3px 5px;border-radius:2px;white-space:nowrap}
 
 .ctl{position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .ctl .row{display:flex;gap:4px}
@@ -55,7 +73,7 @@ header .sub{font-size:11px;color:var(--dim)}
 .ctl button{font-size:10px;padding:5px 9px;border-radius:4px;border:1px solid var(--rule);
   background:transparent;color:var(--dim);cursor:pointer}
 .ctl button.wide{width:88px;font-family:inherit}
-.ctl button.on{background:var(--ink);color:#0A0E12;border-color:var(--ink)}
+.ctl button.on{background:var(--ink);color:var(--on-cy);border-color:var(--ink)}
 
 .legend{position:absolute;bottom:34px;left:12px;display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--dim)}
 .legend span{display:flex;align-items:center;gap:6px}
@@ -65,7 +83,7 @@ header .sub{font-size:11px;color:var(--dim)}
 .hint{position:absolute;bottom:12px;left:12px;font-size:10px;color:var(--dim)}
 
 aside{width:430px;max-width:46vw;border-inline-start:1px solid var(--rule);
-  display:flex;flex-direction:column;min-height:0;background:rgba(8,12,16,.5)}
+  display:flex;flex-direction:column;min-height:0;background:var(--hover)}
 aside nav{display:flex;gap:2px;padding:8px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
 aside nav button{font-size:11px;padding:5px 10px;border-radius:4px;border:1px solid transparent;
   background:transparent;color:var(--dim);cursor:pointer}
@@ -82,8 +100,8 @@ aside nav button.on{background:var(--surf);border-color:var(--rule);color:var(--
 
 table{width:100%;border-collapse:collapse;font-size:11px}
 th{text-align:start;font-weight:500;color:var(--dim);font-size:10px;padding:5px 4px;
-  border-bottom:1px solid var(--rule);position:sticky;top:0;background:#0A1014}
-td{padding:5px 4px;border-bottom:1px solid rgba(31,44,54,.5);vertical-align:top}
+  border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--th-bg)}
+td{padding:5px 4px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
 tbody tr{cursor:pointer}
 tbody tr:hover{background:rgba(67,160,180,.07)}
 tbody tr.sel{background:rgba(255,107,74,.12)}
@@ -178,7 +196,7 @@ textarea:focus{border-color:var(--cy)}
 /* Neutral by default. A count is information; only a real problem is loud,
    because a badge that is always lit is a badge nobody reads. */
 .tabnav-badge{font-family:ui-monospace,monospace;font-size:10px;line-height:1;
-  padding:3px 5px;border-radius:3px;background:rgba(221,231,238,.09);color:var(--dim)}
+  padding:3px 5px;border-radius:3px;background:var(--hover-strong);color:var(--dim)}
 .tabnav button.on .tabnav-badge{color:var(--ink)}
 .tabnav-badge.warn{background:rgba(255,107,74,.15);color:var(--fld)}   /* the same colour a failed check already uses */
 
@@ -238,7 +256,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .map2d svg{flex:1;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
 .map2d svg:active{cursor:grabbing}
 .map2d-bar{display:flex;gap:8px;align-items:center;padding:8px 12px;
-  border-top:1px solid var(--rule);background:rgba(7,11,14,.7)}
+  border-top:1px solid var(--rule);background:var(--overlay)}
 .map2d-bar .ghost{align-self:auto}
 
 .models{display:flex;gap:6px;flex-wrap:wrap}
@@ -248,7 +266,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .models button:hover{border-color:var(--cy)}
 .models button b{font-size:12px;color:var(--ink)}
 .models button span{font-size:10px;line-height:1.5}
-.models button.on{border-color:var(--ink);background:rgba(221,231,238,.07)}
+.models button.on{border-color:var(--ink);background:var(--hover-strong)}
 .models button.on b{color:var(--ink)}
 
 .ask{border:1px solid var(--rule);border-radius:6px;padding:16px}
@@ -258,7 +276,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
   text-align:start;padding:14px;border:1px solid var(--rule);border-radius:5px;
   background:transparent;color:var(--dim);cursor:pointer;transition:border-color .15s,background .15s}
 .ask-opts button:hover{border-color:var(--cy)}
-.ask-opts button.on{border-color:var(--ink);background:rgba(221,231,238,.07)}
+.ask-opts button.on{border-color:var(--ink);background:var(--hover-strong)}
 .ask-opts button b{font-size:13px;color:var(--ink)}
 .ask-opts button span{font-size:11px;line-height:1.7}
 .chk{display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:12px;color:var(--ink);cursor:pointer}
@@ -269,33 +287,33 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 button.ghost:disabled{opacity:.4;cursor:not-allowed}
 
 /* ── persistence bar ─────────────────────────────────────────── */
-.savebar { border-top: 1px solid var(--line, #22303a); margin-top: 12px; padding-top: 12px;
+.savebar { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px;
   display: flex; flex-direction: column; gap: 8px; }
 .savebar .row { display: flex; gap: 6px; align-items: center; }
 .savebar input, .savebar select { flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px;
-  background: #0d1519; color: inherit; border: 1px solid var(--line, #22303a); border-radius: 6px; }
+  background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 6px; }
 .savebar button { white-space: nowrap; }
 
 /* ── revision diff ───────────────────────────────────────────── */
 .revdiff { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px;
-  border: 1px solid var(--line, #22303a); border-radius: 8px; background: #0d1519; }
-.revdiff.alarm { border-color: #FF6B4A; background: #1a0f0c; }
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.revdiff.alarm { border-color: #FF6B4A; background: var(--bad-bg); }
 .revdiff .rework { display: flex; flex-direction: column; gap: 3px; margin-top: 6px;
-  padding-top: 6px; border-top: 1px solid #3a2420; color: #FFB4A2; }
+  padding-top: 6px; border-top: 1px solid #3a2420; color: var(--bad-ink); }
 .revdiff .rework b { color: #FF6B4A; }
 
 /* ── draft disclaimer, on screen as well as on every export ──── */
 .disclaimer { margin-top: 8px; padding: 8px 10px; font-size: 11px; line-height: 1.8;
   border: 1px solid #FF6B4A44; border-right: 3px solid #FF6B4A; border-radius: 6px;
-  background: #1a0f0c; color: #FFB4A2; }
+  background: var(--bad-bg); color: var(--bad-ink); }
 
 /* ── session, review queue, edit panel ───────────────────────── */
 .sessionbar { display: flex; flex-direction: column; gap: 6px; }
 .sessionbar .row { display: flex; gap: 6px; align-items: center; }
 .sessionbar input, .sessionbar select { flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px;
-  background: #0d1519; color: inherit; border: 1px solid var(--line, #22303a); border-radius: 6px; }
+  background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 6px; }
 
-.queuebox { border: 1px solid var(--line, #22303a); border-radius: 10px; padding: 12px;
+.queuebox { border: 1px solid var(--line); border-radius: 10px; padding: 12px;
   display: flex; flex-direction: column; gap: 8px; }
 .queuebox .ask-q { font-weight: 600; }
 
@@ -303,15 +321,15 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .warnish { color: #E8C468; }
 
 .editpanel { display: flex; flex-direction: column; gap: 8px; }
-.editpanel input { padding: 6px 8px; font-size: 12px; background: #0d1519; color: inherit;
-  border: 1px solid var(--line, #22303a); border-radius: 6px; }
+.editpanel input { padding: 6px 8px; font-size: 12px; background: var(--panel); color: inherit;
+  border: 1px solid var(--line); border-radius: 6px; }
 .editpanel .locked { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px;
-  border: 1px solid #2E7D5B; border-radius: 8px; background: #0c1713; color: #9FD8BE; }
+  border: 1px solid #2E7D5B; border-radius: 8px; background: var(--ok-bg); color: var(--ok-ink); }
 .editpanel .pendinghead { padding-top: 4px; }
 
 .difftable { width: 100%; border-collapse: collapse; }
 .difftable th { text-align: right; font-weight: 500; opacity: .6; font-size: 11px; }
-.difftable td { padding: 3px 4px; border-top: 1px solid var(--line, #22303a); vertical-align: top; }
+.difftable td { padding: 3px 4px; border-top: 1px solid var(--line); vertical-align: top; }
 .difftable .was { color: #FF9C86; text-decoration: line-through; opacity: .75; }
 .difftable .now { color: #7FD6A8; }
 
@@ -322,19 +340,19 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .sheets { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 8px; max-height: 420px; overflow-y: auto; }
 .sheet { display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 6px; background: #0d1519; border: 1px solid var(--line, #22303a);
+  padding: 6px; background: var(--panel); border: 1px solid var(--line);
   border-radius: 8px; cursor: pointer; }
 .sheet:hover:not(:disabled) { border-color: #4AA3FF; }
 .sheet:disabled { opacity: .5; cursor: default; }
 .sheet img { width: 100%; height: auto; background: #fff; border-radius: 4px; }
 .sheet-blank { width: 100%; aspect-ratio: 1.41; display: grid; place-items: center;
-  background: #111c22; border-radius: 4px; opacity: .5; }
+  background: var(--panel); border-radius: 4px; opacity: .5; }
 
 /* The equipment-list import on the intake screen. Collapsed by default: it
    is a real entry point, but it is not the one most people arrive for. */
 .intake-more{margin:14px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .intake-more>summary{cursor:pointer;padding:10px 12px;font-size:13px;user-select:none}
-.intake-more>summary:hover{background:rgba(255,255,255,.03)}
+.intake-more>summary:hover{background:var(--hover)}
 .intake-more[open]>summary{border-bottom:1px solid var(--line)}
 .intake-more .pane{border:0;border-radius:0}
 
@@ -371,10 +389,10 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
   position:sticky;top:0;z-index:20}
 .topbar .brand{font-size:12px}
 .topbar .crumb{color:var(--dim);font-size:12px}
-.topbar select{background:#0A1116;border:1px solid var(--rule);color:var(--ink);
+.topbar select{background:var(--surf2);border:1px solid var(--rule);color:var(--ink);
   border-radius:4px;padding:5px 8px;font:inherit;font-size:12px;max-width:260px}
 .who{display:flex;align-items:center;gap:8px;font-size:12px}
-.avatar{width:26px;height:26px;border-radius:50%;background:var(--cy);color:#051015;
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--cy);color:var(--on-cy);
   display:grid;place-items:center;font-weight:700;font-size:11px;flex:none}
 
 /* ── left menu ───────────────────────────────────────────────────────── */
@@ -384,8 +402,8 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
   padding:14px var(--gap) 6px;text-transform:uppercase}
 .sidenav a{display:flex;align-items:center;gap:10px;padding:8px var(--gap);
   color:var(--ink);text-decoration:none;font-size:13px;border-inline-start:2px solid transparent}
-.sidenav a:hover{background:rgba(255,255,255,.04)}
-.sidenav a.on{border-inline-start-color:var(--cy);background:rgba(67,160,180,.10);color:#fff}
+.sidenav a:hover{background:var(--hover)}
+.sidenav a.on{border-inline-start-color:var(--cy);background:var(--cy-soft);color:var(--ink-strong)}
 .sidenav a.soon{color:var(--dim);pointer-events:none}
 .sidenav a .ic{width:18px;text-align:center;opacity:.8}
 .sidenav a .tail{margin-inline-start:auto;font-size:10px;color:var(--dim)}
@@ -430,7 +448,7 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .field{display:flex;flex-direction:column;gap:5px}
 .field > label{font-size:11px;color:var(--dim)}
 .field input,.field select,.field textarea,input.search{
-  background:#0A1116;border:1px solid var(--rule);border-radius:4px;color:var(--ink);
+  background:var(--surf2);border:1px solid var(--rule);border-radius:4px;color:var(--ink);
   padding:8px 10px;font:inherit;font-size:13px;outline:none;width:100%}
 .field input:focus,.field select:focus,.field textarea:focus,input.search:focus{border-color:var(--cy)}
 .field textarea{min-height:76px;resize:vertical}
@@ -442,7 +460,7 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
    fold; measuring the hints' boxes found it. */
 .field .hint{position:static;display:block;font-size:10px;color:var(--dim)}
 
-.btn{background:var(--cy);border:1px solid var(--cy);color:#051015;border-radius:4px;
+.btn{background:var(--cy);border:1px solid var(--cy);color:var(--on-cy);border-radius:4px;
   padding:8px 16px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .btn:disabled{opacity:.35;cursor:not-allowed;filter:grayscale(1)}
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
@@ -451,9 +469,9 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .dtable{width:100%;border-collapse:collapse;font-size:12px}
 .dtable th{text-align:start;font-weight:600;color:var(--dim);font-size:10px;
   letter-spacing:.08em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--rule)}
-.dtable td{padding:9px 10px;border-bottom:1px solid rgba(31,44,54,.55)}
+.dtable td{padding:9px 10px;border-bottom:1px solid var(--rule-soft)}
 .dtable tr:last-child td{border-bottom:0}
-.dtable tbody tr:hover{background:rgba(255,255,255,.025)}
+.dtable tbody tr:hover{background:var(--hover)}
 .wrap{overflow-x:auto}
 
 .pill{display:inline-block;font-size:10px;padding:2px 8px;border-radius:999px;
@@ -462,7 +480,7 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .pill.warn{color:var(--warn);border-color:rgba(224,163,62,.45)}
 .pill.bad{color:var(--bad);border-color:rgba(226,87,76,.45)}
 
-.bar{height:5px;background:#0A1116;border-radius:3px;overflow:hidden;min-width:70px}
+.bar{height:5px;background:var(--surf2);border-radius:3px;overflow:hidden;min-width:70px}
 .bar > i{display:block;height:100%;background:var(--cy)}
 
 .empty-note{color:var(--dim);font-size:12px;padding:20px;text-align:center;
@@ -507,7 +525,7 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 /* Links inside a page (tag numbers, "fix it here") read as links on the dark theme. */
 .page a{color:var(--cy);text-decoration:none} .page a:hover{text-decoration:underline}
 /* Offline: a strip pinned to the bottom, outside the shell's grid areas. */
-.offline-bar{position:fixed;inset-inline:0;bottom:0;z-index:50;background:#2b2210;color:var(--warn);
+.offline-bar{position:fixed;inset-inline:0;bottom:0;z-index:50;background:var(--warn-bg);color:var(--warn);
   border-top:1px solid rgba(224,163,62,.5);padding:6px 16px;font-size:12px;text-align:center}
 /* The field page is used standing up, one-handed: big targets. */
 .field-page .btn{min-height:44px}
@@ -555,4 +573,127 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
   .sidenav{position:sticky;top:0;z-index:15}
   .offline-bar{font-size:11px}
   .page{padding-bottom:56px}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LIGHT THEME
+   Same tokens, other values. Chosen per person (the shell's theme switch,
+   remembered in this browser). The 3D viewer and the weld map keep their
+   dark canvas on purpose: a model reads better on dark, as in any CAD.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root[data-theme="light"]{
+  --bg:#EEF2F5; --surf:#FFFFFF; --rule:#D6DEE4; --ink:#16222B; --dim:#5B6D79;
+  --cy:#1E7C92; --fld:#D2461F;
+  --ok:#1E8A5A; --warn:#A96C00; --bad:#C3362B;
+  --surf2:#F6F8FA; --panel:#F3F6F8; --th-bg:#F3F6F8; --line:#D6DEE4;
+  --rule-soft:#E6ECF0; --hover:rgba(22,34,43,.045); --hover-strong:rgba(22,34,43,.07);
+  --ink-strong:#0A1116; --on-cy:#FFFFFF;
+  --bg-grad:linear-gradient(180deg,#F3F6F8 0%,#E9EEF2 100%);
+  --warn-bg:#FFF4DC; --bad-bg:#FDECE8; --bad-ink:#9E2A1C; --ok-bg:#E8F6EF; --ok-ink:#1E6B47;
+  --cy-soft:rgba(30,124,146,.10); --overlay:rgba(255,255,255,.88);
+  --raise:0 1px 2px rgba(16,24,32,.06), 0 6px 18px rgba(16,24,32,.07);
+  color-scheme:light;
+}
+:root[data-theme="light"] .viewer, :root[data-theme="light"] .map2d{background:#0A1116}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SHELL v2 — the menu, the user menu, the drawer on a phone
+   ═══════════════════════════════════════════════════════════════════════ */
+.shell.rail{--nav-w:60px}
+.sidenav{display:flex;flex-direction:column;padding:0}
+.nav-top{padding:10px 10px 6px;position:sticky;top:0;background:var(--surf);z-index:2}
+.nav-search{position:relative}
+.nav-search input{width:100%;background:var(--surf2);border:1px solid var(--rule);border-radius:6px;color:var(--ink);
+  padding:7px 10px;padding-inline-end:52px;font:inherit;font-size:12px;outline:none}
+.nav-search input:focus{border-color:var(--cy)}
+.nav-search .k{position:absolute;inset-inline-end:8px;unicode-bidi:isolate;pointer-events:none;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dim);
+  border:1px solid var(--rule);border-radius:3px;padding:0 4px;font-family:var(--mono)}
+.nav-groups{flex:1;overflow-y:auto;padding-bottom:10px}
+.nav-grp > button.grp{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;cursor:pointer;
+  font-size:10px;letter-spacing:.12em;color:var(--dim);padding:12px var(--gap) 6px}
+.nav-grp > button.grp:hover{color:var(--ink)}
+.nav-grp > button.grp .chev{margin-inline-start:auto;transition:transform .15s;font-size:9px}
+.nav-grp.closed > button.grp .chev{transform:rotate(90deg)}
+.nav-grp.closed > .items{display:none}
+.sidenav a .badge{margin-inline-start:auto;font-size:10px;font-family:var(--mono);color:var(--dim)}
+.nav-foot{border-top:1px solid var(--rule);padding:8px 10px;display:flex;gap:6px;align-items:center}
+.nav-foot button{all:unset;cursor:pointer;color:var(--dim);font-size:12px;padding:6px 8px;border-radius:6px}
+.nav-foot button:hover{background:var(--hover);color:var(--ink)}
+.nav-empty{padding:10px var(--gap);font-size:12px;color:var(--dim)}
+/* Rail: icons only; the title shows on hover. */
+.shell.rail .sidenav .grp, .shell.rail .sidenav .t, .shell.rail .nav-search, .shell.rail .sidenav a .tail,
+.shell.rail .sidenav a .badge, .shell.rail .nav-foot .t{display:none}
+.shell.rail .sidenav a{justify-content:center;padding:10px 0}
+.shell.rail .nav-grp{border-bottom:1px solid var(--rule-soft)}
+.shell.rail .nav-grp.closed > .items{display:block}
+.shell.rail .nav-foot{flex-direction:column}
+
+/* The top bar */
+.topbar .hamb{display:none;all:unset;cursor:pointer;font-size:18px;padding:4px 8px;border-radius:6px}
+.topbar .hamb:hover{background:var(--hover)}
+.topbar .brand{display:flex;align-items:center;gap:8px}
+.topbar .brand .logo{width:24px;height:24px;border-radius:6px;background:var(--cy);color:var(--on-cy);display:grid;place-items:center;
+  font:700 11px/1 var(--mono);letter-spacing:0}
+.iconbtn{all:unset;cursor:pointer;display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;color:var(--ink);
+  border:1px solid var(--rule)}
+.iconbtn:hover{border-color:var(--cy);color:var(--cy)}
+.usermenu{position:relative}
+.usermenu > button{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:8px;font-size:12px}
+.usermenu > button:hover{background:var(--hover)}
+.usermenu .menu{position:absolute;inset-inline-end:0;top:calc(100% + 6px);min-width:240px;background:var(--surf);border:1px solid var(--rule);
+  border-radius:10px;box-shadow:var(--raise);padding:6px;z-index:40;display:flex;flex-direction:column}
+.usermenu .menu .head{padding:8px 10px;border-bottom:1px solid var(--rule);margin-bottom:4px;display:flex;flex-direction:column;gap:2px}
+.usermenu .menu .head .e{font-size:11px;color:var(--dim);direction:ltr;text-align:right}
+.usermenu .menu button, .usermenu .menu a{all:unset;cursor:pointer;padding:8px 10px;border-radius:6px;font-size:12px;display:flex;gap:8px;align-items:center}
+.usermenu .menu button:hover, .usermenu .menu a:hover{background:var(--hover)}
+.usermenu .menu .danger{color:var(--bad)}
+.role-pill{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--rule);color:var(--dim)}
+.role-pill.developer{color:var(--fld);border-color:var(--fld)}
+.role-pill.admin{color:var(--cy);border-color:var(--cy)}
+
+/* ═══ collapsible form cards ═══ */
+.fold{background:var(--surf);border:1px solid var(--rule);border-radius:8px}
+.fold > .fold-head{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;cursor:pointer;
+  padding:12px var(--gap);font-size:13px;font-weight:600}
+.fold > .fold-head:hover{background:var(--hover)}
+.fold > .fold-head .plus{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:var(--cy-soft);color:var(--cy);
+  font-weight:700;transition:transform .15s}
+.fold.open > .fold-head .plus{transform:rotate(45deg)}
+.fold > .fold-head .hint{position:static;font-weight:400;font-size:11px;color:var(--dim)}
+.fold > .fold-head .x{margin-inline-start:auto;font-size:11px;color:var(--dim);font-weight:400}
+.fold > .fold-body{border-top:1px solid var(--rule);padding:var(--gap)}
+.fold > .fold-body > form.card, .fold > .fold-body > .card{border:0;padding:0;background:none;box-shadow:none}
+.fold > .fold-body > form.card > h2:first-child, .fold > .fold-body > form > h2:first-child,
+.fold > .fold-body > .card > h2:first-child{display:none}
+
+/* ═══ table kit ═══ */
+.tk-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.tk-bar input, .tk-bar select{background:var(--surf2);border:1px solid var(--rule);border-radius:6px;color:var(--ink);
+  padding:6px 9px;font:inherit;font-size:12px;outline:none}
+.tk-bar input:focus, .tk-bar select:focus{border-color:var(--cy)}
+.tk-bar .tk-q{flex:1 1 200px;min-width:160px}
+.tk-bar .tk-n{font-size:11px;color:var(--dim);white-space:nowrap}
+.tk-bar button{all:unset;cursor:pointer;font-size:11px;color:var(--dim);padding:6px 9px;border:1px solid var(--rule);border-radius:6px}
+.tk-bar button:hover{color:var(--cy);border-color:var(--cy)}
+.dtable th.tk-sort{cursor:pointer;user-select:none;white-space:nowrap}
+.dtable th.tk-sort:hover{color:var(--ink)}
+.dtable th.tk-sort::after{content:" ⇅";opacity:.35;font-size:9px}
+.dtable th.tk-sort.asc::after{content:" ▲";opacity:.9}
+.dtable th.tk-sort.desc::after{content:" ▼";opacity:.9}
+.dtable tr[hidden]{display:none}
+mark.tk-hit{background:rgba(224,163,62,.35);color:inherit;border-radius:2px}
+
+/* ── phones: the menu is a drawer ── */
+@media (max-width:900px){
+  .shell, .shell.rail{grid-template-columns:1fr;grid-template-areas:"bar" "body";grid-template-rows:auto 1fr}
+  .topbar .hamb{display:inline-block}
+  .sidenav{position:fixed;inset-block:0;inset-inline-start:0;width:min(300px,86vw);z-index:60;transform:translateX(105%);
+    transition:transform .2s;display:flex !important;flex-direction:column;overflow:hidden;box-shadow:var(--raise);border-inline-end:1px solid var(--rule)}
+  .shell.drawer .sidenav{transform:none}
+  .sidenav > div{display:revert}
+  .sidenav a{border-bottom:0;border-inline-start:2px solid transparent;white-space:normal;border-radius:0}
+  .sidenav a.on{border-bottom:0;border-inline-start-color:var(--cy)}
+  .sidenav .grp{display:flex}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:55}
+  .shell.rail .sidenav .grp, .shell.rail .sidenav .t, .shell.rail .nav-search{display:revert}
 }

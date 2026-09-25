@@ -3,6 +3,8 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { STATUSES } from "../../lib/db/repos/assumptions.mjs";
+import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
 
 /**
  * What the project does not know, and what it has assumed.
@@ -62,7 +64,7 @@ export default function AssumptionsPage() {
           از همان داده‌ای حساب می‌شود که موتورها با آن حکم می‌دهند؛ هر ردیف یعنی سامانه به‌جای حدس زدن، منتظر این عدد مانده است.
         </p>
         {data.missing.length === 0 ? <p className="empty-note">چیزی منتظر اطلاعات نیست.</p> : (
-          <div className="wrap">
+          <TableKit name="assumptions">
             <table className="dtable">
               <thead><tr><th>اطلاعات لازم</th><th>رشتهٔ مسئول</th><th>اثر</th><th>منتظر</th><th>چرا</th><th /></tr></thead>
               <tbody>
@@ -78,7 +80,7 @@ export default function AssumptionsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
@@ -94,7 +96,7 @@ export default function AssumptionsPage() {
           فرض، دادهٔ تأییدشدهٔ پروژه نیست. تغییر هر فرض یک رویژن جدید است و تأیید قبلی را به «در دست بررسی» برمی‌گرداند.
         </p>
         {data.assumptions.length === 0 ? <p className="empty-note">هنوز فرضی ثبت نشده است.</p> : (
-          <div className="wrap">
+          <TableKit name="assumptions">
             <table className="dtable">
               <thead><tr><th>کد</th><th>دسته</th><th>شرح</th><th>مقدار</th><th>مالک</th><th>اثر</th><th>وضعیت</th><th>Rev</th><th /></tr></thead>
               <tbody>
@@ -104,11 +106,11 @@ export default function AssumptionsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
-      {mayEdit && <Propose post={post} />}
+      {mayEdit && <Fold title="پیشنهاد فرض جدید"><Propose post={post} /></Fold>}
     </div>
   );
 }
@@ -177,7 +179,7 @@ function Detail({ a, history, mayEdit, mayDecide, post }) {
         </form>
       )}
       {history && history.length > 0 && (
-        <div className="wrap">
+        <TableKit name="assumptions">
           <table className="dtable">
             <thead><tr><th>Rev</th><th>وضعیت</th><th>مقدار</th><th>دلیل تغییر بعدی</th><th>توسط</th><th>زمان</th></tr></thead>
             <tbody>
@@ -193,7 +195,7 @@ function Detail({ a, history, mayEdit, mayDecide, post }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableKit>
       )}
     </div>
   );

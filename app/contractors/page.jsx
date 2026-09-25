@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import TableKit from "../../components/ui/TableKit";
 
 /**
  * The companies doing the work, and what each one holds.
@@ -52,7 +53,7 @@ export default function ContractorsPage() {
             این شرکت‌ها هم‌اکنون پکیج کاری در دست دارند و تأییدیهٔ صلاحیت‌شان
             منقضی شده است. همین ترکیب است که در ممیزی یافته می‌شود.
           </p>
-          <div className="wrap">
+          <TableKit name="contractors">
             <table className="dtable">
               <thead><tr><th>کد</th><th>نام</th><th>انقضا</th><th>پکیج‌ها</th></tr></thead>
               <tbody>
@@ -66,7 +67,7 @@ export default function ContractorsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         </div>
       )}
 
@@ -78,7 +79,7 @@ export default function ContractorsPage() {
         {contractors.length === 0 ? (
           <p className="empty-note">هنوز پیمانکاری ثبت نشده است.</p>
         ) : (
-          <div className="wrap">
+          <TableKit name="contractors">
             <table className="dtable">
               <thead>
                 <tr>
@@ -105,7 +106,7 @@ export default function ContractorsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
 
@@ -117,7 +118,7 @@ export default function ContractorsPage() {
         {packages.length === 0 ? (
           <p className="empty-note">هنوز پکیج کاری تعریف نشده است.</p>
         ) : (
-          <div className="wrap">
+          <TableKit name="contractors">
             <table className="dtable">
               <thead>
                 <tr>
@@ -147,7 +148,7 @@ export default function ContractorsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableKit>
         )}
       </div>
     </div>

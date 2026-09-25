@@ -36,7 +36,13 @@ export const viewport = {
  */
 export default function RootLayout({ children }) {
   return (
-    <html lang="fa" dir="rtl">
+    <html lang="fa" dir="rtl" suppressHydrationWarning>
+      <head>
+        {/* The theme, before the first paint: without this a light-theme user
+            sees the dark page flash on every load. */}
+        <script dangerouslySetInnerHTML={{ __html:
+          "try{var t=localStorage.getItem('epc.theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}" }} />
+      </head>
       <body>
         <ServiceWorker />
         <PlatformProvider>
