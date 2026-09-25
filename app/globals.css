@@ -504,3 +504,5 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .kpi .b{font-size:10px;color:var(--dim)}
 .kpi.bad .v{color:var(--bad)} .kpi.warn .v{color:var(--warn)} .kpi.ok .v{color:var(--ok)}
 .dtable td.ok{color:var(--ok)} .dtable td.warn{color:var(--warn)} .dtable td.bad{color:var(--bad)}
+/* Links inside a page (tag numbers, "fix it here") read as links on the dark theme. */
+.page a{color:var(--cy);text-decoration:none} .page a:hover{text-decoration:underline}

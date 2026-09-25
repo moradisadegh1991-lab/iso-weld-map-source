@@ -296,6 +296,8 @@ test("anybody on site records HSE; only an engineer or admin issues a permit", a
   equal(["viewer", "qc", "engineer", "admin"].map((role) => can({ role }, ACTIONS.RECORD_HSE)), [false, true, true, true]);
   equal(["viewer", "qc", "engineer", "admin"].map((role) => can({ role }, ACTIONS.ISSUE_PERMIT)), [false, false, true, true]);
   equal(["viewer", "qc", "engineer", "admin"].map((role) => can({ role }, ACTIONS.MANAGE_CONTROLS)), [false, false, true, true]);
+  equal(["viewer", "qc", "engineer", "admin"].map((role) => can({ role }, ACTIONS.RECORD_QUALITY)), [false, true, true, true]);
+  equal(["viewer", "qc", "engineer", "admin"].map((role) => can({ role }, ACTIONS.APPROVE_CONCESSION)), [false, false, true, true]);
 });
 
 test("assertCan throws a 403 rather than returning false", async () => {

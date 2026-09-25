@@ -47,6 +47,8 @@ import {
 import {
   upsertAccount, setBaseline, reportProgress, postCost, upsertRisk, closeRisk, listRisks,
 } from "../lib/db/repos/controls.mjs";
+import { raisePunch, punchAction, raiseNcr, ncrAction } from "../lib/db/repos/quality.mjs";
+import { ensureUser } from "../lib/db/repos/projects.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -742,6 +744,66 @@ try {
     const r5 = (await listRisks(db, { projectId: p.id, today: dd(0) })).find((r) => r.code === "R-05");
     if (r5.status === "open") await closeRisk(db, { projectId: p.id, riskId: r5.id, closedOn: dd(-18) });
     console.log("controls: 5 accounts (2 reported, 3 platform-counted), cost with one reversal, 5 risks");
+
+    // ── punch and NCR ─────────────────────────────────────────────────────
+    //
+    // Two named site people who cannot log in: a walkdown needs a clearer
+    // and a verifier who are not the same person, and the seeding account
+    // is only one.
+    const qcInsp = await ensureUser(db, { subject: "demo|qc-inspector", displayName: "بازرس QC (دمو)" });
+    const supv = await ensureUser(db, { subject: "demo|c02-supervisor", displayName: "سرپرست C-02 (دمو)" });
+    const tagOf = async (no) => (await db.query("SELECT id FROM tag WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0].id;
+    const { rows: [havePunch] } = await db.query("SELECT count(*)::int AS n FROM punch_item WHERE project_id = $1", [p.id]);
+    if (havePunch.n === 0) {
+      const PUNCH = [
+        // tag, cat, description, contractor, raised (days ago), due (days from now), then: clear? verify?
+        ["K-2101", "A", "Lube oil console: flushing certificate missing", mech, -12, -2, false, false],
+        ["K-2101", "A", "Coupling guard not installed (DE side)", mech, -12, 5, true, false],
+        ["KT-2101", "B", "Insulation damaged at steam inlet flange", mech, -9, 10, false, false],
+        ["V-2102", "C", "Nameplate paint overspray", mech, -9, 30, false, false],
+        ["T-2103", "A", "Davit not load tested", mech, -20, -6, true, true],
+        ["P-1203A", "A", "Baseplate grouting voids at anchor bolt 3", civil, -15, -1, false, false],
+        ["P-1203B", "B", "Seal flush line support missing", mech, -15, 7, false, false],
+        ["F-1101A", "A", "Burner BR-12 pilot line not connected", mech, -5, 12, false, false],
+        ["F-1101A", "B", "Peep door gasket missing (arch level)", mech, -5, 20, true, false],
+        ["P-6101A", "C", "Drain funnel to be relocated 150 mm", mech, -30, 15, true, true],
+      ];
+      for (const [no, cat, description, c, r, d, clear, verify] of PUNCH) {
+        const item = await raisePunch(db, { projectId: p.id, tagId: await tagOf(no), category: cat, description,
+          actionContractorId: c.id, raisedOn: dd(r), dueOn: dd(d), userId: qcInsp.id });
+        if (clear) await punchAction(db, { projectId: p.id, punchId: item.id, action: "clear", note: "Done, see photo", onDate: dd(r + 3), userId: supv.id });
+        if (verify) await punchAction(db, { projectId: p.id, punchId: item.id, action: "verify", onDate: dd(r + 4), userId: qcInsp.id });
+      }
+      const x = await raisePunch(db, { projectId: p.id, tagId: await tagOf("V-2104A"), category: "A",
+        description: "Molecular sieve loading record not signed", actionContractorId: mech.id, raisedOn: dd(-4), userId: qcInsp.id });
+      await punchAction(db, { projectId: p.id, punchId: x.id, action: "recategorise", category: "B",
+        note: "Loading record is a pre-commissioning item per MC procedure §4.2", userId: user.id });
+    }
+    const { rows: [haveNcr] } = await db.query("SELECT count(*)::int AS n FROM ncr WHERE project_id = $1", [p.id]);
+    if (haveNcr.n === 0) {
+      const n1 = await raiseNcr(db, { projectId: p.id, title: "Anchor bolt projection short on K-2101 foundation",
+        description: "4 of 16 bolts 12–18 mm short of the projection on the foundation drawing",
+        requirement: "Foundation drawing 21-CV-DW-0104 note 6", source: "Survey before grouting", severity: "major",
+        discipline: "civil", tagId: await tagOf("K-2101"), contractorId: civil.id, raisedOn: dd(-45), responseDue: dd(-35), userId: qcInsp.id });
+      await ncrAction(db, { projectId: p.id, ncrId: n1.id, action: "propose", disposition: "repair",
+        dispositionNote: "Coupler nuts per vendor-approved detail", userId: supv.id });
+      await ncrAction(db, { projectId: p.id, ncrId: n1.id, action: "approve", userId: user.id, actorIsEngineer: true });
+      await ncrAction(db, { projectId: p.id, ncrId: n1.id, action: "implement", note: "Couplers fitted, torque recorded",
+        rootCause: "Template shifted during pour; no check after vibration", correctiveAction: "Template re-survey after vibration added to pour checklist",
+        userId: supv.id });
+      await ncrAction(db, { projectId: p.id, ncrId: n1.id, action: "close", userId: qcInsp.id });
+      await raiseNcr(db, { projectId: p.id, title: "Wrong gasket material on quench oil pump suction",
+        description: "SS316 spiral wound fitted; class sheet calls for inner ring 321", requirement: "Piping class DX01",
+        source: "Walkdown", severity: "major", discipline: "piping", tagId: await tagOf("P-1203A"), contractorId: mech.id,
+        raisedOn: dd(-28), responseDue: dd(-21), userId: qcInsp.id });
+      const n3 = await raiseNcr(db, { projectId: p.id, title: "DFT below minimum on pipe rack PR-01 bay 4",
+        description: "Readings 180–205 µm against 250 µm specified", requirement: "Painting spec, system C4-H",
+        source: "Coating inspection", severity: "minor", discipline: "structural", subsystemId: sub["60-01"].id,
+        contractorId: mech.id, raisedOn: dd(-10), responseDue: dd(4), userId: qcInsp.id });
+      await ncrAction(db, { projectId: p.id, ncrId: n3.id, action: "propose", disposition: "rework",
+        dispositionNote: "Apply an extra coat of topcoat after sweep blast", userId: supv.id });
+    }
+    console.log("quality: 11 punch items (one recategorised A→B), 3 NCRs (one closed, one overdue)");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks

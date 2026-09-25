@@ -92,6 +92,11 @@ const HSE = [
   ["hse_permit_max_hours", "حداکثر مدت مجوز (ساعت)", "0.5", "مثلاً یک شیفت"],
 ];
 
+/** Quality: when an overdue NCR goes to the project manager. No default. */
+const QUALITY = [
+  ["ncr_escalation_days", "مهلت تشدید NCR معوق (روز)", "1", "بعد از این تعداد روز تأخیر، NCR به مدیر پروژه می‌رود"],
+];
+
 /** Instrument calibration tolerance, used where a datasheet gives none. */
 const INSTRUMENTS = [
   ["calibration_tolerance_pct", "تلورانس کالیبراسیون (% اسپن)", "0.001",
@@ -114,7 +119,7 @@ export default function ProjectPage() {
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
       .concat([["description", p.description ?? ""],
                ["steel_erection_standard", p.steel_erection_standard ?? ""],
-               ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING, ...HSE].map(([k]) => [k, p[k] ?? ""])])));
+               ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING, ...HSE, ...QUALITY].map(([k]) => [k, p[k] ?? ""])])));
   }, [data]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setSaved(false); }
@@ -253,6 +258,18 @@ export default function ProjectPage() {
               <input id={k} type="number" step={step} disabled={!editable} dir="ltr"
                      value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
               {hint && <span className="hint">{hint}</span>}
+            </div>
+          ))}
+        </div>
+
+        <h2 style={{ marginTop: 8 }}>کیفیت — Punch و NCR</h2>
+        <div className="grid2">
+          {QUALITY.map(([k, label, step, hint]) => (
+            <div className="field" key={k}>
+              <label htmlFor={k}>{label}</label>
+              <input id={k} type="number" step={step} disabled={!editable} dir="ltr"
+                     value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
+              <span className="hint">{hint}</span>
             </div>
           ))}
         </div>

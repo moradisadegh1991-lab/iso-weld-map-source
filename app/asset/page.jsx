@@ -139,6 +139,17 @@ function Thread({ t, open }) {
             mid={`${t.coating.pct}% · ${t.coating.next.join("، ") || "—"}`}
             right={t.coating.ready ? <span className="pill ok">تحویل‌شده</span> : null} />}
         </Section>
+        <Section title="Punch و NCR" href="/quality" empty={!t.punch.length && !t.ncrs.length}>
+          {t.punch.map((p) => (
+            <Line key={p.id} left={<span className="mono">{p.punch_no}</span>} mid={`${p.category} · ${p.description}`}
+                  right={p.status === "closed" ? <span className="pill ok">بسته</span>
+                    : <span className={`pill ${p.category === "A" ? "bad" : "warn"}`}>{p.status === "cleared" ? "منتظر تأیید" : "باز"}</span>} />
+          ))}
+          {t.ncrs.map((n) => (
+            <Line key={n.id} left={<span className="mono">{n.ncr_no}</span>} mid={n.title}
+                  right={<span className={`pill ${n.status === "closed" ? "ok" : "bad"}`}>{n.status === "closed" ? "بسته" : "باز"}</span>} />
+          ))}
+        </Section>
         <Section title="قراردادها" href="/contractors" empty={!t.packages.length}>
           {t.packages.map((p) => (
             <Line key={p.code} left={<span className="mono">{p.code}</span>} mid={`${p.discipline} · ${p.contractor}`} />
