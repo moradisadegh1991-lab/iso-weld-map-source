@@ -37,6 +37,9 @@ import {
 } from "../lib/db/repos/coating.mjs";
 import { minReadings } from "../lib/coating/coating.mjs";
 import { addBaseline, decideAssumption, listAssumptions } from "../lib/db/repos/assumptions.mjs";
+import {
+  upsertItem, receiveLot, inspectLot, reviewMtc, recordMovement, setRequirement,
+} from "../lib/db/repos/warehouse.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -536,6 +539,54 @@ try {
       await decideAssumption(db, { projectId: p.id, assumptionId: feed.id, status: "approved", userId: user.id });
     }
     console.log("assumptions: master plan baseline");
+
+    // ── warehouse: lots through MIR and MTC, issues to spools ──
+    //
+    //   H-77120  10" pipe, accepted, issued to spools 1 and 2 — then its MTC
+    //            is rejected: the recall list names both spools
+    //   H-88031  10" pipe, received, MIR pending — quarantine
+    //   elbows   accepted but MTC not yet reviewed — not issuable
+    //   cable    accepted on inspection alone (not heat-traceable)
+    const ITEMS = [
+      ["PIPE-10-S40-A106B", 'PIPE 10" SCH40 SMLS', "pipe", "m", "ASTM A106 Gr.B"],
+      ["ELL90-10-S40-A234", 'ELBOW 90 LR 10" SCH40', "fitting", "EA", "ASTM A234 WPB"],
+      ["FLG-WN-10-150", 'FLANGE WN 10" CL150 RF', "flange", "EA", "ASTM A105"],
+      ["CBL-3C35-XLPE", "CABLE 3Cx35 XLPE/SWA 0.6/1kV", "cable", "m", null],
+    ];
+    const it = {};
+    for (const [code, description, category, uom, spec] of ITEMS) {
+      it[code] = await upsertItem(db, { projectId: p.id, code, description, category, uom, spec });
+    }
+    for (const [code, qty] of [["PIPE-10-S40-A106B", 180], ["ELL90-10-S40-A234", 24], ["FLG-WN-10-150", 16], ["CBL-3C35-XLPE", 900]]) {
+      await setRequirement(db, { projectId: p.id, itemId: it[code].id, qty, source: "MTO-CW-930065 Rev.0" });
+    }
+    const { rows: [haveLots] } = await db.query("SELECT count(*)::int AS n FROM material_lot WHERE project_id = $1", [p.id]);
+    if (haveLots.n === 0 && cwSpools.length >= 2) {
+      const l1 = await receiveLot(db, { projectId: p.id, itemId: it["PIPE-10-S40-A106B"].id, receiptNo: "MRR-0012",
+        poRef: "PO-P-0031", supplier: "Supplier A (demo)", receivedOn: "2026-08-02", heatNo: "H-77120",
+        mtcRef: "MTC-77120", qtyReceived: 96, location: "Laydown L-3", userId: user.id });
+      await inspectLot(db, { projectId: p.id, lotId: l1.id, qtyAccepted: 96, qtyRejected: 0, mirRef: "MIR-0012", inspectedOn: "2026-08-03" });
+      await reviewMtc(db, { projectId: p.id, lotId: l1.id, mtcStatus: "accepted" });
+      await recordMovement(db, { projectId: p.id, lotId: l1.id, kind: "issue", qty: 24, movedOn: "2026-08-05",
+        refNo: "MIV-0101", spoolId: cwSpools[0].id, contractorId: mech.id, userId: user.id });
+      await recordMovement(db, { projectId: p.id, lotId: l1.id, kind: "issue", qty: 18, movedOn: "2026-08-06",
+        refNo: "MIV-0102", spoolId: cwSpools[1].id, contractorId: mech.id, userId: user.id });
+      await reviewMtc(db, { projectId: p.id, lotId: l1.id, mtcStatus: "rejected" });   // chemistry out of spec, found late
+      await receiveLot(db, { projectId: p.id, itemId: it["PIPE-10-S40-A106B"].id, receiptNo: "MRR-0019",
+        poRef: "PO-P-0031", supplier: "Supplier A (demo)", receivedOn: "2026-09-20", heatNo: "H-88031",
+        mtcRef: "MTC-88031", qtyReceived: 72, location: "Laydown L-3", userId: user.id });
+      const l3 = await receiveLot(db, { projectId: p.id, itemId: it["ELL90-10-S40-A234"].id, receiptNo: "MRR-0015",
+        poRef: "PO-P-0034", supplier: "Supplier B (demo)", receivedOn: "2026-08-20", heatNo: "E-5521",
+        mtcRef: "MTC-5521", qtyReceived: 20, location: "Store S-1", userId: user.id });
+      await inspectLot(db, { projectId: p.id, lotId: l3.id, qtyAccepted: 18, qtyRejected: 2, mirRef: "MIR-0015", inspectedOn: "2026-08-21" });
+      const l4 = await receiveLot(db, { projectId: p.id, itemId: it["CBL-3C35-XLPE"].id, receiptNo: "MRR-0017",
+        poRef: "PO-E-0007", supplier: "Supplier C (demo)", receivedOn: "2026-09-01", qtyReceived: 1000,
+        location: "Cable yard", userId: user.id });
+      await inspectLot(db, { projectId: p.id, lotId: l4.id, qtyAccepted: 1000, mirRef: "MIR-0017", inspectedOn: "2026-09-02" });
+      await recordMovement(db, { projectId: p.id, lotId: l4.id, kind: "issue", qty: 115, movedOn: "2026-09-09",
+        refNo: "MIV-0203", purpose: "EC-1203A-P", contractorId: elec.id, userId: user.id });
+    }
+    console.log("warehouse: 4 items, lots through MIR/MTC, one late-rejected heat");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks
