@@ -494,3 +494,12 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
    other end. A wrong line number on an engineering screen is a defect, not
    a style issue — and it was only visible in a screenshot. */
 .dtable td.mono{direction:ltr;text-align:right;unicode-bidi:isolate}
+
+/* Headline figures (HSE, project controls): a number, its label, its base. */
+.kpis{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:700px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--surf);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi .v{font-size:22px;font-weight:600;direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:11px;color:var(--dim)}
+.kpi .b{font-size:10px;color:var(--dim)}
+.kpi.bad .v{color:var(--bad)} .kpi.warn .v{color:var(--warn)} .kpi.ok .v{color:var(--ok)}

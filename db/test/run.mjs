@@ -292,6 +292,11 @@ test("QC may record NDT and an engineer may not", async () => {
   equal(can({ role: "engineer" }, ACTIONS.RECORD_NDT), false);
 });
 
+test("anybody on site records HSE; only an engineer or admin issues a permit", async () => {
+  equal(["viewer", "qc", "engineer", "admin"].map((role) => can({ role }, ACTIONS.RECORD_HSE)), [false, true, true, true]);
+  equal(["viewer", "qc", "engineer", "admin"].map((role) => can({ role }, ACTIONS.ISSUE_PERMIT)), [false, false, true, true]);
+});
+
 test("assertCan throws a 403 rather than returning false", async () => {
   const e = await throws(() => assertCan({ role: "viewer" }, ACTIONS.APPROVE_REGISTER), "FORBIDDEN");
   equal(e.status, 403);

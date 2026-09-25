@@ -81,6 +81,17 @@ const COATING = [
   ["coating_max_rh_pct", "حداکثر رطوبت نسبی هنگام رنگ (%)", "0.1", "خالی = رطوبت سنجیده نمی‌شود؛ طبق دیتاشیت رنگ"],
 ];
 
+/** HSE gas-test limits and permit duration. None has a default. */
+const HSE = [
+  ["hse_o2_min_pct", "حداقل O2 (%)", "0.1", "مثلاً 19.5 — طبق دستورالعمل PTW کارفرما"],
+  ["hse_o2_max_pct", "حداکثر O2 (%)", "0.1", "مثلاً 23.5"],
+  ["hse_lel_max_pct", "حداکثر LEL برای کار گرم (%)", "0.1", "بسیاری از دستورالعمل‌ها 0"],
+  ["hse_h2s_max_ppm", "حداکثر H2S (ppm)", "0.1", ""],
+  ["hse_co_max_ppm", "حداکثر CO (ppm)", "0.1", ""],
+  ["hse_gas_test_validity_min", "اعتبار تست گاز (دقیقه)", "1", "تست قدیمی‌تر از این، صدور را متوقف می‌کند"],
+  ["hse_permit_max_hours", "حداکثر مدت مجوز (ساعت)", "0.5", "مثلاً یک شیفت"],
+];
+
 /** Instrument calibration tolerance, used where a datasheet gives none. */
 const INSTRUMENTS = [
   ["calibration_tolerance_pct", "تلورانس کالیبراسیون (% اسپن)", "0.001",
@@ -103,7 +114,7 @@ export default function ProjectPage() {
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
       .concat([["description", p.description ?? ""],
                ["steel_erection_standard", p.steel_erection_standard ?? ""],
-               ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING].map(([k]) => [k, p[k] ?? ""])])));
+               ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING, ...HSE].map(([k]) => [k, p[k] ?? ""])])));
   }, [data]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setSaved(false); }
@@ -230,6 +241,18 @@ export default function ProjectPage() {
               <input id={k} type="number" step={step} disabled={!editable} dir="ltr"
                      value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
               <span className="hint">{hint}</span>
+            </div>
+          ))}
+        </div>
+
+        <h2 style={{ marginTop: 8 }}>HSE — حدود تست گاز و مجوز کار</h2>
+        <div className="grid2">
+          {HSE.map(([k, label, step, hint]) => (
+            <div className="field" key={k}>
+              <label htmlFor={k}>{label}</label>
+              <input id={k} type="number" step={step} disabled={!editable} dir="ltr"
+                     value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
+              {hint && <span className="hint">{hint}</span>}
             </div>
           ))}
         </div>

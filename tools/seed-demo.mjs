@@ -40,6 +40,10 @@ import { addBaseline, decideAssumption, listAssumptions } from "../lib/db/repos/
 import {
   upsertItem, receiveLot, inspectLot, reviewMtc, recordMovement, setRequirement,
 } from "../lib/db/repos/warehouse.mjs";
+import {
+  recordManhours, reportIncident, updateIncident, requestPermit, recordGasTest, activatePermit, recordObservation,
+  closeObservation,
+} from "../lib/db/repos/hse.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -587,6 +591,86 @@ try {
         refNo: "MIV-0203", purpose: "EC-1203A-P", contractorId: elec.id, userId: user.id });
     }
     console.log("warehouse: 4 items, lots through MIR/MTC, one late-rejected heat");
+
+    // ── HSE: hours, incidents as facts, permits around "now", observations ──
+    //
+    //   INC-0001  pinched finger, first an MTC, then two days off → LWC
+    //   INC-0004  injury reported, treatment not yet known → no class
+    //   HW-0099   yesterday's hot work, issued and never closed → expired
+    //   HW-0101   hot work at F-1101A, gas test passed, issued
+    //   CS-0102   firebox entry at F-1101A, no standby named → not issuable,
+    //             and SIMOPS with HW-0101
+    //
+    // Gas limits are the demo's own figures, stated as a project would; the
+    // engine has no defaults for them.
+    await updateProjectProfile(db, { projectId: p.id, patch: {
+      hse_o2_min_pct: 19.5, hse_o2_max_pct: 23.5, hse_lel_max_pct: 0, hse_h2s_max_ppm: 5, hse_co_max_ppm: 25,
+      hse_gas_test_validity_min: 120, hse_permit_max_hours: 12 } });
+    const day0 = new Date();
+    for (let d = 30; d >= 1; d--) {
+      const workDate = new Date(day0.getTime() - d * 86_400_000).toISOString().slice(0, 10);
+      if (new Date(workDate).getUTCDay() === 5) continue;          // Friday off
+      for (const [c, heads, h] of [[civil, 900, 10], [mech, 1400, 10], [elec, 350, 10], [null, 250, 9]]) {
+        await recordManhours(db, { projectId: p.id, contractorId: c?.id || null, workDate, hours: heads * h, headcount: heads, userId: user.id });
+      }
+    }
+    const ago = (days, hour = 9) => {
+      const t = new Date(day0.getTime() - days * 86_400_000); t.setUTCHours(hour, 0, 0, 0); return t.toISOString();
+    };
+    const { rows: [haveInc] } = await db.query("SELECT count(*)::int AS n FROM hse_incident WHERE project_id = $1", [p.id]);
+    if (haveInc.n === 0) {
+      const i1 = await reportIncident(db, { projectId: p.id, refNo: "INC-0001", occurredAt: ago(21), area: "Pipe shop",
+        contractorId: mech.id, description: "Fitter's finger pinched between flange faces during fit-up",
+        injured: true, fatal: false, daysAway: 0, restrictedDays: 0, treatment: "medical", userId: user.id });
+      await updateIncident(db, { projectId: p.id, incidentId: i1.id, patch: { daysAway: 2 },
+        reason: "Clinic note: two days off work after the day of injury", userId: user.id });
+      await reportIncident(db, { projectId: p.id, refNo: "INC-0002", occurredAt: ago(14), area: "FDN-PR-01",
+        contractorId: civil.id, description: "Slip on formwork oil, grazed hand", injured: true, fatal: false,
+        daysAway: 0, restrictedDays: 0, treatment: "first_aid", userId: user.id });
+      await reportIncident(db, { projectId: p.id, refNo: "INC-0003", occurredAt: ago(9), area: "PR-1201",
+        contractorId: mech.id, description: "Spanner dropped from rack level 2 into barricaded zone", injured: false,
+        userId: user.id });
+      await reportIncident(db, { projectId: p.id, refNo: "INC-0004", occurredAt: ago(1, 14), area: "Cable yard",
+        contractorId: elec.id, description: "Back strain pulling cable drum", injured: true, fatal: false, userId: user.id });
+    }
+    const { rows: [havePtw] } = await db.query("SELECT count(*)::int AS n FROM hse_permit WHERE project_id = $1", [p.id]);
+    if (havePtw.n === 0) {
+      const at = (h) => new Date(day0.getTime() + h * 3_600_000).toISOString();
+      const clean = { o2Pct: 20.9, lelPct: 0, h2sPpm: 0, coPpm: 0, testerName: "Gas tester (demo)", instrument: "4-gas detector GD-07" };
+      const old = await requestPermit(db, { projectId: p.id, permitNo: "HW-0099", type: "hot", area: "PR-1201",
+        description: "Weld shoe supports on rack level 1", contractorId: mech.id, requesterName: "C-02 foreman",
+        validFrom: at(-30), validTo: at(-20) });
+      await recordGasTest(db, { projectId: p.id, permitId: old.id, testedAt: at(-30.2), ...clean, userId: user.id });
+      await activatePermit(db, { projectId: p.id, permitId: old.id, userId: user.id, now: at(-29.9) });
+      const hw = await requestPermit(db, { projectId: p.id, permitNo: "HW-0101", type: "hot", area: "F-1101A",
+        description: "Grind and weld convection section access door hinges", contractorId: mech.id,
+        requesterName: "C-02 foreman", validFrom: at(-1), validTo: at(7) });
+      await recordGasTest(db, { projectId: p.id, permitId: hw.id, testedAt: at(-0.2), ...clean, userId: user.id });
+      await activatePermit(db, { projectId: p.id, permitId: hw.id, userId: user.id });
+      await requestPermit(db, { projectId: p.id, permitNo: "CS-0102", type: "confined_space", area: "F-1101A",
+        description: "Firebox entry to inspect refractory anchors", contractorId: civil.id,
+        requesterName: "C-01 supervisor", validFrom: at(2), validTo: at(10) });
+      await requestPermit(db, { projectId: p.id, permitNo: "EI-0103", type: "electrical_isolation", area: "SS-01",
+        description: "Terminate EC-1203A-P at MCC", contractorId: elec.id, requesterName: "C-03 electrician",
+        validFrom: at(1), validTo: at(9), isolationRef: "LOTO-0045" });
+    }
+    const { rows: [haveObs] } = await db.query("SELECT count(*)::int AS n FROM hse_observation WHERE project_id = $1", [p.id]);
+    if (haveObs.n === 0) {
+      const d = (k) => new Date(day0.getTime() + k * 86_400_000).toISOString().slice(0, 10);
+      await recordObservation(db, { projectId: p.id, observedOn: d(-8), kind: "unsafe_condition", severity: "high",
+        area: "PR-1201", contractorId: mech.id, description: "Toe board missing on rack level 2 walkway",
+        action: "Fit toe boards before any work above", dueOn: d(-6), userId: user.id });
+      await recordObservation(db, { projectId: p.id, observedOn: d(-2), kind: "unsafe_act", severity: "medium",
+        area: "Pipe shop", contractorId: mech.id, description: "Grinding without face shield",
+        action: "Toolbox talk; face shields at every grinding station", dueOn: d(3), userId: user.id });
+      const o3 = await recordObservation(db, { projectId: p.id, observedOn: d(-12), kind: "unsafe_condition", severity: "low",
+        area: "FDN-PR-02", contractorId: civil.id, description: "Rebar ends without caps",
+        action: "Cap all protruding rebar", dueOn: d(-10), userId: user.id });
+      await closeObservation(db, { projectId: p.id, observationId: o3.id, closedOn: d(-11), note: "Caps fitted, checked by HSE" });
+      await recordObservation(db, { projectId: p.id, observedOn: d(-5), kind: "good_practice", area: "PR-1201",
+        contractorId: mech.id, description: "Radiography barricade and signage exemplary", userId: user.id });
+    }
+    console.log("hse: 30 days of hours, 4 incidents, 4 permits (one expired, one SIMOPS), 4 observations");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks
