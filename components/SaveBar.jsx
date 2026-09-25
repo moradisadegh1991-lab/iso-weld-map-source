@@ -31,6 +31,25 @@ async function sha256Hex(buf) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * A large file, straight into the bucket. True when the bucket holds it
+ * (uploaded now, or already there); false when this server has no bucket.
+ * Any other failure is an error — not a quiet fall back to "hash only".
+ */
+async function uploadDirect(call, { projectId, sha256, byteSize, contentType, buf }) {
+  let slot;
+  try {
+    slot = await call("/api/documents/upload-url", { method: "POST", body: JSON.stringify({ projectId, sha256, byteSize, contentType }) });
+  } catch (e) {
+    if (e?.res?.status === 409) return false;
+    throw e;
+  }
+  if (slot.exists) return true;
+  const res = await fetch(slot.url, { method: slot.method, headers: slot.headers, body: buf });
+  if (!res.ok) throw new Error(`بارگذاری در MinIO رد شد (${res.status})`);
+  return true;
+}
+
 export default function SaveBar({ session, data, model, sourceFile, strictBom, onSaved }) {
   const { projectId, identity, call } = session;
   const [state, setState] = useState({ phase: "idle" });
@@ -47,14 +66,16 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
 
     setState({ phase: "busy", msg: "ثبت سند…" });
     try {
-      let fileBase64 = null, fileSha256 = null, byteSize = null;
+      let fileBase64 = null, fileSha256 = null, byteSize = null, uploaded = false;
       if (sourceFile) {
         const buf = await sourceFile.arrayBuffer();
         fileSha256 = await sha256Hex(buf);
         byteSize = buf.byteLength;
-        // Above the body ceiling the bytes need a presigned upload straight to
-        // object storage; until MinIO is wired the document is registered by
-        // hash alone and says so, rather than silently storing nothing.
+        // Above the body ceiling the bytes go straight into MinIO through a
+        // URL signed for their hash (the bucket refuses any other bytes). A
+        // server without a bucket answers 409, and the document is then
+        // registered by hash alone and says so, rather than silently storing
+        // nothing.
         //
         // base64FromBuffer rather than the one-line spread that was here: the
         // spread passes every byte as its own argument, so a real multi-sheet
@@ -62,6 +83,10 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
         // exists to serve was the one size it could not handle.
         if (buf.byteLength <= MAX_INLINE_BYTES) {
           fileBase64 = base64FromBuffer(buf);
+        } else {
+          setState({ phase: "busy", msg: `بارگذاری مستقیم فایل (${(buf.byteLength / 1048576).toFixed(1)} MB)…` });
+          uploaded = await uploadDirect(call, { projectId, sha256: fileSha256, byteSize, contentType: sourceFile.type, buf });
+          setState({ phase: "busy", msg: "ثبت سند…" });
         }
       }
 
@@ -73,7 +98,7 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
           revisionDate: data.meta.revDate || null,
           sheetNo: data.meta.sheet || "1/1",
           contentType: sourceFile?.type || "image/jpeg",
-          fileBase64, fileSha256, byteSize,
+          fileBase64, fileSha256, byteSize, uploaded,
         }),
       });
 
@@ -102,7 +127,8 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
         msg: `${run.register.length} جوش ثبت شد` +
           (doc.deduplicated ? " · فایل تکراری بود، دوباره ذخیره نشد" : "") +
           (doc.superseded?.length ? ` · رویژن ${doc.superseded.map((d) => d.revision).join("، ")} منسوخ شد` : "") +
-          (fileBase64 === null && sourceFile ? " · فایل بزرگ بود؛ فقط با hash ثبت شد" : ""),
+          (uploaded ? " · فایل بزرگ مستقیم در MinIO ذخیره شد" : "") +
+          (fileBase64 === null && !uploaded && sourceFile ? " · فایل بزرگ بود؛ فقط با hash ثبت شد (MinIO وصل نیست)" : ""),
       });
     } catch (e) {
       setState({ phase: "error", msg: e.message });

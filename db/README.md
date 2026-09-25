@@ -111,7 +111,7 @@ document (doc_no, revision, sheet, file_sha256)
 |---|---|
 | اسکیما و migration | ✅ آماده — همین SQL روی Postgres واقعی اجرا می‌شود |
 | RLS و نقش `app_rw` | ✅ آماده و تست‌شده |
-| ذخیره‌سازی محتوا‌محور | ✅ درایور local کار می‌کند · درایور S3/MinIO نوشته شده، به bucket وصل نشده |
+| ذخیره‌سازی محتوا‌محور | ✅ درایور local و درایور MinIO (S3)، با `STORAGE_DRIVER` · کنترل هش در ورود (MinIO) و خروج (هر دو) · `npm run storage -- setup / migrate / verify` · آزموده روی MinIO واقعی |
 | احراز هویت (Keycloak) | ⚠️ **seam** — `createIdentityResolver(verifier)` نوشته و تست شده، ولی verifier واقعی به سرور Keycloak نیاز دارد |
 | مجوزدهی (نقش‌ها) | ✅ کامل و تست‌شده — مستقل از احراز هویت |
 
@@ -144,10 +144,12 @@ document (doc_no, revision, sheet, file_sha256)
 
 ### فایل بزرگ
 
-بالای سقف ۳٫۴ مگابایتِ بدنهٔ درخواست، سند فقط با hash ثبت می‌شود و
-`storage_uri` مقدار `pending://<sha>` می‌گیرد — تا هیچ‌چیز آن را با فایل
-ذخیره‌شده اشتباه نگیرد. مسیر درست، آپلود presigned مستقیم به MinIO است که
-هنوز سیم‌کشی نشده.
+بالای سقف ۳٫۴ مگابایتِ بدنهٔ درخواست، با MinIO فایل مستقیم از مرورگر به bucket
+می‌رود (`POST /api/documents/upload-url`). URL برای همان هش و همان اندازه امضا
+شده، پس MinIO بایت‌های دیگر را نمی‌پذیرد. سپس `POST /api/documents` با
+`uploaded: true` از bucket می‌پرسد چه چیزی زیر آن هش دارد و تا نباشد ثبت
+نمی‌کند. بدون MinIO (درایور local) سند فقط با hash ثبت می‌شود و `storage_uri`
+مقدار `pending://<sha>` می‌گیرد، تا هیچ‌چیز آن را با فایل ذخیره‌شده اشتباه نگیرد.
 
 ## احراز هویت در حالت توسعه
 

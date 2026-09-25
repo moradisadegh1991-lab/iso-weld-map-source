@@ -5,7 +5,7 @@ import { authenticate, errorResponse } from "../../../../lib/server/session.mjs"
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 import { readPhoto } from "../../../../lib/db/repos/punch-photos.mjs";
-import { createLocalStore } from "../../../../lib/storage/content-store.mjs";
+import { getStore } from "../../../../lib/storage/index.mjs";
 
 /**
  * GET ?projectId=&id=   the bytes of one punch photo.
@@ -25,7 +25,7 @@ export async function GET(request) {
     const { db, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.VIEW_PROJECT);
-    const store = createLocalStore({ root: process.env.STORAGE_ROOT || ".storage" });
+    const store = await getStore();
     const f = await withProject(db, projectId, () => readPhoto(db, { projectId, photoId, store }));
     return new Response(f.bytes, { headers: {
       "Content-Type": f.contentType,

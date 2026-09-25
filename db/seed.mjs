@@ -23,7 +23,7 @@ import { upsertPipingClass, setClassSizes, applyNdtRequirements } from "../lib/d
 import { upsertWelder, addQualification } from "../lib/db/repos/execution.mjs";
 import { registerDocument } from "../lib/db/repos/documents.mjs";
 import { createRun, saveRegister } from "../lib/db/repos/runs.mjs";
-import { createLocalStore } from "../lib/storage/content-store.mjs";
+import { getStore } from "../lib/storage/index.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -87,7 +87,7 @@ try {
     }
 
     const bytes = Buffer.from("seed placeholder for SW 265022A rev 0");
-    const blob = await createLocalStore({ root: process.env.STORAGE_ROOT || ".storage" })
+    const blob = await (await getStore())
       .put(bytes, { ext: ".jpg", contentType: "image/jpeg" });
     const { document } = await registerDocument(db, {
       projectId: project.id, docNo: "SW 265022A", revision: "0", sheetNo: "1/1",

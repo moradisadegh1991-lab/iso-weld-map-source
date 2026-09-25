@@ -74,7 +74,9 @@ const SECRET = "x".repeat(40);
 test("a session verifies, and a tampered one does not", async () => {
   const t = issue({ sub: "user-1" }, SECRET);
   equal(verify(t, SECRET).sub, "user-1");
-  equal(verify(t.slice(0, -1) + "A", SECRET), null, "a changed signature is rejected");
+  // A character that is not the one there: "A" alone left about one token in
+  // sixteen unchanged (a 32-byte MAC's last base64url character is one of 16).
+  equal(verify(t.slice(0, -1) + (t.at(-1) === "A" ? "E" : "A"), SECRET), null, "a changed signature is rejected");
   equal(verify(t, "y".repeat(40)), null, "and so is another server's secret");
 });
 

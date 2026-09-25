@@ -5,7 +5,7 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { fieldPack, applyOps, recentOps } from "../../../lib/db/repos/field.mjs";
-import { createLocalStore } from "../../../lib/storage/content-store.mjs";
+import { getStore } from "../../../lib/storage/index.mjs";
 
 // A photo is at most 5 MB, sent one per request (base64 adds a third); a
 // batch without photos is far smaller.
@@ -47,6 +47,6 @@ export async function POST(request) {
     // Permission is checked per operation inside applyOps: one operation the
     // role may not make is refused on its own, the rest still apply.
     return Response.json({ results: await applyOps(db, { projectId, userId: user.id, membership, ops,
-      store: createLocalStore({ root: process.env.STORAGE_ROOT || ".storage" }) }) });
+      store: await getStore() }) });
   } catch (e) { return errorResponse(e); }
 }

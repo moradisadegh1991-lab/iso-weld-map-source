@@ -17,6 +17,7 @@ import "../tools/env.mjs";           // the app reads .env.local; so must this
 import { createClient } from "../lib/db/client.mjs";
 import { createLlmClient } from "../lib/llm/index.mjs";
 import { access, constants } from "node:fs/promises";
+import { storageConfig, s3Client } from "../lib/storage/index.mjs";
 
 const C = process.stdout.isTTY && !process.env.NO_COLOR
   ? { g: "\x1b[32m", y: "\x1b[33m", r: "\x1b[31m", d: "\x1b[2m", b: "\x1b[1m", o: "\x1b[0m" }
@@ -68,10 +69,10 @@ const db = await createClient({ dataDir: process.env.PGLITE_DIR || ".pglite" });
       : llm?.id === "anthropic" ? "ANTHROPIC_API_KEY=…" : "LLM_BASE_URL=http://vllm:8000/v1");
 
   // ── 5 · blob storage ───────────────────────────────────────────────────
-  const root = process.env.STORAGE_ROOT || ".storage";
-  const writable = await access(root, constants.W_OK).then(() => true).catch(() => false);
-  step(5, "ذخیره‌سازی نقشه", "ok",
-    `${root}${writable ? "" : ` · ${C.d}هنوز ساخته نشده، در اولین آپلود ساخته می‌شود${C.o}`}`);
+  // Drawings, documents and site photos. On S3/MinIO the bucket is asked,
+  // with this server's own credentials — "configured" is not "reachable".
+  const storage = await checkStorage();
+  step(5, "ذخیره‌سازی فایل‌ها", storage.status, storage.detail, storage.next);
 
   // ── 6 onwards · the project itself ─────────────────────────────────────
   //
@@ -170,4 +171,24 @@ function report() {
     }
   }
   console.log();
+}
+
+async function checkStorage() {
+  let cfg;
+  try { cfg = storageConfig(); } catch (e) { return { status: "missing", detail: e.message, next: "STORAGE_DRIVER=s3 S3_ENDPOINT=… S3_BUCKET=… (docs/RUNBOOK.md)" }; }
+  if (cfg.driver === "local") {
+    const writable = await access(cfg.root, constants.W_OK).then(() => true).catch(() => false);
+    return { status: "ok", detail: `دیسک محلی ${cfg.root}${writable ? "" : " · هنوز ساخته نشده، در اولین آپلود ساخته می‌شود"}` +
+      " · برای بیش از یک سرور: MinIO" };
+  }
+  try {
+    const client = await s3Client(cfg);
+    await client.headBucket({ Bucket: cfg.bucket });
+    return { status: "ok", detail: `MinIO/S3 ${cfg.endpoint} · bucket ${cfg.bucket}` };
+  } catch (e) {
+    const code = e?.$metadata?.httpStatusCode;
+    return { status: "missing",
+      detail: `${cfg.endpoint} · bucket ${cfg.bucket}: ${code === 404 ? "وجود ندارد" : code === 403 ? "دسترسی رد شد" : e.message}`,
+      next: code === 404 ? "npm run storage -- setup" : "S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY و سیاست دسترسی را بررسی کنید" };
+  }
 }

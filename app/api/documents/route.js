@@ -5,10 +5,10 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { unitByCode } from "../../../lib/db/repos/projects.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { registerDocument, currentRevision, supersedePrevious } from "../../../lib/db/repos/documents.mjs";
-import { createLocalStore } from "../../../lib/storage/content-store.mjs";
+import { getStore } from "../../../lib/storage/index.mjs";
+import { keyFor } from "../../../lib/storage/content-store.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 
-const store = createLocalStore({ root: process.env.STORAGE_ROOT || ".storage" });
 
 /**
  * Register an uploaded drawing.
@@ -32,17 +32,28 @@ export async function POST(request) {
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.UPLOAD_DOCUMENT);
 
-    // Two paths. With bytes, the server hashes them itself and ignores any
+    // Three paths. With bytes, the server hashes them itself and ignores any
     // digest the client claimed — a hash supplied by the uploader is a
-    // statement of intent, not evidence. Without bytes, the sheet was too big
-    // for the request body and is registered by hash alone until the
-    // presigned upload straight to object storage exists; the storage uri
-    // says `pending://` so nothing can mistake it for a stored file.
+    // statement of intent, not evidence. Uploaded straight to the bucket
+    // (a sheet too big for the request body, see ./upload-url): the bucket
+    // is asked what it holds under that hash — the SHA-256 it checked on
+    // the way in — and nothing is registered unless it is there. With
+    // neither, it is registered by hash alone; the storage uri says
+    // `pending://` so nothing can mistake it for a stored file.
     let blob;
+    const claimed = /^[0-9a-f]{64}$/.test(String(body.fileSha256 || "")) ? body.fileSha256 : null;
     if (fileBase64) {
       const bytes = Buffer.from(fileBase64, "base64");
-      blob = await store.put(bytes, { ext: extFor(contentType), contentType });
-    } else if (/^[0-9a-f]{64}$/.test(String(body.fileSha256 || ""))) {
+      blob = await (await getStore()).put(bytes, { ext: extFor(contentType), contentType });
+    } else if (claimed && body.uploaded) {
+      const store = await getStore();
+      if (store.driver !== "s3") return Response.json({ error: "direct upload needs object storage (MinIO)" }, { status: 409 });
+      const uri = `s3://${store.bucket}/${keyFor(claimed, extFor(contentType))}`;
+      const held = await store.stat(uri);
+      if (!held) return Response.json({ error: "the file is not in the bucket — upload it first" }, { status: 409 });
+      if (held.sha256 !== claimed) return Response.json({ error: "the bucket holds different bytes under that name" }, { status: 409 });
+      blob = { digest: claimed, uri, size: held.size, deduplicated: false };
+    } else if (claimed) {
       blob = {
         digest: body.fileSha256,
         uri: `pending://${body.fileSha256}`,
