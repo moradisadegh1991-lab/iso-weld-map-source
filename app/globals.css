@@ -506,3 +506,43 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .dtable td.ok{color:var(--ok)} .dtable td.warn{color:var(--warn)} .dtable td.bad{color:var(--bad)}
 /* Links inside a page (tag numbers, "fix it here") read as links on the dark theme. */
 .page a{color:var(--cy);text-decoration:none} .page a:hover{text-decoration:underline}
+/* Offline: a strip pinned to the bottom, outside the shell's grid areas. */
+.offline-bar{position:fixed;inset-inline:0;bottom:0;z-index:50;background:#2b2210;color:var(--warn);
+  border-top:1px solid rgba(224,163,62,.5);padding:6px 16px;font-size:12px;text-align:center}
+/* The field page is used standing up, one-handed: big targets. */
+.field-page .btn{min-height:44px}
+.field-step{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--rule)}
+.queued{border:1px dashed var(--warn);border-radius:4px;padding:6px 8px;font-size:12px;color:var(--warn)}
+/* Labels: printed, not viewed. */
+.labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.label{background:#fff;color:#000;border:1px solid #bbb;border-radius:4px;padding:8px;text-align:center;break-inside:avoid}
+.label .no{font:700 14px/1.2 monospace;margin-top:4px;direction:ltr}
+.label .desc{font-size:10px;color:#333}
+@media print{
+  .sidenav,.topbar,header,.no-print,.offline-bar{display:none !important}
+  .shell{display:block} body{background:#fff}
+  .labels{grid-template-columns:repeat(4,1fr)}
+}
+
+/* ── phones ──────────────────────────────────────────────────────────────
+   The menu groups are <div>s; as flex items each became its own column and
+   the "strip" was a wall of links filling the first screen (measured on a
+   412 px viewport, the field page's content started below the fold).
+   display:contents lets every link sit in the one horizontal strip. The
+   top bar wraps instead of overlapping, and keeps what a person on site
+   needs: the project, who they are, and the way out. */
+@media (max-width:900px){
+  .shell{grid-template-rows:auto auto 1fr}
+  .sidenav > div{display:contents}
+}
+@media (max-width:700px){
+  .topbar{flex-wrap:wrap;height:auto;min-height:var(--bar-h);padding:6px 10px;gap:6px;position:static}
+  .topbar .brand,.topbar .crumb,.topbar .grow{display:none}
+  .topbar select{max-width:none;flex:1 1 100%}
+  .who{flex:1 1 100%;flex-wrap:wrap}
+  .who > span:nth-child(2){max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .who .btn{padding:4px 8px !important;font-size:11px}
+  .sidenav{position:sticky;top:0;z-index:15}
+  .offline-bar{font-size:11px}
+  .page{padding-bottom:56px}
+}

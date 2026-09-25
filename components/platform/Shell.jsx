@@ -75,6 +75,13 @@ export default function Shell({ children }) {
         </div>
       </header>
 
+      {(p.offline || !p.online) && (
+        <div className="offline-bar" role="status">
+          آفلاین — صفحهٔ <a href="/field">سایت</a> با بستهٔ ذخیره‌شده کار می‌کند و ثبت‌ها تا برگشت شبکه در صف می‌مانند.
+          {p.confirmedAt && ` هویت آخرین بار ${new Date(p.confirmedAt).toLocaleString("fa-IR")} تأیید شد.`}
+        </div>
+      )}
+
       <nav className="sidenav" aria-label="بخش‌های سامانه">
         {nav.map((g) => (
           <div key={g.group}>

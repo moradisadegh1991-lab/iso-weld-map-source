@@ -1,10 +1,15 @@
 import "./globals.css";
 import { PlatformProvider } from "../lib/client/platform.mjs";
 import Shell from "../components/platform/Shell";
+import ServiceWorker from "../components/platform/ServiceWorker";
 
 export const metadata = {
   title: "EPC Platform — سامانهٔ یکپارچهٔ اجرای پروژه",
   description: "مشخصات پروژه، پیمانکاران، ساب‌سیستم‌ها و اجرای رشته‌ها در یک سامانه",
+  // Installable on a phone's home screen, opening straight to the field page.
+  manifest: "/manifest.webmanifest",
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "EPC سایت", statusBarStyle: "black-translucent" },
 };
 
 /**
@@ -20,6 +25,7 @@ export const metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#0A1116",
 };
 
 /**
@@ -32,6 +38,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="fa" dir="rtl">
       <body>
+        <ServiceWorker />
         <PlatformProvider>
           <Shell>{children}</Shell>
         </PlatformProvider>
