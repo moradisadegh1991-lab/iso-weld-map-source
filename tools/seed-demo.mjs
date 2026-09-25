@@ -49,6 +49,8 @@ import {
 } from "../lib/db/repos/controls.mjs";
 import { raisePunch, punchAction, raiseNcr, ncrAction } from "../lib/db/repos/quality.mjs";
 import { ensureUser } from "../lib/db/repos/projects.mjs";
+import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
+import { upsertPackage as upsertTestPackage, addLines as addPackLines } from "../lib/db/repos/completions.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
 
@@ -804,6 +806,31 @@ try {
         dispositionNote: "Apply an extra coat of topcoat after sweep blast", userId: supv.id });
     }
     console.log("quality: 11 punch items (one recategorised A→B), 3 NCRs (one closed, one overdue)");
+
+    // ── completions: the cooling-water line's class and its test package ──
+    //
+    //   TP-60-001  hydrostatic, Rr 1.0 stated: the test pressure is known
+    //              (1.5 × 10 × 1.0 = 15 barg), and the walkdown lists what
+    //              holds it — welds, NDT, supports
+    //   TP-60-002  an instrument-air header with no drawing yet and no Rr:
+    //              no test pressure, and "unknown" rather than "nothing to do"
+    const cw = await upsertPipingClass(db, { projectId: p.id, code: "A1CW", description: "Cooling water, CS, 150#",
+      serviceCategory: "category_d", materialSpec: "A106 Gr.B", corrosionAllowMm: 3, designTempC: 65, designPressBarg: 10 });
+    await db.query("UPDATE line SET piping_class_id = $2 WHERE project_id = $1 AND line_no = '28-CWR-10-930065A'", [p.id, cw.id]);
+    const { rows: [cwLine] } = await db.query("SELECT id FROM line WHERE project_id = $1 AND line_no = '28-CWR-10-930065A'", [p.id]);
+    const { rows: [iaLine] } = await db.query(
+      `INSERT INTO line (project_id, line_no, service, piping_class) VALUES ($1,'2-IA-60-0012','Instrument air','A1CW')
+       ON CONFLICT (project_id, line_no) DO UPDATE SET service = EXCLUDED.service RETURNING id`, [p.id]);
+    await fileLine(db, { projectId: p.id, lineId: iaLine.id, subsystemId: sub["60-01"].id });
+    const tp1 = await upsertTestPackage(db, { projectId: p.id, packNo: "TP-60-001", subsystemId: sub["60-01"].id,
+      medium: "hydrostatic", stressRatio: 1, description: "Cooling water return, rack PR-01", userId: user.id });
+    const tp2 = await upsertTestPackage(db, { projectId: p.id, packNo: "TP-60-002", subsystemId: sub["60-01"].id,
+      medium: "hydrostatic", description: "Instrument air header", userId: user.id });
+    const { rows: inPack } = await db.query("SELECT line_id FROM test_package_line WHERE project_id = $1", [p.id]);
+    const packed = new Set(inPack.map((r) => r.line_id));
+    if (!packed.has(cwLine.id)) await addPackLines(db, { projectId: p.id, packageId: tp1.id, lineIds: [cwLine.id] });
+    if (!packed.has(iaLine.id)) await addPackLines(db, { projectId: p.id, packageId: tp2.id, lineIds: [iaLine.id] });
+    console.log("completions: class A1CW (10 barg), TP-60-001 (15 barg, held by the walkdown), TP-60-002 (no Rr, no drawing)");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks
