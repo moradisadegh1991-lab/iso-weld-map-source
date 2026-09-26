@@ -22,7 +22,8 @@ const office = await login();
 const me = async (page) => page.evaluate(async () => (await fetch("/api/auth/me")).status);
 console.log("both signed in:", await me(phone), await me(office));
 office.on("dialog", (d) => d.accept());
-await office.getByRole("button", { name: "خروج از همه‌جا" }).click();
+await office.locator(".usermenu > button").click();   // since the UI round it sits in the user menu
+await office.getByRole("menuitem", { name: "خروج از همه‌جا" }).click();
 await office.waitForSelector("#email");
 console.log("office after 'everywhere':", await me(office));
 console.log("phone after 'everywhere':", await me(phone));

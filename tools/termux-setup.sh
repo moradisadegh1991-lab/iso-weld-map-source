@@ -153,11 +153,16 @@ step "۳.۵ · کامپایلر WASM"
 # putting the files there ourselves makes startup work with no network at all.
 # Not in package.json on purpose — 54 MB that only Android needs.
 WASM_DIR="node_modules/next/wasm/@next/swc-wasm-nodejs"
-if [ -f "$WASM_DIR/wasm.js" ]; then
-  ok "از قبل سر جایش است"
+# Pinned to the exact Next version: the wasm and native builds must match.
+NEXT_VER="$(node -p "require('./package.json').dependencies.next")"
+# The one in place must be THIS version's. After an upgrade of Next (14 → 15
+# for the security fixes), a compiler left from the old version would load and
+# fail in ways that name neither version.
+HAVE_VER="$(node -p "try { require('./$WASM_DIR/package.json').version } catch { '' }" 2>/dev/null)"
+if [ -f "$WASM_DIR/wasm.js" ] && [ "$HAVE_VER" = "$NEXT_VER" ]; then
+  ok "از قبل سر جایش است (نسخهٔ ${NEXT_VER})"
 else
-  # Pinned to the exact Next version: the wasm and native builds must match.
-  NEXT_VER="$(node -p "require('./package.json').dependencies.next")"
+  [ -d "$WASM_DIR" ] && rm -rf "$WASM_DIR" && warn "کامپایلر WASM نسخهٔ ${HAVE_VER:-نامعلوم} با Next ${NEXT_VER} نمی‌خواند؛ جایگزین می‌شود"
   npm install --no-save --no-audit --no-fund "@next/swc-wasm-nodejs@${NEXT_VER}" \
     >/dev/null 2>&1 \
     || die "دانلود کامپایلر WASM شکست خورد — اتصال اینترنت را بررسی کنید"

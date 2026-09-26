@@ -13,7 +13,8 @@ import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
  * person at the other end is a site supervisor who needs to know whether to
  * find another welder, chase a certificate, or send someone for a re-test.
  */
-export async function POST(request, { params }) {
+export async function POST(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const body = await request.json();
     const { projectId, welderId, weldedAt } = body;

@@ -13,12 +13,22 @@ K-2201,Recycle Compressor,Centrifugal,22-01,22`;
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
 const page = await browser.newPage({ viewport: { width: 420, height: 900 } });   // a phone
 const errors = [];
-page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+// Before signing in, /api/auth/me answers 401: that is the sign-in page asking, not a fault.
+const signInProbe = (t) => /401/.test(t) && /auth\/me|status of 401/.test(t);
+page.on("console", (m) => m.type() === "error" && !signInProbe(m.text()) && errors.push(m.text()));
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-page.on("response", (r) => { if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url()}`); });
-page.on("requestfailed", (r) => errors.push(`REQFAIL ${r.url()} ${r.failure()?.errorText}`));
+page.on("response", (r) => { if (r.status() >= 400 && !(r.status() === 401 && r.url().endsWith("/api/auth/me"))) errors.push(`HTTP ${r.status()} ${r.url()}`); });
+// A navigation cancels the menu prefetches in flight (ERR_ABORTED); that is the browser, not a fault.
+page.on("requestfailed", (r) => { if (!/ERR_ABORTED/.test(r.failure()?.errorText || "")) errors.push(`REQFAIL ${r.url()} ${r.failure()?.errorText}`); });
 
-await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
+// Since the platform shell the intake lives at /piping, behind the sign-in.
+const BASE = process.env.BASE_URL || "http://localhost:3000";
+const { DRIVE_EMAIL: EMAIL, DRIVE_PASSWORD: PASSWORD } = process.env;
+if (!EMAIL || !PASSWORD) { console.error("set DRIVE_EMAIL and DRIVE_PASSWORD"); process.exit(1); }
+await page.goto(BASE, { waitUntil: "networkidle" });
+await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);
+await page.click("button[type=submit]"); await page.waitForSelector(".shell");
+await page.goto(`${BASE}/piping`, { waitUntil: "networkidle" });
 
 // The intake screen: no drawing loaded, which is when an equipment list
 // actually turns up on a project.
@@ -38,7 +48,7 @@ console.log("verdict:", verdict);
 console.log("rows   :", rows);
 
 // The unclassified table must name the air cooler, not just count it.
-const bodyText = await page.locator(".pane").innerText();
+const bodyText = await page.locator("details.intake-more .pane").innerText();
 console.log("names EA-2103:", bodyText.includes("EA-2103"));
 console.log("names TOTAL as skipped:", /رد شد/.test(bodyText) && bodyText.includes("TOTAL"));
 
@@ -47,6 +57,6 @@ const overflow = await page.evaluate(() =>
   document.documentElement.scrollWidth - document.documentElement.clientWidth);
 console.log("horizontal overflow px:", overflow);
 
-await page.screenshot({ path: "/tmp/claude-0/shots/equipment.png", fullPage: true });
+await page.screenshot({ path: `${process.env.SHOT_DIR || "/tmp/shots"}/equipment.png`, fullPage: true });
 console.log("console errors:", errors.length ? errors : "none");
 await browser.close();

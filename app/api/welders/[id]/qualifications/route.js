@@ -8,7 +8,8 @@ import { resolveQualification } from "../../../../../lib/qualification/asme-ix.m
 import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
 
 /** A welder's tickets, each resolved into the range it actually permits. */
-export async function GET(request, { params }) {
+export async function GET(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const projectId = new URL(request.url).searchParams.get("projectId");
     if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });
@@ -25,7 +26,8 @@ export async function GET(request, { params }) {
   } catch (e) { return errorResponse(e); }
 }
 
-export async function POST(request, { params }) {
+export async function POST(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const body = await request.json();
     const { projectId, process, positions = [] } = body;

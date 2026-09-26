@@ -12,7 +12,8 @@ import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
  * This is the authority on wall thickness, which is what the welder
  * qualification check needs and what a schedule label alone never provided.
  */
-export async function GET(request, { params }) {
+export async function GET(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const projectId = new URL(request.url).searchParams.get("projectId");
     if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });
@@ -27,7 +28,8 @@ export async function GET(request, { params }) {
   } catch (e) { return errorResponse(e); }
 }
 
-export async function PUT(request, { params }) {
+export async function PUT(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const { projectId, sizes } = await request.json();
     if (!projectId || !Array.isArray(sizes)) {

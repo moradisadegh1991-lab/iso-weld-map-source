@@ -15,7 +15,8 @@ import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
  * until every weld knows which requirement it is under, and any class rule
  * that falls below the code floor is returned so somebody owns it.
  */
-export async function POST(request, { params }) {
+export async function POST(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const { projectId, pipingClassCode, lineId = null, seed = null } = await request.json();
     if (!projectId || !pipingClassCode) {

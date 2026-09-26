@@ -14,7 +14,8 @@ import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
  * weld-level diff and the spool impact split by fabrication status, because
  * the second is the part somebody has to act on today.
  */
-export async function GET(request, { params }) {
+export async function GET(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const url = new URL(request.url);
     const projectId = url.searchParams.get("projectId");

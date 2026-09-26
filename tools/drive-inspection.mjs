@@ -52,6 +52,7 @@ await site.close();
 // ── raise a request from the form, and sign the contractor's part ──
 await page.bringToFront();
 await page.reload({ waitUntil: "networkidle" });
+await page.locator(".fold-head", { hasText: "درخواست بازرسی جدید" }).click();   // the form is folded until asked for
 await page.selectOption("#r-scope", "foundation");
 const actOpts = await page.locator("#r-act option").allInnerTexts();
 await page.selectOption("#r-act", { label: actOpts.find((t) => t.includes("· 50 —")) });
@@ -93,8 +94,9 @@ await page.locator("table.dtable tbody tr", { hasText: "ITP-CIV-001" }).first().
 console.log("matrix:", (await page.locator(".card", { has: page.locator("h2", { hasText: "ITP-CIV-001 rev 0" }) }).locator("tbody tr").allInnerTexts())
   .map((r) => flat(r).slice(0, 80)));
 await page.screenshot({ path: `${SHOT}/132-inspection-itp.png`, fullPage: true });
+await page.locator(".fold-head", { hasText: "ITP یا رویژن جدید" }).click();   // the form is folded until asked for
 await page.fill("#n-no", "ITP-CIV-001"); await page.fill("#n-rev", "1"); await page.selectOption("#n-s", "foundation");
-await page.getByRole("button", { name: "ITP یا رویژن جدید" }).click();
+await page.locator("form", { has: page.locator("#n-no") }).getByRole("button", { name: "ITP یا رویژن جدید" }).click();
 await page.waitForTimeout(1200);
 const draft = page.locator(".card", { has: page.locator("h2", { hasText: "rev 1" }) });
 console.log("rev 1 draft rows:", await draft.locator("tbody tr").count());
@@ -114,8 +116,9 @@ await page.screenshot({ path: `${SHOT}/133-inspection-item.png`, fullPage: true 
 
 // ── who signs for whom ──
 await page.goto(`${BASE}/admin`, { waitUntil: "networkidle" });
-await page.waitForSelector("text=اعضا و طرف بازرسی");
-console.log("members:", (await page.locator(".card", { hasText: "اعضا و طرف بازرسی" }).locator("tbody tr").all()).length,
-  (await page.$$eval(".card select[aria-label^='طرف بازرسی']", (xs) => xs.map((x) => x.options[x.selectedIndex].text))).join(", "));
+// The users page (lib/db/repos/users.mjs) lists each member with the party they sign for.
+const members = page.locator(".card", { has: page.locator("h2", { hasText: "اعضای پروژه" }) }).locator("tbody tr:not([hidden])");
+await members.first().waitFor();
+console.log("members:", (await members.allInnerTexts()).map((r) => flat(r).slice(0, 90)));
 console.log("problems:", problems.length ? problems : "none");
 await b.close();

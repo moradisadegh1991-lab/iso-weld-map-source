@@ -16,7 +16,8 @@ import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
  * approval records who signed and the hash of what they signed — lives in the
  * schema. Both have to agree before a row changes.
  */
-export async function POST(request, { params }) {
+export async function POST(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const { projectId } = await request.json();
     if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });

@@ -6,7 +6,8 @@ import { withProject } from "../../../../../lib/db/scope.mjs";
 import { recordNdt, ndtHistory } from "../../../../../lib/db/repos/execution.mjs";
 import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
 
-export async function GET(request, { params }) {
+export async function GET(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const projectId = new URL(request.url).searchParams.get("projectId");
     if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });
@@ -20,7 +21,8 @@ export async function GET(request, { params }) {
 }
 
 /** The repair cycle is derived server-side; a caller cannot number its own re-shots. */
-export async function POST(request, { params }) {
+export async function POST(request, ctx) {
+  const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
     const body = await request.json();
     const { projectId, method, result } = body;

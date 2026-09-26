@@ -15,3 +15,5 @@ node_modules/
 
 # written by tools/termux-setup.sh — a run log, not source
 setup.log
+backups/
+*.server.pid
