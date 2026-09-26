@@ -59,7 +59,12 @@ export default function ControlsPage() {
           <div className="field"><label htmlFor="asof">تاریخ داده (Data date)</label>
             <input id="asof" type="date" dir="ltr" value={asOf || data.asOf} onChange={(e) => setAsOf(e.target.value === data.today ? "" : e.target.value)} /></div>
           {asOf && <button className="btn ghost" onClick={() => setAsOf("")}>امروز</button>}
-          <span className="muted sm">EV پلتفرم شمارش امروز است و به عقب برده نمی‌شود؛ برای تاریخ گذشته فقط گزارش‌های دستی حساب می‌شوند.</span>
+          <span className="muted sm" style={{ flex: 1, minWidth: 220 }}>EV پلتفرم برای امروز شمارش زنده است؛ برای تاریخ گذشته از آخرین اسنپ‌شات تا آن تاریخ خوانده می‌شود — هرگز شمارش امروز به‌جای گذشته.</span>
+          {may && !asOf && (
+            data.snapshots.dates[0] === data.today
+              ? <span className="pill ok">اسنپ‌شات امروز ثبت شده</span>
+              : <button className="btn" onClick={() => post({ kind: "snapshot" })}>ثبت اسنپ‌شات امروز</button>
+          )}
         </div>
       </div>
 
@@ -95,6 +100,8 @@ export default function ControlsPage() {
         {may && <Fold title="حساب کنترلی جدید"><AccountForm data={data} post={post} /></Fold>}
       </div>
 
+      <Snapshots data={data} />
+
       <Risks data={data} post={post} may={may} />
     </div>
   );
@@ -114,7 +121,8 @@ function AccountRow({ a, data, open, onToggle, post, may, call, projectId }) {
         <td className="sm">
           {a.evMethod === "platform"
             ? <><span className="pill ok">محاسبه‌شده</span> {data.platformDisciplines[a.evDiscipline]}{a.subsystemCode && ` · ${a.subsystemCode}`}
-                {a.ev.detail && <div className="muted">{a.ev.detail.items} آیتم · {a.ev.detail.installed} نصب · {a.ev.detail.tested} تست · سهم نصب {a.creditInstalledPct ?? "؟"}٪</div>}</>
+                {a.ev.source === "snapshot" && <div><span className="pill">اسنپ‌شات {fa(a.ev.detail.snapshotOn)}</span></div>}
+                {a.ev.detail && a.ev.detail.items != null && <div className="muted">{a.ev.detail.items} آیتم · {a.ev.detail.installed} نصب · {a.ev.detail.tested} تست · سهم نصب {a.creditInstalledPct ?? "؟"}٪</div>}</>
             : <><span className="pill warn">گزارشی</span>{a.ev.detail && <span className="muted"> {a.ev.detail.source} ({fa(a.ev.detail.asOf)})</span>}</>}
           {a.ev.reason && <div className="muted">{a.ev.reason}</div>}
         </td>
@@ -340,6 +348,65 @@ function Risks({ data, post, may }) {
           </div>
           <div><button className="btn" type="submit">ثبت ریسک</button></div>
         </form>
+      )}
+    </div>
+  );
+}
+
+function Snapshots({ data }) {
+  const h = data.snapshots;
+  if (!h.dates.length) {
+    return (
+      <div className="card">
+        <h2>تاریخچهٔ ماهانه (اسنپ‌شات)</h2>
+        <p className="empty-note">هنوز اسنپ‌شاتی ثبت نشده. EV پلتفرم شمارش لحظه‌ای است و اگر در پایان هر ماه ثبت نشود، رقم آن ماه از دست می‌رود — با دکمهٔ «ثبت اسنپ‌شات امروز» یا زمان‌بندی <span className="mono">npm run controls:snapshot</span>.</p>
+      </div>
+    );
+  }
+  const dates = [...h.dates].reverse();
+  const accounts = [...new Map(h.ev.map((r) => [r.accountId, r.code])).entries()];
+  const disciplines = [...new Set(h.progress.map((r) => r.discipline))];
+  const evAt = (id, d) => h.ev.find((r) => r.accountId === id && r.asOf === d);
+  const prAt = (k, d) => h.progress.find((r) => r.discipline === k && r.asOf === d);
+  return (
+    <div className="card">
+      <h2>تاریخچهٔ ماهانه (اسنپ‌شات)</h2>
+      <p className="muted sm">رقم ثبت‌شدهٔ هر تاریخ همان است که آن روز بود — اسنپ‌شات اصلاح یا حذف نمی‌شود.</p>
+      {accounts.length > 0 && (
+        <TableKit name="controls-ev-history">
+          <table className="dtable">
+            <thead><tr><th>حساب</th>{dates.map((d) => <th key={d} className="mono">{fa(d)}</th>)}</tr></thead>
+            <tbody>
+              {accounts.map(([id, code]) => (
+                <tr key={id}>
+                  <td className="mono">{code}</td>
+                  {dates.map((d) => {
+                    const r = evAt(id, d);
+                    return <td key={d} className="mono sm" title={r?.reason || ""}>{r ? <>PV {pct(r.pvPct)}<br />EV {pct(r.evPct)}</> : "—"}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableKit>
+      )}
+      {disciplines.length > 0 && (
+        <TableKit name="controls-progress-history">
+          <table className="dtable">
+            <thead><tr><th>رشته</th>{dates.map((d) => <th key={d} className="mono">{fa(d)}</th>)}</tr></thead>
+            <tbody>
+              {disciplines.map((k) => (
+                <tr key={k}>
+                  <td>{data.platformDisciplines[k] || k}</td>
+                  {dates.map((d) => {
+                    const r = prAt(k, d);
+                    return <td key={d} className="mono sm">{r ? <>{r.installed}/{r.items} نصب<br />{r.tested} تست</> : "—"}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableKit>
       )}
     </div>
   );

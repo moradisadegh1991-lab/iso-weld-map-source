@@ -688,8 +688,9 @@ try {
     // ── project controls: accounts, S-curves around today, cost, risks ──
     //
     //   civil and furnace mechanical: EV reported (progress report no.)
-    //   CW piping, electrical, instruments: EV counted by the platform under
-    //   a stated rule of credit (piping 70/30, E&I 60/40)
+    //   CW piping, electrical, instruments, steel, painting: EV counted by the
+    //   platform under a stated rule of credit (piping and steel 70/30, the
+    //   rest 60/40)
     //   one invoice reversed as a duplicate
     const dd = (k) => new Date(day0.getTime() + k * 86_400_000).toISOString().slice(0, 10);
     const scurve = (start, end) => {
@@ -703,6 +704,8 @@ try {
       ["CA-60-PIP", "Cooling water piping (U-60)", mech, 42_000_000, "platform", "piping", 70, -150, 150],
       ["CA-70-ELE", "Electrical installation", elec, 36_000_000, "platform", "electrical", 60, -200, 150],
       ["CA-80-INS", "Instrumentation", elec, 28_000_000, "platform", "instrumentation", 60, -190, 150],
+      ["CA-20-STR", "Pipe racks & platforms — steel erection", civil, 54_000_000, "platform", "structural", 70, -240, 120],
+      ["CA-90-PNT", "Painting & insulation", mech, 22_000_000, "platform", "coating", 60, -120, 210],
     ];
     const acc = {};
     for (const [code, title, c, bac, evMethod, evDiscipline, credit, s0, s1] of ACCOUNTS) {
@@ -751,7 +754,7 @@ try {
     }
     const r5 = (await listRisks(db, { projectId: p.id, today: dd(0) })).find((r) => r.code === "R-05");
     if (r5.status === "open") await closeRisk(db, { projectId: p.id, riskId: r5.id, closedOn: dd(-18) });
-    console.log("controls: 5 accounts (2 reported, 3 platform-counted), cost with one reversal, 5 risks");
+    console.log("controls: 7 accounts (2 reported, 5 platform-counted), cost with one reversal, 5 risks");
 
     // ── punch and NCR ─────────────────────────────────────────────────────
     //

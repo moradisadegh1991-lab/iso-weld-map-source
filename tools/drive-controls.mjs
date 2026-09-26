@@ -1,6 +1,7 @@
 /**
  * Drive project controls: the project indices, each account's EV source,
- * an S-curve, a refused re-baseline, a moved data date, and the risks.
+ * an S-curve, a refused re-baseline, a moved data date, the monthly
+ * snapshot and its history, and the risks.
  *   DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-controls.mjs
  */
 import { chromium } from "playwright";
@@ -14,7 +15,7 @@ const page = await b.newPage({ viewport: { width: 1440, height: 1000 } });
 const problems = [], expected400 = [];
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 page.on("response", (r) => {
-  if (r.status() >= 400 && !/favicon|auth\/me/.test(r.url())) (r.status() === 400 ? expected400 : problems).push(`HTTP ${r.status()} ${r.url()}`);
+  if (r.status() >= 400 && !/favicon|auth\/me/.test(r.url())) ([400, 409].includes(r.status()) ? expected400 : problems).push(`HTTP ${r.status()} ${r.url()}`);
 });
 await page.goto(BASE, { waitUntil: "networkidle" });
 await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);
@@ -51,11 +52,33 @@ await page.fill("#asof", back); await page.waitForTimeout(1500);
 for (const r of await card("حساب‌های کنترلی").locator("tbody > tr").allInnerTexts()) console.log("  @-30d", flat(r).slice(0, 160));
 await page.getByRole("button", { name: "امروز" }).click(); await page.waitForTimeout(1000);
 
+// The monthly snapshot: taken once for today, then the history shows it and
+// a later data date reads it (labelled with its own date).
+const snapBtn = page.getByRole("button", { name: "ثبت اسنپ‌شات امروز" });
+console.log("snapshot button:", await snapBtn.count());
+if (await snapBtn.count()) { await snapBtn.click(); await page.waitForTimeout(2500); }
+console.log("after snapshot:", await page.locator(".pill", { hasText: "اسنپ‌شات امروز ثبت شده" }).count() ? "button replaced by 'recorded' pill" : "NO PILL");
+const hist = card("تاریخچهٔ ماهانه");
+for (const r of await hist.locator("tbody > tr").allInnerTexts()) console.log("  hist", flat(r).slice(0, 120));
+await hist.scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${SHOT}/97-controls-snapshots.png` });
+const again = await page.evaluate(async () => {
+  const pid = localStorage.getItem("epc.lastProject") || (await (await fetch("/api/projects")).json()).projects[0].id;
+  const r = await fetch("/api/controls", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ projectId: pid, kind: "snapshot" }) });
+  return `${r.status} ${(await r.json()).error || ""}`;
+});
+console.log("second snapshot today:", again);
+const fwd = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+await page.fill("#asof", fwd); await page.waitForTimeout(1500);
+for (const r of await card("حساب‌های کنترلی").locator("tbody > tr").allInnerTexts()) console.log("  @+1d", flat(r).slice(0, 170));
+await page.getByRole("button", { name: "امروز" }).click(); await page.waitForTimeout(1000);
+
 for (const r of await card("رجیستر ریسک").locator("tbody > tr").allInnerTexts()) console.log("  risk", flat(r).slice(0, 170));
 await card("رجیستر ریسک").scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOT}/96-controls-risk.png` });
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 console.log("overflow px:", overflow);
-console.log("expected 400s:", expected400.length);
+console.log("expected 400/409s:", expected400.length);
 console.log("problems:", problems.length ? problems : "none");
 await b.close();

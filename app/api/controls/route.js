@@ -6,6 +6,7 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import {
   controlsBoard, baselineHistory, costLedger, upsertAccount, setBaseline, reportProgress, postCost, upsertRisk, closeRisk,
+  takeSnapshot, snapshotHistory,
 } from "../../../lib/db/repos/controls.mjs";
 
 export async function GET(request) {
@@ -25,7 +26,7 @@ export async function GET(request) {
       const board = await controlsBoard(db, { projectId, asOf: url.searchParams.get("asOf") || null });
       const { rows: subsystems } = await db.query("SELECT id, code FROM subsystem WHERE project_id = $1 ORDER BY code", [projectId]);
       const { rows: contractors } = await db.query("SELECT id, code, name FROM contractor WHERE project_id = $1 ORDER BY code", [projectId]);
-      return Response.json({ ...board, subsystems, contractors });
+      return Response.json({ ...board, subsystems, contractors, snapshots: await snapshotHistory(db, { projectId }) });
     });
   } catch (e) { return errorResponse(e); }
 }
@@ -46,6 +47,7 @@ export async function POST(request) {
       if (kind === "cost") return Response.json({ cost: await postCost(db, args) });
       if (kind === "risk") return Response.json({ risk: await upsertRisk(db, args) });
       if (kind === "risk-close") return Response.json({ risk: await closeRisk(db, args) });
+      if (kind === "snapshot") return Response.json({ snapshot: await takeSnapshot(db, { projectId, userId: user.id }) });
       return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
     });
   } catch (e) { return errorResponse(e); }

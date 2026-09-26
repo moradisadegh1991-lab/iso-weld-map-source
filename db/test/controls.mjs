@@ -193,10 +193,10 @@ test("platform EV counts the discipline's items under the rule of credit, and re
     equal(a.ev.pct, Math.round((2 * 70 / c2.items) * 100) / 100);
     equal(a.ev.detail, c2);
     equal((await ctl.controlsBoard(db, { projectId: P, asOf: shift(-1) })).accounts.find((x) => x.code === "CW-PIP").ev.pct,
-      null, "the platform count is today's; it is not back-dated");
+      null, "the platform count is today's; it is not back-dated (no snapshot yet)");
     await throws(() => ctl.reportProgress(db, { projectId: P, accountId: pip.id, asOf: TODAY, pct: 50, source: "x" }), "INVALID_INPUT");
-    await throws(() => ctl.upsertAccount(db, { projectId: P, code: "X", title: "x", evMethod: "platform", evDiscipline: "civil" }),
-      "INVALID_INPUT", "the platform does not count civil items as installed/tested");
+    await throws(() => ctl.upsertAccount(db, { projectId: P, code: "X", title: "x", evMethod: "platform", evDiscipline: "equipment" }),
+      "INVALID_INPUT", "the platform does not count equipment items as installed/tested");
   });
 });
 

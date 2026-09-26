@@ -69,6 +69,8 @@ postgresql://app_report@host:5432/isoweld?options=-c%20app.project_id%3D<PROJECT
 | `fact_weld` | یک ردیف به ازای هر جوش در **رجیستر حاکم** | معیارها از پیش محاسبه شده‌اند (`is_welded`، `is_examined`، `awaiting_ndt`) — مدل Power BI نباید «جوش زده شده» را با تست رابطه بیان کند |
 | `fact_ndt` | یک ردیف به ازای هر رکورد NDT | `is_first_shot` و `is_first_shot_reject` ستون‌اند، نه محاسبهٔ DAX |
 | `fact_extraction_edit` | یک ردیف به ازای هر فیلد اصلاح‌شده | فکت **دقت استخراج** |
+| `fact_ev_snapshot` | یک ردیف به ازای هر حساب کنترلی در هر اسنپ‌شات | منحنی S و روند SPI/CPI ماهانه؛ `pv` و `ev` پولی فقط وقتی BAC و ارز هست |
+| `fact_progress_snapshot` | رشته × زیرسیستم × تاریخ اسنپ‌شات | روند نصب/تست — برای سیویل، سازه و رنگ تنها منبع تاریخچه است، چون شمارششان را موتور انجام می‌دهد نه view |
 
 ### «رجیستر حاکم» یعنی چه
 
