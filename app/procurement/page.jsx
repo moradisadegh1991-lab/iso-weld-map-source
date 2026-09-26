@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Tender from "./Tender";
 
 /**
  * Procurement and expediting.
@@ -16,7 +17,19 @@ import Fold from "../../components/ui/Fold";
 const DOC_STATE = { pending: ["", "در انتظار"], overdue: ["bad", "معوق"], under_review: ["warn", "در بررسی"],
   resubmit: ["warn", "ارسال مجدد"], resubmit_overdue: ["bad", "ارسال مجدد — معوق"], accepted: ["ok", "پذیرفته"] };
 
+const TABS = [["orders", "سفارش‌ها و پیگیری"], ["tender", "درخواست خرید و مناقصه"], ["vdt", "دادهٔ فنی وندور (VDT)"]];
+
 export default function ProcurementPage() {
+  const [tab, setTab] = useState("orders");
+  const bar = (
+    <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} className={`btn ${tab === k ? "" : "ghost"}`} onClick={() => setTab(k)}>{t}</button>)}
+    </div>
+  );
+  return tab === "orders" ? <Orders bar={bar} /> : <Tender key={tab} tab={tab} bar={bar} />;
+}
+
+function Orders({ bar }) {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/procurement?projectId=${id}`, []);
   const [msg, setMsg] = useState(null);
@@ -48,6 +61,7 @@ export default function ProcurementPage() {
         <h1>خرید و پیگیری</h1>
         <span className="sub">{data.orders.length} سفارش · {ex.length} ردیف باز · {docs.length} مدرک فروشنده</span>
       </div>
+      {bar}
       {msg && <p className="err">{msg}</p>}
 
       <div className="kpis">

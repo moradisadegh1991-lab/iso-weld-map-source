@@ -53,6 +53,7 @@ import { upsertTemplate } from "../lib/db/repos/precom.mjs";
 import { ensureUser } from "../lib/db/repos/projects.mjs";
 import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
 import * as prc from "../lib/db/repos/procurement.mjs";
+import * as tender from "../lib/db/repos/tender.mjs";
 import * as dcr from "../lib/db/repos/doc-control.mjs";
 import { setAssetMaster } from "../lib/db/repos/handover.mjs";
 import * as mnt from "../lib/db/repos/maintenance.mjs";
@@ -973,6 +974,50 @@ try {
       }
     }
     console.log("handover: FLOC {plant}-{unit}-{tag}, criticality A/B/C, 3 asset masters (K-2101 held only by MC)");
+
+    // ── procurement phase 2: an open tender, and vendor data ──────────────
+    //
+    //   MR-M-0201  issued Rev 0, then Rev 1 (spare seal kit added): the
+    //              first vendor's bid quotes Rev 0 and drops out of ranking
+    //   VDT PU     the (demo) company template for pumps; P-1203A's vendor
+    //              sent it without the rated flow — recorded, not acceptable
+    const { rows: [haveMr] } = await db.query("SELECT count(*)::int AS n FROM material_requisition WHERE project_id = $1", [p.id]);
+    if (haveMr.n === 0) {
+      const tid = async (no) => (await db.query("SELECT id FROM tag WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0]?.id;
+      const vid = async (code, name, country) => (await prc.upsertVendor(db, { projectId: p.id, code, name, country })).id;
+      const vA = await vid("V-PUMP", "Pump vendor (demo)", "IT");
+      const vB = await vid("V-PUMP2", "Pump vendor B (demo)", "DE");
+      const vC = await vid("V-PUMP3", "Pump vendor C (demo)", "IR");
+      const mr = await tender.createMr(db, { projectId: p.id, mrNo: "MR-M-0201", title: "Cooling water booster pumps", discipline: "mechanical", userId: user.id });
+      const pump = await tid("P-6101B") || await tid("P-6101A");
+      await tender.addMrLine(db, { projectId: p.id, mrId: mr.id, tagId: pump, qty: 1, needOn: dd(160), description: "API 610 OH2, per datasheet DS-6101" });
+      await tender.issueMr(db, { projectId: p.id, mrId: mr.id, reason: "Issued for enquiry", userId: user.id });
+      const bA = await tender.recordBid(db, { projectId: p.id, mrId: mr.id, vendorId: vA, bidRef: "Q-4471", receivedOn: dd(-12),
+        validUntil: dd(75), currency: "EUR", totalPrice: 188000, deliveryWeeks: 30, userId: user.id });
+      await tender.reviseMr(db, { projectId: p.id, mrId: mr.id });
+      await tender.addMrLine(db, { projectId: p.id, mrId: mr.id, tagId: pump, qty: 1, description: "Spare mechanical seal cartridge" });
+      await tender.issueMr(db, { projectId: p.id, mrId: mr.id, reason: "Rev 1: spare seal cartridge added (SPIR)", userId: user.id });
+      const bB = await tender.recordBid(db, { projectId: p.id, mrId: mr.id, vendorId: vB, bidRef: "ANG-2026-118", receivedOn: dd(-4),
+        validUntil: dd(60), currency: "EUR", totalPrice: 212000, deliveryWeeks: 26, userId: user.id });
+      await tender.recordBid(db, { projectId: p.id, mrId: mr.id, vendorId: vC, bidRef: "PC-77", receivedOn: dd(-3),
+        validUntil: dd(45), currency: "EUR", totalPrice: 176000, deliveryWeeks: 34, userId: user.id });
+      await tender.evaluateBid(db, { projectId: p.id, bidId: bA.id, techStatus: "acceptable", userId: user.id });
+      await tender.evaluateBid(db, { projectId: p.id, bidId: bB.id, techStatus: "acceptable", userId: user.id });
+
+      await tender.setTemplate(db, { projectId: p.id, isoClass: "PU", reason: "Company VDT for centrifugal pumps (demo)", userId: user.id, attributes: [
+        { key: "manufacturer", label: "Manufacturer", type: "text", required: true },
+        { key: "model", label: "Model", type: "text", required: true },
+        { key: "serial_no", label: "Serial no.", type: "text", required: true },
+        { key: "year_built", label: "Year built", type: "number", required: true },
+        { key: "rated_flow", label: "Rated flow", unit: "m3/h", type: "number", required: true },
+        { key: "rated_head", label: "Rated head", unit: "m", type: "number", required: true },
+        { key: "driver_power", label: "Driver rated power", unit: "kW", type: "number", required: true },
+      ] });
+      await tender.submitVdt(db, { projectId: p.id, tagId: await tid("P-1203A"), submittedOn: dd(-6), vendorRef: "TR-PV-0032", userId: user.id,
+        values: { manufacturer: "Pump vendor (demo)", model: "API 610 OH2", serial_no: "PV-1203A-8812", year_built: "2026",
+          rated_head: "92", driver_power: "160" } });
+    }
+    console.log("procurement 2: MR-M-0201 at Rev 1 with 3 bids (one on Rev 0), VDT template PU, P-1203A data incomplete");
 
     // ── handover phase 2: the maintenance plan, spare parts, calibration ──
     //
