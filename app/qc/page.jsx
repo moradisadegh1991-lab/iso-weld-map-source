@@ -1,6 +1,7 @@
 "use client";
 import { useProjectData } from "../../lib/client/platform.mjs";
 import TableKit from "../../components/ui/TableKit";
+import PipingNav from "../../components/ui/PipingNav";
 
 /**
  * Quality control: what has been welded and not yet examined.
@@ -24,6 +25,7 @@ export default function QcPage() {
         <h1>کنترل کیفیت</h1>
         <span className="sub">شکاف تحویل و عملکرد جوشکاران</span>
       </div>
+      <PipingNav here="/qc" />
 
       <div className="card">
         <h2>{gap.length} جوشِ زده‌شده بدون بازرسی</h2>

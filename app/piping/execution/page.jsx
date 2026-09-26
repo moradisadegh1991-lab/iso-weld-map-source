@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { CHAINS, spoolStageTitle } from "../../../lib/platform/precedence.mjs";
 import TableKit from "../../../components/ui/TableKit";
+import PipingNav from "../../../components/ui/PipingNav";
 
 /**
  * Piping execution: every spool's place in its chain, the supports, and
@@ -56,6 +57,7 @@ export default function PipingExecution() {
         <h1>اجرای پایپینگ</h1>
         <span className="sub">{data.board.length} اسپول · {data.supports.length} ساپورت</span>
       </div>
+      <PipingNav here="/piping/execution" />
 
       {msg && <p className="err">{msg}</p>}
 
