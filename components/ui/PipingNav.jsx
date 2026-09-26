@@ -9,6 +9,7 @@ const LINKS = [
   ["/piping/execution", "اجرا: اسپول، ساپورت"],
   ["/qc", "NDT و جوشکار"],
   ["/piping/joint", "سابقهٔ جوش"],
+  ["/ndt-joints", "NDT ساپورت و سازه"],
   ["/inspection", "بازرسی (ITP)"],
   ["/completions", "پکیج تست"],
   ["/warehouse", "مواد"],

@@ -57,6 +57,7 @@ import * as tender from "../lib/db/repos/tender.mjs";
 import { reserve as reserveStock } from "../lib/db/repos/reserve.mjs";
 import * as dcr from "../lib/db/repos/doc-control.mjs";
 import * as incoming from "../lib/db/repos/incoming.mjs";
+import * as jointNdt from "../lib/db/repos/joint-ndt.mjs";
 import { setAssetMaster } from "../lib/db/repos/handover.mjs";
 import * as mnt from "../lib/db/repos/maintenance.mjs";
 import { upsertPackage as upsertTestPackage, addLines as addPackLines } from "../lib/db/repos/completions.mjs";
@@ -1061,6 +1062,44 @@ try {
         text: "Suction drum level trip set point missing on LT-2101", userId: user.id });
       await incoming.finishReview(db, { projectId: p.id, reviewId: reviews.find((x) => x.discipline === "Piping").id, userId: user.id });
       console.log("documents: incoming DES-TR-0112 — 21-PID-001 Rev B under review (1 comment), a datasheet outside the MDR");
+    }
+
+    // ── NDT of structural, support and equipment welds ────────────────────
+    //   The matrix below is the (demo) NDT specification — each rule names
+    //   its clause. A rack's CJP welds: VT 100% + UT 20% random, every weld
+    //   of the lot when a sample fails; support attachment fillets MT 100%;
+    //   equipment field seams RT 100%.
+    const { rows: [haveRule] } = await db.query("SELECT count(*)::int AS n FROM ndt_matrix_rule WHERE project_id = $1", [p.id]);
+    if (haveRule.n === 0) {
+      for (const r of [
+        ["structural", "cjp", "VT", 100, null, "Demo spec ST-005 §7.1 (visual, all welds)"],
+        ["structural", "cjp", "UT", 20, "full", "Demo spec ST-005 §7.3 (CJP, random)"],
+        ["structural", "fillet", "VT", 100, null, "Demo spec ST-005 §7.1"],
+        ["structural", "fillet", "MT", 10, "full", "Demo spec ST-005 §7.4"],
+        ["support", "fillet", "MT", 100, null, "Demo spec PI-020 §9 (attachments to pressure parts)"],
+        ["equipment", "cjp", "RT", 100, null, "Demo: vessel drawing, field circumferential seam"],
+      ]) await jointNdt.setRule(db, { projectId: p.id, scope: r[0], jointType: r[1], method: r[2], percent: r[3], extension: r[4], basis: r[5], userId: user.id });
+      const { rows: [rack] } = await db.query("SELECT id, tag_no FROM tag WHERE project_id = $1 AND kind = 'structure' ORDER BY tag_no LIMIT 1", [p.id]);
+      const { rows: [vessel] } = await db.query("SELECT id, tag_no FROM tag WHERE project_id = $1 AND discipline = 'equipment' AND kind = 'static' ORDER BY tag_no LIMIT 1", [p.id]);
+      const { rows: [sup] } = await db.query("SELECT id, support_no FROM pipe_support WHERE project_id = $1 ORDER BY support_no LIMIT 1", [p.id]);
+      const sw = await upsertWelder(db, { projectId: p.id, stampNo: "ST-03", name: "جوشکار سازه (نمایشی)" });
+      if (rack) {
+        for (let k = 1; k <= 4; k++) {
+          const j = await jointNdt.upsertJoint(db, { projectId: p.id, scope: "structural", jointNo: `${rack.tag_no}-W${k}`, tagId: rack.id, jointType: "cjp", thicknessMm: 16 });
+          if (k <= 3) {
+            await jointNdt.recordJointWeld(db, { projectId: p.id, jointId: j.id, welderId: sw.id, weldedOn: dd(-6) });
+            await jointNdt.recordJointNdt(db, { projectId: p.id, jointId: j.id, method: "VT", result: "accept", inspectedOn: dd(-5), userId: user.id });
+          }
+        }
+      }
+      if (sup) {
+        const j = await jointNdt.upsertJoint(db, { projectId: p.id, scope: "support", jointNo: `${sup.support_no}-A1`, supportId: sup.id, jointType: "fillet" });
+        await jointNdt.recordJointWeld(db, { projectId: p.id, jointId: j.id, welderId: sw.id, weldedOn: dd(-4) });
+      }
+      if (vessel) {
+        await jointNdt.upsertJoint(db, { projectId: p.id, scope: "equipment", jointNo: `${vessel.tag_no}-FS1`, tagId: vessel.id, jointType: "cjp", thicknessMm: 22 });
+      }
+      console.log(`joint NDT: 6 matrix rules; ${rack?.tag_no || "no rack"} 4 CJP welds (3 welded, UT sample not drawn), ${sup?.support_no || "no support"} MT pending, ${vessel?.tag_no || "no vessel"} field seam`);
     }
 
     // ── warehouse: a reservation ──────────────────────────────────────────
