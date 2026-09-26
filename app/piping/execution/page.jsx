@@ -101,7 +101,7 @@ function SpoolRow({ b, open, detail, onToggle, onRecord }) {
   return (
     <>
       <tr>
-        <td className="mono">{b.spoolNo}</td>
+        <td className="mono"><a href={`/piping/joint?q=${encodeURIComponent(b.spoolNo)}`} title="جوش‌های این اسپول و سابقهٔ هرکدام">{b.spoolNo}</a></td>
         <td className="mono">{b.lineNo || "—"}</td>
         <td className="sm">{spoolStageTitle(b.stage)}</td>
         <td><Bar pct={b.pct} /></td>

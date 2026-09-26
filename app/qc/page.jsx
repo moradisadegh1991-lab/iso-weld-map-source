@@ -40,7 +40,7 @@ export default function QcPage() {
               <tbody>
                 {gap.slice(0, 200).map((g, i) => (
                   <tr key={g.weld_uid || i}>
-                    <td className="mono">{g.weld_no}</td>
+                    <td className="mono">{g.weld_uid ? <a href={`/piping/joint?uid=${encodeURIComponent(g.weld_uid)}`}>{g.weld_no}</a> : g.weld_no}</td>
                     <td className="mono">{g.line_no || "—"}</td>
                     <td>{g.shop_field}</td>
                     <td className="mono">{g.ndt_requirement || "—"}</td>

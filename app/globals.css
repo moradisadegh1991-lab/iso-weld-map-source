@@ -697,3 +697,12 @@ mark.tk-hit{background:rgba(224,163,62,.35);color:inherit;border-radius:2px}
   .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:55}
   .shell.rail .sidenav .grp, .shell.rail .sidenav .t, .shell.rail .nav-search{display:revert}
 }
+
+/* ── joint history ── */
+div.kv{display:grid;gap:10px 16px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+div.kv > div{min-width:0;overflow-wrap:anywhere}
+ol.timeline{list-style:none;margin:0;padding:0;border-inline-start:2px solid var(--line);display:flex;flex-direction:column;gap:8px}
+ol.timeline li{position:relative;padding-inline-start:14px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+ol.timeline li::before{content:"";position:absolute;inset-inline-start:-6px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--dim)}
+ol.timeline li.ok::before{background:var(--ok)}
+ol.timeline li.bad::before{background:var(--bad)}
