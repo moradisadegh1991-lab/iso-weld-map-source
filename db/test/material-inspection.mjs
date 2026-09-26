@@ -4,6 +4,13 @@
  * request is raised for, and ACCEPTING it — on the MIR, or its MTC — waits
  * for the request the project's material ITP holds on. Rejecting never
  * waits. A project with no material ITP receives as before.
+ *
+ * A lot's kind of work is its item's CATEGORY, not one flat "material": a
+ * pressure/structural item (pipe, fitting, flange, valve, plate, structural,
+ * bolting — lib/warehouse/stock.mjs's TRACEABLE set) is scope
+ * "material_pressure"; cable and instrument are "material_electrical";
+ * everything else is "material_general". A hold written on one scope's ITP
+ * never touches a lot of another.
  */
 import { test, run, assert, equal, throws } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
@@ -62,7 +69,8 @@ test("with no material ITP, a lot is received, accepted and its MTC accepted as 
 
 test("the material ITP names only the receipt's own two checks, and is approved like any ITP", async () => {
   await inP(async () => {
-    itp = await insp.createItp(db, { projectId: P, itpNo: "ITP-MAT-01", revision: "0", title: "Material receiving", scope: "material", userId: alice.id });
+    itp = await insp.createItp(db, { projectId: P, itpNo: "ITP-MAT-01", revision: "0", title: "Material receiving",
+      scope: "material_pressure", userId: alice.id });
     await throws(async () => insp.saveActivity(db, { projectId: P, itpId: itp.id, seq: 5, title: "Fit-up", stepCode: "fit_up",
       points: { contractor: "H" } }), "زنجیرهٔ");
     mirAct = await insp.saveActivity(db, { projectId: P, itpId: itp.id, seq: 10, title: "Visual, dimensional, quantity", stepCode: "mir",
@@ -114,7 +122,7 @@ test("the request is raised for a lot, against the material ITP only, and names 
     equal([row.ir_no, row.itemLabel, row.state.state], [ir.ir_no, "PIPE-6-S40 · MRR-002 · ذوب H-2", "awaiting"]);
     const l = await lotOf(lotA.id);
     equal([l.itpHold.mir.irNo, l.itpHold.mir.state], [ir.ir_no, "awaiting"]);
-    const items = await insp.itemsForScope(db, { projectId: P, scope: "material" });
+    const items = await insp.itemsForScope(db, { projectId: P, scope: "material_pressure" });
     equal(items.map((i) => [i.kind, i.label]).sort()[0][0], "lot");
     assert(items.every((i) => !i.label.includes("R-X")), "another project's lots are not offered");
     await throws(async () => wh.inspectLot(db, { projectId: P, lotId: lotA.id, qtyAccepted: 50, inspectedOn: TODAY }), "منتظر نتیجه");
@@ -163,6 +171,42 @@ test("a rejected receipt inspection closes, raises its NCR, and keeps the lot he
     await throws(async () => wh.inspectLot(db, { projectId: P, lotId: lotC.id, qtyAccepted: 30, inspectedOn: TODAY }), "بازرسی دوباره لازم است");
     equal((await lotOf(lotC.id)).itpHold.mir.state, "rejected");
     await wh.inspectLot(db, { projectId: P, lotId: lotC.id, qtyAccepted: 0, qtyRejected: 30, mirRef: "MIR-004", inspectedOn: TODAY });
+  });
+});
+
+let cableItem, cableLot1, cableLot2, pipeLot2;
+test("a pressure ITP does not hold a cable lot, and an electrical ITP holds only its own", async () => {
+  await inP(async () => {
+    cableItem = await wh.upsertItem(db, { projectId: P, code: "CBL-1", description: "Cable 3Cx35", category: "cable", uom: "m" });
+    cableLot1 = await wh.receiveLot(db, { projectId: P, itemId: cableItem.id, receiptNo: "MRR-CBL-01", receivedOn: TODAY, qtyReceived: 500 });
+    // No electrical ITP exists yet: the cable receives as before, untouched by the pressure ITP's PMI hold.
+    await wh.inspectLot(db, { projectId: P, lotId: cableLot1.id, qtyAccepted: 500, mirRef: "MIR-CBL-01", inspectedOn: TODAY });
+    equal((await lotOf(cableLot1.id)).itpHold, { mir: null, mtc: null });
+
+    const cblItp = await insp.createItp(db, { projectId: P, itpNo: "ITP-MAT-CBL", revision: "0",
+      title: "Cable receiving", scope: "material_electrical", userId: alice.id });
+    const cblMir = await insp.saveActivity(db, { projectId: P, itpId: cblItp.id, seq: 10, title: "Visual and continuity",
+      stepCode: "mir", points: { contractor: "H" } });
+    await insp.approveItp(db, { projectId: P, itpId: cblItp.id, userId: dave.id });
+
+    cableLot2 = await wh.receiveLot(db, { projectId: P, itemId: cableItem.id, receiptNo: "MRR-CBL-02", receivedOn: TODAY, qtyReceived: 200 });
+    await throws(async () => wh.inspectLot(db, { projectId: P, lotId: cableLot2.id, qtyAccepted: 200, inspectedOn: TODAY }), "ITP-MAT-CBL ردیف 10");
+    // The pressure ITP still holds a new pipe lot exactly as before; the new electrical ITP changes nothing about it.
+    pipeLot2 = await receive("MRR-005", "H-5");
+    await throws(async () => wh.inspectLot(db, { projectId: P, lotId: pipeLot2.id, qtyAccepted: 50, inspectedOn: TODAY }), "ITP-MAT-01 ردیف 10");
+
+    const ir = await insp.raiseIr(db, { projectId: P, activityId: cblMir.id, itemKind: "lot", itemId: cableLot2.id,
+      plannedAt: inHours(30), membership: await M(alice), userId: alice.id });
+    await insp.recordResult(db, { projectId: P, irId: ir.id, outcome: "accepted", membership: await M(alice), userId: alice.id, now: inHours(31) });
+    await wh.inspectLot(db, { projectId: P, lotId: cableLot2.id, qtyAccepted: 200, mirRef: "MIR-CBL-02", inspectedOn: TODAY });
+    // Releasing the cable's own IR did not touch the pipe lot, which is still held.
+    equal((await lotOf(pipeLot2.id)).itpHold.mir?.seq, 10);
+
+    const pressureItems = await insp.itemsForScope(db, { projectId: P, scope: "material_pressure" });
+    const electricalItems = await insp.itemsForScope(db, { projectId: P, scope: "material_electrical" });
+    assert(!pressureItems.some((i) => i.id === cableLot2.id), "a cable lot is not offered under the pressure scope");
+    assert(!electricalItems.some((i) => i.id === pipeLot2.id), "a pipe lot is not offered under the electrical scope");
+    assert(electricalItems.some((i) => i.id === cableLot2.id));
   });
 });
 

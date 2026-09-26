@@ -18,6 +18,8 @@ const reg = await import("../../lib/db/repos/assumptions.mjs");
 const elec = await import("../../lib/db/repos/electrical.mjs");
 const steel = await import("../../lib/db/repos/structural.mjs");
 const inst = await import("../../lib/db/repos/instrumentation.mjs");
+const docsRepo = await import("../../lib/db/repos/documents.mjs");
+const runs = await import("../../lib/db/repos/runs.mjs");
 
 const db = await getDb();
 const alice = await projects.ensureUser(db, { subject: "kc|alice", displayName: "Alice" });
@@ -141,6 +143,39 @@ test("structures, instruments and equipment report their own gaps", async () => 
     const rank = { high: 0, medium: 1, low: 2 };
     assert(m.every((x, i) => i === 0 || rank[m[i - 1].impact] <= rank[x.impact]),
       `what withholds a verdict comes first: ${m.map((x) => x.impact).join(", ")}`);
+  });
+});
+
+test("R3: a current revision whose every extraction attempt failed has no register, and is reported so", async () => {
+  await withProject(db, P, async () => {
+    // Not yet extracted at all: an expected state, not R3.
+    await docsRepo.registerDocument(db, { projectId: P, docNo: "ISO-R3-A", revision: "0", revisionDate: "2026-01-01",
+      fileSha256: "1".repeat(64), storageUri: "local://r3a" });
+    equal((await keys()).some((k) => k.startsWith("register-missing:")), false);
+
+    // The only revision's only extraction failed.
+    const { document: b } = await docsRepo.registerDocument(db, { projectId: P, docNo: "ISO-R3-B", revision: "0", revisionDate: "2026-01-01",
+      fileSha256: "2".repeat(64), storageUri: "local://r3b" });
+    await runs.createRun(db, { projectId: P, documentId: b.id, payload: {}, engineError: "geometry does not close" });
+    let m = await reg.missingInformation(db, { projectId: P });
+    let r3 = m.find((x) => x.key === "register-missing");
+    equal([r3.count, r3.impact, r3.discipline], [1, "medium", "پایپینگ"]);
+
+    // A drawing WITH a valid register is not counted, even with a later failed run on it.
+    const { document: c0 } = await docsRepo.registerDocument(db, { projectId: P, docNo: "ISO-R3-C", revision: "0", revisionDate: "2026-01-01",
+      fileSha256: "3".repeat(64), storageUri: "local://r3c0" });
+    await runs.createRun(db, { projectId: P, documentId: c0.id, payload: {} });
+    await runs.createRun(db, { projectId: P, documentId: c0.id, payload: {}, engineError: "transient" });
+    equal((await reg.missingInformation(db, { projectId: P })).find((x) => x.key === "register-missing").count, 1, "still just ISO-R3-B");
+
+    // A NEW revision supersedes it, and only that new revision's extraction fails: R3 now fires on the current one.
+    const { document: c1 } = await docsRepo.registerDocument(db, { projectId: P, docNo: "ISO-R3-C", revision: "1", revisionDate: "2026-02-01",
+      fileSha256: "4".repeat(64), storageUri: "local://r3c1" });
+    await docsRepo.supersedePrevious(db, { projectId: P, documentId: c1.id });
+    await runs.createRun(db, { projectId: P, documentId: c1.id, payload: {}, engineError: "geometry does not close" });
+    m = await reg.missingInformation(db, { projectId: P });
+    r3 = m.find((x) => x.key === "register-missing");
+    equal(r3.count, 2, "ISO-R3-B, and now ISO-R3-C's current revision");
   });
 });
 

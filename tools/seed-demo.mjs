@@ -1265,13 +1265,17 @@ try {
     }
     console.log("inspection: 2 ITPs, 24 h notice; pre-pour released on FDN-P-1203A, requested on FDN-T-3102; a rejected fit-up with its NCR and re-inspection");
 
-    //   Material receiving under its own ITP. Lots already through MIR stay
-    //   as they were (inspected before this ITP was in force); the pipe that
-    //   arrived on MRR-0019 has not been, so accepting it now waits on its IR.
+    //   Material receiving is two ITPs, not one — a lot's kind of work is
+    //   its item's category (pipe/fitting/flange/valve/plate/structural/
+    //   bolting need heat traceability and PMI; cable/instrument do not), so
+    //   a PMI hold on pipe cannot also stop a cable delivery. Lots already
+    //   through MIR stay as they were (inspected before either ITP was in
+    //   force); the pipe on MRR-0019 and a fresh cable lot have not been, so
+    //   accepting either now waits on its own ITP's IR — and only its own.
     const { rows: [haveMat] } = await db.query("SELECT count(*)::int AS n FROM itp WHERE project_id = $1 AND itp_no = 'ITP-MAT-001'", [p.id]);
     if (haveMat.n === 0) {
       const mat = await insp.createItp(db, { projectId: p.id, itpNo: "ITP-MAT-001", revision: "0",
-        title: "Material receiving — piping and electrical bulk", scope: "material", userId: qcInsp.id });
+        title: "Material receiving — pressure-retaining piping and structural steel", scope: "material_pressure", userId: qcInsp.id });
       for (const a of [
         { seq: 10, title: "Visual, dimensional and quantity check against PO and packing list", stepCode: "mir",
           reference: "PO · MSS SP-25 marking", criteria: "quantity per packing list, no damage, markings legible", record: "MIR",
@@ -1283,15 +1287,33 @@ try {
           record: "PMI report", points: { contractor: "H", company: "W" } },
       ]) await insp.saveActivity(db, { projectId: p.id, itpId: mat.id, ...a });
       await insp.approveItp(db, { projectId: p.id, itpId: mat.id, userId: user.id, onDate: dd(-10) });
+
+      const cbl = await insp.createItp(db, { projectId: p.id, itpNo: "ITP-MAT-002", revision: "0",
+        title: "Material receiving — cable and instrumentation", scope: "material_electrical", userId: qcInsp.id });
+      for (const a of [
+        { seq: 10, title: "Visual: reel condition, drum marking, no jacket damage; quantity against packing list", stepCode: "mir",
+          reference: "PO · IEC 60228 marking", criteria: "quantity per packing list, jacket intact, drum undamaged", record: "MIR",
+          points: { contractor: "H", company: "W" } },
+        { seq: 20, title: "Factory test certificate review: conductor resistance, insulation resistance at works", stepCode: "mtc_review",
+          reference: "IEC 60502 routine test certificate", criteria: "within cable spec", record: "Test certificate review",
+          points: { contractor: "H", company: "R" } },
+      ]) await insp.saveActivity(db, { projectId: p.id, itpId: cbl.id, ...a });
+      await insp.approveItp(db, { projectId: p.id, itpId: cbl.id, userId: user.id, onDate: dd(-10) });
+
+      const when = (days, hour) => { const d = new Date(Date.now() + days * 86_400_000); d.setHours(hour, 0, 0, 0); return d; };
       const { rows: [lot19] } = await db.query("SELECT id FROM material_lot WHERE project_id = $1 AND receipt_no = 'MRR-0019'", [p.id]);
       if (lot19) {
-        const [matItp] = (await insp.listItps(db, { projectId: p.id })).filter((i) => i.itp_no === "ITP-MAT-001");
-        const when = (days, hour) => { const d = new Date(Date.now() + days * 86_400_000); d.setHours(hour, 0, 0, 0); return d; };
-        await insp.raiseIr(db, { projectId: p.id, activityId: matItp.activities.find((a) => a.seq === 10).id, itemKind: "lot", itemId: lot19.id,
+        const [pipeItp] = (await insp.listItps(db, { projectId: p.id })).filter((i) => i.itp_no === "ITP-MAT-001");
+        await insp.raiseIr(db, { projectId: p.id, activityId: pipeItp.activities.find((a) => a.seq === 10).id, itemKind: "lot", itemId: lot19.id,
           plannedAt: when(1, 8), location: "Laydown L-3", membership: { inspection_party: "contractor" }, userId: qcInsp.id, now: when(-1, 8) });
       }
+      const lot20 = await receiveLot(db, { projectId: p.id, itemId: it["CBL-3C35-XLPE"].id, receiptNo: "MRR-0020",
+        poRef: "PO-E-0007", supplier: "Supplier C (demo)", receivedOn: dd(-2), qtyReceived: 300, location: "Cable yard", userId: user.id });
+      const [cableItp] = (await insp.listItps(db, { projectId: p.id })).filter((i) => i.itp_no === "ITP-MAT-002");
+      await insp.raiseIr(db, { projectId: p.id, activityId: cableItp.activities.find((a) => a.seq === 10).id, itemKind: "lot", itemId: lot20.id,
+        plannedAt: when(1, 9), location: "Cable yard", membership: { inspection_party: "contractor" }, userId: qcInsp.id, now: when(-1, 9) });
     }
-    console.log("inspection: material receiving ITP; MRR-0019 waits on its receipt inspection");
+    console.log("inspection: two material ITPs (pressure piping, electrical); MRR-0019 and MRR-0020 each wait on their own");
 
     // ── pre-commissioning checklists ──────────────────────────────────────
     //
