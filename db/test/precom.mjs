@@ -176,19 +176,19 @@ test("a pass counts once someone else accepts it; the latest attempt decides", a
 
 test("RFC waits for every check, every punch A and every NCR — not punch B; the signer does not accept it", async () => {
   await inP(async () => {
-    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "checks");
+    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "چک‌لیست باز");
     const s0 = await prc.subsystemPrecom(db, { projectId: P, subsystemId: sub.id });
     const loop = s0.checks.find((c) => c.itemKind === "loop");
     const lt = await prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tLoop.id, itemRef: loop.itemRef,
       result: "pass", performedOn: TODAY, userId: alice.id });
     await prc.acceptAttempt(db, { projectId: P, attemptId: lt.id, userId: bob.id });
     const a = await qa.raisePunch(db, { projectId: P, tagId: pump.id, category: "A", description: "Missing holding-down bolt", raisedOn: TODAY, userId: bob.id });
-    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "punch_a (1)");
+    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "Punch A باز (1)");
     await qa.punchAction(db, { projectId: P, punchId: a.id, action: "clear", note: "fitted", userId: alice.id });
     await qa.punchAction(db, { projectId: P, punchId: a.id, action: "verify", userId: bob.id });
     punchB = await qa.raisePunch(db, { projectId: P, tagId: pump.id, category: "B", description: "Coupling guard paint", raisedOn: TODAY, userId: bob.id });
     const n = await qa.raiseNcr(db, { projectId: P, title: "t", description: "d", severity: "minor", tagId: pump.id, raisedOn: TODAY, userId: bob.id });
-    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "ncr (1)");
+    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "NCR باز (1)");
     await qa.ncrAction(db, { projectId: P, ncrId: n.id, action: "propose", disposition: "rework", dispositionNote: "redo", userId: bob.id });
     await qa.ncrAction(db, { projectId: P, ncrId: n.id, action: "approve", userId: alice.id, actorIsEngineer: true });
     await qa.ncrAction(db, { projectId: P, ncrId: n.id, action: "implement", note: "done", rootCause: "x", correctiveAction: "y", userId: bob.id });
@@ -209,7 +209,7 @@ test("RFC waits for every check, every punch A and every NCR — not punch B; th
 let tCom, punchB;
 test("commissioning procedures are recorded only once RFC is accepted, and RFSU waits for them and for punch B", async () => {
   await inP(async () => {
-    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "rfc");
+    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "RFC پذیرفته نشده");
     tCom = await prc.upsertTemplate(db, { projectId: P, code: "C-MEC-01", title: "Pump run on process fluid", appliesTo: "rotating",
       phase: "commissioning", criteria: "72 h, design flow" });
     await throws(async () => prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tCom.id, itemRef: pump.id,
@@ -223,7 +223,7 @@ test("commissioning procedures are recorded only once RFC is accepted, and RFSU 
     const run1 = await prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tCom.id, itemRef: pump.id,
       result: "pass", performedOn: TODAY, note: "72 h at design flow", userId: alice.id });
     await prc.acceptAttempt(db, { projectId: P, attemptId: run1.id, userId: bob.id });
-    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "punch (1)");
+    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "Punch A/B باز (1)");
     await qa.punchAction(db, { projectId: P, punchId: punchB.id, action: "clear", note: "painted", userId: alice.id });
     await qa.punchAction(db, { projectId: P, punchId: punchB.id, action: "verify", userId: bob.id });
     const r = await prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id });

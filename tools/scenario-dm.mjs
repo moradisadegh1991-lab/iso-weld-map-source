@@ -59,7 +59,7 @@ try {
   const printed = [];
   await addMember(db, { projectId: project.id, userId: me.id, role: PEOPLE.pm.role });
   for (const p of Object.values(PEOPLE).filter((q) => q.email)) {
-    const email2 = code === SCENARIO.code ? p.email : p.email.replace("@", `.${code.toLowerCase()}@`);
+    const email2 = code === SCENARIO.code ? p.email : p.email.replace(".dmw@", `.${code.toLowerCase()}@`);
     const u = await ensureUser(db, { subject: `local|${email2}`, email: email2, displayName: p.name });
     const password = randomBytes(12).toString("base64url");
     await setPassword(db, { userId: u.id, password });

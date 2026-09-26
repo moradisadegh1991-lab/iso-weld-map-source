@@ -206,6 +206,18 @@ test("posting an extraction persists the register the engine computes", async ()
   equal(body.spools.length, 3);
 });
 
+test("a saved register belongs to a line: its welds and spools carry it, so a test package and MC can see them", async () => {
+  // Before this, a register saved through the API made no line at all —
+  // only the demo seed, which inserted its line by hand, had one.
+  const db = await getDb();
+  const { rows: [line] } = await db.query("SELECT id FROM line WHERE project_id = $1 AND line_no = '36-P-001'", [projectId]);
+  assert(line, "the line named with the register exists");
+  const { rows: [n] } = await db.query(
+    "SELECT count(*)::int AS welds, count(*) FILTER (WHERE line_id = $2)::int AS on_line FROM weld WHERE extraction_run_id = $1", [runId, line.id]);
+  equal(n.on_line, n.welds, "every weld of the run is on the line");
+  assert(n.welds > 0);
+});
+
 test("the register is recomputed server-side, never taken from the client", async () => {
   // A client posting a payload it has tampered with gets the engine's answer,
   // not its own: the browser is not a place to decide where a weld goes.

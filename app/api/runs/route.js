@@ -58,7 +58,10 @@ export async function POST(request) {
 
       // The line this drawing belongs to: without one, its welds are in no
       // test package and no subsystem (lib/db/repos/spine.mjs).
-      const line = lineId ? null : await lineForRegister(db, { projectId, lineNo: payload?.meta?.lineNo || lineNo,
+      // A failed model has no register, and a payload that names neither a
+      // line nor a drawing has no line to make: the run is still recorded.
+      const lineNoOf = payload?.meta?.lineNo || lineNo || docNo;
+      const line = lineId || model.error || !lineNoOf ? null : await lineForRegister(db, { projectId, lineNo: lineNoOf,
         docNo, unitCode: payload?.meta?.unit || null, pipingClass: payload?.meta?.pipingClass || null, tieInRefs: tieInRefsOf(payload) });
       const theLine = lineId || line?.id || null;
 
