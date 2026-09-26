@@ -27,12 +27,12 @@ await page.waitForSelector("h1"); await page.waitForTimeout(800);
 console.log("header :", (await page.locator(".pagehead .sub").innerText()).replace(/\s+/g, " "));
 for (const t of await page.locator(".card", { hasText: "لوپ‌ها" }).first().locator("tbody tr").allInnerTexts())
   console.log("  loop", t.replace(/\s+/g, " "));
-const board = page.locator(".card", { hasText: "ابزارها" }).last().locator(".dtable tbody > tr");
+const board = page.locator(".card", { has: page.locator("h2", { hasText: /^ابزارها$/ }) }).locator(".dtable tbody > tr");
 for (const r of await board.allInnerTexts()) console.log("  ", r.replace(/\s+/g, " ").slice(0, 170));
 await page.screenshot({ path: `${SHOT}/60-instrumentation.png` });
 
 const toggle = async (no) => {
-  await page.locator(".card", { hasText: "ابزارها" }).last().locator("tbody > tr", { hasText: no }).first()
+  await page.locator(".card", { has: page.locator("h2", { hasText: /^ابزارها$/ }) }).locator("tbody > tr", { hasText: no }).first()
     .getByRole("button").click();
   await page.waitForTimeout(600);
 };
