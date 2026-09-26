@@ -50,7 +50,7 @@ await irRow.waitFor();
 console.log("IR on the board:", flat(await irRow.innerText()).slice(0, 160));
 console.log("ITP list has ITP-MAT-001:", await page.locator("td", { hasText: "ITP-MAT-001" }).count() > 0);
 await page.getByRole("tab", { name: "پروندهٔ آیتم" }).click();
-await page.selectOption("#i-scope", "material");
+await page.selectOption("#i-scope", "material_pressure");   // pipe is pressure-retaining (045)
 await page.waitForFunction(() => document.querySelectorAll("#i-item option").length > 1);
 const opts = await page.locator("#i-item option").allInnerTexts();
 console.log("lots offered for a file:", opts.length - 1, "| e.g.", opts.find((o) => o.includes("MRR-0019")));

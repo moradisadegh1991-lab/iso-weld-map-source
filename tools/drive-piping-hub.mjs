@@ -33,7 +33,7 @@ const lots = card("بازرسی تدریجی");
 if (await lots.count()) {
   for (const r of await lots.locator("tbody > tr").allInnerTexts()) console.log("  lot", flat(r));
   const btn = lots.getByRole("button", { name: /قرعهٔ/ });
-  if (await btn.count()) { await btn.first().click(); await page.waitForTimeout(1500); console.log("drawn:", flat(await page.locator(".page > p").filter({ hasText: "قرعه کشیده شد" }).first().innerText())); }
+  if (await btn.count()) { await btn.first().click(); await page.waitForTimeout(1500); console.log("drawn:", flat(await page.locator(".page p").filter({ hasText: "قرعه کشیده شد" }).first().innerText())); }
   for (const r of await lots.locator("tbody > tr").allInnerTexts()) console.log("  lot'", flat(r));
 }
 await page.screenshot({ path: `${SHOT}/150-piping-hub.png`, fullPage: true });
@@ -42,7 +42,7 @@ const log = await page.evaluate(async () => { const a = [...document.querySelect
 console.log("weld log:", log);
 for (const p of ["/piping", "/piping/execution", "/piping/joint", "/qc"]) {
   await page.goto(BASE + p, { waitUntil: "networkidle" }); await page.waitForTimeout(800);
-  const cur = await page.locator("nav[aria-label='بخش‌های پایپینگ'] [aria-current=page]").innerText().catch(() => "MISSING");
+  const cur = await page.locator(".section-tabs [aria-current=page]").innerText().catch(() => "MISSING");
   console.log(`bar on ${p}:`, cur);
 }
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

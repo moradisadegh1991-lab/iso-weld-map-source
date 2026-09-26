@@ -252,7 +252,8 @@ function RaiseForm({ data, post, from, onDone }) {
   return (
     <form className="card" onSubmit={async (e) => {
       e.preventDefault();
-      const kind = SCOPE_ITEM[scope];
+      // The kind of item a scope inspects is the server's (lib/inspection SCOPES), not a copy kept here.
+      const kind = data.scopes[scope]?.item;
       if (await post({ kind: "raise", activityId: f.activityId, itemKind: kind, itemId: f.itemId, plannedAt: new Date(f.plannedAt).toISOString(),
         location: f.location, note: f.note, reinspectionOf: reinspect?.id || null })) { setF(blank); setReinspect(null); onDone(); }
     }}>
@@ -421,7 +422,7 @@ function ItemTab({ data }) {
   }, [scope, projectId, call]);
   useEffect(() => {
     if (!itemId) { setFile(null); return; }
-    call(`/api/inspection?projectId=${projectId}&itemKind=${SCOPE_ITEM[scope]}&itemId=${itemId}`).then(setFile).catch(() => setFile(null));
+    call(`/api/inspection?projectId=${projectId}&itemKind=${data.scopes[scope]?.item}&itemId=${itemId}`).then(setFile).catch(() => setFile(null));
   }, [itemId, scope, projectId, call]);
   const owed = file ? file.activities.filter((a) => a.latest?.state.state !== "released") : [];
   return (
@@ -461,8 +462,6 @@ function ItemTab({ data }) {
 
 // ── shared ───────────────────────────────────────────────────────────────
 
-const SCOPE_ITEM = { foundation: "tag", structure: "tag", rotating: "tag", static: "tag", fired: "tag", piping_spool: "spool",
-  cable: "cable", instrument: "instrument", coating: "coating_item", material: "lot" };
 
 function Kpi({ v, l, b, tone = "" }) {
   return <div className={`kpi ${tone}`}><span className="v">{v}</span><span className="l">{l}</span>{b && <span className="b">{b}</span>}</div>;
