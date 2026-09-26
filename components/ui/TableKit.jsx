@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Search, filter, sort and export for any table on the platform.
@@ -23,8 +24,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *
  * Searching ignores the Arabic/Persian letter variants (ي/ی, ك/ک), the
  * zero-width non-joiner and Persian digits, so «۱۲۰۳» finds «1203».
+ *
+ * Row actions. A click on a row selects it (clicks on its own buttons,
+ * links and fields do not); the bar then offers:
+ *   - «مشاهده» on every table: the row as a card, each column's heading
+ *     beside its value (`view(key)` may add more below);
+ *   - «ویرایش» when the page passes `onEdit(key)`;
+ *   - «حذف» when the page passes `onDelete(key)`, asked for confirmation
+ *     first.
+ * The key is the row's `data-key`. `canEdit(key)` / `canDelete(key)` return
+ * true or the reason the action is not open for that row — a signed or
+ * evidence record is revised or revoked, never deleted, and the disabled
+ * button says so rather than disappearing.
  */
-export default function TableKit({ children, name = "table", min = 6 }) {
+export default function TableKit({ children, name = "table", min = 1, onEdit, onDelete, canEdit, canDelete, checkDelete, view, editLabel = "ویرایش", deleteLabel = "حذف" }) {
   const box = useRef(null);
   const st = useRef({ orig: [], tbody: null, observer: null });
   const [q, setQ] = useState("");
@@ -32,6 +45,11 @@ export default function TableKit({ children, name = "table", min = 6 }) {
   const [val, setVal] = useState("");
   const [sort, setSort] = useState(null);                 // { i, dir: 1 | -1 }
   const [meta, setMeta] = useState({ heads: [], total: 0, shown: 0, values: [] });
+  const [sel, setSel] = useState(null);                   // { row, key } — the selected main row
+  const [dialog, setDialog] = useState(null);             // "view" | "delete"
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [probe, setProbe] = useState(null);               // null | "…" | true | "why not"
 
   const apply = useCallback(() => {
     const table = box.current?.querySelector("table");
@@ -49,6 +67,7 @@ export default function TableKit({ children, name = "table", min = 6 }) {
     for (const r of tbody.rows) if (!s.orig.includes(r)) s.orig.push(r);
 
     const heads = [...(table.tHead?.rows?.[0]?.cells || [])].map((c) => c.textContent.trim());
+    setSel((cur) => (cur && !live.has(cur.row) ? null : cur));
     const groups = [];
     for (const r of s.orig) {
       if (isDetail(r) && groups.length) groups[groups.length - 1].rest.push(r);
@@ -108,6 +127,55 @@ export default function TableKit({ children, name = "table", min = 6 }) {
     setSort((s) => (!s || s.i !== i ? { i, dir: 1 } : s.dir === 1 ? { i, dir: -1 } : null));
   }
 
+  // Selecting a row: a click or Enter on it, not on what it holds.
+  function pick(e) {
+    const tr = e.target.closest("tr");
+    if (!tr || !box.current?.contains(tr) || !tr.closest("tbody") || tr.closest("table") !== box.current.querySelector("table")) return;
+    if (e.target.closest("button, a, input, select, textarea, label, summary, details, [contenteditable]")) return;
+    let row = tr;
+    if (isDetail(row)) return;                          // an opened panel belongs to its row
+    const cur = st.current.selRow;
+    if (cur && cur !== row) delete cur.dataset.tkSel;
+    if (cur === row && e.type === "click" && e.detail === 1) { delete row.dataset.tkSel; st.current.selRow = null; setSel(null); return; }
+    row.dataset.tkSel = "";
+    st.current.selRow = row;
+    setSel({ row, key: row.dataset.key || null });
+    setErr("");
+    if (e.type === "dblclick") setDialog("view");
+  }
+  useEffect(() => {
+    // A row React replaced takes the selection with it.
+    if (!sel && st.current.selRow) { delete st.current.selRow.dataset.tkSel; st.current.selRow = null; }
+  }, [sel]);
+
+  const gate = (fn, key) => {
+    if (!sel) return "ابتدا یک ردیف را انتخاب کنید";
+    if (!key) return "این ردیف شناسه ندارد";
+    if (!fn) return true;
+    const r = fn(key);
+    return r === true || r === undefined || r === null ? true : String(r || "برای این ردیف باز نیست");
+  };
+  const editGate = onEdit ? gate(canEdit, sel?.key) : null;
+  const delGate = onDelete ? gate(canDelete, sel?.key) : null;
+
+  async function openDelete() {
+    setErr(""); setDialog("delete");
+    if (!checkDelete) { setProbe(true); return; }
+    setProbe("…");
+    try { setProbe(await checkDelete(sel.key)); } catch (e) { setProbe(e?.message || "بررسی نشد"); }
+  }
+
+  async function doDelete() {
+    if (delGate !== true || probe !== true) return;
+    setBusy(true); setErr("");
+    try {
+      const ok = await onDelete(sel.key);
+      if (ok === false) setErr("حذف انجام نشد — پیام خطای صفحه را ببینید.");
+      else { setDialog(null); setSel(null); }
+    } catch (e) { setErr(e?.message || "حذف انجام نشد"); }
+    setBusy(false);
+  }
+
   function exportCsv() {
     const table = box.current?.querySelector("table");
     if (!table) return;
@@ -127,7 +195,10 @@ export default function TableKit({ children, name = "table", min = 6 }) {
   }
 
   const filtering = q || (col !== "" && val !== "") || sort;
-  const showBar = meta.total >= min || filtering;
+  // A table with row actions always shows its bar: the actions live there.
+  const showBar = meta.total >= min || (meta.total > 0 && !!(onEdit || onDelete)) || filtering;
+  const cells = sel ? [...sel.row.cells].map((c, i) => [meta.heads[i] || "", c.textContent.replace(/\s+/g, " ").trim()]).filter(([h, v]) => h || v) : [];
+  const title = cells.find(([, v]) => v)?.[1] || "ردیف";
   return (
     <div className="tk">
       {showBar && (
@@ -147,12 +218,49 @@ export default function TableKit({ children, name = "table", min = 6 }) {
           <span className="tk-n">{meta.shown === meta.total ? `${fa(meta.total)} ردیف` : `${fa(meta.shown)} از ${fa(meta.total)} ردیف`}</span>
           {filtering && <button type="button" onClick={() => { setQ(""); setCol(""); setVal(""); setSort(null); }}>پاک کردن</button>}
           <button type="button" onClick={exportCsv} title="ردیف‌های نمایش‌داده، برای Excel">خروجی CSV</button>
+          <span className="tk-acts">
+            <button type="button" disabled={!sel} onClick={() => setDialog("view")}
+                    title={sel ? "همهٔ ستون‌های ردیف انتخاب‌شده" : "ابتدا یک ردیف را انتخاب کنید"}>مشاهده</button>
+            {onEdit && <button type="button" disabled={editGate !== true} title={editGate === true ? undefined : editGate}
+                               onClick={() => editGate === true && onEdit(sel.key)}>{editLabel}</button>}
+            {onDelete && <button type="button" className="danger" disabled={delGate !== true} title={delGate === true ? undefined : delGate}
+                                 onClick={() => openDelete()}>{deleteLabel}</button>}
+          </span>
         </div>
       )}
+      {sel && (editGate && editGate !== true || delGate && delGate !== true) && (
+        <p className="muted sm tk-why no-print">{[editGate !== true && editGate && `${editLabel}: ${editGate}`, delGate !== true && delGate && `${deleteLabel}: ${delGate}`].filter(Boolean).join(" · ")}</p>
+      )}
       {showBar && meta.total > 0 && meta.shown === 0 && <p className="empty-note">ردیفی با این جست‌وجو یا فیلتر نیست.</p>}
-      <div className="wrap" ref={box} onClick={onHeadClick}>{children}</div>
+      <div className="wrap" ref={box} onClick={(e) => { onHeadClick(e); pick(e); }} onDoubleClick={pick}>{children}</div>
+      {dialog && sel && createPortal(
+        <div className="tk-view" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setDialog(null); }}
+             onKeyDown={(e) => { if (e.key === "Escape") setDialog(null); }}>
+          <div role="dialog" aria-modal="true" aria-label={dialog === "delete" ? `${deleteLabel} ${title}` : title}>
+            <header><b>{dialog === "delete" ? `${deleteLabel}؟` : "مشاهده"}</b><span className="muted sm">{title}</span>
+              <button type="button" autoFocus onClick={() => setDialog(null)}>✕ بستن</button></header>
+            <dl>{cells.map(([h, v], i) => <FragmentPair key={i} h={h} v={v} />)}</dl>
+            {dialog === "view" && view && sel.key && <div className="tk-extra">{view(sel.key)}</div>}
+            {dialog === "delete" && (
+              <div className="tk-extra">
+                {probe === "…" ? <p className="muted">در حال بررسی ارجاع‌ها…</p>
+                  : probe === true ? <p>این ردیف حذف می‌شود و برنمی‌گردد. ادامه می‌دهید؟</p>
+                  : <p className="err tk-blocked">{probe}</p>}
+                {err && <p className="err">{err}</p>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  {probe === true && <button type="button" className="btn danger" disabled={busy || delGate !== true} onClick={doDelete}>{busy ? "…" : `${deleteLabel} قطعی`}</button>}
+                  <button type="button" className="btn ghost" onClick={() => setDialog(null)}>انصراف</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>, document.body)}
     </div>
   );
+}
+
+function FragmentPair({ h, v }) {
+  return <><dt>{h || "—"}</dt><dd>{v || <span className="muted">—</span>}</dd></>;
 }
 
 /** Fold React's own insertions and removals into the order it believes in. */

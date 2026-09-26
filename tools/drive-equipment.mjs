@@ -1,5 +1,6 @@
 /** Drive the equipment tab in a real browser. Compiling is not working. */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 
 const LIST = `Tag No,Description,Type,Subsystem,Unit
 P-2101A,Feed Pump,Centrifugal,21-01,21
@@ -12,6 +13,7 @@ K-2201,Recycle Compressor,Centrifugal,22-01,22`;
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
 const page = await browser.newPage({ viewport: { width: 420, height: 900 } });   // a phone
+await showAllTabs(page);
 const errors = [];
 // Before signing in, /api/auth/me answers 401: that is the sign-in page asking, not a fault.
 const signInProbe = (t) => /401/.test(t) && /auth\/me|status of 401/.test(t);

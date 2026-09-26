@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Mechanical completion, subsystem by subsystem, and the pressure-test
@@ -60,6 +61,7 @@ export default function CompletionsPage() {
         <Kpi v={packs.length - packsAccepted} l="پکیج باز" />
       </div>
 
+      <Tabs name="completions">
       <div className="card">
         <h2>ساب‌سیستم‌ها — آنچه MC را نگه داشته</h2>
         <p className="muted sm">امضای MC فقط وقتی ممکن است که این فهرست خالی باشد: همهٔ تگ‌ها آماده، همهٔ خطوط در پکیج با تست پذیرفته، همهٔ کابل‌ها و ابزارها تست‌شده، و هیچ Punch A و NCR بازی نمانده. امضاکننده و پذیرندهٔ کارفرما دو نفرند.</p>
@@ -130,6 +132,7 @@ export default function CompletionsPage() {
         )}
         {mayRecord && <Fold title="پکیج تست جدید"><PackForm data={data} post={post} /></Fold>}
       </div>
+      </Tabs>
     </div>
   );
 }
@@ -145,12 +148,13 @@ function PackDetail({ p, data, post, may }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {p.pressure.basis && <p className="mono sm">{p.pressure.basis} = {p.pressure.barg} barg</p>}
-      <TableKit name="completions">
+      <TableKit name="completions" onDelete={may ? (lineId) => post({ kind: "line-remove", packageId: p.package.id, lineId }) : undefined}
+                canDelete={() => (p.accepted ? "پکیج پذیرفته شده؛ خطوطش ثابت است" : true)} deleteLabel="برداشتن از پکیج">
         <table className="dtable">
-          <thead><tr><th>خط</th><th>کلاس</th><th>P طراحی</th><th>جوش</th><th>انجام</th><th>NDT پذیرفته</th><th>PWHT</th><th>ساپورت</th><th /></tr></thead>
+          <thead><tr><th>خط</th><th>کلاس</th><th>P طراحی</th><th>جوش</th><th>انجام</th><th>NDT پذیرفته</th><th>PWHT</th><th>ساپورت</th></tr></thead>
           <tbody>
             {p.lines.map((l) => (
-              <tr key={l.id}>
+              <tr key={l.id} data-key={l.id}>
                 <td className="mono">{l.lineNo}</td><td className="mono">{l.classCode || "—"}</td>
                 <td className="mono">{l.designBarg ?? <span className="bad">؟</span>}</td>
                 <td className="mono">{l.welds}</td>
@@ -158,7 +162,6 @@ function PackDetail({ p, data, post, may }) {
                 <td className={`mono ${l.examined < l.welds ? "warn" : "ok"}`}>{l.examined}</td>
                 <td className="mono">{l.pwhtRequired ? `${l.pwhtDone}/${l.pwhtRequired}` : "—"}</td>
                 <td className={`mono ${l.supportsInstalled < l.supports ? "warn" : ""}`}>{l.supports ? `${l.supportsInstalled}/${l.supports}` : "—"}</td>
-                <td>{may && !p.accepted && <button className="btn ghost" onClick={() => post({ kind: "line-remove", packageId: p.package.id, lineId: l.id })}>حذف</button>}</td>
               </tr>
             ))}
           </tbody>

@@ -4,6 +4,7 @@
  * the refusals shown to the user, and the asset page carrying both.
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const SHOT = process.env.SHOT_DIR || "/tmp/shots";
@@ -11,6 +12,7 @@ const { DRIVE_EMAIL: EMAIL, DRIVE_PASSWORD: PASSWORD } = process.env;
 if (!EMAIL || !PASSWORD) { console.error("set DRIVE_EMAIL and DRIVE_PASSWORD"); process.exit(1); }
 const b = await chromium.launch({ executablePath: CHROME });
 const page = await b.newPage({ viewport: { width: 1440, height: 1000 } });
+await showAllTabs(page);
 const problems = [], refused = [];
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 page.on("response", (r) => {
@@ -59,7 +61,10 @@ const err1 = flat(await page.locator("p.err").first().innerText().catch(() => ""
 check(/DCS یا Historian/.test(err1), `a point with neither identifier is refused, and says why: «${err1.slice(0, 90)}»`);
 check((await pointRows().count()) === 3, "and nothing was added");
 
-await pointRows().filter({ hasText: "Vibration" }).getByRole("button", { name: "حذف" }).click();
+// Removing a point: pick its row, «حذف» in the table's bar, confirm.
+await pointRows().filter({ hasText: "Vibration" }).locator("td").first().click();
+await form.locator(".tk").filter({ has: page.locator("th", { hasText: "Historian" }) }).getByRole("button", { name: "حذف", exact: true }).click();
+await page.locator(".tk-view").getByRole("button", { name: "حذف قطعی" }).click();
 await page.waitForTimeout(1200);
 check((await pointRows().count()) === 2, "the point is removed");
 

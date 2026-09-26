@@ -5,6 +5,7 @@
  * because no RFSU is accepted, and a procedure declared through the form.
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const SHOT = process.env.SHOT_DIR || "/tmp/shots";
@@ -12,6 +13,7 @@ const { DRIVE_EMAIL: EMAIL, DRIVE_PASSWORD: PASSWORD } = process.env;
 if (!EMAIL || !PASSWORD) { console.error("set DRIVE_EMAIL and DRIVE_PASSWORD"); process.exit(1); }
 const b = await chromium.launch({ executablePath: CHROME });
 const page = await b.newPage({ viewport: { width: 1440, height: 1000 } });
+await showAllTabs(page);
 const problems = [], refused = [];
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 page.on("response", (r) => {
@@ -54,7 +56,7 @@ check(/C-ELE-01/.test(flat(await card("چک‌لیست‌ها و روال‌ها
 check(/4 روال راه‌اندازی/.test(flat(await page.locator(".pagehead").innerText())), "…and counted in the header");
 
 const perf = card("آزمون عملکرد");
-const perfText = flat(await perf.innerText());
+const perfText = flat(await card("تضمین‌های عملکرد").innerText());
 check(/PG-01/.test(perfText) && /PG-21/.test(perfText) && /Annex G/.test(perfText), "guarantees with their contract clause, plant and unit");
 check((perfText.match(/آزموده نشده/g) || []).length >= 4, "every guarantee reads not tested");
 check(/در قرارداد نیامده/.test(perfText), "a guarantee with no stated duration says so rather than assuming one");

@@ -172,11 +172,11 @@ function Spares({ data, post, may, projectId }) {
         </div>
         <p className="muted sm">فروشنده پیشنهاد می‌دهد، مالک مقدار را تأیید می‌کند. «موجود» از موجودی قابل حوالهٔ انبار (پذیرفته، MTC در صورت لزوم) خوانده می‌شود.</p>
         {parts.length === 0 ? <p className="empty-note">هنوز قطعه‌ای ثبت نشده است.</p> : (
-          <TableKit name="spares">
+          <TableKit name="spares" onDelete={may ? (spareId) => post({ kind: "spare-remove", spareId }) : undefined}>
             <table className="dtable">
-              <thead><tr><th>تگ</th><th>شمارهٔ قطعه</th><th>شرح</th><th>دسته</th><th>نصب</th><th>پیشنهاد</th><th>تأیید</th><th>انبار</th><th /></tr></thead>
+              <thead><tr><th>تگ</th><th>شمارهٔ قطعه</th><th>شرح</th><th>دسته</th><th>نصب</th><th>پیشنهاد</th><th>تأیید</th><th>انبار</th></tr></thead>
               <tbody>{parts.map((p) => (
-                <tr key={p.id}>
+                <tr key={p.id} data-key={p.id}>
                   <td className="mono" style={{ whiteSpace: "nowrap" }}>{p.tagNo}</td>
                   <td className="mono sm">{p.partNo}<div className="muted">{p.manufacturer || ""}</div></td>
                   <td className="sm">{p.description}</td>
@@ -186,7 +186,6 @@ function Spares({ data, post, may, projectId }) {
                   <td className="sm"><span className={"pill " + COVER[p.cover.state][0]}>{COVER[p.cover.state][1]}</span>
                     {p.cover.state === "short" && <span className="mono"> {p.cover.have}/{p.cover.need}</span>}
                     {p.itemCode && <div className="muted mono">{p.itemCode}</div>}</td>
-                  <td>{may && <button className="btn ghost" onClick={() => post({ kind: "spare-remove", spareId: p.id })}>حذف</button>}</td>
                 </tr>
               ))}</tbody>
             </table>

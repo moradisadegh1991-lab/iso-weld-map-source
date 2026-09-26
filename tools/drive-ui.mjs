@@ -9,6 +9,7 @@
  *   BASE_URL=http://localhost:3000 DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-ui.mjs
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const SHOT = process.env.SHOT_DIR || "/tmp/shots";
@@ -23,6 +24,7 @@ const watch = (page) => {
 const flat = (s) => s.replace(/\s+/g, " ").trim();
 async function login(ctx, email, password) {
   const page = await ctx.newPage(); watch(page);
+  await showAllTabs(page);
   await page.goto(BASE, { waitUntil: "networkidle" });
   await page.fill("#email", email); await page.fill("#password", password);
   await page.click("button[type=submit]"); await page.waitForSelector(".shell");

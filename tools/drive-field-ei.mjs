@@ -7,6 +7,7 @@
  *   BASE_URL=http://localhost:3000 DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-field-ei.mjs
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const SHOT = process.env.SHOT_DIR || "/tmp/shots";
@@ -17,6 +18,7 @@ const INST = process.env.DRIVE_INSTRUMENT || "TT-2101";
 const b = await chromium.launch({ executablePath: CHROME });
 const ctx = await b.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true });
 const page = await ctx.newPage();
+await showAllTabs(page);
 const problems = [];
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 const flat = (s) => s.replace(/\s+/g, " ").trim();

@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { ERECTION_STANDARDS } from "../../lib/structural/steel.mjs";
 import TableKit from "../../components/ui/TableKit";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * The project's particulars.
@@ -173,7 +174,8 @@ export default function ProjectPage() {
         </p>
       )}
 
-      <form className="card" onSubmit={save}>
+      <Tabs name="project">
+      <form className="card" data-tab="spec" data-tab-title="مشخصات و قواعد پروژه" onSubmit={save}>
         <h2>قرارداد و طرفین</h2>
         <div className="grid2">
           {FIELDS.map(([k, label, type]) => (
@@ -325,13 +327,14 @@ export default function ProjectPage() {
       <UnitsCard projectId={projectId} call={call} editable={editable}
                  projectGrade={p.grade_elevation_mm} />
 
-      <div className="card">
+      <div className="card" data-keep>
         <h2>کد پروژه</h2>
         <p className="muted sm">
           کد <b className="mono">{p.code}</b> پس از ساخت پروژه تغییر نمی‌کند — هر
           مدرک، رجیستر و گزارشی که تا امروز صادر شده به آن ارجاع می‌دهد.
         </p>
       </div>
+      </Tabs>
     </div>
   );
 }

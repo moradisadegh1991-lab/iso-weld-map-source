@@ -4,6 +4,8 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import { useRemove } from "../../lib/client/remove.mjs";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * NDT of support, structural and equipment welds, as the project's NDT
@@ -19,6 +21,7 @@ export default function NdtJointsPage() {
   const [open, setOpen] = useState(null);
   const may = { eng: can({ role }, ACTIONS.EDIT_EXTRACTION), weld: can({ role }, ACTIONS.ASSIGN_WELD),
     ndt: can({ role }, ACTIONS.RECORD_NDT), draw: can({ role }, ACTIONS.DRAW_NDT_SAMPLE) };
+  const removeJoint = useRemove("weld-joint", reload);
 
   async function post(body, done) {
     setMsg(null);
@@ -43,19 +46,21 @@ export default function NdtJointsPage() {
       </div>
       {msg && <p className={msg.ok ? "muted" : "err"}>{msg.text}</p>}
 
+      <Tabs name="ndt-joints">
       <div className="card">
         <h2>ماتریس NDT پروژه</h2>
         <p className="muted sm">روش و درصد هر نوع جوش از مشخصات فنی پروژه می‌آید (کد جوشکاری سازه، آزمون غیرچشمی را به مدارک قرارداد می‌سپارد) — پلتفرم درصد پیش‌فرض ندارد. RT و UT روی جوش گوشه پذیرفته نمی‌شود. «گسترش» یعنی اگر نمونهٔ تصادفی رد شد چه باید کرد؛ اگر تعیین نشود، لات پذیرفته نمی‌شود.</p>
         {data.matrix.length === 0 ? <p className="empty-note">قاعده‌ای ثبت نشده — همهٔ جوش‌ها «بدون قاعده» می‌مانند.</p> : (
+          <TableKit name="ndt-matrix" onDelete={may.eng ? (ruleId) => post({ kind: "rule-remove", ruleId }) : undefined}>
           <table className="dtable">
-            <thead><tr><th>دامنه</th><th>نوع اتصال</th><th>روش</th><th>درصد</th><th>گسترش در صورت رد</th><th>مرجع</th><th /></tr></thead>
+            <thead><tr><th>دامنه</th><th>نوع اتصال</th><th>روش</th><th>درصد</th><th>گسترش در صورت رد</th><th>مرجع</th></tr></thead>
             <tbody>{data.matrix.map((r) => (
-              <tr key={r.id}><td>{data.scopes[r.scope]}</td><td>{data.jointTypes[r.joint_type]}</td><td className="mono">{r.method}</td>
+              <tr key={r.id} data-key={r.id}><td>{data.scopes[r.scope]}</td><td>{data.jointTypes[r.joint_type]}</td><td className="mono">{r.method}</td>
                 <td className="mono">{r.percent}%</td><td className="sm">{r.percent < 100 ? (data.extensions[r.extension] || "تعیین نشده") : "—"}</td>
-                <td className="sm">{r.basis}</td>
-                <td>{may.eng && <button className="btn ghost" onClick={() => post({ kind: "rule-remove", ruleId: r.id })}>حذف</button>}</td></tr>
+                <td className="sm">{r.basis}</td></tr>
             ))}</tbody>
           </table>
+          </TableKit>
         )}
         {may.eng && <Fold title="قاعدهٔ جدید"><RuleForm data={data} post={post} /></Fold>}
       </div>
@@ -84,11 +89,11 @@ export default function NdtJointsPage() {
       <div className="card">
         <h2>رجیستر جوش‌ها</h2>
         {data.joints.length === 0 ? <p className="empty-note">جوشی ثبت نشده.</p> : (
-          <TableKit name="ndt-joints">
+          <TableKit name="ndt-joints" {...(may.eng ? removeJoint : {})}>
             <table className="dtable">
               <thead><tr><th>جوش</th><th>دامنه</th><th>تگ / ساپورت</th><th>نوع</th><th>الزام</th><th>جوشکار</th><th>وضعیت</th><th /></tr></thead>
               <tbody>{data.joints.map((j) => (
-                <tr key={j.id}>
+                <tr key={j.id} data-key={j.id}>
                   <td className="mono">{j.jointNo}</td><td className="sm">{data.scopes[j.scope]}</td><td className="mono">{j.parent}</td>
                   <td className="sm">{data.jointTypes[j.jointType]}{j.thicknessMm && ` · ${j.thicknessMm} mm`}</td>
                   <td className="mono sm">{methodsText(j) || "—"}</td>
@@ -104,6 +109,7 @@ export default function NdtJointsPage() {
         {data.joints.filter((j) => j.id === open).map((j) => <JointActions key={j.id} j={j} data={data} post={post} may={may} />)}
         {may.eng && <Fold title="جوش جدید"><JointForm data={data} post={post} /></Fold>}
       </div>
+      </Tabs>
     </div>
   );
 }

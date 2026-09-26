@@ -86,15 +86,15 @@ function MrDetail({ m, data, post, may }) {
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <h3>{m.mr_no} — {m.title}</h3>
-      <TableKit name="mr-lines">
+      <TableKit name="mr-lines" onDelete={may ? (lineId) => post({ kind: "mr-line-remove", lineId }) : undefined}
+                canDelete={() => (draft ? true : "درخواست صادر شده؛ تغییر یعنی رویژن جدید")}>
         <table className="dtable">
-          <thead><tr><th>#</th><th>کالا / تگ</th><th>شرح</th><th>مقدار</th><th>نیاز سایت</th><th /></tr></thead>
+          <thead><tr><th>#</th><th>کالا / تگ</th><th>شرح</th><th>مقدار</th><th>نیاز سایت</th></tr></thead>
           <tbody>
             {m.lines.map((l) => (
-              <tr key={l.id}>
+              <tr key={l.id} data-key={l.id}>
                 <td className="mono">{l.line_no}</td><td className="mono">{l.item_code || l.tag_no}</td><td>{l.description || "—"}</td>
                 <td className="mono">{l.qty} {l.uom}</td><td className="mono">{l.need_on || "—"}</td>
-                <td>{may && draft && <button className="btn ghost" onClick={() => post({ kind: "mr-line-remove", lineId: l.id })}>حذف</button>}</td>
               </tr>
             ))}
           </tbody>

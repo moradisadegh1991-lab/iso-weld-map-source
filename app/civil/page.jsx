@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import { SPECIMENS, individualLimit } from "../../lib/civil/concrete.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Civil: foundations from excavation to handover, and the concrete that
@@ -67,10 +68,11 @@ export default function CivilPage() {
         </span>
       </div>
 
+      <Tabs name="civil">
       {msg && <p className="err">{msg}</p>}
 
       {data.spec.curingDays === null && (
-        <div className="card" style={{ borderColor: "rgba(224,163,62,.5)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(224,163,62,.5)" }}>
           <h2 style={{ color: "var(--warn)" }}>مدت عمل‌آوری بتن ثبت نشده</h2>
           <p className="muted sm">
             مرحلهٔ عمل‌آوری هیچ فونداسیونی حکم نمی‌گیرد تا مدت آن در{" "}
@@ -101,11 +103,11 @@ export default function CivilPage() {
             </table>
           </TableKit>
         )}
+        {mayRegister && <Fold title="ثبت فونداسیون جدید"><AddFoundation equipment={data.equipment} post={post} /></Fold>}
       </div>
 
       <Classes classes={data.classes} />
-
-      {mayRegister && <Fold title="ثبت فونداسیون جدید"><AddFoundation equipment={data.equipment} post={post} /></Fold>}
+      </Tabs>
     </div>
   );
 }

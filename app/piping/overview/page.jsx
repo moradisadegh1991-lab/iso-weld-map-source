@@ -3,7 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import TableKit from "../../../components/ui/TableKit";
-import PipingNav from "../../../components/ui/PipingNav";
+import Tabs from "../../../components/ui/Tabs";
 
 /**
  * Piping on one page: progress in welds and inch-dia, NDT compliance as each
@@ -39,7 +39,6 @@ export default function PipingOverview() {
         <h1>داشبورد پایپینگ</h1>
         <span className="sub">{data.lines.length} خط · {t.drawings} نقشه ({t.drawingsApproved} رجیستر تأییدشده) · {t.welds} جوش</span>
       </div>
-      <PipingNav here="/piping/overview" />
 
       <div className="kpis">
         <Kpi v={pct(t.welded, t.welds)} l="جوش زده‌شده" b={`${t.welded} از ${t.welds}`} />
@@ -51,6 +50,7 @@ export default function PipingOverview() {
       </div>
       {t.unsized > 0 && <p className="muted sm">{t.unsized} جوش سایز (NPS) ندارد و در اینچ-قطر نیامده — صفر حساب نشده.</p>}
 
+      <Tabs name="piping-overview">
       <div className="card">
         <h2>NDT: آنچه هنوز کامل نیست</h2>
         <p className="muted sm">«کامل» یعنی آنچه الزام هر جوش می‌خواهد: ۱۰۰٪ با NDT خود جوش؛ درصد تصادفی با نمونهٔ جوشکار در قرعهٔ خط، و در صورت رد، بازرسی تدریجی ASME B31.3 §341.3.4.</p>
@@ -138,6 +138,7 @@ export default function PipingOverview() {
           </ul>
         </div>
       )}
+      </Tabs>
     </div>
   );
 }

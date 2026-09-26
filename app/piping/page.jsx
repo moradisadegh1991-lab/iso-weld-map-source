@@ -22,7 +22,6 @@ import { prepare, prepareSource } from "../../lib/client/image-prep.mjs";
 import { isPdf, openPdf, renderPage } from "../../lib/client/pdf.mjs";
 import PdfSheetPicker from "../../components/PdfSheetPicker";
 import { DISCLAIMER_FA } from "../../lib/disclaimer.mjs";
-import PipingNav from "../../components/ui/PipingNav";
 
 export default function Page() {
   const [data, setData] = useState(null);
@@ -319,7 +318,6 @@ export default function Page() {
           <span className="chip mono cy">{data.meta.pipingClass} · {data.meta.nps}&quot; · {data.meta.schedule}</span>
         )}
       </div>
-      <PipingNav here="/piping" />
       {/* The stage is derived from what is actually true right now rather
           than tracked separately, so it cannot drift out of step with the
           screen: a saved-and-approved run is approved, a saved one is under

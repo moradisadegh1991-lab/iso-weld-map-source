@@ -5,6 +5,8 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import { PREP_GRADES, INSULATION, dewPoint, minReadings } from "../../lib/coating/coating.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import { useRemove } from "../../lib/client/remove.mjs";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Painting and insulation: the systems from the painting specification, the
@@ -60,9 +62,8 @@ export default function CoatingPage() {
           {` · ${data.unassigned.spools.length} اسپول بدون سیستم رنگ`}
         </span>
       </div>
+      <Tabs name="coating">
       {msg && <p className="err">{msg}</p>}
-
-      <Systems systems={data.systems} mayRegister={mayRegister} post={post} spec={data.spec} />
 
       <div className="card">
         <h2>آیتم‌ها</h2>
@@ -83,31 +84,34 @@ export default function CoatingPage() {
             </table>
           </TableKit>
         )}
+        {mayRegister && data.systems.length > 0 && <Fold title="تخصیص سیستم رنگ و عایق"><Assign data={data} post={post} /></Fold>}
       </div>
 
-      {mayRegister && data.systems.length > 0 && <Fold title="تخصیص سیستم رنگ و عایق"><Assign data={data} post={post} /></Fold>}
+      <Systems systems={data.systems} mayRegister={mayRegister} post={post} spec={data.spec} reload={reload} />
+      </Tabs>
     </div>
   );
 }
 
-function Systems({ systems, mayRegister, post, spec }) {
-  const blank = { code: "", title: "", prepGrade: "Sa 2½", profileMinUm: "", profileMaxUm: "", coats: "", maxDftUm: "" };
-  const [f, setF] = useState(blank);
+function Systems({ systems, mayRegister, post, spec, reload }) {
+  const [editing, setEditing] = useState(null);
+  const removal = useRemove("coating-system", reload);
   return (
     <div className="card">
       <h2>سیستم‌های رنگ (از مشخصات رنگ پروژه)</h2>
       <p className="muted sm">
         شرایط اعمال: فولاد دست‌کم {spec.marginC} °C بالای نقطهٔ شبنم{spec.marginStated ? " (مشخصات پروژه)" : " (ISO 8502-4)"}
         {spec.maxRh !== null ? ` · رطوبت حداکثر ${spec.maxRh}%` : " · حد رطوبت در مشخصات پروژه ثبت نشده — سنجیده نمی‌شود"}.
-        DFT طبق ISO 19840 (قاعدهٔ ۸۰/۲۰) و روی قرائت تجمعی پس از هر لایه.
+        DFT طبق ISO 19840 (قاعدهٔ ۸۰/۲۰) و روی قرائت تجمعی پس از هر لایه. سیستمی که به آیتمی داده شده حذف نمی‌شود.
       </p>
       {systems.length > 0 && (
-        <TableKit name="coating">
+        <TableKit name="coating" {...(mayRegister ? removal : {})}
+                  onEdit={mayRegister ? (id) => setEditing(systems.find((x) => x.id === id)) : undefined}>
           <table className="dtable">
             <thead><tr><th>کد</th><th>شرح</th><th>آماده‌سازی</th><th>پروفیل µm</th><th>لایه‌ها (DFT اسمی µm)</th><th>حداکثر DFT</th></tr></thead>
             <tbody>
               {systems.map((s) => (
-                <tr key={s.id}>
+                <tr key={s.id} data-key={s.id}>
                   <td className="mono">{s.code}</td>
                   <td className="sm">{s.title || "—"}</td>
                   <td className="mono">{s.prep_grade}</td>
@@ -121,31 +125,47 @@ function Systems({ systems, mayRegister, post, spec }) {
           </table>
         </TableKit>
       )}
+      {mayRegister && <Fold title="سیستم رنگ جدید"><SystemForm post={post} /></Fold>}
       {mayRegister && (
+        <Fold title={`ویرایش سیستم ${editing?.code || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
+          {editing && <SystemForm key={editing.id} post={post} initial={editing} onDone={() => setEditing(null)} />}
+        </Fold>
+      )}
+    </div>
+  );
+}
+
+/** New, or the same form filled with a system to amend (its code is the key and stays). */
+function SystemForm({ post, initial = null, onDone }) {
+  const blank = { code: "", title: "", prepGrade: "Sa 2½", profileMinUm: "", profileMaxUm: "", coats: "", maxDftUm: "" };
+  const s0 = (v) => (v === null || v === undefined ? "" : String(Number(v)));
+  const [f, setF] = useState(initial ? { code: initial.code, title: initial.title || "", prepGrade: initial.prep_grade,
+    profileMinUm: s0(initial.profile_min_um), profileMaxUm: s0(initial.profile_max_um), maxDftUm: s0(initial.max_dft_um),
+    coats: initial.coats.map((c) => `${c.name}: ${Number(c.ndft_um)}`).join("\n") } : blank);
+  const x = initial ? "ce" : "cs";
+  return (
         <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
           e.preventDefault();
           const coats = f.coats.split(/\n|؛|;/).map((l) => l.trim()).filter(Boolean).map((l) => {
             const m = l.match(/^(.*?)[:：]\s*(\d+(?:\.\d+)?)$/);
             return m ? { name: m[1].trim(), ndftUm: Number(m[2]) } : { name: l, ndftUm: NaN };
           });
-          if (await post({ kind: "system", ...f, coats })) setF(blank);
+          if (await post({ kind: "system", ...f, coats })) { if (initial) onDone?.(); else setF(blank); }
         }}>
-          <Field id="cs-code" label="کد سیستم" value={f.code} on={(v) => setF({ ...f, code: v })} required />
-          <Field id="cs-title" label="شرح" value={f.title} on={(v) => setF({ ...f, title: v })} />
-          <Select id="cs-prep" label="آماده‌سازی الزامی (ISO 8501-1)" value={f.prepGrade} on={(v) => setF({ ...f, prepGrade: v })}
+          <Field id={`${x}-code`} label="کد سیستم" value={f.code} on={(v) => setF({ ...f, code: v })} required readOnly={!!initial} />
+          <Field id={`${x}-title`} label="شرح" value={f.title} on={(v) => setF({ ...f, title: v })} />
+          <Select id={`${x}-prep`} label="آماده‌سازی الزامی (ISO 8501-1)" value={f.prepGrade} on={(v) => setF({ ...f, prepGrade: v })}
                   options={PREP_GRADES.map((g) => [g, g])} />
-          <Field id="cs-pmin" label="پروفیل حداقل µm" type="number" value={f.profileMinUm} on={(v) => setF({ ...f, profileMinUm: v })} />
-          <Field id="cs-pmax" label="پروفیل حداکثر µm" type="number" value={f.profileMaxUm} on={(v) => setF({ ...f, profileMaxUm: v })} />
-          <Field id="cs-max" label="حداکثر DFT کل µm" type="number" value={f.maxDftUm} on={(v) => setF({ ...f, maxDftUm: v })} />
+          <Field id={`${x}-pmin`} label="پروفیل حداقل µm" type="number" value={f.profileMinUm} on={(v) => setF({ ...f, profileMinUm: v })} />
+          <Field id={`${x}-pmax`} label="پروفیل حداکثر µm" type="number" value={f.profileMaxUm} on={(v) => setF({ ...f, profileMaxUm: v })} />
+          <Field id={`${x}-max`} label="حداکثر DFT کل µm" type="number" value={f.maxDftUm} on={(v) => setF({ ...f, maxDftUm: v })} />
           <div className="field">
-            <label htmlFor="cs-coats">لایه‌ها، هر خط «نام: DFT اسمی»</label>
-            <textarea id="cs-coats" dir="ltr" rows={3} value={f.coats} onChange={(e) => setF({ ...f, coats: e.target.value })}
+            <label htmlFor={`${x}-coats`}>لایه‌ها، هر خط «نام: DFT اسمی»</label>
+            <textarea id={`${x}-coats`} dir="ltr" rows={3} value={f.coats} onChange={(e) => setF({ ...f, coats: e.target.value })}
                       placeholder={"Zinc-rich epoxy primer: 75\nEpoxy MIO: 125\nPolyurethane finish: 50"} required />
           </div>
-          <div><button className="btn" type="submit" disabled={!f.code}>ثبت سیستم</button></div>
+          <div><button className="btn" type="submit" disabled={!f.code}>{initial ? "ذخیرهٔ تغییرات" : "ثبت سیستم"}</button></div>
         </form>
-      )}
-    </div>
   );
 }
 
@@ -387,12 +407,12 @@ function Assign({ data, post }) {
   );
 }
 
-function Field({ id, label, value, on, type = "text", required, hint }) {
+function Field({ id, label, value, on, type = "text", required, hint, readOnly }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <input id={id} type={type} step={type === "number" ? "any" : undefined}
-             dir={type === "text" ? "auto" : "ltr"} required={required}
+             dir={type === "text" ? "auto" : "ltr"} required={required} readOnly={readOnly}
              value={value} onChange={(e) => on(e.target.value)} />
       {hint && <span className="hint">{hint}</span>}
     </div>

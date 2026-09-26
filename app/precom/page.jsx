@@ -5,6 +5,8 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Performance from "./Performance";
+import Tabs from "../../components/ui/Tabs";
+import { useRemove } from "../../lib/client/remove.mjs";
 
 /**
  * Pre-commissioning → RFC → commissioning → RFSU, per subsystem, after MC;
@@ -60,6 +62,7 @@ export default function PrecomPage() {
         <Kpi v={rfsu} l="RFSU پذیرفته" tone={rfsu ? "ok" : ""} />
       </div>
 
+      <Tabs name="precom">
       <div className="card">
         <h2>ساب‌سیستم‌ها</h2>
         <TableKit name="precom"><table className="dtable">
@@ -85,8 +88,9 @@ export default function PrecomPage() {
         </table></TableKit>
       </div>
 
-      <Templates data={data} post={post} may={may} />
-      <Performance data={data} post={post} may={may} />
+      <Templates data={data} post={post} may={may} reload={reload} />
+      <Performance data={data} post={post} may={may} reload={reload} />
+      </Tabs>
     </div>
   );
 }
@@ -184,45 +188,61 @@ function CheckRow({ c, subsystemId, post, may, canRecord, me }) {
   </>;
 }
 
-function Templates({ data, post, may }) {
-  const blank = { code: "", title: "", appliesTo: "subsystem", phase: "precom", criteria: "" };
-  const [f, setF] = useState(blank);
+function Templates({ data, post, may, reload }) {
+  const [editing, setEditing] = useState(null);
+  const removal = useRemove("precom-template", reload);
   return (
     <div className="card">
       <h2>چک‌لیست‌ها و روال‌های راه‌اندازی پروژه</h2>
       <p className="muted sm">از رویهٔ راه‌اندازی پروژه: هر چک‌لیست به یک مرحله و یک نوع آیتم تعلق دارد و برای همهٔ آیتم‌های آن نوع در هر ساب‌سیستم لازم است.
-        بدون چک‌لیست پیش‌راه‌اندازی RFC، و بدون روال راه‌اندازی RFSU امضا نمی‌شود — مرحلهٔ تعریف‌نشده «کامل» نیست.</p>
-      {data.templates.length > 0 && <TableKit name="precom"><table className="dtable">
-        <thead><tr><th>کد</th><th>عنوان</th><th>مرحله</th><th>اعمال به</th><th>معیار</th><th>فعال</th></tr></thead>
-        <tbody>{data.templates.map((t) => (
-          <tr key={t.id} onClick={() => may.sign && setF({ code: t.code, title: t.title, appliesTo: t.appliesTo, phase: t.phase, criteria: t.criteria || "", active: t.active })}
-              style={{ cursor: may.sign ? "pointer" : undefined }}>
-            <td><bdi dir="ltr" className="mono">{t.code}</bdi></td><td>{t.title}</td><td className="sm">{t.phaseTitle}</td><td>{t.appliesTitle}</td><td className="sm">{t.criteria || "—"}</td>
-            <td>{t.active ? "✓" : <span className="muted">—</span>}</td>
-          </tr>))}</tbody>
-      </table></TableKit>}
+        بدون چک‌لیست پیش‌راه‌اندازی RFC، و بدون روال راه‌اندازی RFSU امضا نمی‌شود — مرحلهٔ تعریف‌نشده «کامل» نیست.
+        چک‌لیستی که ثبت دارد حذف نمی‌شود؛ غیرفعالش کنید.</p>
+      {data.templates.length > 0 && (
+        <TableKit name="precom" {...(may.sign ? removal : {})}
+                  onEdit={may.sign ? (id) => setEditing(data.templates.find((t) => t.id === id)) : undefined}>
+          <table className="dtable">
+            <thead><tr><th>کد</th><th>عنوان</th><th>مرحله</th><th>اعمال به</th><th>معیار</th><th>فعال</th></tr></thead>
+            <tbody>{data.templates.map((t) => (
+              <tr key={t.id} data-key={t.id}>
+                <td><bdi dir="ltr" className="mono">{t.code}</bdi></td><td>{t.title}</td><td className="sm">{t.phaseTitle}</td><td>{t.appliesTitle}</td><td className="sm">{t.criteria || "—"}</td>
+                <td>{t.active ? "✓" : <span className="muted">—</span>}</td>
+              </tr>))}</tbody>
+          </table>
+        </TableKit>
+      )}
+      {may.sign && <Fold title="چک‌لیست جدید"><TemplateForm data={data} post={post} /></Fold>}
       {may.sign && (
-        <Fold title={f.code && data.templates.some((t) => t.code === f.code) ? `ویرایش چک‌لیست ${f.code}` : "چک‌لیست جدید"}
-              key={f.code || "new"} defaultOpen={!!f.code}>
-        <form style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }} onSubmit={async (e) => {
-          e.preventDefault();
-          if (await post({ kind: "template", ...f })) setF(blank);
-        }}>
-          <div className="field"><label htmlFor="t-code">کد</label><input id="t-code" dir="ltr" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
-          <div className="field" style={{ flex: "1 1 200px" }}><label htmlFor="t-title">عنوان</label><input id="t-title" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
-          <div className="field"><label htmlFor="t-ph">مرحله</label>
-            <select id="t-ph" value={f.phase} onChange={(e) => setF({ ...f, phase: e.target.value })}>
-              {Object.entries(data.phases).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-          <div className="field"><label htmlFor="t-app">اعمال به</label>
-            <select id="t-app" value={f.appliesTo} onChange={(e) => setF({ ...f, appliesTo: e.target.value })}>
-              {Object.entries(data.applies).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-          <div className="field" style={{ flex: "1 1 200px" }}><label htmlFor="t-cr">معیار پذیرش</label><input id="t-cr" value={f.criteria} onChange={(e) => setF({ ...f, criteria: e.target.value })} /></div>
-          {"active" in f && <label className="sm"><input type="checkbox" checked={f.active !== false} onChange={(e) => setF({ ...f, active: e.target.checked })} /> فعال</label>}
-          <button className="btn ghost" type="submit">ذخیرهٔ چک‌لیست</button>
-        </form>
+        <Fold title={`ویرایش چک‌لیست ${editing?.code || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
+          {editing && <TemplateForm key={editing.id} data={data} post={post} initial={editing} onDone={() => setEditing(null)} />}
         </Fold>
       )}
     </div>
+  );
+}
+
+/** New, or the same form filled with a checklist to amend (its code is the key and stays). */
+function TemplateForm({ data, post, initial = null, onDone }) {
+  const blank = { code: "", title: "", appliesTo: "subsystem", phase: "precom", criteria: "" };
+  const [f, setF] = useState(initial ? { code: initial.code, title: initial.title, appliesTo: initial.appliesTo, phase: initial.phase,
+    criteria: initial.criteria || "", active: initial.active } : blank);
+  const x = initial ? "te" : "t";
+  return (
+    <form style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }} onSubmit={async (e) => {
+      e.preventDefault();
+      if (await post({ kind: "template", ...f })) { if (initial) onDone?.(); else setF(blank); }
+    }}>
+      <div className="field"><label htmlFor={`${x}-code`}>کد</label><input id={`${x}-code`} dir="ltr" value={f.code} readOnly={!!initial} onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
+      <div className="field" style={{ flex: "1 1 200px" }}><label htmlFor={`${x}-title`}>عنوان</label><input id={`${x}-title`} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
+      <div className="field"><label htmlFor={`${x}-ph`}>مرحله</label>
+        <select id={`${x}-ph`} value={f.phase} onChange={(e) => setF({ ...f, phase: e.target.value })}>
+          {Object.entries(data.phases).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+      <div className="field"><label htmlFor={`${x}-app`}>اعمال به</label>
+        <select id={`${x}-app`} value={f.appliesTo} onChange={(e) => setF({ ...f, appliesTo: e.target.value })}>
+          {Object.entries(data.applies).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+      <div className="field" style={{ flex: "1 1 200px" }}><label htmlFor={`${x}-cr`}>معیار پذیرش</label><input id={`${x}-cr`} value={f.criteria} onChange={(e) => setF({ ...f, criteria: e.target.value })} /></div>
+      {initial && <label className="sm"><input type="checkbox" checked={f.active !== false} onChange={(e) => setF({ ...f, active: e.target.checked })} /> فعال</label>}
+      <button className="btn ghost" type="submit">ذخیرهٔ چک‌لیست</button>
+    </form>
   );
 }
 

@@ -465,6 +465,7 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .btn:disabled{opacity:.35;cursor:not-allowed;filter:grayscale(1)}
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
 .btn.ghost:hover:not(:disabled){border-color:var(--cy)}
+.btn.danger{background:#c9483e;border-color:#c9483e;color:#fff}
 
 .dtable{width:100%;border-collapse:collapse;font-size:12px}
 .dtable th{text-align:start;font-weight:600;color:var(--dim);font-size:10px;
@@ -666,9 +667,56 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .fold > .fold-head .hint{position:static;font-weight:400;font-size:11px;color:var(--dim)}
 .fold > .fold-head .x{margin-inline-start:auto;font-size:11px;color:var(--dim);font-weight:400}
 .fold > .fold-body{border-top:1px solid var(--rule);padding:var(--gap)}
-.fold > .fold-body > form.card, .fold > .fold-body > .card{border:0;padding:0;background:none;box-shadow:none}
+.fold > .fold-body > form.card, .fold > .fold-body > .card,
+.fold-panel > .fold-body > form.card, .fold-panel > .fold-body > .card{border:0;padding:0;background:none;box-shadow:none}
 .fold > .fold-body > form.card > h2:first-child, .fold > .fold-body > form > h2:first-child,
-.fold > .fold-body > .card > h2:first-child{display:none}
+.fold > .fold-body > .card > h2:first-child,
+.fold-panel > .fold-body > form.card > h2:first-child, .fold-panel > .fold-body > form > h2:first-child,
+.fold-panel > .fold-body > .card > h2:first-child{display:none}
+
+/* ═══ a section's forms: buttons in the card's header row, the form under it ═══ */
+.card[data-actions]{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
+.card[data-actions] > *{grid-column:1 / -1}
+.card[data-actions="head"] > h2:first-child{grid-column:1;grid-row:1}
+.card[data-actions="head"] > .card-actions{grid-column:2;grid-row:1;border-bottom:1px solid var(--rule);padding-bottom:6px;align-self:stretch}
+.card-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+.card-actions:empty, .card-formslot:empty{display:none}
+.fold-btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+  padding:5px 10px;border-radius:6px;border:1px solid var(--cy);color:var(--cy);background:var(--cy-soft);white-space:nowrap}
+.fold-btn:hover{background:var(--cy);color:var(--on-cy)}
+.fold-btn span{color:inherit}
+.fold-btn .plus{font-weight:700;transition:transform .15s}
+.fold-btn.open{background:var(--cy);color:var(--on-cy)}
+.fold-btn.open .plus{transform:rotate(45deg)}
+.fold-panel{border:1px solid var(--cy);border-radius:8px;background:var(--surf2);box-shadow:var(--raise)}
+.fold-panel-head{display:flex;align-items:center;gap:10px;padding:10px var(--gap);border-bottom:1px solid var(--rule);font-size:13px}
+.fold-panel-head .hint{font-size:11px;color:var(--dim)}
+.fold-panel-head .x{all:unset;cursor:pointer;margin-inline-start:auto;font-size:11px;color:var(--dim);padding:3px 8px;border:1px solid var(--rule);border-radius:6px}
+.fold-panel-head .x:hover{color:var(--ink);border-color:var(--ink)}
+.fold-panel > .fold-body{padding:var(--gap)}
+
+/* ═══ a section's pages, as tabs across the top ═══ */
+.section-tabs{max-width:1280px;margin:0 auto var(--gap);display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  border-bottom:1px solid var(--rule);padding-bottom:0}
+.section-tabs .st-title{font-size:12px;color:var(--dim);white-space:nowrap}
+.section-tabs .st-list{display:flex;gap:2px;flex-wrap:wrap}
+.section-tabs .st-list a{padding:8px 14px;font-size:13px;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;
+  text-decoration:none;white-space:nowrap}
+.section-tabs .st-list a:hover{color:var(--ink);background:var(--hover)}
+.section-tabs .st-list a.on{color:var(--ink-strong);border-bottom-color:var(--cy);font-weight:600}
+
+/* ═══ tabs inside a page ═══ */
+.ptabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--rule)}
+.ptabs button{all:unset;cursor:pointer;padding:8px 14px;font-size:13px;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.ptabs button:hover{color:var(--ink);background:var(--hover)}
+.ptabs button[aria-selected="true"]{color:var(--ink-strong);border-bottom-color:var(--cy);font-weight:600}
+.ptabs .badge{margin-inline-start:6px;font-size:10px;padding:1px 6px;border-radius:9px;background:var(--hover-strong);color:var(--dim)}
+.ptabs .badge.warn{background:rgba(224,163,62,.18);color:#e0a33e}
+.ptabs .badge.bad{background:rgba(226,87,76,.18);color:#e2574c}
+.ptab-panel{display:flex;flex-direction:column;gap:var(--gap)}
+.ptabs-wrap{display:flex;flex-direction:column;gap:var(--gap)}
+.ptab-panel > [data-tab-hidden]{display:none !important}
+@media print{.ptab-panel > [data-tab-hidden]{display:revert !important}}
 
 /* ═══ table kit ═══ */
 .tk-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
@@ -685,6 +733,21 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .dtable th.tk-sort.asc::after{content:" ▲";opacity:.9}
 .dtable th.tk-sort.desc::after{content:" ▼";opacity:.9}
 .dtable tr[hidden]{display:none}
+.tk .dtable tbody tr[data-tk-sel]{background:var(--cy-soft);box-shadow:inset -3px 0 0 var(--cy)}
+.tk .dtable tbody tr{cursor:default}
+.tk-bar .tk-acts{display:inline-flex;gap:6px;margin-inline-start:auto}
+.tk-bar .tk-acts button[disabled]{opacity:.4;cursor:not-allowed}
+.tk-bar .tk-acts button.danger:not([disabled]):hover{color:#e2574c;border-color:#e2574c}
+.tk-view{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:16px}
+.tk-view > div{background:var(--surf);border:1px solid var(--rule);border-radius:10px;max-width:640px;width:100%;max-height:85vh;overflow:auto;box-shadow:var(--raise)}
+.tk-view header{display:flex;align-items:center;gap:10px;padding:12px var(--gap);border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--surf)}
+.tk-view header button{all:unset;cursor:pointer;margin-inline-start:auto;font-size:12px;color:var(--dim);padding:3px 8px;border:1px solid var(--rule);border-radius:6px}
+.tk-view dl{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:8px 14px;padding:var(--gap);margin:0;font-size:13px}
+.tk-view dt{color:var(--dim);font-size:12px}
+.tk-view dd{margin:0;word-break:break-word}
+.tk-view .tk-extra{padding:0 var(--gap) var(--gap);font-size:12px;color:var(--dim);white-space:pre-wrap}
+.tk-why{margin:-4px 0 8px}
+.tk-view .tk-extra p{margin:0 0 10px;color:var(--ink)}
 mark.tk-hit{background:rgba(224,163,62,.35);color:inherit;border-radius:2px}
 
 /* ── phones: the menu is a drawer ── */
@@ -700,6 +763,8 @@ mark.tk-hit{background:rgba(224,163,62,.35);color:inherit;border-radius:2px}
   .sidenav .grp{display:flex}
   .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:55}
   .shell.rail .sidenav .grp, .shell.rail .sidenav .t, .shell.rail .nav-search{display:revert}
+  /* tabs scroll sideways rather than stacking three rows deep */
+  .section-tabs .st-list, .ptabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
 }
 
 /* ── joint history ── */

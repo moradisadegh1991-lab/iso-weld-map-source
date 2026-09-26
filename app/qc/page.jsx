@@ -1,7 +1,7 @@
 "use client";
 import { useProjectData } from "../../lib/client/platform.mjs";
 import TableKit from "../../components/ui/TableKit";
-import PipingNav from "../../components/ui/PipingNav";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Quality control: what has been welded and not yet examined.
@@ -25,9 +25,9 @@ export default function QcPage() {
         <h1>کنترل کیفیت</h1>
         <span className="sub">شکاف تحویل و عملکرد جوشکاران</span>
       </div>
-      <PipingNav here="/qc" />
 
-      <div className="card">
+      <Tabs name="qc">
+      <div className="card" data-tab="gap" data-tab-title="جوش بدون بازرسی" data-badge={gap.length} data-tone="warn">
         <h2>{gap.length} جوشِ زده‌شده بدون بازرسی</h2>
         <p className="muted sm">
           هر کدام یک ITR است که در dossier نخواهد بود. اگر الان دیده نشود، در
@@ -86,6 +86,7 @@ export default function QcPage() {
           </TableKit>
         </div>
       )}
+      </Tabs>
     </div>
   );
 }

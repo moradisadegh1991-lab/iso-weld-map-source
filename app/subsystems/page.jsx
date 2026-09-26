@@ -31,7 +31,7 @@ export default function SubsystemsPage() {
       </div>
 
       {unfiledTotal > 0 && (
-        <div className="card" style={{ borderColor: "rgba(224,163,62,.5)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(224,163,62,.5)" }}>
           <h2 style={{ color: "var(--warn)" }}>{unfiledTotal} قلم کار بدون ساب‌سیستم</h2>
           <p className="muted sm">
             این اقلام زیر هیچ ساب‌سیستمی ثبت نشده‌اند، پس در هیچ درصد آمادگی

@@ -4,7 +4,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { CHAINS, spoolStageTitle } from "../../../lib/platform/precedence.mjs";
 import TableKit from "../../../components/ui/TableKit";
-import PipingNav from "../../../components/ui/PipingNav";
+import Tabs from "../../../components/ui/Tabs";
 
 /**
  * Piping execution: every spool's place in its chain, the supports, and
@@ -65,8 +65,8 @@ export default function PipingExecution() {
         <h1>اجرای پایپینگ</h1>
         <span className="sub">{data.board.length} اسپول · {data.supports.length} ساپورت</span>
       </div>
-      <PipingNav here="/piping/execution" />
 
+      <Tabs name="piping-execution">
       {msg && <p className="err">{msg}</p>}
 
       <Buried data={data} />
@@ -104,6 +104,7 @@ export default function PipingExecution() {
 
       <Supports data={data} projectId={projectId} call={call} reload={reload}
                 mayRecord={mayRecord} setMsg={setMsg} />
+      </Tabs>
     </div>
   );
 }
@@ -196,7 +197,7 @@ function Buried({ data }) {
   const known = data.buried.some((r) => r.welds > r.unknown);
   if (!known) {
     return (
-      <div className="card" style={{ borderColor: "rgba(224,163,62,.5)" }}>
+      <div className="card" data-keep style={{ borderColor: "rgba(224,163,62,.5)" }}>
         <h2 style={{ color: "var(--warn)" }}>تراز گرید پلنت ثبت نشده</h2>
         <p className="muted sm">
           بدون تراز گرید، سامانه نمی‌تواند بگوید کدام جوش زیرزمینی است — و «صفر

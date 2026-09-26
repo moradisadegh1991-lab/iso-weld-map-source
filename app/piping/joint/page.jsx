@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import TableKit from "../../../components/ui/TableKit";
-import PipingNav from "../../../components/ui/PipingNav";
 
 /**
  * Joint history (Master Plan §12): one weld, from the drawing revision that
@@ -43,7 +42,6 @@ export default function JointPage() {
         <h1>سابقهٔ جوش (Joint History)</h1>
         <span className="sub">هر جوش از رویژن نقشه تا تست فشار — طراحی، مواد، فیت‌آپ، جوشکار، NDT و تعمیر، PWHT</span>
       </div>
-      <PipingNav here="/piping/joint" />
       {!uid && <Finder q={q} setQ={setQ} list={list} open={setUid} />}
       {uid && (
         <div><button className="btn ghost" onClick={() => { setUid(""); window.history.replaceState(null, "", "/piping/joint"); }}>← فهرست جوش‌ها</button></div>

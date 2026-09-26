@@ -2,6 +2,7 @@
 import { useState } from "react";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import { useRemove } from "../../lib/client/remove.mjs";
 
 /**
  * Safe work before the permit: the project's rules, people and their
@@ -16,14 +17,14 @@ const tone = (r) => (r === null ? "" : r > 15 ? "bad" : r > 6 ? "warn" : "ok");
 export const Dates = ({ text }) => String(text).split(/(\d{4}-\d{2}-\d{2})/).map((t, i) => (i % 2 ? <bdi key={i} dir="ltr">{t}</bdi> : t));
 const Score = ({ l, s, r }) => <span className={`pill ${tone(r)}`} dir="ltr">{l}×{s}={r}</span>;
 
-export default function SafeWork({ data, post, mayRecord, mayIssue, mayAdmin }) {
+export default function SafeWork({ data, post, reload, mayRecord, mayIssue, mayAdmin }) {
   const s = data.safeWork;
   return (
     <>
       <Rules data={data} post={post} mayAdmin={mayAdmin} />
-      <People s={s} data={data} post={post} mayRecord={mayRecord} />
-      <Equipment s={s} data={data} post={post} mayRecord={mayRecord} />
-      <Jsas s={s} data={data} post={post} mayRecord={mayRecord} mayIssue={mayIssue} />
+      <People s={s} data={data} post={post} reload={reload} mayRecord={mayRecord} />
+      <Equipment s={s} data={data} post={post} reload={reload} mayRecord={mayRecord} />
+      <Jsas s={s} data={data} post={post} reload={reload} mayRecord={mayRecord} mayIssue={mayIssue} />
     </>
   );
 }
@@ -107,18 +108,21 @@ function RulesForm({ data, post }) {
   );
 }
 
-function People({ s, data, post, mayRecord }) {
+function People({ s, data, post, reload, mayRecord }) {
+  const [editing, setEditing] = useState(null);
+  const removal = useRemove("hse-person", reload);
   return (
     <div className="card">
       <h2>افراد و کارت صلاحیت</h2>
       <p className="muted sm">کارت بدون تاریخ انقضا فقط وقتی معتبر است که «بدون انقضا» روی خود کارت آمده باشد. کارت پاک نمی‌شود؛ ابطال با دلیل ثبت می‌شود.</p>
       {s.people.length === 0 ? <p className="empty-note">کسی ثبت نشده است.</p> : (
-        <TableKit name="hse-people">
+        <TableKit name="hse-people" {...(mayRecord ? removal : {})}
+                  onEdit={mayRecord ? (id) => setEditing(s.people.find((p) => p.id === id)) : undefined}>
           <table className="dtable">
             <thead><tr><th>نام</th><th>شمارهٔ شناسایی</th><th>پیمانکار / حرفه</th><th>کارت‌ها</th></tr></thead>
             <tbody>
               {s.people.map((p) => (
-                <tr key={p.id}>
+                <tr key={p.id} data-key={p.id}>
                   <td>{p.full_name}</td>
                   <td className="mono sm">{p.id_no}</td>
                   <td className="sm">{[p.contractor_code, p.trade].filter(Boolean).join(" · ") || "—"}</td>
@@ -132,26 +136,36 @@ function People({ s, data, post, mayRecord }) {
         </TableKit>
       )}
       {mayRecord && <Fold title="ثبت فرد"><PersonForm data={data} post={post} /></Fold>}
+      {mayRecord && (
+        <Fold title={`ویرایش ${editing?.full_name || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
+          {editing && <PersonForm key={editing.id} initial={editing} data={data} post={post} onDone={() => setEditing(null)} />}
+        </Fold>
+      )}
       {mayRecord && s.people.length > 0 && <Fold title="ثبت کارت صلاحیت"><CardForm s={s} post={post} /></Fold>}
       {mayRecord && s.people.some((p) => p.cards.some((c) => !c.revokedOn)) && <Fold title="ابطال کارت"><RevokeForm s={s} post={post} /></Fold>}
     </div>
   );
 }
 
-function PersonForm({ data, post }) {
+/** New, or the same form filled with a person to amend (the ID number is the key and stays). */
+function PersonForm({ data, post, initial = null, onDone }) {
   const blank = { idNo: "", fullName: "", contractorId: "", trade: "" };
-  const [f, setF] = useState(blank);
+  const [f, setF] = useState(initial ? { idNo: initial.id_no, fullName: initial.full_name, contractorId: initial.contractor_id || "", trade: initial.trade || "" } : blank);
+  const x = initial ? "pe" : "ps";
   return (
-    <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "person", ...f })) setF(blank); }}>
-      <Field id="ps-id" label="شمارهٔ شناسایی (کد ملی / پرسنلی)" value={f.idNo} on={(v) => setF({ ...f, idNo: v })} required />
-      <Field id="ps-name" label="نام و نام خانوادگی" value={f.fullName} on={(v) => setF({ ...f, fullName: v })} required />
-      <div className="field"><label htmlFor="ps-c">پیمانکار</label>
-        <select id="ps-c" value={f.contractorId} onChange={(e) => setF({ ...f, contractorId: e.target.value })}>
+    <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
+      e.preventDefault();
+      if (await post({ kind: "person", ...f })) { if (initial) onDone?.(); else setF(blank); }
+    }}>
+      <Field id={`${x}-id`} label="شمارهٔ شناسایی (کد ملی / پرسنلی)" value={f.idNo} on={(v) => setF({ ...f, idNo: v })} required readOnly={!!initial} />
+      <Field id={`${x}-name`} label="نام و نام خانوادگی" value={f.fullName} on={(v) => setF({ ...f, fullName: v })} required />
+      <div className="field"><label htmlFor={`${x}-c`}>پیمانکار</label>
+        <select id={`${x}-c`} value={f.contractorId} onChange={(e) => setF({ ...f, contractorId: e.target.value })}>
           <option value="">کارکنان EPC</option>
           {data.contractors.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
         </select></div>
-      <Field id="ps-trade" label="حرفه" value={f.trade} on={(v) => setF({ ...f, trade: v })} />
-      <div><button className="btn" type="submit">ثبت فرد</button></div>
+      <Field id={`${x}-trade`} label="حرفه" value={f.trade} on={(v) => setF({ ...f, trade: v })} />
+      <div><button className="btn" type="submit">{initial ? "ذخیرهٔ تغییرات" : "ثبت فرد"}</button></div>
     </form>
   );
 }
@@ -199,19 +213,20 @@ function RevokeForm({ s, post }) {
   );
 }
 
-function Equipment({ s, data, post, mayRecord }) {
+function Equipment({ s, data, post, reload, mayRecord }) {
   const live = s.equipment.filter((e) => e.state.code !== "dismantled");
+  const removal = useRemove("hse-equipment", reload);
   return (
     <div className="card">
       <h2>داربست و جرثقیل</h2>
       <p className="muted sm">آخرین بازرسی تصمیم می‌گیرد: ردِ بعد از قبول، برچسب قرمز است. اعتبار = آخرین قبول + فاصلهٔ بازرسی پروژه. بازرس باید در همان روز کارت معتبر داشته باشد.</p>
       {s.equipment.length === 0 ? <p className="empty-note">داربست یا جرثقیلی ثبت نشده است.</p> : (
-        <TableKit name="hse-eq">
+        <TableKit name="hse-eq" {...(mayRecord ? removal : {})}>
           <table className="dtable">
             <thead><tr><th>شماره</th><th>نوع</th><th>محدوده</th><th>وضعیت</th><th>آخرین بازرسی</th></tr></thead>
             <tbody>
               {s.equipment.map((e) => (
-                <tr key={e.id}>
+                <tr key={e.id} data-key={e.id}>
                   <td className="mono">{e.ref_no}</td>
                   <td className="sm">{e.kindTitle}{e.capacity_t ? <> · <bdi dir="ltr">{Number(e.capacity_t)} t</bdi></> : ""}</td>
                   <td className="sm">{e.area || "—"}</td>
@@ -272,22 +287,26 @@ function InspectForm({ s, live, post }) {
   );
 }
 
-function Jsas({ s, data, post, mayRecord, mayIssue }) {
+function Jsas({ s, data, post, reload, mayRecord, mayIssue }) {
   return (
     <div className="card">
       <h2>JSA / TRA</h2>
       <p className="muted sm">ریسک = احتمال × شدت (۱ تا ۵). تأیید فقط وقتی هر گام اقدام کنترلی و ریسک باقیمانده دارد، کنترل ریسک را بالا نبرده و ریسک باقیمانده از حد پروژه بیشتر نیست. تهیه‌کننده تأیید نمی‌کند؛ تغییرِ JSA تأییدشده رویژن جدید است.</p>
       {s.jsas.length === 0 ? <p className="empty-note">JSA ثبت نشده است.</p> : s.jsas.map((j) => (
-        <JsaCard key={j.id} j={j} post={post} mayRecord={mayRecord} mayIssue={mayIssue} />
+        <JsaCard key={j.id} j={j} post={post} reload={reload} mayRecord={mayRecord} mayIssue={mayIssue} />
       ))}
       {mayRecord && <Fold title="JSA جدید"><JsaForm data={data} post={post} /></Fold>}
     </div>
   );
 }
 
-function JsaCard({ j, post, mayRecord, mayIssue }) {
+function JsaCard({ j, post, reload, mayRecord, mayIssue }) {
   const [st, label] = JSA[j.status];
   const [rev, setRev] = useState("");
+  const [editing, setEditing] = useState(null);
+  const removal = useRemove("hse-jsa", reload);
+  const draft = j.status === "draft";
+  const locked = draft ? true : "گام JSA تأییدشده تغییر نمی‌کند؛ رویژن جدید بزنید";
   return (
     <div className="card" style={{ padding: 10, marginBottom: 8 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -295,18 +314,29 @@ function JsaCard({ j, post, mayRecord, mayIssue }) {
         <span className="muted sm">تهیه: {j.prepared_by_name || "?"}{j.approved_by_name && <> · تأیید: {j.approved_by_name} (<bdi dir="ltr">{String(j.approved_on).slice(0, 10)}</bdi>)</>}</span>
       </div>
       {j.steps.length > 0 && (
+        <TableKit name={`jsa-${j.jsa_no}`} min={4}
+                  onEdit={mayRecord ? (seq) => setEditing(j.steps.find((x) => String(x.seq) === seq)) : undefined} canEdit={() => locked}
+                  onDelete={mayRecord ? (seq) => post({ kind: "jsa-step-remove", jsaId: j.id, seq }) : undefined} canDelete={() => locked}>
         <table className="dtable" style={{ marginTop: 6 }}>
           <thead><tr><th>#</th><th>گام</th><th>خطر</th><th>کنترل</th><th>ریسک اولیه</th><th>باقیمانده</th></tr></thead>
           <tbody>{j.steps.map((x) => (
-            <tr key={x.seq}><td className="mono">{x.seq}</td><td className="sm">{x.step}</td><td className="sm">{x.hazard}</td><td className="sm">{x.controls || "—"}</td>
+            <tr key={x.seq} data-key={x.seq}><td className="mono">{x.seq}</td><td className="sm">{x.step}</td><td className="sm">{x.hazard}</td><td className="sm">{x.controls || "—"}</td>
               <td><Score l={x.likelihood} s={x.severity} r={x.initial} /></td>
               <td>{x.residual === null ? "—" : <Score l={x.residualLikelihood} s={x.residualSeverity} r={x.residual} />}</td></tr>
           ))}</tbody>
         </table>
+        </TableKit>
       )}
       {j.status === "draft" && j.problems.length > 0 && <p className="muted sm">تا تأیید: {j.problems.join(" · ")}</p>}
       <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
         {mayIssue && j.status === "draft" && <button className="btn" onClick={() => post({ kind: "jsa-approve", jsaId: j.id })}>تأیید</button>}
+        {mayRecord && draft && (
+          <button className="btn ghost" onClick={async () => {
+            const why = await removal.checkDelete(j.id).catch((e) => e.message);
+            if (why !== true) { window.alert(why); return; }
+            if (window.confirm(`پیش‌نویس ${j.jsa_no} Rev ${j.revision} با گام‌هایش حذف شود؟`)) await removal.onDelete(j.id).catch((e) => window.alert(e.message));
+          }}>حذف پیش‌نویس</button>
+        )}
         {mayRecord && j.status === "approved" && (
           <form style={{ display: "flex", gap: 6 }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "jsa-revise", jsaId: j.id, revision: rev })) setRev(""); }}>
             <input aria-label="رویژن جدید" placeholder="رویژن جدید" value={rev} onChange={(e) => setRev(e.target.value)} style={{ width: 110 }} />
@@ -314,26 +344,37 @@ function JsaCard({ j, post, mayRecord, mayIssue }) {
           </form>
         )}
       </div>
-      {mayRecord && j.status === "draft" && <Fold title="افزودن / اصلاح گام"><StepForm j={j} post={post} /></Fold>}
+      {mayRecord && draft && <Fold title="افزودن گام"><StepForm j={j} post={post} /></Fold>}
+      {mayRecord && draft && (
+        <Fold title={`اصلاح گام ${editing?.seq || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
+          {editing && <StepForm key={editing.seq} j={j} post={post} initial={editing} onDone={() => setEditing(null)} />}
+        </Fold>
+      )}
     </div>
   );
 }
 
-function StepForm({ j, post }) {
+function StepForm({ j, post, initial = null, onDone }) {
   const next = (j.steps.at(-1)?.seq || 0) + 10;
   const blank = { seq: String(next), step: "", hazard: "", controls: "", likelihood: "", severity: "", residualLikelihood: "", residualSeverity: "" };
-  const [f, setF] = useState(blank);
+  const s0 = (v) => (v === null || v === undefined ? "" : String(v));
+  const [f, setF] = useState(initial ? { seq: String(initial.seq), step: initial.step, hazard: initial.hazard, controls: s0(initial.controls),
+    likelihood: s0(initial.likelihood), severity: s0(initial.severity), residualLikelihood: s0(initial.residualLikelihood), residualSeverity: s0(initial.residualSeverity) } : blank);
+  const k = initial ? `e-${j.id}` : j.id;
   return (
-    <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "jsa-step", jsaId: j.id, ...f })) setF({ ...blank, seq: String(Number(f.seq) + 10) }); }}>
-      <Field id={`js-q-${j.id}`} label="ردیف" type="number" value={f.seq} on={(v) => setF({ ...f, seq: v })} required />
-      <Field id={`js-s-${j.id}`} label="گام کار" value={f.step} on={(v) => setF({ ...f, step: v })} required />
-      <Field id={`js-h-${j.id}`} label="خطر" value={f.hazard} on={(v) => setF({ ...f, hazard: v })} required />
-      <Field id={`js-c-${j.id}`} label="اقدام کنترلی" value={f.controls} on={(v) => setF({ ...f, controls: v })} />
-      <Field id={`js-l-${j.id}`} label="احتمال (۱–۵)" type="number" value={f.likelihood} on={(v) => setF({ ...f, likelihood: v })} required />
-      <Field id={`js-v-${j.id}`} label="شدت (۱–۵)" type="number" value={f.severity} on={(v) => setF({ ...f, severity: v })} required />
-      <Field id={`js-rl-${j.id}`} label="احتمال پس از کنترل" type="number" value={f.residualLikelihood} on={(v) => setF({ ...f, residualLikelihood: v })} />
-      <Field id={`js-rv-${j.id}`} label="شدت پس از کنترل" type="number" value={f.residualSeverity} on={(v) => setF({ ...f, residualSeverity: v })} />
-      <div><button className="btn" type="submit">ذخیرهٔ گام</button></div>
+    <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
+      e.preventDefault();
+      if (await post({ kind: "jsa-step", jsaId: j.id, ...f })) { if (initial) onDone?.(); else setF({ ...blank, seq: String(Number(f.seq) + 10) }); }
+    }}>
+      <Field id={`js-q-${k}`} label="ردیف" type="number" value={f.seq} on={(v) => setF({ ...f, seq: v })} required readOnly={!!initial} />
+      <Field id={`js-s-${k}`} label="گام کار" value={f.step} on={(v) => setF({ ...f, step: v })} required />
+      <Field id={`js-h-${k}`} label="خطر" value={f.hazard} on={(v) => setF({ ...f, hazard: v })} required />
+      <Field id={`js-c-${k}`} label="اقدام کنترلی" value={f.controls} on={(v) => setF({ ...f, controls: v })} />
+      <Field id={`js-l-${k}`} label="احتمال (۱–۵)" type="number" value={f.likelihood} on={(v) => setF({ ...f, likelihood: v })} required />
+      <Field id={`js-v-${k}`} label="شدت (۱–۵)" type="number" value={f.severity} on={(v) => setF({ ...f, severity: v })} required />
+      <Field id={`js-rl-${k}`} label="احتمال پس از کنترل" type="number" value={f.residualLikelihood} on={(v) => setF({ ...f, residualLikelihood: v })} />
+      <Field id={`js-rv-${k}`} label="شدت پس از کنترل" type="number" value={f.residualSeverity} on={(v) => setF({ ...f, residualSeverity: v })} />
+      <div><button className="btn" type="submit">{initial ? "ذخیرهٔ اصلاح" : "ذخیرهٔ گام"}</button></div>
     </form>
   );
 }
@@ -357,11 +398,11 @@ function JsaForm({ data, post }) {
   );
 }
 
-function Field({ id, label, value, on, type = "text", required }) {
+function Field({ id, label, value, on, type = "text", required, readOnly }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input id={id} dir="auto" type={type} value={value} required={required} onChange={(e) => on(e.target.value)} />
+      <input id={id} dir="auto" type={type} value={value} required={required} readOnly={readOnly} onChange={(e) => on(e.target.value)} />
     </div>
   );
 }

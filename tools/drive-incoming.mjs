@@ -4,6 +4,7 @@
  *   DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-incoming.mjs
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 import { writeFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -16,6 +17,7 @@ const pdfPath = path.join(await mkdtemp(path.join(tmpdir(), "drive-pdf-")), "60-
 await writeFile(pdfPath, `%PDF-1.4\n% drive test ${Date.now()}\n%%EOF\n`);
 const b = await chromium.launch({ executablePath: CHROME });
 const page = await b.newPage({ viewport: { width: 1440, height: 1000 } });
+await showAllTabs(page);
 const problems = [], expected = [];
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 page.on("response", (r) => {

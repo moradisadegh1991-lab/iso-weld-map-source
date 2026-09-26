@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
-import { navigationFor, activeItem } from "../../lib/platform/navigation.mjs";
+import { navigationFor, activeTab } from "../../lib/platform/navigation.mjs";
 import { AREAS } from "../../lib/platform/areas.mjs";
 import { can } from "../../lib/authz.mjs";
 import SignIn from "./SignIn";
@@ -17,9 +17,10 @@ import SignIn from "./SignIn";
  * link before it has a password.
  *
  * The menu is the member's: the sections their role may open, within the
- * work areas their membership names (lib/platform/areas.mjs). It searches
- * (Ctrl+K), its groups fold and remember it, it narrows to icons, and on a
- * phone it is a drawer.
+ * work areas their membership names (lib/platform/areas.mjs). A section's
+ * pages are tabs across the top of the page, not separate menu entries.
+ * The menu searches every tab (Ctrl+K), its groups fold and remember it, it
+ * narrows to icons, and on a phone it is a drawer.
  */
 export const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", developer: "توسعه‌دهنده" };
 const store = {
@@ -94,11 +95,15 @@ function Frame({ p, pathname, children }) {
 
   const membership = { role: p.role, areas: p.project?.areas || [] };
   const nav = navigationFor(membership, can);
-  const here = activeItem(pathname);
+  const here = activeTab(pathname);
+  const section = nav.flatMap((g) => g.items).find((s) => s.key === here?.section) || null;
+  // Search finds a page by its tab, its section or its group.
   const found = useMemo(() => {
     const n = q.trim().toLowerCase();
     if (!n) return null;
-    return nav.flatMap((g) => g.items.filter((i) => `${i.title} ${i.desc || ""} ${g.group}`.toLowerCase().includes(n)));
+    return nav.flatMap((g) => g.items.flatMap((s) => s.tabs
+      .filter((t) => `${t.title} ${s.title} ${s.desc || ""} ${g.group}`.toLowerCase().includes(n))
+      .map((t) => ({ ...t, key: t.href, icon: s.icon, title: s.tabs.length > 1 ? `${s.title} › ${t.title}` : s.title, desc: s.desc, status: "live" }))));
   }, [q, nav]);
 
   const toggleGroup = (g) => {
@@ -108,7 +113,7 @@ function Frame({ p, pathname, children }) {
   const toggleRail = () => { const v = !rail; setRail(v); store.set("epc.nav.rail", v); };
   const name = p.user?.displayName || p.user?.email || "";
   const initials = name.trim().charAt(0).toUpperCase() || "?";
-  const groupOf = nav.find((g) => g.items.some((i) => i.href === here?.href));
+  const groupOf = nav.find((g) => g.items.some((i) => i.key === here?.section));
   const areas = p.project?.areas || [];
 
   return (
@@ -121,7 +126,7 @@ function Frame({ p, pathname, children }) {
             {p.projects.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}
           </select>
         ) : <span className="crumb">هیچ پروژه‌ای به شما تخصیص نیافته است</span>}
-        {here && <span className="crumb">{groupOf ? `${groupOf.group} ›` : ""} <b style={{ color: "var(--ink)", fontWeight: 500 }}>{here.title}</b></span>}
+        {section && <span className="crumb">{groupOf ? `${groupOf.group} ›` : ""} {section.tabs.length > 1 ? `${section.title} ›` : ""} <b style={{ color: "var(--ink)", fontWeight: 500 }}>{here.title}</b></span>}
         <span className="grow" />
         <button className="iconbtn" onClick={toggleTheme} title={theme === "light" ? "تم تیره" : "تم روشن"} aria-label="تغییر تم">
           {theme === "light" ? "☾" : "☀"}
@@ -172,7 +177,7 @@ function Frame({ p, pathname, children }) {
             found.length ? found.map((i) => <NavLink key={i.href} i={i} on={here?.href === i.href} onClick={() => setQ("")} />)
               : <p className="nav-empty">بخشی با «{q}» نیست.</p>
           ) : nav.map((g) => {
-            const hasHere = g.items.some((i) => i.href === here?.href);
+            const hasHere = g.items.some((i) => i.key === here?.section);
             const isClosed = closed.includes(g.group) && !hasHere;
             return (
               <div key={g.group} className={`nav-grp ${isClosed ? "closed" : ""}`}>
@@ -180,7 +185,7 @@ function Frame({ p, pathname, children }) {
                   <span>{g.group}</span><span className="chev" aria-hidden>▾</span>
                 </button>
                 <div className="items">
-                  {g.items.map((i) => <NavLink key={i.href} i={i} on={here?.href === i.href} />)}
+                  {g.items.map((i) => <NavLink key={i.key} i={i} on={i.key === here?.section} />)}
                 </div>
               </div>
             );
@@ -193,8 +198,29 @@ function Frame({ p, pathname, children }) {
         </div>
       </nav>
 
-      <main className="body">{children}</main>
+      <main className="body">
+        {section && section.tabs.length > 1 && <SectionTabs section={section} here={here} />}
+        {children}
+      </main>
     </div>
+  );
+}
+
+/**
+ * The section's pages, as tabs. Each is its own address (a link), so a
+ * bookmarked or QR-coded page opens on its own tab.
+ */
+function SectionTabs({ section, here }) {
+  return (
+    <nav className="section-tabs no-print" aria-label={section.title}>
+      <span className="st-title"><span aria-hidden>{section.icon}</span> {section.title}</span>
+      <div className="st-list" role="tablist">
+        {section.tabs.map((t) => (
+          <Link key={t.href} href={t.href} role="tab" aria-selected={t.href === here?.href}
+                aria-current={t.href === here?.href ? "page" : undefined} className={t.href === here?.href ? "on" : ""}>{t.title}</Link>
+        ))}
+      </div>
+    </nav>
   );
 }
 

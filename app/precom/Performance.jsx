@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import { useRemove } from "../../lib/client/remove.mjs";
 
 /**
  * Performance test against the contract's guarantees
@@ -12,26 +13,30 @@ import Fold from "../../components/ui/Fold";
  */
 const STATUS = { met: ["ok", "برآورده"], not_met: ["bad", "برآورده نشده"], untested: ["", "آزموده نشده"] };
 
-export default function Performance({ data, post, may }) {
+export default function Performance({ data, post, may, reload }) {
   const p = data.performance;
+  const [editing, setEditing] = useState(null);
+  const removeGuarantee = useRemove("guarantee", reload);
+  const removeTest = useRemove("perf-test", reload);
   const scopeText = (unitId) => {
     const sc = p.scopes[unitId || "plant"];
     return sc ? `${sc.rfsuAccepted}/${sc.subsystems} ساب‌سیستم با RFSU پذیرفته` : "—";
   };
   const unitName = (id) => (id ? p.units.find((u) => u.id === id)?.code || "?" : "کل کارخانه");
   return (
+    <>
     <div className="card">
-      <h2>آزمون عملکرد (Performance Test)</h2>
-      <p className="muted sm">تضمین‌ها از قرارداد، با بند مرجع؛ رواداری‌ای که قرارداد نگفته اعمال نمی‌شود. آزمون فقط وقتی ثبت می‌شود که RFSU همهٔ ساب‌سیستم‌های محدوده‌اش پذیرفته شده باشد.
-        حکم هر نتیجه محاسبه می‌شود؛ آزمونِ امضاشده ثابت است و آزمون مجدد، آزمون جدیدی است.</p>
+      <h2>تضمین‌های عملکرد</h2>
+      <p className="muted sm">تضمین‌ها از قرارداد، با بند مرجع؛ رواداری‌ای که قرارداد نگفته اعمال نمی‌شود. تضمینی که با آن حکم داده شده، شرایطش ثابت است و حذف نمی‌شود.</p>
       {p.guarantees.length === 0 ? <p className="empty-note">تضمینی تعریف نشده است.</p> : (
-        <TableKit name="perf-g"><table className="dtable">
+        <TableKit name="perf-g" {...(may.sign ? removeGuarantee : {})}
+                  onEdit={may.sign ? (id) => setEditing(p.guarantees.find((g) => g.id === id)) : undefined}><table className="dtable">
           <thead><tr><th>کد</th><th>پارامتر</th><th>محدوده</th><th>تضمین</th><th>حداقل مدت</th><th>بند قرارداد</th><th>وضعیت</th></tr></thead>
           <tbody>{p.guarantees.map((g) => {
             const st = p.status.find((x) => x.guaranteeId === g.id);
             const [tone, label] = STATUS[st.status];
             return (
-              <tr key={g.id}>
+              <tr key={g.id} data-key={g.id}>
                 <td><bdi dir="ltr" className="mono">{g.code}</bdi></td>
                 <td>{g.parameter}</td>
                 <td className="sm">{g.unitCode ? `واحد ${g.unitCode}` : "کل کارخانه"}</td>
@@ -45,11 +50,20 @@ export default function Performance({ data, post, may }) {
           })}</tbody>
         </table></TableKit>
       )}
-      {may.sign && <Fold title="تعریف / اصلاح تضمین"><GuaranteeForm p={p} post={post} /></Fold>}
+      {may.sign && <Fold title="تضمین جدید"><GuaranteeForm p={p} post={post} /></Fold>}
+      {may.sign && (
+        <Fold title={`ویرایش تضمین ${editing?.code || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
+          {editing && <GuaranteeForm key={editing.id} p={p} post={post} initial={editing} onDone={() => setEditing(null)} />}
+        </Fold>
+      )}
+    </div>
 
-      <h3 style={{ marginTop: 14 }}>آزمون‌ها</h3>
+    <div className="card">
+      <h2>آزمون عملکرد (Performance Test)</h2>
+      <p className="muted sm">آزمون فقط وقتی ثبت می‌شود که RFSU همهٔ ساب‌سیستم‌های محدوده‌اش پذیرفته شده باشد.
+        حکم هر نتیجه محاسبه می‌شود؛ آزمونِ امضاشده ثابت است و آزمون مجدد، آزمون جدیدی است. آزمونِ امضانشده‌ای که اشتباه ثبت شده حذف می‌شود.</p>
       {p.tests.length === 0 ? <p className="empty-note">آزمونی ثبت نشده است.</p> : p.tests.map((t) => (
-        <TestCard key={t.id} t={t} p={p} post={post} may={may} unitName={unitName} />
+        <TestCard key={t.id} t={t} p={p} post={post} may={may} unitName={unitName} removal={removeTest} />
       ))}
       {may.record && (
         <Fold title="ثبت آزمون">
@@ -57,10 +71,11 @@ export default function Performance({ data, post, may }) {
         </Fold>
       )}
     </div>
+    </>
   );
 }
 
-function TestCard({ t, p, post, may, unitName }) {
+function TestCard({ t, p, post, may, unitName, removal }) {
   const { user } = usePlatform();
   const inScope = p.guarantees.filter((g) => (g.unitId || null) === (t.unitId || null));
   const [f, setF] = useState({ guaranteeId: inScope[0]?.id || "", measured: "", method: "" });
@@ -105,6 +120,12 @@ function TestCard({ t, p, post, may, unitName }) {
           </form>
         )}
         {!t.signedAt && may.sign && <button className="btn" onClick={() => post({ kind: "perf-sign", testId: t.id })}>امضای آزمون</button>}
+        {!t.signedAt && may.record && (
+          <button className="btn ghost" onClick={async () => {
+            if (!window.confirm(`آزمون ${t.testNo} با نتایجش حذف شود؟ امضا نشده، پس سابقه‌ای از آن نمی‌ماند.`)) return;
+            await removal.onDelete(t.id).catch((e) => window.alert(e.message));
+          }}>حذف آزمون</button>
+        )}
         {t.signedAt && !t.acceptedAt && may.sign && t.signedBy !== user?.id && (
           <button className="btn" onClick={() => post({ kind: "perf-accept", testId: t.id })}>پذیرش (کارفرما)</button>)}
       </div>
@@ -112,27 +133,34 @@ function TestCard({ t, p, post, may, unitName }) {
   );
 }
 
-function GuaranteeForm({ p, post }) {
+/** New, or the same form filled with a guarantee to amend (its code is the key and stays). */
+function GuaranteeForm({ p, post, initial = null, onDone }) {
   const blank = { code: "", parameter: "", unitId: "", uom: "", direction: "min", guaranteedValue: "", minDurationH: "", basis: "" };
-  const [f, setF] = useState(blank);
+  const s0 = (v) => (v === null || v === undefined ? "" : String(v));
+  const [f, setF] = useState(initial ? { code: initial.code, parameter: initial.parameter, unitId: initial.unitId || "", uom: initial.uom,
+    direction: initial.direction, guaranteedValue: s0(initial.guaranteedValue), minDurationH: s0(initial.minDurationH), basis: initial.basis } : blank);
+  const x = initial ? "ge" : "gu";
   return (
-    <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "guarantee", ...f })) setF(blank); }}>
-      <Field id="gu-code" label="کد" value={f.code} on={(v) => setF({ ...f, code: v })} ltr required />
-      <Field id="gu-par" label="پارامتر" value={f.parameter} on={(v) => setF({ ...f, parameter: v })} required />
-      <div className="field"><label htmlFor="gu-unit">محدوده</label>
-        <select id="gu-unit" value={f.unitId} onChange={(e) => setF({ ...f, unitId: e.target.value })}>
+    <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
+      e.preventDefault();
+      if (await post({ kind: "guarantee", ...f })) { if (initial) onDone?.(); else setF(blank); }
+    }}>
+      <Field id={`${x}-code`} label="کد" value={f.code} on={(v) => setF({ ...f, code: v })} ltr required readOnly={!!initial} />
+      <Field id={`${x}-par`} label="پارامتر" value={f.parameter} on={(v) => setF({ ...f, parameter: v })} required />
+      <div className="field"><label htmlFor={`${x}-unit`}>محدوده</label>
+        <select id={`${x}-unit`} value={f.unitId} onChange={(e) => setF({ ...f, unitId: e.target.value })}>
           <option value="">کل کارخانه</option>
           {p.units.map((u) => <option key={u.id} value={u.id}>واحد {u.code} — {u.name}</option>)}
         </select></div>
-      <div className="field"><label htmlFor="gu-dir">جهت</label>
-        <select id="gu-dir" value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value })}>
+      <div className="field"><label htmlFor={`${x}-dir`}>جهت</label>
+        <select id={`${x}-dir`} value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value })}>
           {Object.entries(p.directions).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select></div>
-      <Field id="gu-val" label="مقدار تضمین‌شده" type="number" value={f.guaranteedValue} on={(v) => setF({ ...f, guaranteedValue: v })} ltr required />
-      <Field id="gu-uom" label="واحد" value={f.uom} on={(v) => setF({ ...f, uom: v })} ltr required />
-      <Field id="gu-dur" label="حداقل مدت آزمون (ساعت) — فقط اگر قرارداد گفته" type="number" value={f.minDurationH} on={(v) => setF({ ...f, minDurationH: v })} ltr />
-      <Field id="gu-basis" label="بند قرارداد" value={f.basis} on={(v) => setF({ ...f, basis: v })} required />
-      <div><button className="btn" type="submit">ذخیرهٔ تضمین</button></div>
+      <Field id={`${x}-val`} label="مقدار تضمین‌شده" type="number" value={f.guaranteedValue} on={(v) => setF({ ...f, guaranteedValue: v })} ltr required />
+      <Field id={`${x}-uom`} label="واحد" value={f.uom} on={(v) => setF({ ...f, uom: v })} ltr required />
+      <Field id={`${x}-dur`} label="حداقل مدت آزمون (ساعت) — فقط اگر قرارداد گفته" type="number" value={f.minDurationH} on={(v) => setF({ ...f, minDurationH: v })} ltr />
+      <Field id={`${x}-basis`} label="بند قرارداد" value={f.basis} on={(v) => setF({ ...f, basis: v })} required />
+      <div><button className="btn" type="submit">{initial ? "ذخیرهٔ تغییرات" : "ذخیرهٔ تضمین"}</button></div>
     </form>
   );
 }
@@ -159,11 +187,11 @@ function TestForm({ p, post, scopeText }) {
   );
 }
 
-function Field({ id, label, value, on, type = "text", required, ltr }) {
+function Field({ id, label, value, on, type = "text", required, ltr, readOnly }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input id={id} dir={ltr ? "ltr" : "auto"} type={type} step={type === "number" ? "any" : undefined} value={value} required={required}
+      <input id={id} dir={ltr ? "ltr" : "auto"} type={type} step={type === "number" ? "any" : undefined} value={value} required={required} readOnly={readOnly}
         onChange={(e) => on(e.target.value)} />
     </div>
   );

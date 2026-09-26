@@ -6,6 +6,7 @@
  * crew through the form.
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const SHOT = process.env.SHOT_DIR || "/tmp/shots";
@@ -13,6 +14,7 @@ const { DRIVE_EMAIL: EMAIL, DRIVE_PASSWORD: PASSWORD } = process.env;
 if (!EMAIL || !PASSWORD) { console.error("set DRIVE_EMAIL and DRIVE_PASSWORD"); process.exit(1); }
 const b = await chromium.launch({ executablePath: CHROME });
 const page = await b.newPage({ viewport: { width: 1440, height: 1000 } });
+await showAllTabs(page);
 const problems = [], refused = [];
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 page.on("response", (r) => {
@@ -72,7 +74,7 @@ await j.getByRole("button", { name: /JSA جدید/ }).click();
 await j.locator("#jn-no").fill("JSA-DRV-01"); await j.locator("#jn-t").fill("Drive check");
 await j.getByRole("button", { name: "ثبت پیش‌نویس" }).click(); await settle();
 const draft = page.locator(".card", { has: page.locator("b", { hasText: "JSA-DRV-01 Rev 0" }) }).first();
-await draft.getByRole("button", { name: /افزودن \/ اصلاح گام/ }).click();
+await draft.getByRole("button", { name: /افزودن گام/ }).click();
 await draft.getByLabel("گام کار").fill("Lift panel"); await draft.getByLabel("خطر").fill("Crush");
 await draft.getByLabel("اقدام کنترلی").fill("Tag lines");
 await draft.getByLabel("احتمال (۱–۵)").fill("4"); await draft.getByLabel("شدت (۱–۵)").fill("5");

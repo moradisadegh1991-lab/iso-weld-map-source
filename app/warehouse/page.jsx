@@ -8,6 +8,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Mesc from "./Mesc";
 import Stores from "./Stores";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Warehouse: what arrived, what inspection and the certificates allow out,
@@ -67,15 +68,14 @@ export default function WarehousePage() {
       </div>
       {msg && <p className="err">{msg}</p>}
       {recall && (
-        <div className="card" style={{ borderColor: "rgba(226,87,76,.6)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(226,87,76,.6)" }}>
           <h2 style={{ color: "var(--bad)" }}>فراخوان — مواد این لات قبلاً حواله شده</h2>
           <Recall list={recall} />
           <div><button className="btn ghost" onClick={() => setRecall(null)}>بستن</button></div>
         </div>
       )}
 
-      <Shortages rows={data.shortages} />
-
+      <Tabs name="warehouse">
       <div className="card">
         <h2>موجودی به تفکیک لات</h2>
         {data.lots.length === 0 ? <p className="empty-note">هنوز رسیدی ثبت نشده است.</p> : (
@@ -92,16 +92,17 @@ export default function WarehousePage() {
             </table>
           </TableKit>
         )}
+        {mayRecord && data.items.length > 0 && <Fold title="رسید کالا (MRR)"><Receive items={data.items} post={post} /></Fold>}
+        {mayEngineer && <Fold title="کالای جدید"><ItemForm post={post} /></Fold>}
+        {mayEngineer && data.items.length > 0 && <Fold title="نیاز از MTO"><Requirement items={data.items} post={post} /></Fold>}
       </div>
 
+      <Shortages rows={data.shortages} />
       <HeatTrace call={call} projectId={projectId} />
-      {mayRecord && data.items.length > 0 && <Fold title="رسید کالا (MRR)"><Receive items={data.items} post={post} /></Fold>}
       <Stores projectId={projectId} call={call} mayStore={mayRecord} mayApprove={can({ role }, ACTIONS.MANAGE_CONTROLS)} />
 
       <Mesc projectId={projectId} call={call} may={mayEngineer} />
-
-      {mayEngineer && <Fold title="کالای جدید"><ItemForm post={post} /></Fold>}
-      {mayEngineer && data.items.length > 0 && <Fold title="نیاز از MTO"><Requirement items={data.items} post={post} /></Fold>}
+      </Tabs>
     </div>
   );
 }

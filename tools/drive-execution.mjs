@@ -3,6 +3,7 @@
  *   DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-execution.mjs
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
@@ -12,6 +13,7 @@ if (!EMAIL || !PASSWORD) { console.error("set DRIVE_EMAIL and DRIVE_PASSWORD"); 
 
 const browser = await chromium.launch({ executablePath: CHROME });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await showAllTabs(page);
 const problems = [];
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 page.on("response", (r) => {

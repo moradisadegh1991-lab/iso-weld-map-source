@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import { STATUSES } from "../../lib/db/repos/assumptions.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * What the project does not know, and what it has assumed.
@@ -58,6 +59,7 @@ export default function AssumptionsPage() {
       </div>
       {msg && <p className="err">{msg}</p>}
 
+      <Tabs name="assumptions">
       <div className="card">
         <h2>اطلاعات ناقص (UNKNOWN)</h2>
         <p className="muted sm">
@@ -108,9 +110,9 @@ export default function AssumptionsPage() {
             </table>
           </TableKit>
         )}
+        {mayEdit && <Fold title="پیشنهاد فرض جدید"><Propose post={post} /></Fold>}
       </div>
-
-      {mayEdit && <Fold title="پیشنهاد فرض جدید"><Propose post={post} /></Fold>}
+      </Tabs>
     </div>
   );
 }

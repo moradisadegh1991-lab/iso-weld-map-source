@@ -8,6 +8,7 @@ import {
 } from "../../lib/structural/steel.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Structural steel: pipe racks, platforms and shelters, from the foundation
@@ -65,10 +66,11 @@ export default function StructuralPage() {
         </span>
       </div>
 
+      <Tabs name="structural">
       {msg && <p className="err">{msg}</p>}
 
       {!data.standard && (
-        <div className="card" style={{ borderColor: "rgba(224,163,62,.5)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(224,163,62,.5)" }}>
           <h2 style={{ color: "var(--warn)" }}>استاندارد رواداری نصب اسکلت ثبت نشده</h2>
           <p className="muted sm">
             شاقولی هیچ ستونی حکم نمی‌گیرد تا استاندارد در{" "}
@@ -97,11 +99,12 @@ export default function StructuralPage() {
             </table>
           </TableKit>
         )}
+        {mayRegister && <Fold title="ثبت سازهٔ جدید"><AddStructure subsystems={data.subsystems} post={post} /></Fold>}
       </div>
 
       <PretensionTable />
 
-      {mayRegister && <Fold title="ثبت سازهٔ جدید"><AddStructure subsystems={data.subsystems} post={post} /></Fold>}
+      </Tabs>
     </div>
   );
 }

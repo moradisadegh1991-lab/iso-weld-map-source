@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { parseEquipmentList, summarise } from "../../lib/equipment/parse.mjs";
 import { EQUIPMENT_KINDS } from "../../lib/platform/precedence.mjs";
 import TableKit from "../../components/ui/TableKit";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Equipment tags: import a list, then work the two queues it produces.
@@ -80,57 +81,9 @@ export default function EquipmentPage() {
         <span className="sub">{data ? `${data.tags.length} تگ` : "…"}</span>
       </div>
 
-      <div className="card">
-        <h2>ورود لیست تجهیزات</h2>
-        <p className="muted sm">
-          <b>هیچ مدلی اینجا اجرا نمی‌شود</b> — یک جدول را پارسر می‌خواند، و پارسر
-          نمی‌تواند تگی بسازد که در فایل نبوده.
-        </p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <label className="btn ghost" style={{ cursor: "pointer" }}>
-            فایل (Excel یا CSV)
-            <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm" hidden
-                   onChange={(e) => onFile(e.target.files?.[0])} />
-          </label>
-          <button className="btn ghost" onClick={() => read(text)} disabled={!text.trim()}>
-            خواندن متن
-          </button>
-        </div>
-        <div className="field">
-          <textarea className="mono" dir="ltr" value={text} spellCheck={false}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder={"Tag No,Description,Type,Subsystem\nP-2101A,Feed Pump,Centrifugal,21-01"} />
-        </div>
-
-        {msg && <p className="err">{msg}</p>}
-
-        {sum && (
-          <>
-            <p className="mono sm">
-              {sum.total} تگ · {Object.entries(KIND_FA).map(([k, v]) => `${v} ${sum[k]}`).join(" · ")}
-              {sum.unclassified > 0 && ` · نامشخص ${sum.unclassified}`} · {sum.pctClassified}% خودکار
-              {parsed.skipped.length > 0 && ` · ${parsed.skipped.length} سطر تگ نبود`}
-            </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn ghost" onClick={() => doImport(true)}>پیش‌نمایش</button>
-              <button className="btn" onClick={() => doImport(false)}>ثبت در پروژه</button>
-            </div>
-          </>
-        )}
-
-        {report && (
-          <p className={"pill " + (report.dryRun ? "" : "ok")}>
-            {report.dryRun ? "پیش‌نمایش: " : "ثبت شد: "}
-            {report.created} جدید · {report.updated} به‌روزرسانی ·
-            {" "}{report.subsystems} ساب‌سیستم
-            {report.unclassified.length > 0 && ` · ${report.unclassified.length} نامشخص`}
-            {report.unfiled.length > 0 && ` · ${report.unfiled.length} بدون ساب‌سیستم`}
-          </p>
-        )}
-      </div>
-
+      <Tabs name="equipment">
       {data?.unclassified?.length > 0 && (
-        <div className="card" style={{ borderColor: "rgba(224,163,62,.5)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(224,163,62,.5)" }}>
           <h2 style={{ color: "var(--warn)" }}>
             {data.unclassified.length} تگ در انتظار تعیین نوع
           </h2>
@@ -213,6 +166,56 @@ export default function EquipmentPage() {
           </TableKit>
         </div>
       )}
+
+      <div className="card">
+        <h2>ورود لیست تجهیزات</h2>
+        <p className="muted sm">
+          <b>هیچ مدلی اینجا اجرا نمی‌شود</b> — یک جدول را پارسر می‌خواند، و پارسر
+          نمی‌تواند تگی بسازد که در فایل نبوده.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <label className="btn ghost" style={{ cursor: "pointer" }}>
+            فایل (Excel یا CSV)
+            <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm" hidden
+                   onChange={(e) => onFile(e.target.files?.[0])} />
+          </label>
+          <button className="btn ghost" onClick={() => read(text)} disabled={!text.trim()}>
+            خواندن متن
+          </button>
+        </div>
+        <div className="field">
+          <textarea className="mono" dir="ltr" value={text} spellCheck={false}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder={"Tag No,Description,Type,Subsystem\nP-2101A,Feed Pump,Centrifugal,21-01"} />
+        </div>
+
+        {msg && <p className="err">{msg}</p>}
+
+        {sum && (
+          <>
+            <p className="mono sm">
+              {sum.total} تگ · {Object.entries(KIND_FA).map(([k, v]) => `${v} ${sum[k]}`).join(" · ")}
+              {sum.unclassified > 0 && ` · نامشخص ${sum.unclassified}`} · {sum.pctClassified}% خودکار
+              {parsed.skipped.length > 0 && ` · ${parsed.skipped.length} سطر تگ نبود`}
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="btn ghost" onClick={() => doImport(true)}>پیش‌نمایش</button>
+              <button className="btn" onClick={() => doImport(false)}>ثبت در پروژه</button>
+            </div>
+          </>
+        )}
+
+        {report && (
+          <p className={"pill " + (report.dryRun ? "" : "ok")}>
+            {report.dryRun ? "پیش‌نمایش: " : "ثبت شد: "}
+            {report.created} جدید · {report.updated} به‌روزرسانی ·
+            {" "}{report.subsystems} ساب‌سیستم
+            {report.unclassified.length > 0 && ` · ${report.unclassified.length} نامشخص`}
+            {report.unfiled.length > 0 && ` · ${report.unfiled.length} بدون ساب‌سیستم`}
+          </p>
+        )}
+      </div>
+      </Tabs>
     </div>
   );
 }

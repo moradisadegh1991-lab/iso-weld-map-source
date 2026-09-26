@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import { CATEGORIES } from "../../lib/instrumentation/isa.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Instrumentation: the instrument index read by ISA 5.1, each instrument
@@ -61,10 +62,11 @@ export default function InstrumentationPage() {
           {unread > 0 && ` · ${unread} تگ ناخوانا`}
         </span>
       </div>
+      <Tabs name="instrumentation">
       {msg && <p className="err">{msg}</p>}
 
       {data.spec.tolerancePct === null && (
-        <div className="card" style={{ borderColor: "rgba(224,163,62,.5)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(224,163,62,.5)" }}>
           <h2 style={{ color: "var(--warn)" }}>تلورانس کالیبراسیون پروژه ثبت نشده</h2>
           <p className="muted sm">
             ابزاری که تلورانس دیتاشیت خودش را ندارد حکم کالیبراسیون نمی‌گیرد تا در{" "}
@@ -72,8 +74,6 @@ export default function InstrumentationPage() {
           </p>
         </div>
       )}
-
-      <Loops loops={data.loops} mayRecord={mayRecord} post={post} />
 
       <div className="card">
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -98,9 +98,12 @@ export default function InstrumentationPage() {
             </table>
           </TableKit>
         )}
+        {mayRegister && <Fold title="ورود لیست ابزار (Instrument Index)"><Import post={post} /></Fold>}
       </div>
 
-      {mayRegister && <Fold title="ورود لیست ابزار (Instrument Index)"><Import post={post} /></Fold>}
+      <Loops loops={data.loops} mayRecord={mayRecord} post={post} />
+
+      </Tabs>
     </div>
   );
 }

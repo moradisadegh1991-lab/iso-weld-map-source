@@ -22,8 +22,8 @@ const TABS = [["orders", "سفارش‌ها و پیگیری"], ["tender", "در�
 export default function ProcurementPage() {
   const [tab, setTab] = useState("orders");
   const bar = (
-    <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-      {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} className={`btn ${tab === k ? "" : "ghost"}`} onClick={() => setTab(k)}>{t}</button>)}
+    <div className="ptabs no-print" role="tablist">
+      {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>)}
     </div>
   );
   return tab === "orders" ? <Orders bar={bar} /> : <Tender key={tab} tab={tab} bar={bar} />;

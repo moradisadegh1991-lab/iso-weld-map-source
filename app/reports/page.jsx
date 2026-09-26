@@ -1,6 +1,7 @@
 "use client";
 import { useProjectData } from "../../lib/client/platform.mjs";
 import TableKit from "../../components/ui/TableKit";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Progress and KPI.
@@ -23,6 +24,7 @@ export default function ReportsPage() {
         <span className="sub">همان ویوهایی که Power BI به آن وصل می‌شود</span>
       </div>
 
+      <Tabs name="reports">
       <div className="card">
         <h2>پیشرفت خطوط</h2>
         {lines.length === 0 ? (
@@ -71,6 +73,7 @@ export default function ReportsPage() {
           postgresql://app_report@host/db?options=-c%20app.project_id%3D&lt;uuid&gt;
         </p>
       </div>
+      </Tabs>
     </div>
   );
 }

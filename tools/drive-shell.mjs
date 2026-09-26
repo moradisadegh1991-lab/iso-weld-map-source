@@ -3,6 +3,7 @@
  * Compiling is not working: this is what says the shell actually works.
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
@@ -22,6 +23,7 @@ if (!EMAIL || !PASSWORD) {
 
 const browser = await chromium.launch({ executablePath: CHROME });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await showAllTabs(page);
 const problems = [];
 page.on("console", (m) => m.type() === "error" && problems.push("console: " + m.text()));
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));

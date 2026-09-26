@@ -4,6 +4,8 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import { useRemove } from "../../lib/client/remove.mjs";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Project controls: each control account's planned curve, what has been
@@ -23,6 +25,8 @@ export default function ControlsPage() {
   const [msg, setMsg] = useState(null);
   const [open, setOpen] = useState(null);
   const may = can({ role }, ACTIONS.MANAGE_CONTROLS);
+  const [editing, setEditing] = useState(null);
+  const removeAccount = useRemove("control-account", reload);
 
   async function post(body) {
     setMsg(null);
@@ -54,7 +58,7 @@ export default function ControlsPage() {
       {msg && <p className="err">{msg}</p>}
       {!cur && <p className="err">ارز قرارداد در <a href="/project">مشخصات پروژه</a> تعیین نشده — بودجه و هزینه ثبت نمی‌شود و فقط SPI درصدی نشان داده می‌شود.</p>}
 
-      <div className="card">
+      <div className="card" data-keep>
         <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
           <div className="field"><label htmlFor="asof">تاریخ داده (Data date)</label>
             <input id="asof" type="date" dir="ltr" value={asOf || data.asOf} onChange={(e) => setAsOf(e.target.value === data.today ? "" : e.target.value)} /></div>
@@ -82,10 +86,12 @@ export default function ControlsPage() {
         <p className="muted sm">در جمع پروژه نیامده (بدون BAC، PV یا EV): {t.excluded.join("، ")}</p>
       )}
 
+      <Tabs name="controls">
       <div className="card">
         <h2>حساب‌های کنترلی</h2>
         {data.accounts.length === 0 ? <p className="empty-note">حساب کنترلی تعریف نشده است.</p> : (
-          <TableKit name="controls">
+          <TableKit name="controls" {...(may ? removeAccount : {})}
+                    onEdit={may ? (id) => setEditing(data.accounts.find((a) => a.id === id)) : undefined}>
             <table className="dtable">
               <thead><tr><th>کد</th><th>عنوان</th><th>منبع EV</th><th>PV %</th><th>EV %</th><th>SPI</th><th>CPI</th><th>AC</th><th>EAC</th><th>خط مبنا</th><th /></tr></thead>
               <tbody>
@@ -98,11 +104,17 @@ export default function ControlsPage() {
           </TableKit>
         )}
         {may && <Fold title="حساب کنترلی جدید"><AccountForm data={data} post={post} /></Fold>}
+        {may && (
+          <Fold title={`ویرایش حساب ${editing?.code || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
+            {editing && <AccountForm key={editing.id} data={data} post={post} initial={editing} onDone={() => setEditing(null)} />}
+          </Fold>
+        )}
       </div>
 
       <Snapshots data={data} />
 
       <Risks data={data} post={post} may={may} />
+      </Tabs>
     </div>
   );
 }
@@ -115,7 +127,7 @@ function AccountRow({ a, data, open, onToggle, post, may, call, projectId }) {
   const cur = data.currency;
   return (
     <>
-      <tr>
+      <tr data-key={a.id}>
         <td className="mono">{a.code}</td>
         <td>{a.title}{a.contractorCode && <div className="muted sm">{a.contractorCode}</div>}</td>
         <td className="sm">
@@ -261,37 +273,45 @@ function CostForm({ a, cur, post }) {
   );
 }
 
-function AccountForm({ data, post }) {
+/** New, or the same form filled with an account to amend (its code is the key and stays). */
+function AccountForm({ data, post, initial = null, onDone }) {
   const blank = { code: "", title: "", contractorId: "", bac: "", evMethod: "manual", evDiscipline: "piping", evSubsystemId: "", creditInstalledPct: "" };
-  const [f, setF] = useState(blank);
+  const s0 = (v) => (v === null || v === undefined ? "" : String(v));
+  const [f, setF] = useState(initial ? { code: initial.code, title: initial.title, contractorId: initial.contractorId || "", bac: s0(initial.bacEntered),
+    evMethod: initial.evMethod, evDiscipline: initial.evDiscipline || "piping", evSubsystemId: initial.evSubsystemId || "",
+    creditInstalledPct: s0(initial.creditInstalledPct) } : blank);
+  const x = initial ? "ae" : "ac";
   return (
-    <form style={{ marginTop: 10 }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "account", ...f })) setF(blank); }}>
+    <form style={{ marginTop: 10 }} onSubmit={async (e) => {
+      e.preventDefault();
+      if (await post({ kind: "account", ...f })) { if (initial) onDone?.(); else setF(blank); }
+    }}>
       <h2>حساب کنترلی</h2>
       <div className="grid2">
-        <Field id="ac-code" label="کد (WBS/CBS)" value={f.code} on={(v) => setF({ ...f, code: v })} required />
-        <Field id="ac-title" label="عنوان" value={f.title} on={(v) => setF({ ...f, title: v })} required />
-        <div className="field"><label htmlFor="ac-c">پیمانکار</label>
-          <select id="ac-c" value={f.contractorId} onChange={(e) => setF({ ...f, contractorId: e.target.value })}>
+        <Field id={`${x}-code`} label="کد (WBS/CBS)" value={f.code} on={(v) => setF({ ...f, code: v })} required readOnly={!!initial} />
+        <Field id={`${x}-title`} label="عنوان" value={f.title} on={(v) => setF({ ...f, title: v })} required />
+        <div className="field"><label htmlFor={`${x}-c`}>پیمانکار</label>
+          <select id={`${x}-c`} value={f.contractorId} onChange={(e) => setF({ ...f, contractorId: e.target.value })}>
             <option value="">—</option>{data.contractors.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
           </select></div>
-        <Field id="ac-bac" label={`BAC (${data.currency || "ارز تعیین نشده"})`} type="number" value={f.bac} on={(v) => setF({ ...f, bac: v })} />
-        <div className="field"><label htmlFor="ac-m">منبع EV</label>
-          <select id="ac-m" value={f.evMethod} onChange={(e) => setF({ ...f, evMethod: e.target.value })}>
+        <Field id={`${x}-bac`} label={`BAC (${data.currency || "ارز تعیین نشده"})`} type="number" value={f.bac} on={(v) => setF({ ...f, bac: v })} />
+        <div className="field"><label htmlFor={`${x}-m`}>منبع EV</label>
+          <select id={`${x}-m`} value={f.evMethod} onChange={(e) => setF({ ...f, evMethod: e.target.value })}>
             <option value="manual">گزارش دستی</option><option value="platform">محاسبه از پلتفرم</option>
           </select></div>
         {f.evMethod === "platform" && <>
-          <div className="field"><label htmlFor="ac-d">آیتم‌ها</label>
-            <select id="ac-d" value={f.evDiscipline} onChange={(e) => setF({ ...f, evDiscipline: e.target.value })}>
+          <div className="field"><label htmlFor={`${x}-d`}>آیتم‌ها</label>
+            <select id={`${x}-d`} value={f.evDiscipline} onChange={(e) => setF({ ...f, evDiscipline: e.target.value })}>
               {Object.entries(data.platformDisciplines).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
             </select></div>
-          <div className="field"><label htmlFor="ac-s">ساب‌سیستم</label>
-            <select id="ac-s" value={f.evSubsystemId} onChange={(e) => setF({ ...f, evSubsystemId: e.target.value })}>
+          <div className="field"><label htmlFor={`${x}-s`}>ساب‌سیستم</label>
+            <select id={`${x}-s`} value={f.evSubsystemId} onChange={(e) => setF({ ...f, evSubsystemId: e.target.value })}>
               <option value="">همه</option>{data.subsystems.map((s) => <option key={s.id} value={s.id}>{s.code}</option>)}
             </select></div>
-          <Field id="ac-k" label="سهم نصب از 100 (باقی در تست)" type="number" value={f.creditInstalledPct} on={(v) => setF({ ...f, creditInstalledPct: v })} />
+          <Field id={`${x}-k`} label="سهم نصب از 100 (باقی در تست)" type="number" value={f.creditInstalledPct} on={(v) => setF({ ...f, creditInstalledPct: v })} />
         </>}
       </div>
-      <div><button className="btn" type="submit">ثبت حساب</button></div>
+      <div><button className="btn" type="submit">{initial ? "ذخیرهٔ تغییرات" : "ثبت حساب"}</button></div>
     </form>
   );
 }
@@ -444,12 +464,12 @@ function Scale({ id, label, value, on, blank }) {
   );
 }
 
-function Field({ id, label, value, on, type = "text", required }) {
+function Field({ id, label, value, on, type = "text", required, readOnly }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <input id={id} type={type} step={type === "number" ? "any" : undefined} dir={type === "text" ? "auto" : "ltr"}
-             required={required} value={value} onChange={(e) => on(e.target.value)} />
+             required={required} readOnly={readOnly} value={value} onChange={(e) => on(e.target.value)} />
     </div>
   );
 }

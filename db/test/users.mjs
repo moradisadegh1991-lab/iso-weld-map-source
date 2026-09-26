@@ -33,14 +33,17 @@ test("routes and site operations name their area", async () => {
 });
 
 test("the menu is the member's areas, plus what is common", async () => {
-  const hrefs = (m) => navigationFor(m, can).flatMap((g) => g.items.map((i) => i.href));
+  // Every page a member may open, across the sections' tabs.
+  const hrefs = (m) => navigationFor(m, can).flatMap((g) => g.items.flatMap((i) => i.tabs.map((t) => t.href)));
   const civil = hrefs({ role: "engineer", areas: ["civil"] });
   assert(civil.includes("/civil") && civil.includes("/") && civil.includes("/field") && civil.includes("/asset"), civil.join(" "));
   assert(!civil.includes("/piping") && !civil.includes("/hse") && !civil.includes("/admin"), civil.join(" "));
+  const sections = navigationFor({ role: "engineer", areas: ["civil"] }, can).flatMap((g) => g.items);
+  equal(sections.find((s) => s.key === "civil").tabs.map((t) => t.href), ["/civil"], "a section shows only the tabs a member may open");
   const all = hrefs({ role: "engineer", areas: [] });
   assert(all.includes("/hse") && all.includes("/piping"));
   assert(hrefs({ role: "developer" }).includes("/admin"));
-  equal(new Set(navigationFor({ role: "developer" }, can).flatMap((g) => g.items.map((i) => i.area)).filter(Boolean)).size,
+  equal(new Set(navigationFor({ role: "developer" }, can).flatMap((g) => g.items.flatMap((i) => i.tabs.map((t) => t.area))).filter(Boolean)).size,
     Object.keys(AREAS).length, "every area has a page in the menu");
 });
 

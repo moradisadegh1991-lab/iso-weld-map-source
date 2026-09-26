@@ -4,6 +4,7 @@
  *   DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-auth.mjs
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const { DRIVE_EMAIL: EMAIL, DRIVE_PASSWORD: PASSWORD } = process.env;
@@ -12,6 +13,7 @@ const b = await chromium.launch({ executablePath: CHROME });
 const login = async () => {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
+  await showAllTabs(page);
   await page.goto(BASE, { waitUntil: "networkidle" });
   await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);
   await page.click("button[type=submit]"); await page.waitForSelector(".shell");

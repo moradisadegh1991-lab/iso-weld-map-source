@@ -66,9 +66,9 @@ export default function InspectionPage() {
         <p className="muted sm">برای ثبت درخواست یا امضای نتیجه، مدیر پروژه باید در «کاربران و دسترسی» طرف بازرسی شما را تعیین کند (پیمانکار، کارفرما یا TPI).</p>
       )}
 
-      <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="ptabs no-print" role="tablist">
         {[["board", "درخواست‌های بازرسی"], ["itp", "ITP"], ["item", "پروندهٔ آیتم"]].map(([k, t]) => (
-          <button key={k} role="tab" aria-selected={tab === k} className={`btn ${tab === k ? "" : "ghost"}`} onClick={() => setTab(k)}>{t}</button>
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>
         ))}
       </div>
 
@@ -363,19 +363,21 @@ function ItpMatrix({ itp, data, post, may }) {
       </div>
       <p className="muted sm">{itp.status === "draft" ? "پیش‌نویس: تا تأیید، هیچ مرحله‌ای به آن گره نمی‌خورد. تأییدکننده نباید تهیه‌کننده باشد."
         : itp.status === "approved" ? "در حال اجرا و ثابت؛ برای تغییر، رویژن جدید بسازید." : "منسوخ؛ درخواست‌های قبلی همچنان به آن ارجاع دارند."}</p>
-      <TableKit name="inspection"><table className="dtable">
+      <TableKit name="inspection"
+                onEdit={(id) => { const a = itp.activities.find((x) => x.id === id);
+                  setF({ ...a, seq: String(a.seq), stepCode: a.stepCode || "", reference: a.reference || "", criteria: a.criteria || "",
+                    record: a.record || "", points: { contractor: a.points.contractor || "", company: a.points.company || "", tpi: a.points.tpi || "" } }); }}
+                onDelete={(id) => post({ kind: "activity-remove", itpId: itp.id, id })}
+                canEdit={() => (draft ? true : "ITP تأییدشده ثابت است؛ رویژن جدید بسازید")} canDelete={() => (draft ? true : "ITP تأییدشده ثابت است؛ رویژن جدید بسازید")}>
+      <table className="dtable">
         <thead><tr><th>ردیف</th><th>فعالیت</th><th>مرحلهٔ زنجیره</th><th>مرجع</th><th>معیار پذیرش</th><th>سند</th>
-          {Object.keys(data.parties).map((p) => <th key={p}>{data.parties[p]}</th>)}{draft && <th />}</tr></thead>
+          {Object.keys(data.parties).map((p) => <th key={p}>{data.parties[p]}</th>)}</tr></thead>
         <tbody>{itp.activities.map((a) => (
-          <tr key={a.id}>
+          <tr key={a.id} data-key={a.id}>
             <td className="mono">{a.seq}</td><td>{a.title}</td>
             <td className="sm">{a.stepCode ? steps.find((s) => s.code === a.stepCode)?.title || a.stepCode : <span className="muted">—</span>}</td>
             <td className="sm">{a.reference || "—"}</td><td className="sm">{a.criteria || "—"}</td><td className="sm mono">{a.record || "—"}</td>
             {Object.keys(data.parties).map((p) => <td key={p} className={`mono ${a.points[p] === "H" ? "bad" : a.points[p] === "W" ? "warn" : ""}`}>{a.points[p] || ""}</td>)}
-            {draft && <td style={{ whiteSpace: "nowrap" }}>
-              <button className="btn ghost" onClick={() => setF({ ...a, seq: String(a.seq), stepCode: a.stepCode || "", reference: a.reference || "", criteria: a.criteria || "",
-                record: a.record || "", points: { contractor: a.points.contractor || "", company: a.points.company || "", tpi: a.points.tpi || "" } })}>ویرایش</button>
-              <button className="btn ghost" onClick={() => post({ kind: "activity-remove", itpId: itp.id, id: a.id })}>حذف</button></td>}
           </tr>))}</tbody>
       </table></TableKit>
       {draft && (

@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Electrical: the cable schedule, each cable from route to energisation, and
@@ -67,10 +68,11 @@ export default function ElectricalPage() {
         </span>
       </div>
 
+      <Tabs name="electrical">
       {msg && <p className="err">{msg}</p>}
 
       {(data.spec.lvSystemVoltageV === null || (hasMv && (data.spec.mvTestVoltageV === null || data.spec.mvMinMohm === null))) && (
-        <div className="card" style={{ borderColor: "rgba(224,163,62,.5)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(224,163,62,.5)" }}>
           <h2 style={{ color: "var(--warn)" }}>معیار تست عایقی کامل نیست</h2>
           <p className="muted sm">
             {data.spec.lvSystemVoltageV === null && "ولتاژ نامی مدارهای فشار ضعیف ثبت نشده — کابل LV که لیست کابل ولتاژ مدارش را نگفته، حکم IR نمی‌گیرد. "}
@@ -107,9 +109,10 @@ export default function ElectricalPage() {
             </table>
           </TableKit>
         )}
+        {mayRegister && <Fold title="ورود لیست کابل"><Import post={post} /></Fold>}
       </div>
 
-      {mayRegister && <Fold title="ورود لیست کابل"><Import post={post} /></Fold>}
+      </Tabs>
     </div>
   );
 }

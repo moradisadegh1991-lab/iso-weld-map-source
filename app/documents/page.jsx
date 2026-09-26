@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import { useRemove } from "../../lib/client/remove.mjs";
 import Incoming from "./Incoming";
 
 /**
@@ -21,8 +22,8 @@ const TABS = [["register", "رجیستر و ترانسمیتال خروجی"], [
 export default function DocumentsPage() {
   const [tab, setTab] = useState("register");
   const bar = (
-    <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-      {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} className={`btn ${tab === k ? "" : "ghost"}`} onClick={() => setTab(k)}>{t}</button>)}
+    <div className="ptabs no-print" role="tablist">
+      {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>)}
     </div>
   );
   return tab === "register" ? <Register bar={bar} /> : <Incoming bar={bar} />;
@@ -34,7 +35,9 @@ function Register({ bar }) {
   const { data, error, reload } = useProjectData((id) => `/api/doc-control?projectId=${id}${onDate ? `&onDate=${onDate}` : ""}`, [onDate]);
   const [msg, setMsg] = useState(null);
   const [open, setOpen] = useState(null);
+  const [editing, setEditing] = useState(null);
   const may = can({ role }, ACTIONS.CONTROL_DOCUMENTS);
+  const removeDoc = useRemove("mdr-document", reload);
 
   async function post(body) {
     setMsg(null);
@@ -79,7 +82,7 @@ function Register({ bar }) {
       </div>
 
       {(wrongSheets.length > 0 || data.unregistered.length > 0) && (
-        <div className="card" style={{ borderColor: "rgba(226,87,76,.5)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(226,87,76,.5)" }}>
           <h2 style={{ color: "var(--bad)" }}>نقشه‌های بارگذاری‌شده در برابر رجیستر</h2>
           {wrongSheets.map((s) => (
             <p key={s.id} className="sm"><span className="mono">{s.docNo}</span> برگ {s.sheetNo}، بارگذاری {fa(s.uploadedOn)}: {s.reason}</p>
@@ -91,12 +94,13 @@ function Register({ bar }) {
       <div className="card">
         <h2>رجیستر مدارک (MDR)</h2>
         {docs.length === 0 ? <p className="empty-note">مدرکی ثبت نشده است.</p> : (
-          <TableKit name="documents">
+          <TableKit name="documents" {...(may ? removeDoc : {})}
+                    onEdit={may ? (id) => setEditing(docs.find((d) => d.id === id)) : undefined}>
             <table className="dtable">
               <thead><tr><th>شماره</th><th>عنوان</th><th>رشته</th><th>رویژن جاری</th><th>رویژن ساخت</th><th>IFC برنامه</th><th /></tr></thead>
               <tbody>
                 {docs.map((d) => [
-                  <tr key={d.id}>
+                  <tr key={d.id} data-key={d.id}>
                     <td className="mono" style={{ whiteSpace: "nowrap" }}>{d.doc_no}{d.approval_required && <div className="muted sm">نیازمند تأیید کارفرما</div>}</td>
                     <td className="sm">{d.title}{d.tag_no && <div className="muted"><a href={`/asset?tag=${encodeURIComponent(d.tag_no)}`}>{d.tag_no}</a></div>}</td>
                     <td className="sm">{d.discipline || "—"}</td>
@@ -114,6 +118,11 @@ function Register({ bar }) {
           </TableKit>
         )}
         {may && <Fold title="مدرک جدید در رجیستر"><MdrForm data={data} post={post} /></Fold>}
+        {may && (
+          <Fold title={`ویرایش ${editing?.doc_no || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
+            {editing && <MdrForm key={editing.id} data={data} post={post} initial={editing} onDone={() => setEditing(null)} />}
+          </Fold>
+        )}
       </div>
 
       <div className="card">
@@ -173,24 +182,35 @@ function Revisions({ d, data, post, may }) {
   );
 }
 
-function MdrForm({ data, post }) {
+/**
+ * New, or the same form filled with a register row to amend (its number is
+ * the key and stays). The row's tag travels with it: the register saves
+ * every column, and a form that does not show the tag must not clear it.
+ */
+function MdrForm({ data, post, initial = null, onDone }) {
   const blank = { docNo: "", title: "", discipline: "", docType: "", originator: "EPC", subsystemId: "", approvalRequired: false, plannedIfcOn: "" };
-  const [f, setF] = useState(blank);
+  const [f, setF] = useState(initial ? { docNo: initial.doc_no, title: initial.title, discipline: initial.discipline || "", docType: initial.doc_type || "",
+    originator: initial.originator || "EPC", subsystemId: initial.subsystem_id || "", approvalRequired: !!initial.approval_required,
+    plannedIfcOn: initial.planned_ifc_on ? String(initial.planned_ifc_on).slice(0, 10) : "", tagId: initial.tag_id || null } : blank);
+  const x = initial ? "me" : "md";
   return (
-    <form style={{ marginTop: 10 }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "document", ...f })) setF(blank); }}>
+    <form style={{ marginTop: 10 }} onSubmit={async (e) => {
+      e.preventDefault();
+      if (await post({ kind: "document", ...f })) { if (initial) onDone?.(); else setF(blank); }
+    }}>
       <h2>مدرک جدید در رجیستر</h2>
       <div className="grid2">
-        <Field id="md-no" label="شمارهٔ مدرک" value={f.docNo} on={(v) => setF({ ...f, docNo: v })} />
-        <Field id="md-t" label="عنوان" value={f.title} on={(v) => setF({ ...f, title: v })} />
-        <Field id="md-d" label="رشته" value={f.discipline} on={(v) => setF({ ...f, discipline: v })} />
-        <Field id="md-y" label="نوع (P&ID، ISO، DS…)" value={f.docType} on={(v) => setF({ ...f, docType: v })} />
-        <Select id="md-o" label="تهیه‌کننده" value={f.originator} on={(v) => setF({ ...f, originator: v })}
+        <Field id={`${x}-no`} label="شمارهٔ مدرک" value={f.docNo} on={(v) => setF({ ...f, docNo: v })} readOnly={!!initial} />
+        <Field id={`${x}-t`} label="عنوان" value={f.title} on={(v) => setF({ ...f, title: v })} />
+        <Field id={`${x}-d`} label="رشته" value={f.discipline} on={(v) => setF({ ...f, discipline: v })} />
+        <Field id={`${x}-y`} label="نوع (P&ID، ISO، DS…)" value={f.docType} on={(v) => setF({ ...f, docType: v })} />
+        <Select id={`${x}-o`} label="تهیه‌کننده" value={f.originator} on={(v) => setF({ ...f, originator: v })}
                 opts={[["EPC", "EPC"], ["vendor", "فروشنده"], ["contractor", "پیمانکار"], ["client", "کارفرما"]]} />
-        <Select id="md-s" label="ساب‌سیستم" value={f.subsystemId} on={(v) => setF({ ...f, subsystemId: v })} opts={data.subsystems.map((s) => [s.id, s.code])} blank="—" />
-        <Field id="md-p" label="تاریخ برنامه‌ای IFC" type="date" value={f.plannedIfcOn} on={(v) => setF({ ...f, plannedIfcOn: v })} />
+        <Select id={`${x}-s`} label="ساب‌سیستم" value={f.subsystemId} on={(v) => setF({ ...f, subsystemId: v })} opts={data.subsystems.map((s) => [s.id, s.code])} blank="—" />
+        <Field id={`${x}-p`} label="تاریخ برنامه‌ای IFC" type="date" value={f.plannedIfcOn} on={(v) => setF({ ...f, plannedIfcOn: v })} />
         <label className="sm" style={{ alignSelf: "end" }}><input type="checkbox" checked={f.approvalRequired} onChange={(e) => setF({ ...f, approvalRequired: e.target.checked })} /> تأیید کارفرما پیش از IFC لازم است</label>
       </div>
-      <div><button className="btn" type="submit">ثبت در رجیستر</button></div>
+      <div><button className="btn" type="submit">{initial ? "ذخیرهٔ تغییرات" : "ثبت در رجیستر"}</button></div>
     </form>
   );
 }
@@ -241,11 +261,11 @@ function Select({ id, label, value, on, opts, blank }) {
   );
 }
 
-function Field({ id, label, value, on, type = "text" }) {
+function Field({ id, label, value, on, type = "text", readOnly }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input id={id} type={type} dir={type === "text" ? "auto" : "ltr"} value={value} onChange={(e) => on(e.target.value)} />
+      <input id={id} type={type} dir={type === "text" ? "auto" : "ltr"} value={value} readOnly={readOnly} onChange={(e) => on(e.target.value)} />
     </div>
   );
 }

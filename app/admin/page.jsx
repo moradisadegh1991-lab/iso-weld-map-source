@@ -64,9 +64,9 @@ export default function AdminPage() {
         <h1>کاربران و دسترسی</h1>
         <span className="sub">{project ? `${project.code} — ${project.name}` : ""}</span>
       </div>
-      <div className="tabs" role="tablist" style={{ display: "flex", gap: 8 }}>
-        <button role="tab" aria-selected={tab === "users"} className={`btn ${tab === "users" ? "" : "ghost"}`} onClick={() => setTab("users")}>کاربران</button>
-        <button role="tab" aria-selected={tab === "roles"} className={`btn ${tab === "roles" ? "" : "ghost"}`} onClick={() => setTab("roles")}>نقش‌ها و اختیارات</button>
+      <div className="ptabs no-print" role="tablist">
+        <button role="tab" aria-selected={tab === "users"} onClick={() => setTab("users")}>کاربران</button>
+        <button role="tab" aria-selected={tab === "roles"} onClick={() => setTab("roles")}>نقش‌ها و اختیارات</button>
       </div>
       {msg && <p className="err" role="alert">{msg}</p>}
       {link && <LinkBox link={link} onClose={() => setLink(null)} />}

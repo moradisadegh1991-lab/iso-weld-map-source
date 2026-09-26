@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import SafeWork, { Dates } from "./SafeWork";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * HSE: hours worked, what went wrong, the permits that let work start, and
@@ -78,23 +79,8 @@ export default function HsePage() {
         </p>
       )}
 
-      <div className="card">
-        <h2>به تفکیک پیمانکار</h2>
-        <TableKit name="hse">
-          <table className="dtable">
-            <thead><tr><th>پیمانکار</th><th>نفرساعت</th><th>LTI</th><th>TRC</th><th>LTIF (IOGP)</th><th>TRIR (IOGP)</th><th>TRIR (OSHA)</th></tr></thead>
-            <tbody>
-              {s.byContractor.map((c) => (
-                <tr key={c.code}><td className="mono">{c.code}</td><td className="mono">{fmt(c.hours)}</td><td>{c.lti}</td><td>{c.recordable}</td>
-                  <td className="mono">{rate(c.ltif.iogp)}</td><td className="mono">{rate(c.trir.iogp)}</td><td className="mono">{rate(c.trir.osha)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </TableKit>
-        {mayRecord && <Manhours contractors={data.contractors} post={post} />}
-      </div>
-
-      <div className="card">
+      <Tabs name="hse">
+      <div className="card" data-badge={expired + simops} data-tone="bad">
         <h2>مجوز کار (PTW)</h2>
         {unset.length > 0 && (
           <p className="err">
@@ -115,9 +101,9 @@ export default function HsePage() {
         {mayRecord && <Fold title="درخواست مجوز کار"><PermitForm data={data} post={post} /></Fold>}
       </div>
 
-      <SafeWork data={data} post={post} mayRecord={mayRecord} mayIssue={mayIssue} mayAdmin={mayAdmin} />
+      <SafeWork data={data} post={post} reload={reload} mayRecord={mayRecord} mayIssue={mayIssue} mayAdmin={mayAdmin} />
 
-      <div className="card">
+      <div className="card" data-badge={s.unclassified} data-tone="warn">
         <h2>رویدادها</h2>
         <p className="muted sm">طبقه انتخاب نمی‌شود؛ از واقعیت‌ها (فوت، روز غیبت، روز کار محدود، نوع درمان) طبق IOGP به دست می‌آید. هر تغییر واقعیت با دلیلش ثبت می‌شود.</p>
         {data.incidents.length === 0 ? <p className="empty-note">رویدادی ثبت نشده است.</p> : (
@@ -133,7 +119,7 @@ export default function HsePage() {
         {mayRecord && <Fold title="گزارش رویداد"><IncidentForm data={data} post={post} /></Fold>}
       </div>
 
-      <div className="card">
+      <div className="card" data-badge={overdue} data-tone="bad">
         <h2>مشاهدات ایمنی</h2>
         {data.observations.length === 0 ? <p className="empty-note">مشاهده‌ای ثبت نشده است.</p> : (
           <TableKit name="hse">
@@ -147,6 +133,23 @@ export default function HsePage() {
         )}
         {mayRecord && <Fold title="ثبت مشاهدهٔ ایمنی"><ObservationForm data={data} post={post} /></Fold>}
       </div>
+
+      <div className="card">
+        <h2>به تفکیک پیمانکار</h2>
+        <TableKit name="hse">
+          <table className="dtable">
+            <thead><tr><th>پیمانکار</th><th>نفرساعت</th><th>LTI</th><th>TRC</th><th>LTIF (IOGP)</th><th>TRIR (IOGP)</th><th>TRIR (OSHA)</th></tr></thead>
+            <tbody>
+              {s.byContractor.map((c) => (
+                <tr key={c.code}><td className="mono">{c.code}</td><td className="mono">{fmt(c.hours)}</td><td>{c.lti}</td><td>{c.recordable}</td>
+                  <td className="mono">{rate(c.ltif.iogp)}</td><td className="mono">{rate(c.trir.iogp)}</td><td className="mono">{rate(c.trir.osha)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </TableKit>
+        {mayRecord && <Manhours contractors={data.contractors} post={post} />}
+      </div>
+      </Tabs>
     </div>
   );
 }

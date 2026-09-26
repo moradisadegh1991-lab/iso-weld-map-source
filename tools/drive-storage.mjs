@@ -8,12 +8,14 @@
  *   BASE_URL=http://localhost:3000 DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-storage.mjs
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const { DRIVE_EMAIL: EMAIL, DRIVE_PASSWORD: PASSWORD } = process.env;
 if (!EMAIL || !PASSWORD) { console.error("set DRIVE_EMAIL and DRIVE_PASSWORD"); process.exit(1); }
 const b = await chromium.launch({ executablePath: CHROME });
 const page = await (await b.newContext()).newPage();
+await showAllTabs(page);
 await page.goto(BASE, { waitUntil: "networkidle" });
 await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);
 await page.click("button[type=submit]"); await page.waitForSelector(".shell");

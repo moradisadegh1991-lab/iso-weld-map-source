@@ -158,7 +158,8 @@ test("the retest is a new test; the guarantee's terms stay what it was judged ag
     await pf.upsertGuarantee(db, { projectId: P, code: "PG-01", parameter: "Cracked-gas compressor capacity", unitId: u21.id,
       uom: "t/h", direction: "min", guaranteedValue: 212, basis: "Contract Annex G §2.1 (Rev B)" });
     await throws(() => db.query("UPDATE performance_guarantee SET guaranteed_value = 200 WHERE id = $1", [cap.id]), "terms are fixed");
-    await throws(() => db.query("DELETE FROM performance_test"), "permission denied");
+    // Since 049 an unsigned test entered by mistake can be deleted; a signed one never (db/test/removal.mjs).
+    await throws(() => db.query("DELETE FROM performance_test"), "never deleted");
   });
 });
 

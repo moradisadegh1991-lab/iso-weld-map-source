@@ -11,6 +11,7 @@
  *   BASE_URL=http://localhost:3000 DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-field.mjs
  */
 import { chromium } from "playwright";
+import { showAllTabs } from "./drive-tabs.mjs";
 import jsQR from "jsqr";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
@@ -21,6 +22,7 @@ const TAG = process.env.DRIVE_TAG || "P-1203B";
 const b = await chromium.launch({ executablePath: CHROME });
 const ctx = await b.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true });
 const page = await ctx.newPage();
+await showAllTabs(page);
 const problems = [];
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 const flat = (s) => s.replace(/\s+/g, " ").trim();

@@ -54,8 +54,8 @@ export default function HandoverPage() {
         <p className="err">در <a href="/project">مشخصات پروژه</a> {!s.flocTemplate && "الگوی Functional Location"}{!s.flocTemplate && !s.levels.length && " و "}{!s.levels.length && "سطوح Criticality"} تعیین نشده — تا تعیین نشود، هیچ تگی آمادهٔ تحویل نیست.</p>
       )}
 
-      <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} className={`btn ${tab === k ? "" : "ghost"}`} onClick={() => setTab(k)}>{t}</button>)}
+      <div className="ptabs no-print" role="tablist">
+        {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>)}
       </div>
       {tab !== "master" ? <Maintenance key={tab} tab={tab} may={may} /> : <>
       <div className="kpis">
@@ -197,16 +197,18 @@ function MasterForm({ t, data, save }) {
     <div style={{ marginTop: 14 }}>
       <p className="sm muted" style={{ marginBottom: 4 }}>شناسه‌های DCS / Historian</p>
       {points.length > 0 && (
+        <TableKit name={`dcs-${t.tag_no || t.id}`} min={4}
+                  onDelete={async (id) => { const ok = await save({ kind: "dcs-remove", id }); if (ok) setSaved((n) => n + 1); return !!ok; }}>
         <table className="dtable" style={{ marginBottom: 8 }}>
-          <thead><tr><th>پارامتر</th><th>DCS</th><th>Historian</th><th>واحد</th><th /></tr></thead>
+          <thead><tr><th>پارامتر</th><th>DCS</th><th>Historian</th><th>واحد</th></tr></thead>
           <tbody>{points.map((p) => (
-            <tr key={p.id}>
+            <tr key={p.id} data-key={p.id}>
               <td className="sm">{p.label}</td><td className="mono sm">{p.dcs_tag || "—"}</td>
               <td className="mono sm">{p.historian_tag || "—"}</td><td className="sm">{p.uom || "—"}</td>
-              <td><button type="button" className="btn ghost sm" onClick={async () => { if (await save({ kind: "dcs-remove", id: p.id })) setSaved((n) => n + 1); }}>حذف</button></td>
             </tr>
           ))}</tbody>
         </table>
+        </TableKit>
       )}
       <form onSubmit={addPoint} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
         <Field id={`pl-${t.id}`} label="پارامتر" value={pf.label} on={(v) => setPf({ ...pf, label: v })} />

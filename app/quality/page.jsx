@@ -8,6 +8,7 @@ import { compressPhoto, blobToBase64 } from "../../lib/client/photo.mjs";
 import PhotoStrip from "../../components/quality/PhotoStrip";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * Punch list and NCRs, and what they hold against each subsystem's MC.
@@ -26,7 +27,6 @@ const EVENT_FA = { raised: "ثبت", cleared: "رفع", rejected: "برگشت", 
 export default function QualityPage() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/quality?projectId=${id}`, []);
-  const [tab, setTab] = useState("punch");
   const [msg, setMsg] = useState(null);
   const may = can({ role }, ACTIONS.RECORD_QUALITY);
 
@@ -66,6 +66,9 @@ export default function QualityPage() {
              b={data.escalationDays ? `بیش از ${data.escalationDays} روز — مدیر پروژه` : "مهلت تشدید تعیین نشده"} />
       </div>
 
+      <Tabs name="quality">
+        <PunchTab data={data} post={post} may={may} />
+        <NcrTab data={data} post={post} may={may} role={role} />
       <div className="card">
         <h2>آنچه هر ساب‌سیستم را نگه داشته</h2>
         <TableKit name="quality">
@@ -85,13 +88,7 @@ export default function QualityPage() {
           </table>
         </TableKit>
       </div>
-
-      <div className="tabs" role="tablist" style={{ display: "flex", gap: 8 }}>
-        <button role="tab" aria-selected={tab === "punch"} className={`btn ${tab === "punch" ? "" : "ghost"}`} onClick={() => setTab("punch")}>Punch list</button>
-        <button role="tab" aria-selected={tab === "ncr"} className={`btn ${tab === "ncr" ? "" : "ghost"}`} onClick={() => setTab("ncr")}>NCR</button>
-      </div>
-
-      {tab === "punch" ? <PunchTab data={data} post={post} may={may} /> : <NcrTab data={data} post={post} may={may} role={role} />}
+      </Tabs>
     </div>
   );
 }

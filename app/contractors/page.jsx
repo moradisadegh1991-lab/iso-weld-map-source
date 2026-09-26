@@ -3,6 +3,9 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
+import Fold from "../../components/ui/Fold";
+import { useRemove } from "../../lib/client/remove.mjs";
+import Tabs from "../../components/ui/Tabs";
 
 /**
  * The companies doing the work, and what each one holds.
@@ -25,8 +28,10 @@ const STATUS_FA = {
 export default function ContractorsPage() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/contractors?projectId=${id}`, []);
-  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
   const mayEdit = can({ role }, ACTIONS.MANAGE_MEMBERS);
+  const removal = useRemove("contractor", reload);
+  const removePackage = useRemove("contract-package", reload);
 
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
@@ -38,16 +43,10 @@ export default function ContractorsPage() {
       <div className="pagehead">
         <h1>پیمانکاران</h1>
         <span className="sub">{contractors.length} شرکت · {packages.length} پکیج کاری</span>
-        <span className="grow" />
-        {mayEdit && (
-          <button className="btn" onClick={() => setAdding((v) => !v)}>
-            {adding ? "بستن" : "افزودن پیمانکار"}
-          </button>
-        )}
       </div>
 
       {lapsed.length > 0 && (
-        <div className="card" style={{ borderColor: "rgba(226,87,76,.5)" }}>
+        <div className="card" data-keep style={{ borderColor: "rgba(226,87,76,.5)" }}>
           <h2 style={{ color: "var(--bad)" }}>صلاحیت منقضی، با کار باز</h2>
           <p className="muted sm">
             این شرکت‌ها هم‌اکنون پکیج کاری در دست دارند و تأییدیهٔ صلاحیت‌شان
@@ -71,15 +70,15 @@ export default function ContractorsPage() {
         </div>
       )}
 
-      {adding && <AddContractor projectId={projectId} call={call}
-                                onDone={() => { setAdding(false); reload(); }} />}
-
+      <Tabs name="contractors">
       <div className="card">
         <h2>شرکت‌ها</h2>
         {contractors.length === 0 ? (
           <p className="empty-note">هنوز پیمانکاری ثبت نشده است.</p>
         ) : (
-          <TableKit name="contractors">
+          <TableKit name="contractors"
+                    onEdit={mayEdit ? (id) => setEditing(contractors.find((c) => c.id === id)) : undefined}
+                    {...(mayEdit ? removal : {})}>
             <table className="dtable">
               <thead>
                 <tr>
@@ -89,7 +88,7 @@ export default function ContractorsPage() {
               </thead>
               <tbody>
                 {contractors.map((c) => (
-                  <tr key={c.id}>
+                  <tr key={c.id} data-key={c.id}>
                     <td className="mono">{c.code}</td>
                     <td>{c.name}</td>
                     <td><span className={"pill " + (c.status === "active" ? "ok" : "")}>
@@ -108,6 +107,13 @@ export default function ContractorsPage() {
             </table>
           </TableKit>
         )}
+        {mayEdit && <Fold title="افزودن پیمانکار"><ContractorForm projectId={projectId} call={call} onDone={reload} /></Fold>}
+        {mayEdit && (
+          <Fold title={`ویرایش ${editing?.code || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
+            {editing && <ContractorForm key={editing.id} initial={editing} projectId={projectId} call={call}
+                                        onDone={() => { setEditing(null); reload(); }} />}
+          </Fold>
+        )}
       </div>
 
       <div className="card">
@@ -118,7 +124,7 @@ export default function ContractorsPage() {
         {packages.length === 0 ? (
           <p className="empty-note">هنوز پکیج کاری تعریف نشده است.</p>
         ) : (
-          <TableKit name="contractors">
+          <TableKit name="contract-packages" {...(mayEdit ? removePackage : {})}>
             <table className="dtable">
               <thead>
                 <tr>
@@ -128,7 +134,7 @@ export default function ContractorsPage() {
               </thead>
               <tbody>
                 {packages.map((p) => (
-                  <tr key={p.packageId}>
+                  <tr key={p.packageId} data-key={p.packageId}>
                     <td className="mono">{p.code}</td>
                     <td>{p.contractor}</td>
                     <td>{DISCIPLINE_FA[p.discipline] || p.discipline}</td>
@@ -151,12 +157,19 @@ export default function ContractorsPage() {
           </TableKit>
         )}
       </div>
+      </Tabs>
     </div>
   );
 }
 
-function AddContractor({ projectId, call, onDone }) {
-  const [f, setF] = useState({ code: "", name: "", status: "active", disciplines: [] });
+const BLANK = { code: "", name: "", status: "active", disciplines: [] };
+
+/** New, or the same form filled with a contractor to amend it (its code is its key and stays). */
+function ContractorForm({ initial = null, projectId, call, onDone }) {
+  const [f, setF] = useState(initial ? {
+    code: initial.code, name: initial.name, status: initial.status, disciplines: initial.disciplines || [],
+    prequalifiedUntil: initial.prequalifiedUntil ? String(initial.prequalifiedUntil).slice(0, 10) : "",
+  } : BLANK);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -172,35 +185,36 @@ function AddContractor({ projectId, call, onDone }) {
     setBusy(true); setErr(null);
     try {
       await call("/api/contractors", {
-        method: "POST", body: JSON.stringify({ ...f, projectId }) });
+        method: "POST", body: JSON.stringify({ ...f, prequalifiedUntil: f.prequalifiedUntil || null, projectId }) });
+      if (!initial) setF(BLANK);
+      setBusy(false);
       onDone();
     } catch (e2) { setErr(e2.message); setBusy(false); }
   }
 
   return (
-    <form className="card" onSubmit={submit}>
-      <h2>پیمانکار جدید</h2>
+    <form onSubmit={submit}>
       <div className="grid2">
         <div className="field">
-          <label htmlFor="c-code">کد</label>
-          <input id="c-code" required value={f.code} dir="ltr"
+          <label htmlFor={initial ? "ce-code" : "c-code"}>کد</label>
+          <input id={initial ? "ce-code" : "c-code"} required value={f.code} dir="ltr" readOnly={!!initial}
                  onChange={(e) => setF({ ...f, code: e.target.value })} />
         </div>
         <div className="field">
-          <label htmlFor="c-name">نام شرکت</label>
-          <input id="c-name" required value={f.name}
+          <label htmlFor={initial ? "ce-name" : "c-name"}>نام شرکت</label>
+          <input id={initial ? "ce-name" : "c-name"} required value={f.name}
                  onChange={(e) => setF({ ...f, name: e.target.value })} />
         </div>
         <div className="field">
-          <label htmlFor="c-status">وضعیت</label>
-          <select id="c-status" value={f.status}
+          <label htmlFor={initial ? "ce-status" : "c-status"}>وضعیت</label>
+          <select id={initial ? "ce-status" : "c-status"} value={f.status}
                   onChange={(e) => setF({ ...f, status: e.target.value })}>
             {Object.entries(STATUS_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
         <div className="field">
-          <label htmlFor="c-pq">صلاحیت معتبر تا</label>
-          <input id="c-pq" type="date" dir="ltr" value={f.prequalifiedUntil || ""}
+          <label htmlFor={initial ? "ce-pq" : "c-pq"}>صلاحیت معتبر تا</label>
+          <input id={initial ? "ce-pq" : "c-pq"} type="date" dir="ltr" value={f.prequalifiedUntil || ""}
                  onChange={(e) => setF({ ...f, prequalifiedUntil: e.target.value })} />
           <span className="hint">بدون تاریخ، انقضا قابل پایش نیست.</span>
         </div>
@@ -224,7 +238,7 @@ function AddContractor({ projectId, call, onDone }) {
       {err && <p className="err">{err}</p>}
       <div>
         <button className="btn" type="submit" disabled={busy || !f.code || !f.name}>
-          {busy ? "در حال ثبت…" : "ثبت"}
+          {busy ? "در حال ثبت…" : initial ? "ذخیرهٔ تغییرات" : "ثبت"}
         </button>
       </div>
     </form>
