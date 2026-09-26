@@ -1057,6 +1057,34 @@ try {
     }
     console.log("inspection: 2 ITPs, 24 h notice; pre-pour released on FDN-P-1203A, requested on FDN-T-3102; a rejected fit-up with its NCR and re-inspection");
 
+    //   Material receiving under its own ITP. Lots already through MIR stay
+    //   as they were (inspected before this ITP was in force); the pipe that
+    //   arrived on MRR-0019 has not been, so accepting it now waits on its IR.
+    const { rows: [haveMat] } = await db.query("SELECT count(*)::int AS n FROM itp WHERE project_id = $1 AND itp_no = 'ITP-MAT-001'", [p.id]);
+    if (haveMat.n === 0) {
+      const mat = await insp.createItp(db, { projectId: p.id, itpNo: "ITP-MAT-001", revision: "0",
+        title: "Material receiving — piping and electrical bulk", scope: "material", userId: qcInsp.id });
+      for (const a of [
+        { seq: 10, title: "Visual, dimensional and quantity check against PO and packing list", stepCode: "mir",
+          reference: "PO · MSS SP-25 marking", criteria: "quantity per packing list, no damage, markings legible", record: "MIR",
+          points: { contractor: "H", company: "W" } },
+        { seq: 20, title: "MTC review: chemistry and mechanicals against the material spec, heat traceability", stepCode: "mtc_review",
+          reference: "EN 10204 3.1 · ASTM material spec", criteria: "within spec; heat on MTC = heat stencilled on the material",
+          record: "MTC review sheet", points: { contractor: "H", company: "R" } },
+        { seq: 30, title: "PMI of alloy materials", reference: "API RP 578", criteria: "alloying elements per spec",
+          record: "PMI report", points: { contractor: "H", company: "W" } },
+      ]) await insp.saveActivity(db, { projectId: p.id, itpId: mat.id, ...a });
+      await insp.approveItp(db, { projectId: p.id, itpId: mat.id, userId: user.id, onDate: dd(-10) });
+      const { rows: [lot19] } = await db.query("SELECT id FROM material_lot WHERE project_id = $1 AND receipt_no = 'MRR-0019'", [p.id]);
+      if (lot19) {
+        const [matItp] = (await insp.listItps(db, { projectId: p.id })).filter((i) => i.itp_no === "ITP-MAT-001");
+        const when = (days, hour) => { const d = new Date(Date.now() + days * 86_400_000); d.setHours(hour, 0, 0, 0); return d; };
+        await insp.raiseIr(db, { projectId: p.id, activityId: matItp.activities.find((a) => a.seq === 10).id, itemKind: "lot", itemId: lot19.id,
+          plannedAt: when(1, 8), location: "Laydown L-3", membership: { inspection_party: "contractor" }, userId: qcInsp.id, now: when(-1, 8) });
+      }
+    }
+    console.log("inspection: material receiving ITP; MRR-0019 waits on its receipt inspection");
+
     // ── pre-commissioning checklists ──────────────────────────────────────
     //
     //   Declared from the (demo) commissioning procedure. No subsystem has an

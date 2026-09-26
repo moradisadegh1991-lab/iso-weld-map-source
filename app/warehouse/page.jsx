@@ -18,6 +18,13 @@ import Fold from "../../components/ui/Fold";
  */
 const INSPECTION = { pending: ["", "منتظر MIR"], accepted: ["ok", "پذیرفته"], partial: ["", "پذیرش جزئی"], rejected: ["bad", "رد"] };
 const MTC = { pending: ["", "بررسی‌نشده"], accepted: ["ok", "پذیرفته"], rejected: ["bad", "رد — قرنطینه"] };
+const IR_STATE = { awaiting: "منتظر نتیجه", rejected: "رد شد — بازرسی دوباره لازم است" };
+
+/** What the project's material ITP still holds on a step of a lot, in words. */
+function holdText(h) {
+  if (!h) return null;
+  return `ITP ${h.itpNo} ردیف ${h.seq} — ${h.irNo ? `${h.irNo} ${IR_STATE[h.state] || h.state}` : "درخواست بازرسی ثبت نشده"}`;
+}
 
 export default function WarehousePage() {
   const { projectId, role, call } = usePlatform();
@@ -130,8 +137,10 @@ function LotRow({ l, open, onToggle, data, post, mayRecord, mayInspect, call, pr
         <td className="sm"><span className="mono">{l.code}</span><div className="muted">{l.description}</div></td>
         <td className="mono sm">{l.receiptNo}<div className="muted">{fa(l.receivedOn)}</div></td>
         <td className="mono">{l.heatNo || (l.traceable ? <span className="pill bad">ندارد</span> : "—")}</td>
-        <td><span className={"pill " + INSPECTION[l.inspection][0]}>{INSPECTION[l.inspection][1]}</span></td>
-        <td>{l.traceable ? <span className={"pill " + MTC[l.mtcStatus][0]}>{MTC[l.mtcStatus][1]}</span> : <span className="muted sm">لازم نیست</span>}</td>
+        <td><span className={"pill " + INSPECTION[l.inspection][0]}>{INSPECTION[l.inspection][1]}</span>
+          {l.itpHold?.mir && <div className="sm" style={{ color: "var(--warn)" }} title={holdText(l.itpHold.mir)}>توقف ITP · {l.itpHold.mir.irNo || "IR لازم"}</div>}</td>
+        <td>{l.traceable ? <span className={"pill " + MTC[l.mtcStatus][0]}>{MTC[l.mtcStatus][1]}</span> : <span className="muted sm">لازم نیست</span>}
+          {l.traceable && l.itpHold?.mtc && <div className="sm" style={{ color: "var(--warn)" }} title={holdText(l.itpHold.mtc)}>توقف ITP · {l.itpHold.mtc.irNo || "IR لازم"}</div>}</td>
         <td className="mono">{l.qtyReceived} {l.uom}</td>
         <td className="mono">{l.accepted}</td>
         <td className="mono">{l.netIssued}</td>
@@ -158,6 +167,14 @@ function LotDetail({ l, data, post, mayRecord, mayInspect, call, projectId }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {!l.issuable && <p className="sm err">قابل حواله نیست: {l.holdReasons.join(" · ")}</p>}
+      {(l.itpHold?.mir || (l.traceable && l.itpHold?.mtc)) && (
+        <div className="card" style={{ padding: 10, borderColor: "var(--warn)" }}>
+          <b className="sm">نقطهٔ توقف ITP — پذیرش تا آزاد شدن بازرسی ممکن نیست (رد کردن ممکن است)</b>
+          {l.itpHold?.mir && <p className="sm">MIR: {holdText(l.itpHold.mir)} — «{l.itpHold.mir.title}»</p>}
+          {l.traceable && l.itpHold?.mtc && <p className="sm">MTC: {holdText(l.itpHold.mtc)} — «{l.itpHold.mtc.title}»</p>}
+          <a className="sm" href="/inspection">درخواست و نتیجهٔ بازرسی در صفحهٔ بازرسی ←</a>
+        </div>
+      )}
       <p className="sm muted">{l.spec || ""} {l.poRef ? `· PO ${l.poRef}` : ""} {l.supplier ? `· ${l.supplier}` : ""} {l.location ? `· محل ${l.location}` : ""}</p>
       {mayInspect && (
         <div className="grid2">

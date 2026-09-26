@@ -8,7 +8,7 @@ import * as insp from "../../../lib/db/repos/inspection.mjs";
 import { raiseNcr } from "../../../lib/db/repos/quality.mjs";
 import { updateProjectProfile } from "../../../lib/db/repos/projects.mjs";
 import { PARTIES, POINTS, OUTCOMES, SCOPES } from "../../../lib/inspection/itp.mjs";
-import { CHAINS } from "../../../lib/platform/precedence.mjs";
+import { INSPECTABLE } from "../../../lib/platform/precedence.mjs";
 
 /**
  * GET ?projectId=                              ITPs, the request board, and what the page needs to write them
@@ -36,7 +36,7 @@ export async function GET(request) {
         noticeHours: p?.inspection_notice_hours ?? null,
         myParty: membership.inspection_party || null,
         scopes: Object.fromEntries(Object.entries(SCOPES).map(([k, v]) => [k, { ...v,
-          steps: CHAINS[k].map((s) => ({ code: s.code, title: s.title, derived: !!s.derive })) }])),
+          steps: INSPECTABLE[k].map((s) => ({ code: s.code, title: s.title, derived: !!s.derive })) }])),
         parties: PARTIES, points: POINTS, outcomes: OUTCOMES,
       }, { headers: { "Cache-Control": "no-store" } });
     });

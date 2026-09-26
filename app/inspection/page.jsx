@@ -16,7 +16,7 @@ import Fold from "../../components/ui/Fold";
  */
 const STATE = { awaiting: ["warn", "منتظر"], released: ["ok", "آزاد شد"], rejected: ["bad", "رد"], cancelled: ["", "لغو"] };
 const OUT_TONE = { accepted: "ok", accepted_comments: "ok", rejected: "bad", not_attended: "warn" };
-const ITEM_KIND_FA = { tag: "تگ", spool: "اسپول", cable: "کابل", instrument: "ابزار", coating_item: "رنگ" };
+const ITEM_KIND_FA = { tag: "تگ", spool: "اسپول", cable: "کابل", instrument: "ابزار", coating_item: "رنگ", lot: "لات انبار" };
 
 export default function InspectionPage() {
   const { projectId, role, call } = usePlatform();
@@ -460,7 +460,7 @@ function ItemTab({ data }) {
 // ── shared ───────────────────────────────────────────────────────────────
 
 const SCOPE_ITEM = { foundation: "tag", structure: "tag", rotating: "tag", static: "tag", fired: "tag", piping_spool: "spool",
-  cable: "cable", instrument: "instrument", coating: "coating_item" };
+  cable: "cable", instrument: "instrument", coating: "coating_item", material: "lot" };
 
 function Kpi({ v, l, b, tone = "" }) {
   return <div className={`kpi ${tone}`}><span className="v">{v}</span><span className="l">{l}</span>{b && <span className="b">{b}</span>}</div>;
