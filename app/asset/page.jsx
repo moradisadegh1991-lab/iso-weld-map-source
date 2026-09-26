@@ -139,9 +139,16 @@ function Thread({ t, open }) {
             mid={`${t.coating.pct}% · ${t.coating.next.join("، ") || "—"}`}
             right={t.coating.ready ? <span className="pill ok">تحویل‌شده</span> : null} />}
         </Section>
-        <Section title="شناسنامهٔ نگهداری (CMMS)" href="/handover" empty={!t.master}>
+        <Section title="شناسنامهٔ نگهداری (CMMS)" href="/handover" empty={!t.master && !t.dcsPoints.length}>
           {t.master && <Line left={<span className="mono">{t.master.iso_class || "—"} · {t.master.criticality || "—"}</span>}
             mid={[t.master.manufacturer, t.master.model, t.master.serial_no].map((x) => x || "—").join(" / ")} />}
+          {t.master && (t.master.design_pressure_barg || t.master.design_temp_min_c || t.master.design_temp_max_c) && (
+            <Line left="شرایط طراحی" mid={`${t.master.design_pressure_barg ? `${t.master.design_pressure_barg} barg` : "—"} · ${t.master.design_temp_min_c ?? "?"}…${t.master.design_temp_max_c ?? "?"}°C`}
+              right={t.master.datasheet_doc_no ? <span className="muted sm">{t.master.datasheet_doc_no} Rev.{t.master.datasheet_revision}</span> : null} />
+          )}
+          {t.dcsPoints.map((p) => (
+            <Line key={p.label} left={p.label} mid={[p.dcs_tag && `DCS ${p.dcs_tag}`, p.historian_tag && `Historian ${p.historian_tag}`].filter(Boolean).join(" · ") || "—"} />
+          ))}
         </Section>
         <Section title="خرید" href="/procurement" empty={!t.purchase.length}>
           {t.purchase.map((l) => (

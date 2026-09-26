@@ -88,7 +88,12 @@ export default function HandoverPage() {
             <tbody>
               {rows.map((t) => [
                 <tr key={t.id}>
-                  <td className="mono" style={{ whiteSpace: "nowrap" }}><a href={`/asset?tag=${encodeURIComponent(t.tagNo)}`}>{t.tagNo}</a><div className="muted sm">{t.description}</div></td>
+                  <td className="mono" style={{ whiteSpace: "nowrap" }}><a href={`/asset?tag=${encodeURIComponent(t.tagNo)}`}>{t.tagNo}</a><div className="muted sm">{t.description}</div>
+                    {(t.master.designPressureBarg || t.master.designTempMinC || t.master.designTempMaxC) && (
+                      <div className="muted sm">{t.master.designPressureBarg ? `${t.master.designPressureBarg} barg` : ""}
+                        {(t.master.designTempMinC || t.master.designTempMaxC) ? ` · ${t.master.designTempMinC ?? "?"}…${t.master.designTempMaxC ?? "?"}°C` : ""}
+                        {t.datasheetLabel ? ` (${t.datasheetLabel})` : ""}</div>)}
+                    {t.dcsPoints > 0 && <div className="muted sm">DCS/Historian: {t.dcsPoints} پارامتر</div>}</td>
                   <td className="mono sm">{t.floc.code || <span className="muted">{t.floc.reason}</span>}</td>
                   <td className="sm">{t.master.isoClass ? <><span className="mono">{t.master.isoClass}</span> <span className="muted">{t.classLabel}</span></> : "—"}</td>
                   <td className="mono">{t.master.criticality || "—"}</td>
@@ -128,16 +133,28 @@ function Kpi({ v, l, b, tone = "" }) {
 function MasterForm({ t, data, save }) {
   const [f, setF] = useState({ isoClass: t.master.isoClass || "", criticality: t.master.criticality || "",
     criticalityBasis: t.master.criticalityBasis || "", manufacturer: t.master.manufacturer || "", model: t.master.model || "",
-    serialNo: t.master.serialNo || "", yearBuilt: t.master.yearBuilt ?? "" });
+    serialNo: t.master.serialNo || "", yearBuilt: t.master.yearBuilt ?? "",
+    designPressureBarg: t.master.designPressureBarg ?? "", designTempMinC: t.master.designTempMinC ?? "",
+    designTempMaxC: t.master.designTempMaxC ?? "", datasheetRevisionId: t.master.datasheetRevisionId || "" });
   const [hist, setHist] = useState(null);
+  const [datasheets, setDatasheets] = useState([]);
+  const [points, setPoints] = useState([]);
+  const [pf, setPf] = useState({ label: "", dcsTag: "", historianTag: "", uom: "" });
+  const [pmsg, setPmsg] = useState(null);
   const { projectId, call } = usePlatform();
   // Re-read after every successful save — even one that changed nothing is
   // a revision on record.
   const [saved, setSaved] = useState(0);
   useEffect(() => {
-    call(`/api/handover?projectId=${projectId}&tagId=${t.id}`).then((r) => setHist(r.history)).catch(() => setHist([]));
+    call(`/api/handover?projectId=${projectId}&tagId=${t.id}`).then((r) => { setHist(r.history); setDatasheets(r.datasheets); setPoints(r.dcsPoints); }).catch(() => { setHist([]); setDatasheets([]); setPoints([]); });
   }, [t.id, saved, projectId, call]);
+  async function addPoint(e) {
+    e.preventDefault(); setPmsg(null);
+    if (await save({ kind: "dcs-add", tagId: t.id, ...pf })) { setPf({ label: "", dcsTag: "", historianTag: "", uom: "" }); setSaved((n) => n + 1); }
+    else setPmsg("ثبت نشد");
+  }
   return (
+    <>
     <form onSubmit={async (e) => { e.preventDefault(); if (await save({ tagId: t.id, ...f })) setSaved((n) => n + 1); }}>
       <div className="grid2">
         <div className="field"><label htmlFor={`ic-${t.id}`}>کلاس ISO 14224</label>
@@ -156,6 +173,18 @@ function MasterForm({ t, data, save }) {
         <Field id={`sn-${t.id}`} label="شمارهٔ سریال" value={f.serialNo} on={(v) => setF({ ...f, serialNo: v })} />
         <Field id={`yb-${t.id}`} label="سال ساخت" value={f.yearBuilt} on={(v) => setF({ ...f, yearBuilt: v })} />
       </div>
+      <p className="sm muted" style={{ marginTop: 10, marginBottom: 2 }}>شرایط طراحی — فقط با ارجاع به رویژن دیتاشیت همین تگ در کنترل مدارک</p>
+      <div className="grid2">
+        <div className="field"><label htmlFor={`ds-${t.id}`}>رویژن دیتاشیت</label>
+          <select id={`ds-${t.id}`} value={f.datasheetRevisionId} onChange={(e) => setF({ ...f, datasheetRevisionId: e.target.value })}>
+            <option value="">—</option>
+            {datasheets.map((d) => <option key={d.id} value={d.id}>{d.doc_no} Rev.{d.revision} ({d.purpose})</option>)}
+          </select>
+          {!datasheets.length && <span className="muted sm">دیتاشیتی برای این تگ در کنترل مدارک ثبت نشده</span>}</div>
+        <Field id={`dp-${t.id}`} label="فشار طراحی (barg)" value={f.designPressureBarg} on={(v) => setF({ ...f, designPressureBarg: v })} />
+        <Field id={`tmin-${t.id}`} label="کمینهٔ دمای طراحی (°C)" value={f.designTempMinC} on={(v) => setF({ ...f, designTempMinC: v })} />
+        <Field id={`tmax-${t.id}`} label="بیشینهٔ دمای طراحی (°C)" value={f.designTempMaxC} on={(v) => setF({ ...f, designTempMaxC: v })} />
+      </div>
       <div style={{ display: "flex", gap: 12, alignItems: "start", marginTop: 8 }}>
         <button className="btn" type="submit">ذخیره</button>
         {hist && hist.length > 0 && (
@@ -165,6 +194,30 @@ function MasterForm({ t, data, save }) {
         )}
       </div>
     </form>
+    <div style={{ marginTop: 14 }}>
+      <p className="sm muted" style={{ marginBottom: 4 }}>شناسه‌های DCS / Historian</p>
+      {points.length > 0 && (
+        <table className="dtable" style={{ marginBottom: 8 }}>
+          <thead><tr><th>پارامتر</th><th>DCS</th><th>Historian</th><th>واحد</th><th /></tr></thead>
+          <tbody>{points.map((p) => (
+            <tr key={p.id}>
+              <td className="sm">{p.label}</td><td className="mono sm">{p.dcs_tag || "—"}</td>
+              <td className="mono sm">{p.historian_tag || "—"}</td><td className="sm">{p.uom || "—"}</td>
+              <td><button type="button" className="btn ghost sm" onClick={async () => { if (await save({ kind: "dcs-remove", id: p.id })) setSaved((n) => n + 1); }}>حذف</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      )}
+      <form onSubmit={addPoint} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
+        <Field id={`pl-${t.id}`} label="پارامتر" value={pf.label} on={(v) => setPf({ ...pf, label: v })} />
+        <Field id={`pd-${t.id}`} label="DCS tag" value={pf.dcsTag} on={(v) => setPf({ ...pf, dcsTag: v })} />
+        <Field id={`ph-${t.id}`} label="Historian tag" value={pf.historianTag} on={(v) => setPf({ ...pf, historianTag: v })} />
+        <Field id={`pu-${t.id}`} label="واحد" value={pf.uom} on={(v) => setPf({ ...pf, uom: v })} />
+        <button className="btn ghost" type="submit">افزودن</button>
+        {pmsg && <span className="err sm">{pmsg}</span>}
+      </form>
+    </div>
+    </>
   );
 }
 

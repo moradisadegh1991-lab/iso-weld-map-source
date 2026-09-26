@@ -77,8 +77,25 @@ test("readiness scores identity; an absent link is 'none recorded', not a failur
 test("what the platform does not hold yet is named, not shown as complete", async () => {
   await withProject(db, P, async () => {
     const t = await assetThread(db, { projectId: P, tagNo: "P-1203A" });
-    equal(t.notHeld.map((n) => n.key), ["vendor", "cmms", "dcs"], "procurement is held now (migration 025)");
+    equal(t.notHeld.map((n) => n.key), ["vendor", "cmms", "inst_asset"], "procurement and DCS/Historian tags are held now (046)");
     equal(t.purchase, [], "and a tag nobody has ordered shows no purchase, not a missing module");
+    equal(t.master, null, "no asset master set yet");
+    equal(t.dcsPoints, []);
+  });
+});
+
+test("design conditions and DCS/Historian points ride along the thread once set", async () => {
+  await withProject(db, P, async () => {
+    const hov = await import("../../lib/db/repos/handover.mjs");
+    const doc = await import("../../lib/db/repos/doc-control.mjs");
+    const d = await doc.upsertMdr(db, { projectId: P, docNo: "DS-P-1203A", title: "Pump datasheet", tagId: pump.id });
+    const r = await doc.issueRevision(db, { projectId: P, mdrId: d.id, revision: "0", purpose: "IFC", issuedOn: "2026-01-01" });
+    await hov.setAssetMaster(db, { projectId: P, tagId: pump.id, designPressureBarg: 12.5, designTempMinC: -20, designTempMaxC: 150,
+      datasheetRevisionId: r.id, userId: alice.id });
+    await hov.addDcsPoint(db, { projectId: P, tagId: pump.id, label: "Discharge pressure", dcsTag: "P-1203A_PI.PV", uom: "barg", userId: alice.id });
+    const t = await assetThread(db, { projectId: P, tagNo: "P-1203A" });
+    equal([t.master.design_pressure_barg, t.master.datasheet_doc_no, t.master.datasheet_revision], ["12.5", "DS-P-1203A", "0"]);
+    equal(t.dcsPoints.map((p) => p.label), ["Discharge pressure"]);
   });
 });
 

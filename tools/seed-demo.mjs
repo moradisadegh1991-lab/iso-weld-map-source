@@ -58,7 +58,7 @@ import { reserve as reserveStock } from "../lib/db/repos/reserve.mjs";
 import * as dcr from "../lib/db/repos/doc-control.mjs";
 import * as incoming from "../lib/db/repos/incoming.mjs";
 import * as jointNdt from "../lib/db/repos/joint-ndt.mjs";
-import { setAssetMaster } from "../lib/db/repos/handover.mjs";
+import { setAssetMaster, addDcsPoint } from "../lib/db/repos/handover.mjs";
 import * as mnt from "../lib/db/repos/maintenance.mjs";
 import { upsertPackage as upsertTestPackage, addLines as addPackLines } from "../lib/db/repos/completions.mjs";
 import { buildModel } from "../lib/engine.js";
@@ -1003,9 +1003,17 @@ try {
     const { rows: [haveMaster] } = await db.query("SELECT count(*)::int AS n FROM asset_master WHERE project_id = $1", [p.id]);
     if (haveMaster.n === 0) {
       const tid = async (no) => (await db.query("SELECT id FROM tag WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0].id;
-      await setAssetMaster(db, { projectId: p.id, tagId: await tid("K-2101"), isoClass: "CO", criticality: "A",
+      const k2101 = await tid("K-2101");
+      const ds = await dcr.upsertMdr(db, { projectId: p.id, docNo: "DS-K-2101", title: "Compressor datasheet — K-2101",
+        discipline: "mechanical", docType: "Datasheet", originator: "vendor", tagId: k2101 });
+      const dsRev = await dcr.issueRevision(db, { projectId: p.id, mdrId: ds.id, revision: "1", purpose: "IFC", issuedOn: dd(-90), userId: user.id });
+      await setAssetMaster(db, { projectId: p.id, tagId: k2101, isoClass: "CO", criticality: "A",
         criticalityBasis: "Criticality assessment CA-OLF-2026-03 (production loss, single train)", manufacturer: "Compressor vendor (demo)",
-        model: "5-stage centrifugal, barrel", serialNo: "C-2101-0417", yearBuilt: 2026, userId: user.id });
+        model: "5-stage centrifugal, barrel", serialNo: "C-2101-0417", yearBuilt: 2026,
+        designPressureBarg: 38.5, designTempMinC: -29, designTempMaxC: 135, datasheetRevisionId: dsRev.id, userId: user.id });
+      await addDcsPoint(db, { projectId: p.id, tagId: k2101, label: "Discharge pressure", dcsTag: "K2101_PI102.PV",
+        historianTag: "OLF12:K2101.PI102", uom: "barg", userId: user.id });
+      await addDcsPoint(db, { projectId: p.id, tagId: k2101, label: "Running status", dcsTag: "K2101_RUN.STS", userId: user.id });
       await setAssetMaster(db, { projectId: p.id, tagId: await tid("P-1203A"), isoClass: "PU", criticality: "A",
         criticalityBasis: "CA-OLF-2026-03", manufacturer: "Pump vendor (demo)", model: "API 610 OH2", userId: user.id });
       await setAssetMaster(db, { projectId: p.id, tagId: await tid("P-6101A"), isoClass: "PU", userId: user.id });
@@ -1016,7 +1024,7 @@ try {
         await prc.returnDoc(db, { projectId: p.id, docId: d.id, returnedOn: dd(-55), code: 1 });
       }
     }
-    console.log("handover: FLOC {plant}-{unit}-{tag}, criticality A/B/C, 3 asset masters (K-2101 held only by MC)");
+    console.log("handover: FLOC {plant}-{unit}-{tag}, criticality A/B/C, 3 asset masters (K-2101 held only by MC), K-2101 design conditions from DS-K-2101 Rev.1 and 2 DCS/Historian points");
 
     // ── procurement phase 2: an open tender, and vendor data ──────────────
     //

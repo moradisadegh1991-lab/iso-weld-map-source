@@ -6,6 +6,7 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import {
   handoverBoard, setAssetMaster, assetMasterHistory, exportHandover, exportLog,
+  datasheetRevisions, addDcsPoint, removeDcsPoint, dcsPoints,
 } from "../../../lib/db/repos/handover.mjs";
 import * as mt from "../../../lib/db/repos/maintenance.mjs";
 import { listItems } from "../../../lib/db/repos/warehouse.mjs";
@@ -52,7 +53,11 @@ export async function GET(request) {
         }, { headers: { "Cache-Control": "no-store" } });
       }
       const tagId = url.searchParams.get("tagId");
-      if (tagId) return Response.json({ history: await assetMasterHistory(db, { projectId, tagId }) });
+      if (tagId) return Response.json({
+        history: await assetMasterHistory(db, { projectId, tagId }),
+        datasheets: await datasheetRevisions(db, { projectId, tagId }),
+        dcsPoints: await dcsPoints(db, { projectId, tagId }),
+      });
       return Response.json({ ...(await handoverBoard(db, { projectId })), exports: await exportLog(db, { projectId }) });
     });
   } catch (e) { return errorResponse(e); }
@@ -69,6 +74,8 @@ export async function POST(request) {
     return await withProject(db, projectId, async () => {
       const a = { ...body, projectId, userId: user.id };
       if (kind === "master") return Response.json({ master: await setAssetMaster(db, a) });
+      if (kind === "dcs-add") return Response.json({ point: await addDcsPoint(db, a) });
+      if (kind === "dcs-remove") return Response.json(await removeDcsPoint(db, a));
       if (kind === "pm") return Response.json({ task: await mt.savePmTask(db, a) });
       if (kind === "pm-approve") return Response.json({ task: await mt.approvePmTask(db, a) });
       if (kind === "pm-discard") return Response.json(await mt.discardPmDraft(db, a));
