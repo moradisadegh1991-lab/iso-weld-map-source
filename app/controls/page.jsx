@@ -353,6 +353,7 @@ function Risks({ data, post, may }) {
         </TableKit>
       )}
       {may && (
+        <Fold title="ریسک جدید">
         <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "risk", ...f })) setF(blank); }}>
           <div className="grid2">
             <Field id="rk-code" label="کد" value={f.code} on={(v) => setF({ ...f, code: v })} required />
@@ -368,6 +369,7 @@ function Risks({ data, post, may }) {
           </div>
           <div><button className="btn" type="submit">ثبت ریسک</button></div>
         </form>
+        </Fold>
       )}
     </div>
   );

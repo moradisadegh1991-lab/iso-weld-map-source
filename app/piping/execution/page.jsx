@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { CHAINS, spoolStageTitle } from "../../../lib/platform/precedence.mjs";
 import TableKit from "../../../components/ui/TableKit";
 import Tabs from "../../../components/ui/Tabs";
+import Fold from "../../../components/ui/Fold";
 
 /**
  * Piping execution: every spool's place in its chain, the supports, and
@@ -312,6 +313,7 @@ function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
       )}
 
       {mayRecord && (
+        <Fold title="ساپورت جدید">
         <form onSubmit={add} className="grid2" style={{ alignItems: "end" }}>
           <div className="field"><label htmlFor="s-no">شمارهٔ ساپورت</label>
             <input id="s-no" dir="ltr" required value={f.supportNo}
@@ -331,6 +333,7 @@ function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
                    onChange={(e) => setF({ ...f, drawingRef: e.target.value })} /></div>
           <div><button className="btn" type="submit" disabled={!f.supportNo}>افزودن ساپورت</button></div>
         </form>
+        </Fold>
       )}
     </div>
   );

@@ -46,7 +46,7 @@ const buriedText = await page.locator(".card").first().innerText();
 console.log("buried card            :", buriedText.replace(/\s+/g, " ").slice(0, 140));
 
 // open the first spool's chain and record the next manual step
-await page.locator("button", { hasText: "مراحل" }).first().click();
+await page.locator("tbody button", { hasText: "مراحل" }).first().click();
 await page.waitForSelector("button:has-text('ثبت انجام')", { timeout: 8000 });
 const derivedMarks = await page.locator("b", { hasText: "⚙" }).count();
 console.log("derived steps marked ⚙ :", derivedMarks);
@@ -60,6 +60,7 @@ console.log("buttons on derived     :", derivedButtons, "(must be 0)");
 await page.screenshot({ path: `${SHOT}/11-execution.png`, fullPage: true });
 
 // add a spring hanger with no load: must be refused with the Persian reason
+await page.locator(".fold-btn", { hasText: "ساپورت جدید" }).click();
 await page.fill("#s-no", "SH-TEST-1");
 await page.selectOption("#s-kind", "spring_hanger");
 await page.click("button:has-text('افزودن ساپورت')");
