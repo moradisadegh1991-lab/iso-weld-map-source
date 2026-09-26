@@ -107,9 +107,29 @@ step "۳ · وابستگی‌ها"
 # `npm install` PRUNES the WASM compiler that the next step installs with
 # --no-save, because an unsaved package is extraneous against the lockfile.
 # Re-running this script would otherwise throw away 54 MB and fetch it again
-# every single time. npm writes node_modules/.package-lock.json on each
-# install, so it being newer than package-lock.json means the tree is current.
-if [ node_modules/.package-lock.json -nt package-lock.json ]; then
+# every single time.
+#
+# "Current" is asked of node_modules itself: every dependency package.json
+# names is installed, at the version package-lock.json pins. It used to be a
+# timestamp (node_modules/.package-lock.json newer than package-lock.json),
+# and that lied: the --no-save install below rewrites that file too, so a
+# pull that added a dependency (jsqr) was reported current and the app then
+# failed to compile with "Module not found".
+deps_current() {
+  node -e '
+    const fs = require("fs");
+    const want = Object.keys(require("./package.json").dependencies || {});
+    const lock = require("./package-lock.json").packages || {};
+    const stale = want.filter((n) => {
+      const at = `node_modules/${n}/package.json`;
+      if (!fs.existsSync(at)) return true;
+      const pinned = lock[`node_modules/${n}`]?.version;
+      return pinned && JSON.parse(fs.readFileSync(at, "utf8")).version !== pinned;
+    });
+    if (stale.length) { console.error("  نصب‌نشده یا نسخهٔ دیگر: " + stale.join(" ")); process.exit(1); }
+  '
+}
+if [ -d node_modules ] && deps_current; then
   ok "node_modules به‌روز است — رد شد"
 else
   npm install --no-audit --no-fund 2>&1 | tail -3
