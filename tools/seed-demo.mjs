@@ -631,6 +631,24 @@ try {
     }
     console.log("warehouse: 4 items, lots through MIR/MTC, one late-rejected heat");
 
+    // The 28" CW return drawing's own stock codes (its MTO), received and
+    // accepted, so a released spool can reserve its material by code.
+    const { rows: [haveIso] } = await db.query("SELECT count(*)::int AS n FROM material_item WHERE project_id = $1 AND code = 'PC06TSS00AB'", [p.id]);
+    if (haveIso.n === 0) {
+      for (const [code, description, category, uom, qty, heat] of [
+        ["PC06TSS00AB", "Welded pipe API 5L Gr.B SAW, 36in SCH 10", "pipe", "m", 24, "H-771203"],
+        ["AC03C95J0AB", "Elbow 90 LR A234 WPB-W, 36in SCH 10", "fitting", "EA", 4, "H-66120"],
+        ["AC03C45J0AB", "Elbow 45 LR A234 WPB-W, 36in SCH 10", "fitting", "EA", 4, "H-66121"],
+      ]) {
+        const item = await upsertItem(db, { projectId: p.id, code, description, category, uom });
+        const lot = await receiveLot(db, { projectId: p.id, itemId: item.id, receiptNo: `MRR-${code.slice(0, 6)}`, receivedOn: "2026-07-20",
+          qtyReceived: qty, heatNo: heat, mtcRef: `MTC-${heat}`, location: "Yard B" });
+        await inspectLot(db, { projectId: p.id, lotId: lot.id, qtyAccepted: qty, qtyRejected: 0, mirRef: `MIR-${code.slice(0, 6)}`, inspectedOn: "2026-07-22" });
+        await reviewMtc(db, { projectId: p.id, lotId: lot.id, mtcStatus: "accepted" });
+      }
+      console.log("warehouse: the CW return drawing's stock codes in stock — its spools can reserve their material");
+    }
+
     // ── HSE: hours, incidents as facts, permits around "now", observations ──
     //
     //   INC-0001  pinched finger, first an MTC, then two days off → LWC

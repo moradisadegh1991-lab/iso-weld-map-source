@@ -48,6 +48,14 @@ export default function PipingExecution() {
     } catch (e) { setMsg(e.message); }
   }
 
+  async function reserveMaterial(spoolId) {
+    setMsg(null);
+    try {
+      await call("/api/piping/execution", { method: "POST", body: JSON.stringify({ projectId, kind: "reserve_material", spoolId }) });
+      setDetail(await call(detailUrl(spoolId)));
+    } catch (e) { setMsg(e.message); }
+  }
+
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
 
@@ -85,7 +93,8 @@ export default function PipingExecution() {
                   <SpoolRow key={b.spoolId} b={b} open={open === b.spoolId}
                     detail={open === b.spoolId ? detail : null}
                     onToggle={() => expand(b.spoolId)}
-                    onRecord={mayRecord ? (code) => record(b.spoolId, code) : null} />
+                    onRecord={mayRecord ? (code) => record(b.spoolId, code) : null}
+                    onReserve={mayRecord ? () => reserveMaterial(b.spoolId) : null} />
                 ))}
               </tbody>
             </table>
@@ -99,7 +108,7 @@ export default function PipingExecution() {
   );
 }
 
-function SpoolRow({ b, open, detail, onToggle, onRecord }) {
+function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve }) {
   return (
     <>
       <tr>
@@ -145,10 +154,35 @@ function SpoolRow({ b, open, detail, onToggle, onRecord }) {
                 ))}
               </div>
             )}
+            {detail?.material && <SpoolMaterial m={detail.material} onReserve={onReserve} />}
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+const MAT_TONE = { reserved: "ok", issued: "ok", available: "warn", short: "bad", no_item: "bad", uom: "bad", unmatched: "bad" };
+
+/** The spool's material from its register, against the warehouse (lib/piping/spool-bom.mjs). */
+function SpoolMaterial({ m, onReserve }) {
+  if (!m.lines.length) return <p className="muted sm" style={{ marginTop: 8 }}>فهرست مواد این اسپول ثبت نشده — رجیستر نقشه پیش از این قابلیت ذخیره شده یا MTO نداشته.</p>;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <b className="sm">مواد اسپول (از رجیستر و MTO نقشه — طول لوله خالص، بدون اضافهٔ برش)</b>
+      <table className="dtable">
+        <thead><tr><th>کد کالا</th><th>شرح</th><th>سایز</th><th>مقدار</th><th>رزرو / حواله</th><th>وضعیت</th></tr></thead>
+        <tbody>{m.lines.map((l, i) => (
+          <tr key={i}><td className="mono">{l.stockCode || "—"}</td><td className="sm">{l.description || l.type || "لوله"}</td>
+            <td className="mono">{l.nps}"</td><td className="mono">{l.qty} {l.uom}</td>
+            <td className="mono">{l.reserved !== undefined ? `${Math.round(l.reserved * 1000) / 1000} / ${l.issued}` : "—"}</td>
+            <td><span className={`pill ${MAT_TONE[l.state]}`}>{l.text}</span></td></tr>
+        ))}</tbody>
+      </table>
+      {onReserve && m.toReserve > 0 && (m.blocking === 0
+        ? <button className="btn" onClick={onReserve}>رزرو مواد این اسپول</button>
+        : <p className="muted sm">رزرو همه یا هیچ است — تا {m.blocking} ردیف برطرف نشود، رزرو نمی‌شود.</p>)}
+    </div>
   );
 }
 

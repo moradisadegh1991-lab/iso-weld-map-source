@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { spoolMaterial, reserveSpoolMaterial } from "../../../../lib/db/repos/spool-material.mjs";
 import { authenticate, errorResponse } from "../../../../lib/server/session.mjs";
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
@@ -20,7 +21,7 @@ export async function GET(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
 
     return await withProject(db, projectId, async () => {
-      if (spoolId) return Response.json(await spoolStatus(db, { projectId, spoolId }));
+      if (spoolId) return Response.json({ ...(await spoolStatus(db, { projectId, spoolId })), material: await spoolMaterial(db, { projectId, spoolId }) });
       const { rows: [p] } = await db.query(
         "SELECT grade_elevation_mm, elevation_datum FROM project WHERE id = $1", [projectId]);
       return Response.json({
@@ -51,6 +52,9 @@ export async function POST(request) {
     assertCan(membership, ACTIONS.ASSIGN_WELD);
 
     return await withProject(db, projectId, async () => {
+      if (kind === "reserve_material") {
+        return Response.json({ result: await reserveSpoolMaterial(db, { projectId, spoolId: body.spoolId, needBy: body.needBy || null, userId: user.id }) });
+      }
       if (kind === "activity") {
         return Response.json({ activity: await recordSpoolActivity(db,
           { ...body, projectId, userId: user.id }) });
