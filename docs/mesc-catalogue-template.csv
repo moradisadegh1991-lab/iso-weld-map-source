@@ -1,0 +1,4 @@
+# MESC catalogue import — three columns: code, description, uom (comma, ; or tab).
+# 2-, 4- or 6-digit codes are group titles; 10-digit codes are items.
+# Fill from the owner's MESC book; quote a description that contains the separator.
+code,description,uom

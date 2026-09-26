@@ -6,6 +6,7 @@ import { CATEGORIES } from "../../lib/warehouse/stock.mjs";
 import { spoolStageTitle } from "../../lib/platform/precedence.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Mesc from "./Mesc";
 
 /**
  * Warehouse: what arrived, what inspection and the certificates allow out,
@@ -94,6 +95,8 @@ export default function WarehousePage() {
 
       <HeatTrace call={call} projectId={projectId} />
       {mayRecord && data.items.length > 0 && <Fold title="رسید کالا (MRR)"><Receive items={data.items} post={post} /></Fold>}
+      <Mesc projectId={projectId} call={call} may={mayEngineer} />
+
       {mayEngineer && <Fold title="کالای جدید"><ItemForm post={post} /></Fold>}
       {mayEngineer && data.items.length > 0 && <Fold title="نیاز از MTO"><Requirement items={data.items} post={post} /></Fold>}
     </div>
