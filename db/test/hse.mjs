@@ -206,9 +206,10 @@ test("a hot-work permit is not issued against limits nobody set", async () => {
       "INVALID_INPUT");
     assert(/حدود تست گاز/.test(e.message) && /حداکثر مدت/.test(e.message), e.message);
     const miss = (await missingInformation(db, { projectId: P })).filter((m) => m.key.startsWith("hse-"));
-    equal(miss.map((m) => [m.key, m.count]), [["hse-gas", 1], ["hse-duration", 1]], "and the missing list says why");
+    equal(miss.map((m) => [m.key, m.count]), [["hse-gas", 1], ["hse-duration", 1], ["hse-competence-rule", 1], ["hse-jsa-rule", 1]],
+      "and the missing list says why — including the safe-work rules nobody has stated for hot work");
     await projects.updateProjectProfile(db, { projectId: P, patch: { ...limits } });
-    equal((await missingInformation(db, { projectId: P })).filter((m) => m.key.startsWith("hse-")).length, 0);
+    equal((await missingInformation(db, { projectId: P })).filter((m) => ["hse-gas", "hse-duration"].includes(m.key)).length, 0);
   });
 });
 

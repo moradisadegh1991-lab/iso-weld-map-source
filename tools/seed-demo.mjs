@@ -44,6 +44,7 @@ import {
   recordManhours, reportIncident, updateIncident, requestPermit, recordGasTest, activatePermit, recordObservation,
   closeObservation,
 } from "../lib/db/repos/hse.mjs";
+import * as hsw from "../lib/db/repos/hse-safework.mjs";
 import {
   upsertAccount, setBaseline, reportProgress, postCost, upsertRisk, closeRisk, listRisks,
 } from "../lib/db/repos/controls.mjs";
@@ -728,6 +729,69 @@ try {
         contractorId: mech.id, description: "Radiography barricade and signage exemplary", userId: user.id });
     }
     console.log("hse: 30 days of hours, 4 incidents, 4 permits (one expired, one SIMOPS), 4 observations");
+
+    // ── HSE safe work: competence, scaffolds and cranes, JSA ─────────────
+    //
+    //   Rules are the demo's own, stated as a client's PTW procedure would;
+    //   the engine has none of its own.
+    //   WAH-0104  Reza, green-tagged SC-1201-03, approved JSA → issued
+    //   WAH-0105  Sara's height card expired, SC-1101-01 red-tagged, no JSA
+    //   LF-0106   CR-80T-01 never inspected — nobody holds a lifting inspector card
+    //   Ali's first-aid card has no expiry date on record → missing information
+    const { rows: [havePeople] } = await db.query("SELECT count(*)::int AS n FROM hse_person WHERE project_id = $1", [p.id]);
+    if (havePeople.n === 0) {
+      await updateProjectProfile(db, { projectId: p.id, patch: {
+        hse_scaffold_inspection_days: 7, hse_crane_inspection_days: 365, hse_risk_max_residual: 6 } });
+      await hsw.setSafeWorkRules(db, { projectId: p.id,
+        competenceRules: { hot: ["induction", "hot_work"], confined_space: ["induction", "confined_space"],
+          work_at_height: ["induction", "work_at_height"], lifting: ["induction", "rigger"] },
+        jsaRequiredTypes: ["work_at_height", "confined_space", "lifting"] });
+      const dd2 = (k) => new Date(day0.getTime() + k * 86_400_000).toISOString().slice(0, 10);
+      const person = (idNo, fullName, c, trade) => hsw.upsertPerson(db, { projectId: p.id, idNo, fullName, contractorId: c.id, trade });
+      const reza = await person("DEMO-0001", "رضا کریمی (دمو)", mech, "داربست‌بند");
+      const sara = await person("DEMO-0002", "سارا مرادی (دمو)", mech, "عایق‌کار");
+      const hamid = await person("DEMO-0003", "حمید توکلی (دمو)", mech, "بازرس داربست");
+      const ali = await person("DEMO-0004", "علی رضایی (دمو)", mech, "ریگر");
+      for (const x of [reza, sara, hamid, ali]) {
+        await hsw.addCompetence(db, { projectId: p.id, personId: x.id, kind: "induction", issuedOn: dd2(-60), noExpiry: true, certNo: `IND-${x.id_no}` });
+      }
+      await hsw.addCompetence(db, { projectId: p.id, personId: reza.id, kind: "work_at_height", issuedOn: dd2(-200), expiresOn: dd2(165), certNo: "WAH-3301", issuer: "Training centre (demo)" });
+      await hsw.addCompetence(db, { projectId: p.id, personId: sara.id, kind: "work_at_height", issuedOn: dd2(-370), expiresOn: dd2(-5), certNo: "WAH-2990", issuer: "Training centre (demo)" });
+      await hsw.addCompetence(db, { projectId: p.id, personId: hamid.id, kind: "scaffold_inspector", issuedOn: dd2(-300), expiresOn: dd2(400), certNo: "SI-114" });
+      await hsw.addCompetence(db, { projectId: p.id, personId: ali.id, kind: "rigger", issuedOn: dd2(-100), expiresOn: dd2(630), certNo: "RG-551" });
+      await hsw.addCompetence(db, { projectId: p.id, personId: ali.id, kind: "first_aid", issuedOn: dd2(-40), certNo: "FA-078" });
+      const sc1 = await hsw.registerEquipment(db, { projectId: p.id, kind: "scaffold", refNo: "SC-1201-03", area: "PR-1201",
+        description: "Rack level 2 access, bays 4–7", contractorId: mech.id });
+      await hsw.inspectEquipment(db, { projectId: p.id, equipmentId: sc1.id, inspectedOn: dd2(-2), result: "pass", inspectorId: hamid.id, certRef: "TAG-1201-03/07" });
+      const sc2 = await hsw.registerEquipment(db, { projectId: p.id, kind: "scaffold", refNo: "SC-1101-01", area: "F-1101A",
+        description: "Convection section access", contractorId: mech.id });
+      await hsw.inspectEquipment(db, { projectId: p.id, equipmentId: sc2.id, inspectedOn: dd2(-10), result: "pass", inspectorId: hamid.id, certRef: "TAG-1101-01/02" });
+      await hsw.inspectEquipment(db, { projectId: p.id, equipmentId: sc2.id, inspectedOn: dd2(-1), result: "fail", inspectorId: hamid.id,
+        findings: "Toe board missing at bay 3; one base plate on loose fill" });
+      const crane = await hsw.registerEquipment(db, { projectId: p.id, kind: "crane", refNo: "CR-80T-01", area: "U-11",
+        description: "80 t mobile crane", capacityT: 80 });
+      const hseLead = await ensureUser(db, { subject: "demo|hse-lead", displayName: "کارشناس HSE (دمو)" });
+      const jsa = await hsw.createJsa(db, { projectId: p.id, jsaNo: "JSA-WAH-01", title: "Insulation work on pipe rack from scaffold",
+        area: "PR-1201", contractorId: mech.id, userId: hseLead.id });
+      for (const st of [
+        { seq: 10, step: "Access scaffold", hazard: "Fall from height", controls: "Green-tagged scaffold only; full-body harness, 100% tie-off", likelihood: 4, severity: 5, residualLikelihood: 1, residualSeverity: 5 },
+        { seq: 20, step: "Cut and fit cladding", hazard: "Dropped objects onto walkway below", controls: "Tool lanyards; barricade below; toe boards checked", likelihood: 3, severity: 4, residualLikelihood: 1, residualSeverity: 4 },
+        { seq: 30, step: "Handle mineral wool", hazard: "Skin and eye irritation", controls: "Gloves, goggles, long sleeves", likelihood: 3, severity: 2, residualLikelihood: 2, residualSeverity: 2 },
+      ]) await hsw.saveJsaStep(db, { projectId: p.id, jsaId: jsa.id, ...st });
+      await hsw.approveJsa(db, { projectId: p.id, jsaId: jsa.id, userId: user.id, today: dd2(-3) });
+      const at = (h) => new Date(day0.getTime() + h * 3_600_000).toISOString();
+      const ok = await requestPermit(db, { projectId: p.id, permitNo: "WAH-0104", type: "work_at_height", area: "PR-1201",
+        description: "Cladding on rack level 2", contractorId: mech.id, requesterName: "C-02 foreman", validFrom: at(-0.5), validTo: at(7),
+        equipmentId: sc1.id, jsaId: jsa.id, crew: [reza.id] });
+      await activatePermit(db, { projectId: p.id, permitId: ok.id, userId: user.id });
+      await requestPermit(db, { projectId: p.id, permitNo: "WAH-0105", type: "work_at_height", area: "F-1101A",
+        description: "Insulation repair, convection section", contractorId: mech.id, requesterName: "C-02 foreman",
+        validFrom: at(1), validTo: at(8), equipmentId: sc2.id, crew: [reza.id, sara.id] });
+      await requestPermit(db, { projectId: p.id, permitNo: "LF-0106", type: "lifting", area: "U-11",
+        description: "Lift quench tower top section", contractorId: mech.id, requesterName: "C-02 lifting supervisor",
+        validFrom: at(2), validTo: at(10), equipmentId: crane.id, crew: [ali.id] });
+    }
+    console.log("hse safe work: 4 people and their cards, 2 scaffolds (one red-tagged), 1 crane never inspected, JSA-WAH-01 approved, 3 permits");
 
     // ── project controls: accounts, S-curves around today, cost, risks ──
     //

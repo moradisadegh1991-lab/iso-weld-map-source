@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import SafeWork, { Dates } from "./SafeWork";
 
 /**
  * HSE: hours worked, what went wrong, the permits that let work start, and
@@ -29,6 +30,7 @@ export default function HsePage() {
   const [msg, setMsg] = useState(null);
   const mayRecord = can({ role }, ACTIONS.RECORD_HSE);
   const mayIssue = can({ role }, ACTIONS.ISSUE_PERMIT);
+  const mayAdmin = can({ role }, ACTIONS.MANAGE_MEMBERS);
 
   async function post(body) {
     setMsg(null);
@@ -113,6 +115,8 @@ export default function HsePage() {
         {mayRecord && <Fold title="درخواست مجوز کار"><PermitForm data={data} post={post} /></Fold>}
       </div>
 
+      <SafeWork data={data} post={post} mayRecord={mayRecord} mayIssue={mayIssue} mayAdmin={mayAdmin} />
+
       <div className="card">
         <h2>رویدادها</h2>
         <p className="muted sm">طبقه انتخاب نمی‌شود؛ از واقعیت‌ها (فوت، روز غیبت، روز کار محدود، نوع درمان) طبق IOGP به دست می‌آید. هر تغییر واقعیت با دلیلش ثبت می‌شود.</p>
@@ -180,7 +184,14 @@ function PermitRow({ p, post, mayRecord, mayIssue }) {
       <tr>
         <td className="mono">{p.permit_no}</td>
         <td>{p.typeTitle}</td>
-        <td className="mono">{p.area}</td>
+        <td className="mono">{p.area}
+          {(p.equipment || p.jsa || p.crew.length > 0) && (
+            <div className="muted sm" style={{ fontFamily: "inherit" }}>
+              {p.equipment && <div>{p.equipment.kind === "scaffold" ? "داربست" : "جرثقیل"}: <bdi dir="ltr" style={{ whiteSpace: "nowrap" }}>{p.equipment.refNo}</bdi></div>}
+              {p.jsa && <div>JSA: <bdi dir="ltr" style={{ whiteSpace: "nowrap" }}>{p.jsa.jsaNo} Rev {p.jsa.revision}</bdi></div>}
+              {p.crew.length > 0 && <div>خدمه: {p.crew.map((c) => c.name).join("، ")}</div>}
+            </div>
+          )}</td>
         <td className="mono sm">{dt(p.valid_from)} ← {dt(p.valid_to)}</td>
         <td><span className={`pill ${st}`}>{label}</span>{p.issued_by_name && <div className="muted sm">صادرکننده: {p.issued_by_name}</div>}</td>
         <td>{!p.needsGas ? <span className="muted sm">لازم نیست</span>
@@ -189,8 +200,9 @@ function PermitRow({ p, post, mayRecord, mayIssue }) {
           : g.ok ? <span className="pill ok">قبول · {dt(p.last_gas.tested_at)}</span>
           : <span className="pill bad" title={g.failures.join(" · ")}>رد: {g.failures.join(" · ")}</span>}</td>
         <td className="sm">
-          {p.readiness && !p.readiness.ok && <div className="muted">{p.readiness.reasons.join(" · ")}</div>}
+          {p.readiness && !p.readiness.ok && <div className="muted"><Dates text={p.readiness.reasons.join(" · ")} /></div>}
           {p.readiness?.ok && <span className="pill ok">آمادهٔ صدور</span>}
+          {p.readiness?.notes?.length > 0 && <div className="muted" style={{ opacity: 0.8 }}>سنجیده نشد: {p.readiness.notes.join(" · ")}</div>}
           {p.simopsWith.length > 0 && open && <div><span className="pill bad">SIMOPS با {p.simopsWith.join("، ")}</span></div>}
         </td>
         <td style={{ whiteSpace: "nowrap" }}>
@@ -229,7 +241,9 @@ function GasForm({ onSubmit, id }) {
 
 function PermitForm({ data, post }) {
   const blank = { permitNo: "", type: "hot", area: "", description: "", contractorId: "", requesterName: "",
-    validFrom: nowLocal(), validTo: nowLocal(8), attendant: "", isolationRef: "" };
+    validFrom: nowLocal(), validTo: nowLocal(8), attendant: "", isolationRef: "", equipmentId: "", jsaId: "", crew: [] };
+  const sw = data.safeWork;
+  const eqKind = { work_at_height: "scaffold", lifting: "crane" };
   const [f, setF] = useState(blank);
   return (
     <form style={{ marginTop: 10 }} onSubmit={async (e) => {
@@ -241,7 +255,7 @@ function PermitForm({ data, post }) {
       <div className="grid2">
         <Field id="pt-no" label="شمارهٔ مجوز" value={f.permitNo} on={(v) => setF({ ...f, permitNo: v })} required />
         <div className="field"><label htmlFor="pt-type">نوع</label>
-          <select id="pt-type" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
+          <select id="pt-type" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value, equipmentId: "" })}>
             {Object.entries(data.permitTypes).map(([k, t]) => <option key={k} value={k}>{t.title}{t.gas ? " — تست گاز" : ""}</option>)}
           </select></div>
         <Field id="pt-area" label="محدوده (واحد / تجهیز)" value={f.area} on={(v) => setF({ ...f, area: v })} required />
@@ -256,7 +270,31 @@ function PermitForm({ data, post }) {
         <Field id="pt-to" label="تا" type="datetime-local" value={f.validTo} on={(v) => setF({ ...f, validTo: v })} required />
         {f.type === "confined_space" && <Field id="pt-att" label="نگهبان فضای بسته" value={f.attendant} on={(v) => setF({ ...f, attendant: v })} />}
         {f.type === "electrical_isolation" && <Field id="pt-iso" label="شمارهٔ گواهی ایزولاسیون (LOTO)" value={f.isolationRef} on={(v) => setF({ ...f, isolationRef: v })} />}
+        {eqKind[f.type] && (
+          <div className="field"><label htmlFor="pt-eq">{eqKind[f.type] === "scaffold" ? "داربست" : "جرثقیل / بالابر"}</label>
+            <select id="pt-eq" value={f.equipmentId} onChange={(e) => setF({ ...f, equipmentId: e.target.value })}>
+              <option value="">—</option>
+              {sw.equipment.filter((e) => e.kind === eqKind[f.type] && e.state.code !== "dismantled").map((e) => (
+                <option key={e.id} value={e.id}>{e.ref_no} — {e.state.text}</option>))}
+            </select></div>
+        )}
+        <div className="field"><label htmlFor="pt-jsa">JSA</label>
+          <select id="pt-jsa" value={f.jsaId} onChange={(e) => setF({ ...f, jsaId: e.target.value })}>
+            <option value="">—</option>
+            {sw.jsas.filter((j) => j.status === "approved").map((j) => <option key={j.id} value={j.id}>{j.jsa_no} Rev {j.revision} — {j.title}</option>)}
+          </select></div>
       </div>
+      {sw.people.length > 0 && (
+        <fieldset className="card" style={{ padding: 8, marginTop: 8 }}>
+          <legend className="sm">خدمه (صلاحیت هر نفر طبق قواعد پروژه سنجیده می‌شود)</legend>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {sw.people.map((p) => (
+              <label key={p.id} className="sm"><input type="checkbox" checked={f.crew.includes(p.id)}
+                onChange={() => setF({ ...f, crew: f.crew.includes(p.id) ? f.crew.filter((x) => x !== p.id) : [...f.crew, p.id] })} /> {p.full_name}</label>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <p className="muted sm">صدور با امضای شخص دیگری غیر از درخواست‌کننده انجام می‌شود.</p>
       <div><button className="btn" type="submit">ثبت درخواست</button></div>
     </form>

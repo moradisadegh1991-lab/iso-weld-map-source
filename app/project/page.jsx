@@ -91,6 +91,9 @@ const HSE = [
   ["hse_co_max_ppm", "حداکثر CO (ppm)", "0.1", ""],
   ["hse_gas_test_validity_min", "اعتبار تست گاز (دقیقه)", "1", "تست قدیمی‌تر از این، صدور را متوقف می‌کند"],
   ["hse_permit_max_hours", "حداکثر مدت مجوز (ساعت)", "0.5", "مثلاً یک شیفت"],
+  ["hse_scaffold_inspection_days", "فاصلهٔ بازرسی داربست (روز)", "1", "طبق دستورالعمل کارفرما؛ مثلاً ۷"],
+  ["hse_crane_inspection_days", "فاصلهٔ بازرسی جرثقیل / بالابر (روز)", "1", "اعتبار گواهی بازرسی (Thorough examination)"],
+  ["hse_risk_max_residual", "حداکثر ریسک باقیماندهٔ پذیرفتنی JSA (احتمال × شدت، ۱ تا ۲۵)", "1", "بالاتر از این، JSA تأیید نمی‌شود"],
 ];
 
 /** Quality: when an overdue NCR goes to the project manager. No default. */
