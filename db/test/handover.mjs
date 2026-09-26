@@ -44,12 +44,15 @@ test("criticality only from the project's own levels, with its basis", async () 
 test("ready only when every item is known and true — unknown holds as firmly as missing", async () => {
   const full = { isoClass: "PU", criticality: "A", manufacturer: "X", model: "Y", serialNo: "Z" };
   const floc = { code: "OLF-P-1" };
-  equal(handoverChecklist({ master: full, floc, mcAccepted: true, iom: "accepted" }).ready, true);
-  const unknownMc = handoverChecklist({ master: full, floc, mcAccepted: null, iom: "accepted" });
+  const pm = { pmApproved: 1 };
+  equal(handoverChecklist({ master: full, floc, mcAccepted: true, iom: "accepted", ...pm }).ready, true);
+  const unknownMc = handoverChecklist({ master: full, floc, mcAccepted: null, iom: "accepted", ...pm });
   equal([unknownMc.open, unknownMc.ready], [["mc"], false], "unknown is not ready");
-  equal(handoverChecklist({ master: full, floc, mcAccepted: true, iom: null }).open, ["iom"], "no PO in the platform: no manual to check");
-  equal(handoverChecklist({ master: { ...full, serialNo: " " }, floc, mcAccepted: true, iom: "resubmit" }).open, ["serial", "iom"]);
-  equal(handoverChecklist({ master: full, floc: { code: null, reason: "x" }, mcAccepted: true, iom: "accepted" }).open, ["floc"]);
+  equal(handoverChecklist({ master: full, floc, mcAccepted: true, iom: null, ...pm }).open, ["iom"], "no PO in the platform: no manual to check");
+  equal(handoverChecklist({ master: { ...full, serialNo: " " }, floc, mcAccepted: true, iom: "resubmit", ...pm }).open, ["serial", "iom"]);
+  equal(handoverChecklist({ master: full, floc: { code: null, reason: "x" }, mcAccepted: true, iom: "accepted", ...pm }).open, ["floc"]);
+  const noPlan = handoverChecklist({ master: full, floc, mcAccepted: true, iom: "accepted" });
+  equal([noPlan.open, noPlan.ready], [["pm"], false], "an asset with no approved maintenance plan is not handed over");
 });
 
 test("CSV: quoted, BOM for Excel, and a quote inside a field survives", async () => {
@@ -68,6 +71,7 @@ const projects = await import("../../lib/db/repos/projects.mjs");
 const spine = await import("../../lib/db/repos/spine.mjs");
 const prc = await import("../../lib/db/repos/procurement.mjs");
 const hov = await import("../../lib/db/repos/handover.mjs");
+const mt = await import("../../lib/db/repos/maintenance.mjs");
 const { missingInformation } = await import("../../lib/db/repos/assumptions.mjs");
 
 const db = await getDb();
@@ -97,7 +101,7 @@ test("nothing is guessed: no class, no criticality, no location until they are g
     equal(b.tags.map((t) => t.tagNo), ["P-1203A"], "only equipment is handed over as an asset");
     const t = b.tags[0];
     equal([t.master.isoClass, t.floc.code, t.mcAccepted, t.iom, t.vendorHint], [null, null, false, "pending", "Pump Works"]);
-    equal(t.open, ["class", "criticality", "floc", "manufacturer", "model", "serial", "mc", "iom"]);
+    equal(t.open, ["class", "criticality", "floc", "manufacturer", "model", "serial", "mc", "iom", "pm"]);
     const miss = (await missingInformation(db, { projectId: P })).map((m) => m.key);
     assert(miss.includes("cmms-floc") && miss.includes("cmms-criticality"), miss.join(","));
   });
@@ -119,7 +123,7 @@ test("the asset master refuses a rank outside the policy, and keeps every change
     equal(h.map((r) => r.snapshot.serialNo), ["SN-1182", "SN-1183"], "the corrected serial and the one before it");
     await throws(() => db.query("UPDATE asset_master_revision SET snapshot = '{}'"), "permission denied");
     const t = (await hov.handoverBoard(db, { projectId: P })).tags[0];
-    equal([t.floc.code, t.master.isoClass, t.classLabel, t.open], ["OLF-12-12-01-P-1203A", "PU", "Pumps", ["mc", "iom"]]);
+    equal([t.floc.code, t.master.isoClass, t.classLabel, t.open], ["OLF-12-12-01-P-1203A", "PU", "Pumps", ["mc", "iom", "pm"]]);
   });
 });
 
@@ -132,7 +136,13 @@ test("ready when MC is accepted and the manual is approved; the export says so a
     equal([t.iom, t.ready], ["under_review", false]);
     await prc.returnDoc(db, { projectId: P, docId: iom.id, returnedOn: TODAY, code: 1 });
     t = (await hov.handoverBoard(db, { projectId: P })).tags[0];
-    equal([t.iom, t.ready], ["accepted", true]);
+    equal([t.iom, t.ready, t.open], ["accepted", false, ["pm"]], "the manual is in; the plan is not");
+    const task = await mt.savePmTask(db, { projectId: P, tagId: pump.id, taskCode: "PM-01", title: "Lube oil change", strategy: "time_based",
+      intervalValue: 3, intervalUnit: "month", source: "oem", sourceRef: "IOM §7.2", userId: alice.id });
+    equal((await hov.handoverBoard(db, { projectId: P })).tags[0].ready, false, "a draft is not a plan");
+    await mt.approvePmTask(db, { projectId: P, taskId: task.id, userId: bob.id });
+    t = (await hov.handoverBoard(db, { projectId: P })).tags[0];
+    equal([t.pmApproved, t.ready], [1, true]);
     const e = await hov.exportHandover(db, { projectId: P, userId: alice.id });
     const [head, row] = e.csv.slice(1).split("\r\n");
     assert(head.startsWith('"Functional Location","Parent (system)","Tag"'));

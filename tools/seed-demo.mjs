@@ -55,6 +55,7 @@ import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
 import * as prc from "../lib/db/repos/procurement.mjs";
 import * as dcr from "../lib/db/repos/doc-control.mjs";
 import { setAssetMaster } from "../lib/db/repos/handover.mjs";
+import * as mnt from "../lib/db/repos/maintenance.mjs";
 import { upsertPackage as upsertTestPackage, addLines as addPackLines } from "../lib/db/repos/completions.mjs";
 import { buildModel } from "../lib/engine.js";
 import { DEMO } from "../lib/demo.js";
@@ -969,6 +970,54 @@ try {
       }
     }
     console.log("handover: FLOC {plant}-{unit}-{tag}, criticality A/B/C, 3 asset masters (K-2101 held only by MC)");
+
+    // ── handover phase 2: the maintenance plan, spare parts, calibration ──
+    //
+    //   Intervals cite a (demo) source — the platform proposes none. Tasks
+    //   are prepared by the QC inspector and approved by the admin; the seal
+    //   inspection on P-1203A is left as a draft awaiting approval. The
+    //   commissioning seal is short (nothing received); PI-1203A's monthly
+    //   plan makes it overdue.
+    const { rows: [havePm] } = await db.query("SELECT count(*)::int AS n FROM pm_task WHERE project_id = $1", [p.id]);
+    if (havePm.n === 0) {
+      const tid = async (no) => (await db.query("SELECT id FROM tag WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0]?.id;
+      const task = async (tag, t, approve = true) => {
+        const tagId = await tid(tag);
+        if (!tagId) return;
+        const row = await mnt.savePmTask(db, { projectId: p.id, tagId, ...t, userId: qcInsp.id });
+        if (approve) await mnt.approvePmTask(db, { projectId: p.id, taskId: row.id, userId: user.id });
+      };
+      await task("K-2101", { taskCode: "PM-01", title: "Lube oil sample and analysis", strategy: "condition_based", intervalValue: 1, intervalUnit: "month",
+        craft: "mechanical", durationH: 0.5, source: "oem", sourceRef: "Compressor IOM (demo) §8.3" });
+      await task("K-2101", { taskCode: "PM-02", title: "Vibration route (bearings, casing)", strategy: "condition_based", intervalValue: 1, intervalUnit: "month",
+        craft: "instrument", durationH: 1, source: "company", sourceRef: "ENG-STD-ROT-02 (demo) §4" });
+      await task("K-2101", { taskCode: "PM-03", title: "Major overhaul", strategy: "time_based", intervalValue: 40000, intervalUnit: "run_hours",
+        craft: "mechanical", durationH: 480, source: "oem", sourceRef: "Compressor IOM (demo) §9.1" });
+      await task("P-1203A", { taskCode: "PM-01", title: "Bearing housing oil change", strategy: "time_based", intervalValue: 3, intervalUnit: "month",
+        craft: "mechanical", durationH: 1, source: "oem", sourceRef: "Pump IOM (demo) §6.1" });
+      await task("P-1203A", { taskCode: "PM-02", title: "Mechanical seal leak check", strategy: "condition_based", intervalValue: 1, intervalUnit: "week",
+        craft: "operations", durationH: 0.2, source: "rcm", sourceRef: "RCM-OLF-12 (demo) row 7" }, false);
+      const seal = await upsertItem(db, { projectId: p.id, code: "SEAL-OH2-65", description: "Mechanical seal cartridge, OH2 65 mm", category: "other", uom: "EA" });
+      const spare = async (tag, s) => { const tagId = await tid(tag); if (tagId) await mnt.saveSpare(db, { projectId: p.id, tagId, ...s, userId: user.id }); };
+      await spare("P-1203A", { partNo: "SC-65-OH2", manufacturer: "Seal vendor (demo)", description: "Mechanical seal cartridge", category: "commissioning",
+        qtyInstalled: 1, qtyRecommended: 1, qtyApproved: 1, itemId: seal.id, spirRef: "SPIR-P-1203 (demo)" });
+      await spare("P-1203A", { partNo: "SC-65-OH2", manufacturer: "Seal vendor (demo)", description: "Mechanical seal cartridge", category: "operational",
+        qtyInstalled: 1, qtyRecommended: 2, qtyApproved: 1, itemId: seal.id, spirRef: "SPIR-P-1203 (demo)" });
+      await spare("P-1203A", { partNo: "6310-C3", manufacturer: "SKF", description: "Radial bearing", category: "operational",
+        qtyInstalled: 2, qtyRecommended: 4, qtyApproved: 2, spirRef: "SPIR-P-1203 (demo)" });
+      await spare("P-1203B", { partNo: "SC-65-OH2", manufacturer: "Seal vendor (demo)", description: "Mechanical seal cartridge", category: "operational",
+        qtyInstalled: 1, qtyRecommended: 2, qtyApproved: 1, itemId: seal.id, spirRef: "SPIR-P-1203 (demo)" });
+      await spare("K-2101", { partNo: "DGS-2101", manufacturer: "Compressor vendor (demo)", description: "Dry gas seal, tandem", category: "capital",
+        qtyInstalled: 2, qtyRecommended: 1, qtyApproved: 1, spirRef: "SPIR-K-2101 (demo)" });
+      const iid = async (no) => (await db.query("SELECT id FROM instrument WHERE project_id = $1 AND tag_no = $2", [p.id, no])).rows[0]?.id;
+      for (const [no, months, source, ref] of [["PT-1203A", 12, "company", "ENG-STD-INST-04 (demo) §3"], ["FT-2101", 6, "statutory", "Custody transfer rule (demo)"],
+        ["LT-3102", 12, "company", "ENG-STD-INST-04 (demo) §3"], ["PI-1203A", 1, "company", "ENG-STD-INST-04 (demo) §5 — local gauges on quench oil"],
+        ["PSV-1203A", 24, "statutory", "Pressure equipment inspection rule (demo)"]]) {
+        const id = await iid(no);
+        if (id) await mnt.setCalibrationPlan(db, { projectId: p.id, instrumentId: id, intervalMonths: months, source, sourceRef: ref, userId: user.id });
+      }
+    }
+    console.log("maintenance: PM plan on K-2101 and P-1203A (one draft), SPIR with a short commissioning seal, 5 calibration plans (PI-1203A overdue)");
 
     // ── inspection ────────────────────────────────────────────────────────
     //

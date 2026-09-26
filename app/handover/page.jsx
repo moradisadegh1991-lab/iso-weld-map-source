@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
+import Maintenance from "./Maintenance";
 
 /**
  * Handover to maintenance.
@@ -11,13 +12,18 @@ import TableKit from "../../components/ui/TableKit";
  * the platform has no source for is shown as "unknown", not as done — and
  * holds the tag just as a missing one does. The export is neutral CSV (the
  * CMMS administrator maps it to their import layout), logged with its hash.
+ *
+ * The other tabs are what the CMMS needs besides the asset master: the
+ * maintenance plan, spare parts and periodic calibration (./Maintenance.jsx).
  */
+const TABS = [["master", "شناسنامهٔ تجهیزات"], ["pm", "برنامهٔ PM"], ["spares", "قطعات یدکی (SPIR)"], ["calibration", "کالیبراسیون دوره‌ای"]];
 export default function HandoverPage() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/handover?projectId=${id}`, []);
   const [msg, setMsg] = useState(null);
   const [open, setOpen] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [tab, setTab] = useState("master");
   const may = can({ role }, ACTIONS.MANAGE_HANDOVER);
 
   async function save(body) {
@@ -48,6 +54,10 @@ export default function HandoverPage() {
         <p className="err">در <a href="/project">مشخصات پروژه</a> {!s.flocTemplate && "الگوی Functional Location"}{!s.flocTemplate && !s.levels.length && " و "}{!s.levels.length && "سطوح Criticality"} تعیین نشده — تا تعیین نشود، هیچ تگی آمادهٔ تحویل نیست.</p>
       )}
 
+      <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} className={`btn ${tab === k ? "" : "ghost"}`} onClick={() => setTab(k)}>{t}</button>)}
+      </div>
+      {tab !== "master" ? <Maintenance key={tab} tab={tab} may={may} /> : <>
       <div className="kpis">
         <Kpi v={`${ready}/${tags.length}`} l="آمادهٔ تحویل" tone={ready && ready === tags.length ? "ok" : ""} />
         <Kpi v={count("class")} l="بدون کلاس ISO 14224" tone={count("class") ? "warn" : ""} />
@@ -55,6 +65,7 @@ export default function HandoverPage() {
         <Kpi v={tags.filter((t) => t.open.some((k) => ["manufacturer", "model", "serial"].includes(k))).length} l="پلاک ناقص" b="سازنده، مدل، سریال" />
         <Kpi v={count("mc")} l="MC پذیرفته نشده" />
         <Kpi v={count("iom")} l="دفترچهٔ O&M تأییدنشده یا نامعلوم" />
+        <Kpi v={count("pm")} l="بدون برنامهٔ PM تأییدشده" tone={count("pm") ? "warn" : ""} />
       </div>
 
       <div className="card">
@@ -99,13 +110,16 @@ export default function HandoverPage() {
         <div className="card">
           <h2>خروجی‌های گرفته‌شده</h2>
           <ul className="sm">{data.exports.map((e) => (
-            <li key={e.id}>{new Date(e.at).toLocaleString("fa-IR")} — {e.by_name || "?"} — {e.rows_total} ردیف ({e.rows_ready} آماده) — <span className="mono">SHA-256 {e.sha256.slice(0, 16)}…</span></li>
+            <li key={e.id}>{new Date(e.at).toLocaleString("fa-IR")} — {EXPORT_FA[e.kind] || e.kind} — {e.by_name || "?"} — {e.rows_total} ردیف{e.kind === "asset_master" ? ` (${e.rows_ready} آماده)` : ""} — <span className="mono">SHA-256 {e.sha256.slice(0, 16)}…</span></li>
           ))}</ul>
         </div>
       )}
+      </>}
     </div>
   );
 }
+
+const EXPORT_FA = { asset_master: "شناسنامه", pm_plan: "برنامهٔ PM", spares: "قطعات یدکی", calibration: "کالیبراسیون" };
 
 function Kpi({ v, l, b, tone = "" }) {
   return <div className={`kpi ${tone}`}><span className="v">{v}</span><span className="l">{l}</span>{b && <span className="b">{b}</span>}</div>;

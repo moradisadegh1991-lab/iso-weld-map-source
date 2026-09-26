@@ -524,6 +524,10 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .dtable td.ok{color:var(--ok)} .dtable td.warn{color:var(--warn)} .dtable td.bad{color:var(--bad)}
 /* Links inside a page (tag numbers, "fix it here") read as links on the dark theme. */
 .page a{color:var(--cy);text-decoration:none} .page a:hover{text-decoration:underline}
+/* A link that looks like a button keeps the button's colours: `.page a` is more
+   specific than `.btn`, and without this every <a class="btn"> read teal on teal. */
+.page a.btn{color:var(--on-cy);text-decoration:none;display:inline-block}
+.page a.btn.ghost{color:var(--ink)}
 /* Offline: a strip pinned to the bottom, outside the shell's grid areas. */
 .offline-bar{position:fixed;inset-inline:0;bottom:0;z-index:50;background:var(--warn-bg);color:var(--warn);
   border-top:1px solid rgba(224,163,62,.5);padding:6px 16px;font-size:12px;text-align:center}

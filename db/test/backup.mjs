@@ -19,6 +19,8 @@ const root = await mkdtemp(path.join(tmpdir(), "backup-test-"));
 const { createClient } = await import("../../lib/db/client.mjs");
 const { migrate } = await import("../../lib/db/migrate.mjs");
 const B = await import("../../lib/db/backup.mjs");
+// The newest migration, read from the directory — not written here, or every new migration breaks this test.
+const LATEST = (await readdir(new URL("../migrations/", import.meta.url))).filter((f) => f.endsWith(".sql")).sort().at(-1).replace(/\.sql$/, "");
 
 const src = path.join(root, "live");
 const out = path.join(root, "backups");
@@ -32,7 +34,7 @@ let first;
 
 test("a PGlite backup is read back and counted before it is reported", async () => {
   first = await B.backup({ dataDir: src, dir: out, now: "20260926T080000Z" });
-  equal([first.driver, first.rows.project, first.migration], ["pglite", 2, "035_current_revision"]);
+  equal([first.driver, first.rows.project, first.migration], ["pglite", 2, LATEST]);
   assert(first.tables > 50 && /matches/.test(first.verified));
   const m = JSON.parse(await readFile(`${first.file}.json`, "utf8"));
   equal([m.sha256, m.rows.project], [first.sha256, 2], "the manifest beside it says what it holds");
@@ -138,7 +140,7 @@ if (!PG) {
       dump = await B.backup({ url: urlOf(name("src")), dir: out, now: "20260926T090000Z" });
     } finally { busy = false; await writing; await writer.end(); }
     assert(n > 5, `writes went on during the backup (${n})`);
-    equal([dump.driver, dump.migration], ["pg", "035_current_revision"]);
+    equal([dump.driver, dump.migration], ["pg", LATEST]);
     assert(dump.rows.project >= 3, "the three rows before it, and whatever the snapshot saw");
     assert(!dump.source.includes("not-a-real-secret") && (await readFile(`${dump.file}.json`, "utf8")).indexOf("not-a-real-secret") < 0,
       "no password in the manifest");
