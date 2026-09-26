@@ -1,0 +1,47 @@
+{
+  "id": "REPLACE-WITH-DRAWING-NO",
+  "kind": "golden",
+  "title": "one line: size, topology, what makes this drawing worth testing",
+
+  "source": {
+    "drawingNo": "", "rev": "", "sheet": "", "project": "", "pipingClass": ""
+  },
+  "provenance": "who produced the reference register, from which revision, and how it was checked",
+  "verifiedBy": "",
+  "verifiedAt": "",
+
+  "options": { "spoolMaxLen": 12000, "maxPipeLength": 12000, "strictBom": true },
+
+  "input": {
+    "meta": { "nps": 0, "schedule": "", "clLengthM": 0, "pupLength": 0 },
+    "bom": [
+      { "pt": 1, "group": "PIPE", "description": "", "diam": 0, "qty": 0 }
+    ],
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "", "E": 0, "N": 0, "EL": 0 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 0 }
+    ]
+  },
+
+  "expect": {
+    "weldCount": 0,
+    "fieldWelds": [],
+    "spoolCount": 0,
+    "girthWelds": 0,
+    "maxWarnings": 0,
+    "register": [
+      { "no": "W-01", "spool": "SP-01", "loc": "Field", "kind": "Tie-in", "nps": 0 }
+    ]
+  },
+
+  "_howToFill": [
+    "node types: tie-in | elbow90 | elbow45 | tee | reducer | flange-wn | valve-bw | valve-flanged",
+    "E / N / EL are the node CENTRELINE intersection coordinates in mm, exactly as the drawing calls them out",
+    "input.* is the ground truth for extraction too — get it right and this case scores both layers",
+    "expect.* is what the ENGINEER says is correct, never what the engine happens to print",
+    "omit any expect key you have not personally verified; an unverified expectation is worse than none",
+    "if the engine disagrees with the verified register, that is a finding — open an issue, do not edit expect to match"
+  ]
+}

@@ -1,0 +1,19 @@
+
+# local PGlite data directory — a dev database, never source
+.pglite/
+node_modules/
+.next/
+.storage/
+
+# secrets — never source. .env.example is the template and is tracked;
+# anything carrying a real key is not. An API key reaching GitHub is
+# compromised the moment it is pushed, public repo or not.
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# written by tools/termux-setup.sh — a run log, not source
+setup.log
+backups/
+*.server.pid

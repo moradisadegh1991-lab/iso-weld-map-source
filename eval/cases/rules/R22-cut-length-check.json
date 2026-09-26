@@ -1,0 +1,31 @@
+{
+  "id": "R22-cut-length-check",
+  "title": "The drawing's CUT PIPE LENGTH table catches what the MTO hides",
+  "rule": "جدول CUT PIPE LENGTH نقشه، تیزترین چک موجود است — چون qty در MTO گرد شده و معمولاً اضافه برای تنظیم میدانی دارد",
+  "note": "Taken from a real drawing: 28\"-CWR-10-930065A. CL 3336 and CUT 3211 are both printed on it, and the 125 mm between them is the flange hub. With the hub ignored the MTO check actually looked BETTER (0.04 m off instead of 0.09 m), because the BOM says 3.3 m. Only the cut length exposes it.",
+  "options": { "spoolMaxLen": 12000, "maxPipeLength": 12000, "strictBom": true },
+  "input": {
+    "meta": { "drawingNo": "28\"-CWR-10-930065A-DA01-UCW", "rev": "A0", "sheet": "1/1",
+              "nps": 28, "schedule": "SCH 10", "clLengthM": 3.336, "pupLength": null },
+    "bom": [
+      { "pt": 1, "group": "PIPE", "description": "Pipe, API 5L GR.B, LSAW, BE, SCH 10", "diam": 28, "qty": 3.3 },
+      { "pt": 2, "group": "FLANGES", "description": "Flange, ASTM A105N, Weld Neck, RF, 150#, ASME B16.47B", "diam": 28, "qty": 1 }
+    ],
+    "cutLengths": [{ "piece": 1, "lengthMm": 3211, "nps": 28 }],
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "60\"-CWR-10-930002A-DA01-UCW", "E": 837391, "N": 1467586, "EL": 292062 },
+      { "id": "N2", "type": "flange-wn", "ref": "28\"-CWR-10-930066A-DA01-N", "faceToFace": 125, "E": 837391, "N": 1467586, "EL": 295398 }
+    ],
+    "edges": [{ "from": "N1", "to": "N2", "nps": 28 }]
+  },
+  "expect": {
+    "weldCount": 2,
+    "fieldWeldCount": 1,
+    "spoolCount": 1,
+    "maxWarnings": 0,
+    "register": [
+      { "no": "W-01", "loc": "Field", "kind": "Tie-in", "nps": 28, "role": "60\"-CWR-10-930002A-DA01-UCW" },
+      { "no": "W-02", "loc": "Shop", "kind": "BW", "nps": 28 }
+    ]
+  }
+}

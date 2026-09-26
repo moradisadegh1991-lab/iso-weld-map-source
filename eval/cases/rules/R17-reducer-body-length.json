@@ -1,0 +1,30 @@
+{
+  "id": "R17-reducer-body-length",
+  "title": "A reducer is modelled at its real length, not twice it",
+  "rule": "تبدیل → ۲ جوش، و بدنه‌اش به طول واقعی B16.9 نه دو برابرش",
+  "note": "The node sits at the CENTRE of an in-line body, so each weld is half the length away. Taking the full B16.9 overall length H as the take-out on each side made every reducer twice as long as the fitting it represents and shortened the pipe either side by about 100 mm at NPS 12. A 12-inch concentric reducer is roughly 203 mm end to end; the estimate od*0.62 lands at 201.",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "reducer", "ref": "", "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 10000, "EL": 10000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 8 }
+    ]
+  },
+  "expect": {
+    "weldCount": 4,
+    "fieldWeldCount": 2,
+    "maxWarnings": 0,
+    "register": [
+      { "no": "W-01", "loc": "Field", "kind": "Tie-in", "nps": 12 },
+      { "no": "W-02", "loc": "Shop", "kind": "BW", "nps": 12 },
+      { "no": "W-03", "loc": "Shop", "kind": "BW", "nps": 8 },
+      { "no": "W-04", "loc": "Field", "kind": "Tie-in", "nps": 8 }
+    ]
+  }
+}

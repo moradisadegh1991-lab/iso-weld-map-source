@@ -1,0 +1,21 @@
+{
+  "id": "R05-tee-with-pup",
+  "title": "Tee with pups -> 6 welds (three legs x two welds)",
+  "rule": "سه‌راهی → ۶ جوش با pup (سه سر × دو جوش)",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 150 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "tee", "ref": "", "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 8000, "EL": 10000 },
+      { "id": "N4", "type": "tie-in", "ref": "TP-C", "E": 4000, "N": 4000, "EL": 10000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 12 },
+      { "from": "N2", "to": "N4", "nps": 12 }
+    ]
+  },
+  "expect": { "weldCount": 9, "fieldWeldCount": 3, "girthWelds": 0 }
+}

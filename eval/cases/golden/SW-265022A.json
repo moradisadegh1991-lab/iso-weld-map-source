@@ -1,0 +1,60 @@
+{
+  "id": "SW-265022A",
+  "kind": "golden",
+  "title": "K110 Ethane Cracking — 36\" line, two tie-ins, 45° + 90° elbows, 150 mm pups",
+  "source": {
+    "drawingNo": "SW 265022A",
+    "rev": "0",
+    "sheet": "1/1",
+    "project": "K110 Ethane Cracking Plant — Kavian Olefin Plant-2",
+    "pipingClass": "DX01"
+  },
+  "provenance": "Extraction verified against the drawing; the reference weld register was produced by hand by a piping engineer and is documented in README.md.",
+  "verifiedBy": "piping engineering (manual register)",
+  "options": { "spoolMaxLen": 12000, "maxPipeLength": 12000, "strictBom": true },
+  "input": {
+    "meta": {
+      "drawingNo": "SW 265022A", "rev": "0", "sheet": "1/1",
+      "project": "K110 Ethane Cracking Plant — Kavian Olefin Plant-2",
+      "unit": "30", "area": "2B01U", "pipingClass": "DX01",
+      "nps": 36, "schedule": "SCH 10", "clLengthM": 17.0,
+      "pupLength": 150
+    },
+    "bom": [
+      { "pt": 1, "group": "PIPE", "description": "Welded Pipe, API 5L Gr.B SAW, Bevelled End B16-25 THK B36-10, SCH 10", "diam": 36, "qty": 12.6 },
+      { "pt": 2, "group": "FITTINGS", "description": "Elbow 90 LR, ASTM A234 WPB/W Welded, BW Ends, B16.9, SCH 10", "diam": 36, "qty": 1 },
+      { "pt": 3, "group": "FITTINGS", "description": "Elbow 45 LR, ASTM A234 WPB/W Welded, BW Ends, B16.9, SCH 10", "diam": 36, "qty": 1 },
+      { "pt": 4, "group": "MISCELLANEOUS", "description": "Welded Pipe (pup pieces per Detail A), API 5L Gr.B SAW, SCH 10", "diam": 36, "qty": 0.6 }
+    ],
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "2B01U-SW265004A", "E": 118948, "N": 384836, "EL": 96846 },
+      { "id": "N2", "type": "elbow45", "ref": "", "E": 118948, "N": 385918, "EL": 97928 },
+      { "id": "N3", "type": "elbow90", "ref": "", "E": 118948, "N": 399000, "EL": 97928 },
+      { "id": "N4", "type": "tie-in", "ref": "3B04A-SW265022A", "E": 118948, "N": 399000, "EL": 100300 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 36 },
+      { "from": "N2", "to": "N3", "nps": 36 },
+      { "from": "N3", "to": "N4", "nps": 36 }
+    ]
+  },
+  "expect": {
+    "weldCount": 10,
+    "fieldWelds": ["W-01", "W-05", "W-06", "W-10"],
+    "spoolCount": 3,
+    "girthWelds": 0,
+    "maxWarnings": 0,
+    "register": [
+      { "no": "W-01", "spool": "SP-01", "loc": "Field", "kind": "Tie-in",  "nps": 36, "role": "2B01U-SW265004A" },
+      { "no": "W-02", "spool": "SP-01", "loc": "Shop",  "kind": "BW",      "nps": 36 },
+      { "no": "W-03", "spool": "SP-01", "loc": "Shop",  "kind": "BW",      "nps": 36 },
+      { "no": "W-04", "spool": "SP-01", "loc": "Shop",  "kind": "BW",      "nps": 36 },
+      { "no": "W-05", "spool": "SP-01", "loc": "Field", "kind": "Closure", "nps": 36 },
+      { "no": "W-06", "spool": "SP-02", "loc": "Field", "kind": "Closure", "nps": 36 },
+      { "no": "W-07", "spool": "SP-03", "loc": "Shop",  "kind": "BW",      "nps": 36 },
+      { "no": "W-08", "spool": "SP-03", "loc": "Shop",  "kind": "BW",      "nps": 36 },
+      { "no": "W-09", "spool": "SP-03", "loc": "Shop",  "kind": "BW",      "nps": 36 },
+      { "no": "W-10", "spool": "SP-03", "loc": "Field", "kind": "Tie-in",  "nps": 36, "role": "3B04A-SW265022A" }
+    ]
+  }
+}

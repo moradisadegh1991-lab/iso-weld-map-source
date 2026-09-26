@@ -1,0 +1,51 @@
+name: engine eval
+
+# The weld engine decides what gets welded and where a spool is cut, so a
+# silent regression in it is a fabrication error waiting to happen. This gate
+# is the reason EPIC-7 is sequenced before any other work on the engine.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The eval gate deliberately runs BEFORE any install: the harness has no
+      # dependencies and reads the engine straight from source, so it cannot
+      # be broken by an unrelated dependency problem, and it stays fast.
+      - name: Run engine eval against the recorded baseline
+        run: npm run eval:check -- --json eval/results/ci.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval/results/ci.json
+          if-no-files-found: warn
+
+  data-layer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Runs against real PostgreSQL via PGlite, in-process: no service
+      # container, no credentials, and the same migrations production applies.
+      - name: Data layer tests
+        run: npm run db:test

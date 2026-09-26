@@ -1,0 +1,470 @@
+#!/usr/bin/env node
+/**
+ * Plant siting, piping execution and supports.
+ */
+import { test, run, assert, equal, throws } from "./harness.mjs";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { buildModel } from "../../lib/engine.js";
+import { DEMO } from "../../lib/demo.js";
+import { CHAINS, validateChain, nextActions, derivedSteps, DONE, IN_PROGRESS }
+  from "../../lib/platform/precedence.mjs";
+import { deriveFromWelds, notApplicable } from "../../lib/db/repos/piping-execution.mjs";
+
+const CHAIN = CHAINS.piping_spool;
+const step = (code) => CHAIN.find((s) => s.code === code);
+
+// ── buried or above ground, in the engine ────────────────────────────────
+
+test("with no grade elevation there is no verdict, not zero buried", async () => {
+  // "0 buried" and "nobody said where the ground is" are opposite facts.
+  for (const g of [undefined, null, ""]) {
+    const m = buildModel(DEMO, { gradeElevationMm: g });
+    equal(m.totals.buried, null, `grade ${JSON.stringify(g)} must give null, not 0`);
+    equal(m.register[0].buried, null);
+  }
+});
+
+test("a weld below grade is buried and one above it is not", async () => {
+  const m = buildModel(DEMO, { gradeElevationMm: 100000 });
+  const deep = m.register.find((w) => w.el === 96846);
+  const high = m.register.find((w) => w.el === 100300);
+  equal(deep.buried, true, "3.15 m below a grade of EL 100 000");
+  equal(high.buried, false);
+  equal(m.totals.buried + m.totals.aboveGround, m.register.length,
+    "and every weld is classified once the grade is known");
+});
+
+test("the grade is taken from the project, never assumed", async () => {
+  // Grade 0.00 on the same drawing puts everything above ground. Guessing
+  // 100 000 for a project that uses 0.00 would bury every pipe rack.
+  equal(buildModel(DEMO, { gradeElevationMm: 0 }).totals.buried, 0,
+    "zero is a real grade, not an absent one");
+});
+
+// ── the chain ────────────────────────────────────────────────────────────
+
+test("the piping chain is well formed", async () => {
+  equal(validateChain(CHAIN), []);
+  equal(derivedSteps(CHAIN), ["shop_weld", "shop_ndt", "field_weld"]);
+});
+
+test("fit-up is inspected before the root pass, not after", async () => {
+  assert(step("shop_weld").after.includes("fit_up"));
+});
+
+test("shop NDT comes before erection", async () => {
+  // A reject found in the shop is a cut in the shop; in the rack it is
+  // scaffolding, a permit and a day.
+  assert(step("erected").after.includes("shop_ndt"));
+});
+
+test("the pressure test waits for field welds AND permanent supports", async () => {
+  equal(step("test").after.sort(), ["field_weld", "supports"]);
+  const next = nextActions(CHAIN, {
+    released: DONE, fit_up: DONE, shop_weld: DONE, shop_ndt: DONE, erected: DONE,
+  }).map((s) => s.code);
+  assert(next.includes("supports") && next.includes("field_weld"),
+    "supports and field welding run in parallel once the spool is up");
+  assert(!next.includes("test"));
+});
+
+test("paint and insulation come after the test", async () => {
+  // Joints are left exposed for the leak test so a weep can be seen.
+  assert(step("painted").after.includes("test"));
+});
+
+// ── deriving from the register ───────────────────────────────────────────
+
+test("derived steps follow the welds on the spool", async () => {
+  const w = (field, welded, examined) =>
+    ({ is_field_weld: field, is_welded: welded, is_examined: examined });
+  equal(deriveFromWelds([w(false, true, true), w(false, true, false)]),
+    { shop_weld: DONE, shop_ndt: IN_PROGRESS, field_weld: DONE },
+    "no field welds on this spool: nothing to do on site");
+  equal(deriveFromWelds([w(false, false, false)]).shop_weld, null, "none welded is not started");
+  equal(deriveFromWelds([w(true, true, false)]).field_weld, IN_PROGRESS,
+    "a field weld made but not examined is not ready for the test");
+});
+
+test("NDT is done when it is accepted, not when a film was shot (F11)", async () => {
+  // A weld examined and REJECTED (or still pending) has been examined; it
+  // has not passed. The shop NDT step, and field welding before the
+  // pressure test, wait for acceptance. Started is still "examined".
+  const w = (field, welded, examined, accepted) =>
+    ({ is_field_weld: field, is_welded: welded, is_examined: examined, is_accepted: accepted });
+  equal(deriveFromWelds([w(false, true, true, true), w(false, true, true, false)]).shop_ndt, IN_PROGRESS,
+    "one shop weld rejected: shop NDT is under way, not done");
+  equal(deriveFromWelds([w(false, true, true, true), w(false, true, true, true)]).shop_ndt, DONE);
+  equal(deriveFromWelds([w(false, true, false, false)]).shop_ndt, null, "nothing examined: not started");
+  equal(deriveFromWelds([w(true, true, true, false)]).field_weld, IN_PROGRESS, "a field weld rejected is not ready for the test");
+  equal(deriveFromWelds([w(true, true, true, true)]).field_weld, DONE);
+});
+
+test("a spool with no shop welds is not offered a shop fit-up", async () => {
+  // A single straight length has nothing to fit up in the shop. Offering it
+  // was noise; waiting on it would be a false hold. Not applicable is not
+  // "done" — done would claim an inspection that never happened.
+  const fieldOnly = [{ is_field_weld: true }];
+  equal([...notApplicable(fieldOnly)].sort(), ["fit_up", "shop_ndt", "shop_weld"]);
+  equal([...notApplicable([{ is_field_weld: false }])], ["field_weld"]);
+  equal(notApplicable([]).size, 0, "no register, no claims either way");
+});
+
+test("an unreleased field-only spool is not flagged out of order, and N/A is not progress", async () => {
+  // N/A steps are stored as done so nothing waits on them. Until release,
+  // "done" fit-up after a not-done release read as recorded out of order —
+  // a false alarm on every straight length in the register.
+  const { CHAINS, walk, progress } = await import("../../lib/platform/precedence.mjs");
+  const na = notApplicable([{ is_field_weld: true }]);
+  const recorded = Object.fromEntries([...na].map((c) => [c, DONE]));
+  equal(walk(CHAINS.piping_spool, recorded, { na }).filter((x) => x.outOfOrder).map((x) => x.code), []);
+  const p = progress(CHAINS.piping_spool, recorded, { na });
+  equal([p.done, p.total], [0, 7], "three steps out of scope, none of the rest done");
+});
+
+test("a spool with no welds at all gets no verdict", async () => {
+  // Different from "no shop welds": here the register itself is missing.
+  equal(deriveFromWelds([]), { shop_weld: null, shop_ndt: null, field_weld: null });
+});
+
+// ── against the database ─────────────────────────────────────────────────
+
+process.env.AUTH_MODE = "dev";
+process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "exec-db-"));
+const { getDb } = await import("../../lib/server/db.mjs");
+const { withProject } = await import("../../lib/db/scope.mjs");
+const projects = await import("../../lib/db/repos/projects.mjs");
+const runs = await import("../../lib/db/repos/runs.mjs");
+const exec = await import("../../lib/db/repos/execution.mjs");
+const pe = await import("../../lib/db/repos/piping-execution.mjs");
+
+const db = await getDb();
+const alice = await projects.ensureUser(db, { subject: "kc|alice" });
+const proj = await projects.createProject(db, { code: "K110", name: "K110", ownerUserId: alice.id });
+const other = await projects.createProject(db, { code: "OTHER", name: "O", ownerUserId: alice.id });
+let lineId, spools, welds;
+
+await withProject(db, proj.id, async () => {
+  const { rows: [line] } = await db.query(
+    "INSERT INTO line (project_id, line_no) VALUES ($1,'28-CWR-10') RETURNING id", [proj.id]);
+  lineId = line.id;
+  const { rows: [doc] } = await db.query(
+    `INSERT INTO document (project_id, doc_no, revision, file_sha256, storage_uri)
+     VALUES ($1,'SW 265022A','0',$2,'local://x') RETURNING id`, [proj.id, "b".repeat(64)]);
+  const model = buildModel(DEMO, {});
+  const r = await runs.createRun(db, { projectId: proj.id, documentId: doc.id, lineId,
+    payload: DEMO, validationChecks: model.checks });
+  await runs.saveRegister(db, { projectId: proj.id, runId: r.id, documentId: doc.id, lineId, model });
+  spools = (await db.query("SELECT id, spool_no FROM spool WHERE project_id = $1 ORDER BY spool_no",
+    [proj.id])).rows;
+  welds = (await db.query(
+    "SELECT weld_uid, weld_no, spool_id, shop_field FROM weld WHERE project_id = $1 ORDER BY weld_no",
+    [proj.id])).rows;
+});
+
+test("half a coordinate pair and an impossible latitude are refused", async () => {
+  await throws(() => projects.updateProjectProfile(db, { projectId: proj.id,
+    patch: { origin_latitude: 27.49 } }), "origin_is_a_pair");
+  await throws(() => projects.updateProjectProfile(db, { projectId: proj.id,
+    patch: { origin_latitude: 127, origin_longitude: 52.6 } }), "origin_latitude_range");
+  const p = await projects.updateProjectProfile(db, { projectId: proj.id,
+    patch: { origin_latitude: 27.49, origin_longitude: 52.61 } });
+  equal(Number(p.origin_latitude), 27.49);
+});
+
+test("the stored register gets no buried verdict until the grade is recorded", async () => {
+  await withProject(db, proj.id, async () => {
+    const [row] = await pe.buriedExposure(db, { projectId: proj.id });
+    equal(row.unknown, row.welds, "all unknown, none claimed above ground");
+    equal(row.buried, 0);
+    equal(row.aboveGround, 0, "unknown is not folded into above ground");
+  });
+});
+
+test("the database and the engine agree on every weld", async () => {
+  // The same formula lives in lib/engine.js and in reporting.fact_weld.
+  // Two implementations are unavoidable across browser and database; this
+  // is what stops them drifting.
+  await projects.updateProjectProfile(db, { projectId: proj.id,
+    patch: { grade_elevation_mm: 100000, elevation_datum: "Plant grade ±0.00 = EL 100000" } });
+  const engine = buildModel(DEMO, { gradeElevationMm: 100000 }).register;
+  await withProject(db, proj.id, async () => {
+    const { rows } = await db.query(
+      "SELECT weld_no, is_buried FROM reporting.fact_weld WHERE project_key = $1", [proj.id]);
+    for (const e of engine) {
+      const d = rows.find((r) => r.weld_no === e.no);
+      equal(d.is_buried, e.buried, `weld ${e.no}: engine and database disagree`);
+    }
+    const [row] = await pe.buriedExposure(db, { projectId: proj.id });
+    equal(row.unknown, 0);
+    equal(row.buried, 9);
+    assert(row.deepestMm < 0, "and the deepest point is reported below grade");
+  });
+});
+
+test("a derived step cannot be ticked by hand", async () => {
+  await withProject(db, proj.id, async () => {
+    for (const code of ["shop_weld", "shop_ndt", "field_weld"]) {
+      const e = await throws(() => pe.recordSpoolActivity(db, { projectId: proj.id,
+        spoolId: spools[0].id, code, doneAt: "2026-09-01" }), "INVALID_INPUT");
+      assert(/رجیستر جوش/.test(e.message), `${code} must say where its answer comes from`);
+    }
+    await throws(() => pe.recordSpoolActivity(db, { projectId: proj.id,
+      spoolId: spools[0].id, code: "polished", doneAt: "2026-09-01" }), "INVALID_INPUT");
+  });
+});
+
+test("a completed step with no date is refused, in the repository and in the table", async () => {
+  await withProject(db, proj.id, async () => {
+    await throws(() => pe.recordSpoolActivity(db, { projectId: proj.id,
+      spoolId: spools[0].id, code: "released" }), "تاریخ");
+    await throws(() => db.query(
+      `INSERT INTO spool_activity (project_id, spool_id, code, status)
+       VALUES ($1,$2,'released','done')`, [proj.id, spools[0].id]), "spool_done_is_dated");
+  });
+});
+
+test("a spool walks its chain, and welding answers itself", async () => {
+  await withProject(db, proj.id, async () => {
+    const sp = spools[0].id;
+    let s = await pe.spoolStatus(db, { projectId: proj.id, spoolId: sp });
+    equal(s.next.map((n) => n.code), ["released"]);
+    equal(s.buried, true, "this spool is underground at grade EL 100 000");
+
+    await pe.recordSpoolActivity(db, { projectId: proj.id, spoolId: sp, code: "released",
+      doneAt: "2026-08-01", userId: alice.id });
+    await pe.recordSpoolActivity(db, { projectId: proj.id, spoolId: sp, code: "fit_up",
+      doneAt: "2026-08-03", refNo: "FU-0012", userId: alice.id });
+
+    const shopWeld = welds.find((w) => w.spool_id === sp && w.shop_field === "Shop");
+    assert(shopWeld, "the demo spool has a shop weld");
+    const welder = await exec.upsertWelder(db, { projectId: proj.id, stampNo: "W-12", name: "رضایی" });
+    await exec.addQualification(db, { projectId: proj.id, welderId: welder.id, process: "GTAW",
+      positions: ["6G"], couponOdMm: 219.1, couponThicknessMm: 8.18 });
+    await exec.assignWeld(db, { projectId: proj.id, weldUid: shopWeld.weld_uid,
+      welderId: welder.id, weldedAt: "2026-08-05", process: "GTAW", position: "V", lineId });
+
+    s = await pe.spoolStatus(db, { projectId: proj.id, spoolId: sp });
+    const sw = s.steps.find((x) => x.code === "shop_weld");
+    assert([DONE, IN_PROGRESS].includes(sw.status), "nobody told the system; the register did");
+    equal(sw.derived, true);
+    equal(s.steps.find((x) => x.code === "fit_up").refNo, "FU-0012", "with the report number");
+  });
+});
+
+test("the database and the chain agree on every spool's stage", async () => {
+  // The chain is JavaScript; the reporting view is SQL. Both answer "how far
+  // along is this spool" — this is what stops them drifting apart.
+  await withProject(db, proj.id, async () => {
+    // Give the spools different histories so the comparison means something.
+    // Spool 0 gets fit-up AND every shop weld made, so the order in which
+    // SQL tests "fit_up" and "shop_weld" decides the answer — a fixture
+    // where only one of them is true would pass with the branches swapped,
+    // which is exactly what a first version of this test did.
+    await pe.recordSpoolActivity(db, { projectId: proj.id, spoolId: spools[1].id,
+      code: "released", doneAt: "2026-08-02", userId: alice.id });
+    const welder = await exec.upsertWelder(db, { projectId: proj.id, stampNo: "W-12", name: "رضایی" });
+    const { rows: pending } = await db.query(
+      `SELECT w.weld_uid FROM weld w LEFT JOIN weld_execution e ON e.weld_uid = w.weld_uid
+        WHERE w.spool_id = $1 AND w.shop_field = 'Shop' AND e.weld_uid IS NULL`, [spools[0].id]);
+    for (const w of pending) {
+      await exec.assignWeld(db, { projectId: proj.id, weldUid: w.weld_uid, welderId: welder.id,
+        weldedAt: "2026-08-06", process: "GTAW", position: "V", lineId });
+    }
+    const first = await pe.spoolStatus(db, { projectId: proj.id, spoolId: spools[0].id });
+    equal(first.headline, "shop_weld", "the fixture really puts spool 0 past fit-up");
+    for (const s of spools) {
+      const js = await pe.spoolStatus(db, { projectId: proj.id, spoolId: s.id });
+      const { rows: [sql] } = await db.query(
+        "SELECT stage FROM reporting.spool_stage WHERE spool_key = $1", [s.id]);
+      equal(sql.stage, js.headline, `${s.spool_no}: SQL says ${sql.stage}, chain says ${js.headline}`);
+    }
+  });
+});
+
+test("a rejected shot keeps shop NDT open — in the chain and in SQL — until the repair is accepted", async () => {
+  await withProject(db, proj.id, async () => {
+    const { rows: shop } = await db.query(
+      `SELECT w.weld_uid FROM weld w WHERE w.spool_id = $1 AND w.shop_field = 'Shop' ORDER BY w.weld_no`, [spools[0].id]);
+    for (const [i, w] of shop.entries()) {
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: w.weld_uid, method: "RT", result: i === 0 ? "reject" : "accept" });
+    }
+    const stage = async () => (await db.query("SELECT stage FROM reporting.spool_stage WHERE spool_key = $1", [spools[0].id])).rows[0].stage;
+    const js = async () => pe.spoolStatus(db, { projectId: proj.id, spoolId: spools[0].id });
+    let s = await js();
+    equal([s.steps.find((x) => x.code === "shop_ndt").status, s.headline, await stage()], [IN_PROGRESS, "shop_weld", "shop_weld"],
+      "a rejected film is not a passed weld");
+    const { rows: [f] } = await db.query("SELECT is_examined, is_accepted FROM reporting.fact_weld WHERE weld_uid = $1", [shop[0].weld_uid]);
+    equal([f.is_examined, f.is_accepted], [true, false]);
+    // A second method on another weld, rejected at its first cycle while RT
+    // passed at its second: acceptance is per method, at each method's own latest cycle.
+    await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[0].weld_uid, method: "RT", result: "accept" });
+    if (shop[1]) {
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[1].weld_uid, method: "RT", result: "reject" });
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[1].weld_uid, method: "RT", result: "accept" });
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[1].weld_uid, method: "PT", result: "reject" });
+      const { rows: [g] } = await db.query("SELECT is_accepted FROM reporting.fact_weld WHERE weld_uid = $1", [shop[1].weld_uid]);
+      equal(g.is_accepted, false, "RT passed at cycle 2 does not hide PT rejected at cycle 1");
+      await exec.recordNdt(db, { projectId: proj.id, weldUid: shop[1].weld_uid, method: "PT", result: "accept" });
+    }
+    s = await js();
+    equal([s.steps.find((x) => x.code === "shop_ndt").status, s.headline, await stage()], [DONE, "shop_ndt", "shop_ndt"], "repaired and accepted");
+  });
+});
+
+test("a rejected field weld holds the spool's field welding and its machine's piping step until repaired", async () => {
+  const acts = await import("../../lib/db/repos/activities.mjs");
+  const spine = await import("../../lib/db/repos/spine.mjs");
+  await withProject(db, proj.id, async () => {
+    const tag = await spine.upsertTag(db, { projectId: proj.id, tagNo: "P-900", discipline: "equipment", kind: "rotating" });
+    await db.query("UPDATE line SET tag_id = $1 WHERE id = $2", [tag.id, lineId]);
+    const welder = await exec.upsertWelder(db, { projectId: proj.id, stampNo: "W-12", name: "رضایی" });
+    const { rows: all } = await db.query(
+      `SELECT w.weld_uid, w.shop_field, w.spool_id, (e.weld_uid IS NOT NULL) AS made FROM weld w
+         LEFT JOIN weld_execution e ON e.weld_uid = w.weld_uid WHERE w.line_id = $1 ORDER BY w.weld_no`, [lineId]);
+    const fieldWeld = all.find((w) => w.shop_field === "Field");
+    assert(fieldWeld, "the fixture has a field weld");
+    for (const w of all) {
+      if (!w.made) await exec.assignWeld(db, { projectId: proj.id, weldUid: w.weld_uid, welderId: welder.id,
+        weldedAt: "2026-08-06", process: "GTAW", position: "V", lineId });
+      const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM ndt_record WHERE weld_uid = $1", [w.weld_uid]);
+      if (!n.n) await exec.recordNdt(db, { projectId: proj.id, weldUid: w.weld_uid, method: "RT",
+        result: w.weld_uid === fieldWeld.weld_uid ? "reject" : "accept" });
+    }
+    const { createLoader } = await import("../../lib/db/loader.mjs");
+    // Both ways the platform asks: one tag, and a board's primed batch.
+    const piping = async () => {
+      const one = (await acts.tagStatus(db, { projectId: proj.id, tagId: tag.id })).steps.find((x) => x.code === "piping").status;
+      const loader = createLoader(db, proj.id);
+      await loader.prime([tag.id]);
+      const batch = (await acts.tagStatus(db, { projectId: proj.id, tagId: tag.id, loader })).steps.find((x) => x.code === "piping").status;
+      equal(batch, one, "primed and single agree");
+      return one;
+    };
+    const fieldStep = async () => (await pe.spoolStatus(db, { projectId: proj.id, spoolId: fieldWeld.spool_id })).steps.find((x) => x.code === "field_weld").status;
+    const sqlStage = async () => (await db.query("SELECT stage FROM reporting.spool_stage WHERE spool_key = $1", [fieldWeld.spool_id])).rows[0].stage;
+    const jsStage = async () => (await pe.spoolStatus(db, { projectId: proj.id, spoolId: fieldWeld.spool_id })).headline;
+    equal([await piping(), await fieldStep()], [IN_PROGRESS, IN_PROGRESS], "every weld made and shot, one field weld rejected");
+    assert(await sqlStage() !== "field_weld", "SQL does not report field welding done either");
+    equal(await sqlStage(), await jsStage());
+    await exec.recordNdt(db, { projectId: proj.id, weldUid: fieldWeld.weld_uid, method: "RT", result: "accept" });
+    equal([await piping(), await fieldStep()], [DONE, DONE], "the repair accepted");
+    equal(await sqlStage(), await jsStage());
+    await db.query("UPDATE line SET tag_id = NULL WHERE id = $1", [lineId]);
+  });
+});
+
+test("the board lists every spool short of ready, worst first", async () => {
+  await withProject(db, proj.id, async () => {
+    const board = await pe.spoolBoard(db, { projectId: proj.id });
+    equal(board.length, spools.length);
+    assert(board[0].pct <= board[board.length - 1].pct);
+    assert(board.every((b) => b.waitingOn.length || b.ready));
+  });
+});
+
+// ── supports ─────────────────────────────────────────────────────────────
+
+test("a spring hanger with no load is refused", async () => {
+  // A spring nobody knows the load of is a spring nobody can set.
+  await withProject(db, proj.id, async () => {
+    await throws(() => pe.upsertSupport(db, { projectId: proj.id, supportNo: "SH-01",
+      kind: "spring_hanger", lineId }), "INVALID_INPUT");
+    await throws(() => db.query(
+      `INSERT INTO pipe_support (project_id, support_no, kind) VALUES ($1,'SH-02','spring_hanger')`,
+      [proj.id]), "spring_has_load");
+    const ok = await pe.upsertSupport(db, { projectId: proj.id, supportNo: "SH-01",
+      kind: "spring_hanger", lineId, loadKn: 12.5 });
+    equal(Number(ok.load_kn), 12.5);
+  });
+});
+
+test("a support cannot be inspected before it is installed", async () => {
+  await withProject(db, proj.id, async () => {
+    const s = await pe.upsertSupport(db, { projectId: proj.id, supportNo: "G-101",
+      kind: "guide", lineId, spoolId: spools[0].id });
+    await throws(() => pe.markSupport(db, { projectId: proj.id, supportId: s.id,
+      step: "inspected", on: "2026-09-02" }), "INVALID_INPUT");
+    await throws(() => db.query(
+      "UPDATE pipe_support SET inspected_at = '2026-09-02' WHERE id = $1", [s.id]),
+      "inspected_after_installed");
+
+    await pe.markSupport(db, { projectId: proj.id, supportId: s.id, step: "installed",
+      on: "2026-09-01", userId: alice.id });
+    const done = await pe.markSupport(db, { projectId: proj.id, supportId: s.id,
+      step: "inspected", on: "2026-09-02", userId: alice.id });
+    assert(done.inspected_at);
+
+    await throws(() => db.query(
+      "UPDATE pipe_support SET inspected_at = '2026-08-01' WHERE id = $1", [s.id]),
+      "inspected_after_installed", "and not dated before its own installation either");
+  });
+});
+
+test("supports belong to one project", async () => {
+  await withProject(db, other.id, async () => {
+    equal((await pe.listSupports(db, { projectId: other.id })).length, 0);
+  });
+});
+
+// ── grade per unit ───────────────────────────────────────────────────────
+
+const exposure = async () => (await pe.buriedExposure(db, { projectId: proj.id }))[0];
+
+test("a drawing's unit grade overrides the project grade", async () => {
+  // A utilities platform 1 m lower than the process area: the same weld
+  // elevations read differently against it.
+  await withProject(db, proj.id, async () => {
+    const u = await projects.createUnit(db, { projectId: proj.id, code: "60",
+      name: "یوتیلیتی", gradeElevationMm: 99000 });
+    await db.query("UPDATE document SET unit_id = $1 WHERE project_id = $2", [u.id, proj.id]);
+    const row = await exposure();
+    equal([row.gradeMinMm, row.gradeMaxMm], [99000, 99000], "and the grade used is reported");
+    equal(row.buried, 7, "welds at EL 99 300 and 99 450 are above this platform");
+
+    const engine = buildModel(DEMO, { gradeElevationMm: 99000 });
+    equal(engine.totals.buried, row.buried, "the preview, given the same grade, agrees");
+  });
+});
+
+test("the line's unit wins over the drawing's, and an empty override falls back", async () => {
+  await withProject(db, proj.id, async () => {
+    const tank = await projects.createUnit(db, { projectId: proj.id, code: "70",
+      name: "مخازن", gradeElevationMm: 101000 });
+    await db.query("UPDATE line SET unit_id = $1 WHERE id = $2", [tank.id, lineId]);
+    let row = await exposure();
+    equal(row.gradeMinMm, 101000, "the most specific statement wins");
+    equal(row.buried, 10);
+
+    // Clearing the line unit's override: back to the drawing's unit.
+    await projects.createUnit(db, { projectId: proj.id, code: "70", gradeElevationMm: "" });
+    row = await exposure();
+    equal(row.gradeMinMm, 99000);
+
+    // Leaving the grade out of an update does NOT clear it.
+    await projects.createUnit(db, { projectId: proj.id, code: "60", name: "یوتیلیتی و آب خنک" });
+    row = await exposure();
+    equal(row.gradeMinMm, 99000, "renaming a unit is not a request to forget its grade");
+
+    await db.query("UPDATE line SET unit_id = NULL WHERE id = $1", [lineId]);
+    await db.query("UPDATE document SET unit_id = NULL WHERE project_id = $1", [proj.id]);
+    row = await exposure();
+    equal(row.gradeMinMm, 100000, "with no unit, the project grade");
+  });
+});
+
+test("a printed unit code is matched exactly and never creates a unit", async () => {
+  // The code comes from the model reading a title block; creating a unit
+  // from it would let one misread digit invent a unit with its own grade.
+  await withProject(db, proj.id, async () => {
+    equal((await projects.unitByCode(db, { projectId: proj.id, code: " 60 " }))?.code, "60");
+    equal(await projects.unitByCode(db, { projectId: proj.id, code: "060" }), null);
+    equal(await projects.unitByCode(db, { projectId: proj.id, code: "99" }), null);
+    const { rows } = await db.query("SELECT count(*)::int AS n FROM unit WHERE project_id = $1", [proj.id]);
+    equal(rows[0].n, 2, "no unit was created by looking one up");
+  });
+});
+
+await run();

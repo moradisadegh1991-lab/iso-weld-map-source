@@ -1,0 +1,223 @@
+{
+  "recordedAt": "2026-09-22T12:28:26.374Z",
+  "engine": "lib/engine.js",
+  "summary": {
+    "cases": 26,
+    "draft": 1,
+    "pass": 25,
+    "fail": 0,
+    "xfail": 0,
+    "xpass": 0,
+    "passRate": 100,
+    "weldCountExact": {
+      "ok": 24,
+      "of": 24,
+      "pct": 100
+    },
+    "fieldWeldsExact": {
+      "ok": 2,
+      "of": 2,
+      "pct": 100
+    },
+    "spoolCountExact": {
+      "ok": 14,
+      "of": 14,
+      "pct": 100
+    },
+    "registerExact": {
+      "ok": 8,
+      "of": 8,
+      "pct": 100
+    },
+    "registerFieldAccuracy": 100,
+    "registerFields": {
+      "correct": 101,
+      "of": 101
+    },
+    "warnings": 9
+  },
+  "cases": [
+    {
+      "id": "28-CWR-10-930065A",
+      "kind": "golden",
+      "status": "draft",
+      "file": "eval/cases/golden/28-CWR-10-930065A.json",
+      "failed": []
+    },
+    {
+      "id": "SW-265022A",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/SW-265022A.json",
+      "failed": []
+    },
+    {
+      "id": "R01-tie-in-pair",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R01-tie-in-pair.json",
+      "failed": []
+    },
+    {
+      "id": "R02-elbow90-with-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R02-elbow90-with-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R03-elbow90-no-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R03-elbow90-no-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R04-elbow45-with-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R04-elbow45-with-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R05-tee-with-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R05-tee-with-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R06-tee-no-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R06-tee-no-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R07-reducer",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R07-reducer.json",
+      "failed": []
+    },
+    {
+      "id": "R08-flange-wn",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R08-flange-wn.json",
+      "failed": []
+    },
+    {
+      "id": "R09-valve-bw",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R09-valve-bw.json",
+      "failed": []
+    },
+    {
+      "id": "R10-valve-flanged",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R10-valve-flanged.json",
+      "failed": []
+    },
+    {
+      "id": "R11-girth-long-run",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R11-girth-long-run.json",
+      "failed": []
+    },
+    {
+      "id": "R12-spool-transport-cut",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R12-spool-transport-cut.json",
+      "failed": []
+    },
+    {
+      "id": "R13-bom-gate-drops-fitting",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R13-bom-gate-drops-fitting.json",
+      "failed": []
+    },
+    {
+      "id": "R14-bom-gate-disabled",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R14-bom-gate-disabled.json",
+      "failed": []
+    },
+    {
+      "id": "R15-too-few-nodes",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R15-too-few-nodes.json",
+      "failed": []
+    },
+    {
+      "id": "R16-valve-bw-no-dimension",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R16-valve-bw-no-dimension.json",
+      "failed": []
+    },
+    {
+      "id": "R17-reducer-body-length",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R17-reducer-body-length.json",
+      "failed": []
+    },
+    {
+      "id": "R18-reducer-measured",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R18-reducer-measured.json",
+      "failed": []
+    },
+    {
+      "id": "R19-flange-hub-missing",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R19-flange-hub-missing.json",
+      "failed": []
+    },
+    {
+      "id": "R20-flange-hub-measured",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R20-flange-hub-measured.json",
+      "failed": []
+    },
+    {
+      "id": "R21-spool-over-transport-limit",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R21-spool-over-transport-limit.json",
+      "failed": []
+    },
+    {
+      "id": "R22-cut-length-check",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R22-cut-length-check.json",
+      "failed": []
+    },
+    {
+      "id": "R23-cut-length-mismatch",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R23-cut-length-mismatch.json",
+      "failed": []
+    },
+    {
+      "id": "R24-incomplete-geometry-invalidates-length",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R24-incomplete-geometry-invalidates-length.json",
+      "failed": []
+    }
+  ]
+}

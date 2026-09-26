@@ -1,0 +1,29 @@
+{
+  "id": "R10-valve-flanged",
+  "title": "Flanged valve -> 0 welds, and the bolted joint breaks the spool",
+  "rule": "شیر فلنجی → ۰ جوش",
+  "note": "A bolted joint is not a shop weld, so the pipe either side belongs to a different spool. Any flange welded to those pipe ends is its own flange-wn node carrying its own weld — the engine never invents one, because nothing is drawn that the MTO does not buy.",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "valve-flanged", "ref": "", "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 8000, "EL": 10000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 12 }
+    ]
+  },
+  "expect": {
+    "weldCount": 2,
+    "fieldWeldCount": 2,
+    "spoolCount": 2,
+    "maxWarnings": 0,
+    "register": [
+      { "no": "W-01", "loc": "Field", "kind": "Tie-in", "nps": 12 },
+      { "no": "W-02", "loc": "Field", "kind": "Tie-in", "nps": 12 }
+    ]
+  }
+}

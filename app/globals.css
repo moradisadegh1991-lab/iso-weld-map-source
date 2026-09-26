@@ -2,11 +2,29 @@
   --bg:#070B0E; --surf:#0D141A; --rule:#1F2C36; --ink:#DDE7EE; --dim:#6F8492;
   --cy:#43A0B4; --fld:#FF6B4A;
   --mono: ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  /* Theme tokens: every colour a component uses comes from here, so the
+     light theme at the end of this file is one block, not a hunt. */
+  --surf2:#0A1116;          /* inputs, bars */
+  --panel:#0d1519;          /* nested panels */
+  --th-bg:#0A1014;          /* sticky table heads */
+  --line:#22303a;
+  --rule-soft:rgba(31,44,54,.55);
+  --hover:rgba(255,255,255,.04);
+  --hover-strong:rgba(221,231,238,.08);
+  --ink-strong:#fff;
+  --on-cy:#051015;
+  --bg-grad:radial-gradient(120% 90% at 30% 8%,#101A21 0%,#060A0D 70%);
+  --warn-bg:#2b2210;
+  --bad-bg:#1a0f0c; --bad-ink:#FFB4A2;
+  --ok-bg:#0c1713; --ok-ink:#9FD8BE;
+  --cy-soft:rgba(67,160,180,.10);
+  --overlay:rgba(7,11,14,.78);
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
 body{
-  background:radial-gradient(120% 90% at 30% 8%,#101A21 0%,#060A0D 70%) fixed;
+  background:var(--bg-grad) fixed;
   color:var(--ink);
   font:14px/1.6 ui-sans-serif,system-ui,"Segoe UI",Tahoma,sans-serif;
   -webkit-font-smoothing:antialiased;
@@ -47,7 +65,7 @@ header .sub{font-size:11px;color:var(--dim)}
 .wm-tag{position:absolute;top:0;left:0;font:600 10px/1 var(--mono);letter-spacing:.06em;
   padding:4px 6px;border:1px solid;border-radius:3px;white-space:nowrap}
 .wm-dim{position:absolute;top:0;left:0;font:500 10px/1 var(--mono);color:var(--cy);
-  background:rgba(7,11,14,.78);padding:3px 5px;border-radius:2px;white-space:nowrap}
+  background:var(--overlay);padding:3px 5px;border-radius:2px;white-space:nowrap}
 
 .ctl{position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .ctl .row{display:flex;gap:4px}
@@ -55,7 +73,7 @@ header .sub{font-size:11px;color:var(--dim)}
 .ctl button{font-size:10px;padding:5px 9px;border-radius:4px;border:1px solid var(--rule);
   background:transparent;color:var(--dim);cursor:pointer}
 .ctl button.wide{width:88px;font-family:inherit}
-.ctl button.on{background:var(--ink);color:#0A0E12;border-color:var(--ink)}
+.ctl button.on{background:var(--ink);color:var(--on-cy);border-color:var(--ink)}
 
 .legend{position:absolute;bottom:34px;left:12px;display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--dim)}
 .legend span{display:flex;align-items:center;gap:6px}
@@ -65,18 +83,25 @@ header .sub{font-size:11px;color:var(--dim)}
 .hint{position:absolute;bottom:12px;left:12px;font-size:10px;color:var(--dim)}
 
 aside{width:430px;max-width:46vw;border-inline-start:1px solid var(--rule);
-  display:flex;flex-direction:column;min-height:0;background:rgba(8,12,16,.5)}
+  display:flex;flex-direction:column;min-height:0;background:var(--hover)}
 aside nav{display:flex;gap:2px;padding:8px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
 aside nav button{font-size:11px;padding:5px 10px;border-radius:4px;border:1px solid transparent;
   background:transparent;color:var(--dim);cursor:pointer}
 aside nav button.on{background:var(--surf);border-color:var(--rule);color:var(--ink)}
 .pane{padding:10px 12px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:10px}
+/* The pane scrolls; its blocks do not compress.
+   Without this, a column flex child shrinks below its own content once the
+   pane is height-limited — which it is on a phone, where aside is capped at
+   52vh. A warning listing 38 missing welds measured 130px of text inside a
+   20px box: it had wrapped correctly and then been squashed flat, so it read
+   as a single clipped line. The content was never the problem. */
+.pane > *{flex-shrink:0}
 .tot{font-size:11px;color:var(--cy)}
 
 table{width:100%;border-collapse:collapse;font-size:11px}
 th{text-align:start;font-weight:500;color:var(--dim);font-size:10px;padding:5px 4px;
-  border-bottom:1px solid var(--rule);position:sticky;top:0;background:#0A1014}
-td{padding:5px 4px;border-bottom:1px solid rgba(31,44,54,.5);vertical-align:top}
+  border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--th-bg)}
+td{padding:5px 4px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
 tbody tr{cursor:pointer}
 tbody tr:hover{background:rgba(67,160,180,.07)}
 tbody tr.sel{background:rgba(255,107,74,.12)}
@@ -116,6 +141,98 @@ textarea:focus{border-color:var(--cy)}
   aside{width:100%;max-width:none;border-inline-start:none;border-top:1px solid var(--rule);max-height:52vh}
   .canvas{min-height:340px}
 }
+/* ── the contractor's register ────────────────────────────────────────── */
+/* A file input styled as a button: the native control is unreadable at this
+   size and cannot be made to match the others. */
+.filelabel{position:relative;overflow:hidden;display:inline-flex;align-items:center;
+  padding:6px 11px;border:1px solid var(--rule);border-radius:4px;color:var(--dim);
+  font-size:12px;cursor:pointer;transition:border-color .15s,color .15s}
+.filelabel:hover{border-color:var(--cy);color:var(--cy)}
+.filelabel input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+/* Shorter than the JSON editor: this is a paste target, not a workspace. */
+.truth-paste{min-height:140px}
+.err.sm{font-size:11px;line-height:1.7}
+
+/* ── the platform shell ───────────────────────────────────────────────── */
+.modbar{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--rule);
+  flex-wrap:wrap;align-items:stretch}
+.modbar .mod{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  padding:7px 11px;border:1px solid var(--rule);border-radius:5px;background:transparent;
+  color:var(--dim);cursor:pointer;font-family:inherit;text-align:start;
+  transition:border-color .15s,color .15s,background .15s}
+.modbar .mod b{font-size:12px;color:var(--ink)}
+.modbar .mod span{font-size:10px;line-height:1.5}
+.modbar .mod:hover:not(:disabled){border-color:var(--cy)}
+.modbar .mod.on{background:var(--surf);border-color:var(--ink)}
+/* Planned, not hidden: visible so the direction is legible, dimmed and
+   disabled so nobody mistakes it for something they can use today. */
+.modbar .mod.soon{opacity:.42;cursor:not-allowed;border-style:dashed}
+.modbar .mod.soon b{color:var(--dim)}
+
+.rail{display:flex;flex-wrap:wrap;gap:4px 14px;list-style:none;margin:0;
+  padding:8px 12px;border-bottom:1px solid var(--rule);font-size:11px;color:var(--dim)}
+.rail li{display:flex;align-items:center;gap:5px}
+.rail li i{width:7px;height:7px;border-radius:50%;background:var(--rule);display:inline-block}
+.rail li.done i{background:var(--cy)}
+.rail li.now i{background:var(--ink);box-shadow:0 0 0 3px rgba(221,231,238,.14)}
+.rail li.now{color:var(--ink)}
+.rail.failed{color:var(--fld)}
+
+@media (max-width:560px){
+  .modbar{padding:8px 6px;gap:4px}
+  .modbar .mod{padding:7px 9px}
+  .rail{gap:4px 10px;padding:8px}
+}
+
+/* ── the pane navigator ───────────────────────────────────────────────── */
+.tabnav{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.tabnav button{display:flex;align-items:center;gap:6px;font-family:inherit;font-size:12px;
+  padding:7px 10px;border-radius:5px;border:1px solid transparent;background:transparent;
+  color:var(--dim);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.tabnav button:hover{border-color:var(--rule);color:var(--ink)}
+.tabnav button.on{background:var(--surf);border-color:var(--rule);color:var(--ink)}
+.tabnav-label{white-space:nowrap}
+
+/* Neutral by default. A count is information; only a real problem is loud,
+   because a badge that is always lit is a badge nobody reads. */
+.tabnav-badge{font-family:ui-monospace,monospace;font-size:10px;line-height:1;
+  padding:3px 5px;border-radius:3px;background:var(--hover-strong);color:var(--dim)}
+.tabnav button.on .tabnav-badge{color:var(--ink)}
+.tabnav-badge.warn{background:rgba(255,107,74,.15);color:var(--fld)}   /* the same colour a failed check already uses */
+
+/* The one-line description only appears where there is room for it; on a
+   phone the label and its count carry the meaning on their own. */
+.tabnav-hint{display:none}
+@media (min-width:1100px){
+  .tabnav button{flex-direction:column;align-items:flex-start;gap:2px;padding:7px 11px}
+  .tabnav button .tabnav-badge{position:absolute;top:6px;inset-inline-end:8px}
+  .tabnav button{position:relative;padding-inline-end:34px}
+  .tabnav-hint{display:block;font-size:10px;line-height:1.4;color:var(--dim);opacity:.75}
+  .tabnav button.on .tabnav-hint{opacity:1}
+}
+
+/* A phone, once the viewport meta lets the real width through. The 900px
+   block above was written for a narrow window on a desktop; these are the
+   things that still do not fit when the window is a 6-inch screen. */
+@media (max-width:560px){
+  /* 210px minimums put two of these side by side and push the page wider
+     than the screen — the horizontal scroll that clipped the text. */
+  .ask-opts button{min-width:100%}
+  .models button{min-width:calc(50% - 3px)}
+  .intake{padding:24px 16px;gap:14px}
+  /* Tables are the other thing that will not compress: let them scroll
+     inside their pane instead of stretching the document. */
+  .pane{padding:10px 8px}
+  .pane table{display:block;overflow-x:auto;white-space:nowrap}
+  aside nav button{font-size:12px;padding:7px 11px}   /* a thumb, not a mouse */
+  .tabnav{padding:8px 6px;gap:3px}
+  .tabnav button{padding:8px 9px}
+  .canvas{min-height:260px}
+}
+/* Nothing should ever scroll the page sideways; if something overflows, it
+   scrolls inside its own box. */
+html,body{overflow-x:hidden}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 .note{margin:0;padding:8px 11px;border:1px solid var(--rule);border-inline-start:2px solid var(--cy);
@@ -139,7 +256,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .map2d svg{flex:1;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
 .map2d svg:active{cursor:grabbing}
 .map2d-bar{display:flex;gap:8px;align-items:center;padding:8px 12px;
-  border-top:1px solid var(--rule);background:rgba(7,11,14,.7)}
+  border-top:1px solid var(--rule);background:var(--overlay)}
 .map2d-bar .ghost{align-self:auto}
 
 .models{display:flex;gap:6px;flex-wrap:wrap}
@@ -149,7 +266,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .models button:hover{border-color:var(--cy)}
 .models button b{font-size:12px;color:var(--ink)}
 .models button span{font-size:10px;line-height:1.5}
-.models button.on{border-color:var(--ink);background:rgba(221,231,238,.07)}
+.models button.on{border-color:var(--ink);background:var(--hover-strong)}
 .models button.on b{color:var(--ink)}
 
 .ask{border:1px solid var(--rule);border-radius:6px;padding:16px}
@@ -159,7 +276,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
   text-align:start;padding:14px;border:1px solid var(--rule);border-radius:5px;
   background:transparent;color:var(--dim);cursor:pointer;transition:border-color .15s,background .15s}
 .ask-opts button:hover{border-color:var(--cy)}
-.ask-opts button.on{border-color:var(--ink);background:rgba(221,231,238,.07)}
+.ask-opts button.on{border-color:var(--ink);background:var(--hover-strong)}
 .ask-opts button b{font-size:13px;color:var(--ink)}
 .ask-opts button span{font-size:11px;line-height:1.7}
 .chk{display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:12px;color:var(--ink);cursor:pointer}
@@ -168,3 +285,493 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .drop.locked{opacity:.45;cursor:not-allowed;border-color:var(--rule)}
 .drop.locked:hover{border-color:var(--rule);background:transparent}
 button.ghost:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── persistence bar ─────────────────────────────────────────── */
+.savebar { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px;
+  display: flex; flex-direction: column; gap: 8px; }
+.savebar .row { display: flex; gap: 6px; align-items: center; }
+.savebar input, .savebar select { flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px;
+  background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 6px; }
+.savebar button { white-space: nowrap; }
+
+/* ── revision diff ───────────────────────────────────────────── */
+.revdiff { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.revdiff.alarm { border-color: #FF6B4A; background: var(--bad-bg); }
+.revdiff .rework { display: flex; flex-direction: column; gap: 3px; margin-top: 6px;
+  padding-top: 6px; border-top: 1px solid #3a2420; color: var(--bad-ink); }
+.revdiff .rework b { color: #FF6B4A; }
+
+/* ── draft disclaimer, on screen as well as on every export ──── */
+.disclaimer { margin-top: 8px; padding: 8px 10px; font-size: 11px; line-height: 1.8;
+  border: 1px solid #FF6B4A44; border-right: 3px solid #FF6B4A; border-radius: 6px;
+  background: var(--bad-bg); color: var(--bad-ink); }
+
+/* ── session, review queue, edit panel ───────────────────────── */
+.sessionbar { display: flex; flex-direction: column; gap: 6px; }
+.sessionbar .row { display: flex; gap: 6px; align-items: center; }
+.sessionbar input, .sessionbar select { flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px;
+  background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 6px; }
+
+.queuebox { border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px; }
+.queuebox .ask-q { font-weight: 600; }
+
+button.ghost.sm { padding: 2px 8px; font-size: 11px; }
+.warnish { color: #E8C468; }
+
+.editpanel { display: flex; flex-direction: column; gap: 8px; }
+.editpanel input { padding: 6px 8px; font-size: 12px; background: var(--panel); color: inherit;
+  border: 1px solid var(--line); border-radius: 6px; }
+.editpanel .locked { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px;
+  border: 1px solid #2E7D5B; border-radius: 8px; background: var(--ok-bg); color: var(--ok-ink); }
+.editpanel .pendinghead { padding-top: 4px; }
+
+.difftable { width: 100%; border-collapse: collapse; }
+.difftable th { text-align: right; font-weight: 500; opacity: .6; font-size: 11px; }
+.difftable td { padding: 3px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+.difftable .was { color: #FF9C86; text-decoration: line-through; opacity: .75; }
+.difftable .now { color: #7FD6A8; }
+
+.editlog summary { cursor: pointer; font-size: 12px; opacity: .8; padding: 4px 0; }
+
+/* ── PDF sheet picker ────────────────────────────────────────── */
+.sheetpicker { display: flex; flex-direction: column; gap: 10px; }
+.sheets { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px; max-height: 420px; overflow-y: auto; }
+.sheet { display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; cursor: pointer; }
+.sheet:hover:not(:disabled) { border-color: #4AA3FF; }
+.sheet:disabled { opacity: .5; cursor: default; }
+.sheet img { width: 100%; height: auto; background: #fff; border-radius: 4px; }
+.sheet-blank { width: 100%; aspect-ratio: 1.41; display: grid; place-items: center;
+  background: var(--panel); border-radius: 4px; opacity: .5; }
+
+/* The equipment-list import on the intake screen. Collapsed by default: it
+   is a real entry point, but it is not the one most people arrive for. */
+.intake-more{margin:14px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.intake-more>summary{cursor:pointer;padding:10px 12px;font-size:13px;user-select:none}
+.intake-more>summary:hover{background:var(--hover)}
+.intake-more[open]>summary{border-bottom:1px solid var(--line)}
+.intake-more .pane{border:0;border-radius:0}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THE PLATFORM SHELL
+   ═══════════════════════════════════════════════════════════════════════
+   Desktop first. The phone is a test target, not the design target: this is
+   a system people sit in front of for a shift, next to a drawing and a
+   spreadsheet, and squeezing it into a phone column would cost the density
+   that makes it faster than what it replaces. It still reflows rather than
+   breaking on a narrow screen — but it reflows DOWN from the desktop layout
+   instead of growing up from a phone one.
+
+   A note on dimensions: everything here is sized in a small number of steps
+   (--gap and its multiples, one rule colour, three text sizes). An ERP earns
+   trust by being boring in exactly the same way on every screen. */
+
+:root{
+  --gap:16px;
+  --tile:180px;
+  --nav-w:224px;
+  --bar-h:52px;
+  --ok:#3FB27F; --warn:#E0A33E; --bad:#E2574C;
+  --raise:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.22);
+}
+
+.shell{min-height:100vh;display:grid;grid-template-rows:var(--bar-h) 1fr;
+  grid-template-columns:var(--nav-w) 1fr;
+  grid-template-areas:"bar bar" "nav body"}
+
+/* ── top bar ─────────────────────────────────────────────────────────── */
+.topbar{grid-area:bar;display:flex;align-items:center;gap:var(--gap);
+  padding:0 var(--gap);background:var(--surf);border-bottom:1px solid var(--rule);
+  position:sticky;top:0;z-index:20}
+.topbar .brand{font-size:12px}
+.topbar .crumb{color:var(--dim);font-size:12px}
+.topbar select{background:var(--surf2);border:1px solid var(--rule);color:var(--ink);
+  border-radius:4px;padding:5px 8px;font:inherit;font-size:12px;max-width:260px}
+.who{display:flex;align-items:center;gap:8px;font-size:12px}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--cy);color:var(--on-cy);
+  display:grid;place-items:center;font-weight:700;font-size:11px;flex:none}
+
+/* ── left menu ───────────────────────────────────────────────────────── */
+.sidenav{grid-area:nav;background:var(--surf);border-inline-end:1px solid var(--rule);
+  padding:10px 0;overflow-y:auto}
+.sidenav .grp{font-size:10px;letter-spacing:.14em;color:var(--dim);
+  padding:14px var(--gap) 6px;text-transform:uppercase}
+.sidenav a{display:flex;align-items:center;gap:10px;padding:8px var(--gap);
+  color:var(--ink);text-decoration:none;font-size:13px;border-inline-start:2px solid transparent}
+.sidenav a:hover{background:var(--hover)}
+.sidenav a.on{border-inline-start-color:var(--cy);background:var(--cy-soft);color:var(--ink-strong)}
+.sidenav a.soon{color:var(--dim);pointer-events:none}
+.sidenav a .ic{width:18px;text-align:center;opacity:.8}
+.sidenav a .tail{margin-inline-start:auto;font-size:10px;color:var(--dim)}
+
+/* ── body ────────────────────────────────────────────────────────────── */
+/* `display:block` is not decoration. The original single-page stylesheet has
+   a global `main{display:flex;flex-direction:column}`, and this element is a
+   <main>, so it inherited that. `.page` then carries `margin:0 auto`, and on
+   a FLEX ITEM auto margins cancel the default `align-items:stretch` — the
+   page collapsed from 1216px to 297px and every tile grid resolved to one
+   column. The build passed, every route rendered, every assertion about
+   headings and overflow passed, and the layout was unusable. Measured, not
+   guessed. */
+.body{grid-area:body;padding:var(--gap);overflow-x:hidden;display:block}
+.page{width:100%;max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:var(--gap)}
+.page h1{font-size:19px;margin:0;font-weight:600}
+.page h2{font-size:14px;margin:0;font-weight:600;color:var(--ink)}
+.pagehead{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.pagehead .sub{color:var(--dim);font-size:12px}
+
+/* ── tiles ───────────────────────────────────────────────────────────── */
+.tiles{display:grid;gap:var(--gap);
+  grid-template-columns:repeat(auto-fill,minmax(var(--tile),1fr))}
+.tile{background:var(--surf);border:1px solid var(--rule);border-radius:8px;
+  padding:14px;min-height:118px;display:flex;flex-direction:column;gap:6px;
+  color:var(--ink);text-decoration:none;transition:border-color .15s,transform .15s,box-shadow .15s}
+.tile:hover{border-color:var(--cy);transform:translateY(-1px);box-shadow:var(--raise)}
+.tile .ic{font-size:18px;opacity:.85}
+.tile .t{font-size:13px;font-weight:600}
+.tile .d{font-size:11px;color:var(--dim);line-height:1.5}
+.tile .big{font-family:var(--mono);font-size:26px;margin-top:auto;line-height:1}
+.tile .big.ok{color:var(--ok)} .tile .big.warn{color:var(--warn)} .tile .big.bad{color:var(--bad)}
+.tile.soon{opacity:.5;pointer-events:none}
+.tile.soon .t::after{content:" · به‌زودی";font-weight:400;color:var(--dim);font-size:10px}
+
+/* ── cards, forms, tables ────────────────────────────────────────────── */
+.card{background:var(--surf);border:1px solid var(--rule);border-radius:8px;padding:var(--gap);
+  display:flex;flex-direction:column;gap:12px}
+.card > h2{padding-bottom:10px;border-bottom:1px solid var(--rule)}
+
+.grid2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.field{display:flex;flex-direction:column;gap:5px}
+.field > label{font-size:11px;color:var(--dim)}
+.field input,.field select,.field textarea,input.search{
+  background:var(--surf2);border:1px solid var(--rule);border-radius:4px;color:var(--ink);
+  padding:8px 10px;font:inherit;font-size:13px;outline:none;width:100%}
+.field input:focus,.field select:focus,.field textarea:focus,input.search:focus{border-color:var(--cy)}
+.field textarea{min-height:76px;resize:vertical}
+/* position:static is not decoration. The original single-page stylesheet has
+   `.hint{position:absolute;bottom:12px;left:12px}` for the caption over the
+   3D viewer, and it applied to every form hint in the shell: each one was
+   pinned to its form's bottom-left corner, on top of the others. Screenshots
+   missed it for three rounds because the full-page capture stopped at the
+   fold; measuring the hints' boxes found it. */
+.field .hint{position:static;display:block;font-size:10px;color:var(--dim)}
+
+.btn{background:var(--cy);border:1px solid var(--cy);color:var(--on-cy);border-radius:4px;
+  padding:8px 16px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.35;cursor:not-allowed;filter:grayscale(1)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
+.btn.ghost:hover:not(:disabled){border-color:var(--cy)}
+.btn.danger{background:#c9483e;border-color:#c9483e;color:#fff}
+
+.dtable{width:100%;border-collapse:collapse;font-size:12px}
+.dtable th{text-align:start;font-weight:600;color:var(--dim);font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--rule)}
+.dtable td{padding:9px 10px;border-bottom:1px solid var(--rule-soft)}
+.dtable tr:last-child td{border-bottom:0}
+.dtable tbody tr:hover{background:var(--hover)}
+.wrap{overflow-x:auto}
+
+.pill{display:inline-block;font-size:10px;padding:2px 8px;border-radius:999px;
+  border:1px solid var(--rule);color:var(--dim)}
+.pill.ok{color:var(--ok);border-color:rgba(63,178,127,.45)}
+.pill.warn{color:var(--warn);border-color:rgba(224,163,62,.45)}
+.pill.bad{color:var(--bad);border-color:rgba(226,87,76,.45)}
+
+.bar{height:5px;background:var(--surf2);border-radius:3px;overflow:hidden;min-width:70px}
+.bar > i{display:block;height:100%;background:var(--cy)}
+
+.empty-note{color:var(--dim);font-size:12px;padding:20px;text-align:center;
+  border:1px dashed var(--rule);border-radius:6px}
+
+/* ── sign in ─────────────────────────────────────────────────────────── */
+.signin{min-height:100vh;display:grid;place-items:center;padding:var(--gap)}
+.signin form{width:100%;max-width:380px;background:var(--surf);border:1px solid var(--rule);
+  border-radius:10px;padding:26px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--raise)}
+.signin h1{font-size:16px;margin:0}
+.signin .mark{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--cy)}
+
+/* ── narrower screens: reflow DOWN from the desktop layout ───────────── */
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr;grid-template-areas:"bar" "nav" "body"}
+  .sidenav{display:flex;gap:2px;overflow-x:auto;padding:6px;border-inline-end:0;
+    border-bottom:1px solid var(--rule)}
+  .sidenav .grp{display:none}
+  .sidenav a{border-inline-start:0;border-bottom:2px solid transparent;white-space:nowrap;
+    border-radius:4px}
+  .sidenav a.on{border-inline-start:0;border-bottom-color:var(--cy)}
+  .sidenav a .tail{display:none}
+  :root{--tile:150px}
+}
+
+/* Codes in table cells render left-to-right, still aligned to the RTL column.
+   Without this, "28-CWR-10-930065A" in an RTL table is displayed as
+   "CWR-10-930065A-28": the bidi algorithm moves the leading number to the
+   other end. A wrong line number on an engineering screen is a defect, not
+   a style issue — and it was only visible in a screenshot. */
+.dtable td.mono{direction:ltr;text-align:right;unicode-bidi:isolate}
+
+/* Headline figures (HSE, project controls): a number, its label, its base. */
+.kpis{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:700px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--surf);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi .v{font-size:22px;font-weight:600;direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:11px;color:var(--dim)}
+.kpi .b{font-size:10px;color:var(--dim)}
+.kpi.bad .v{color:var(--bad)} .kpi.warn .v{color:var(--warn)} .kpi.ok .v{color:var(--ok)}
+.dtable td.ok{color:var(--ok)} .dtable td.warn{color:var(--warn)} .dtable td.bad{color:var(--bad)}
+/* Links inside a page (tag numbers, "fix it here") read as links on the dark theme. */
+.page a{color:var(--cy);text-decoration:none} .page a:hover{text-decoration:underline}
+/* A link that looks like a button keeps the button's colours: `.page a` is more
+   specific than `.btn`, and without this every <a class="btn"> read teal on teal. */
+.page a.btn{color:var(--on-cy);text-decoration:none;display:inline-block}
+.page a.btn.ghost{color:var(--ink)}
+/* Offline: a strip pinned to the bottom, outside the shell's grid areas. */
+.offline-bar{position:fixed;inset-inline:0;bottom:0;z-index:50;background:var(--warn-bg);color:var(--warn);
+  border-top:1px solid rgba(224,163,62,.5);padding:6px 16px;font-size:12px;text-align:center}
+/* The field page is used standing up, one-handed: big targets. */
+.field-page .btn{min-height:44px}
+.field-step{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--rule)}
+.queued{border:1px dashed var(--warn);border-radius:4px;padding:6px 8px;font-size:12px;color:var(--warn)}
+/* Punch photos: thumbnails, the queued ones dashed like any queued entry. */
+.photo-strip{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.photo-thumb{position:relative;display:block;width:72px;height:72px;border:1px solid var(--rule);border-radius:4px;overflow:hidden;background:var(--surf)}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-thumb .photo-tag{position:absolute;inset-inline:0;bottom:0;font-size:10px;line-height:1.4;text-align:center;background:rgba(0,0,0,.6);color:#fff}
+.photo-thumb.is-queued{border:1px dashed var(--warn)} .photo-thumb.is-queued .photo-tag{color:var(--warn)}
+.photo-thumb.is-rejected{border:1px solid var(--bad)} .photo-thumb.is-rejected .photo-tag{color:var(--bad)}
+.photo-thumb .photo-none{display:block;padding:8px 2px 0;font-size:9px;line-height:1.3;text-align:center;color:var(--dim)}
+.photo-btn{position:relative;overflow:hidden;cursor:pointer}
+.photo-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+/* Labels: printed, not viewed. */
+.labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.label{background:#fff;color:#000;border:1px solid #bbb;border-radius:4px;padding:8px;text-align:center;break-inside:avoid}
+.label .no{font:700 14px/1.2 monospace;margin-top:4px;direction:ltr}
+.label .desc{font-size:10px;color:#333}
+@media print{
+  .sidenav,.topbar,header,.no-print,.offline-bar{display:none !important}
+  .shell{display:block} body{background:#fff}
+  .labels{grid-template-columns:repeat(4,1fr)}
+}
+
+/* ── phones ──────────────────────────────────────────────────────────────
+   The menu groups are <div>s; as flex items each became its own column and
+   the "strip" was a wall of links filling the first screen (measured on a
+   412 px viewport, the field page's content started below the fold).
+   display:contents lets every link sit in the one horizontal strip. The
+   top bar wraps instead of overlapping, and keeps what a person on site
+   needs: the project, who they are, and the way out. */
+@media (max-width:900px){
+  .shell{grid-template-rows:auto auto 1fr}
+  .sidenav > div{display:contents}
+}
+@media (max-width:700px){
+  .topbar{flex-wrap:wrap;height:auto;min-height:var(--bar-h);padding:6px 10px;gap:6px;position:static}
+  .topbar .brand,.topbar .crumb,.topbar .grow{display:none}
+  .topbar select{max-width:none;flex:1 1 100%}
+  .who{flex:1 1 100%;flex-wrap:wrap}
+  .who > span:nth-child(2){max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .who .btn{padding:4px 8px !important;font-size:11px}
+  .sidenav{position:sticky;top:0;z-index:15}
+  .offline-bar{font-size:11px}
+  .page{padding-bottom:56px}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LIGHT THEME
+   Same tokens, other values. Chosen per person (the shell's theme switch,
+   remembered in this browser). The 3D viewer and the weld map keep their
+   dark canvas on purpose: a model reads better on dark, as in any CAD.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root[data-theme="light"]{
+  --bg:#EEF2F5; --surf:#FFFFFF; --rule:#D6DEE4; --ink:#16222B; --dim:#5B6D79;
+  --cy:#1E7C92; --fld:#D2461F;
+  --ok:#1E8A5A; --warn:#A96C00; --bad:#C3362B;
+  --surf2:#F6F8FA; --panel:#F3F6F8; --th-bg:#F3F6F8; --line:#D6DEE4;
+  --rule-soft:#E6ECF0; --hover:rgba(22,34,43,.045); --hover-strong:rgba(22,34,43,.07);
+  --ink-strong:#0A1116; --on-cy:#FFFFFF;
+  --bg-grad:linear-gradient(180deg,#F3F6F8 0%,#E9EEF2 100%);
+  --warn-bg:#FFF4DC; --bad-bg:#FDECE8; --bad-ink:#9E2A1C; --ok-bg:#E8F6EF; --ok-ink:#1E6B47;
+  --cy-soft:rgba(30,124,146,.10); --overlay:rgba(255,255,255,.88);
+  --raise:0 1px 2px rgba(16,24,32,.06), 0 6px 18px rgba(16,24,32,.07);
+  color-scheme:light;
+}
+:root[data-theme="light"] .viewer, :root[data-theme="light"] .map2d{background:#0A1116}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SHELL v2 — the menu, the user menu, the drawer on a phone
+   ═══════════════════════════════════════════════════════════════════════ */
+.shell.rail{--nav-w:60px}
+.sidenav{display:flex;flex-direction:column;padding:0}
+.nav-top{padding:10px 10px 6px;position:sticky;top:0;background:var(--surf);z-index:2}
+.nav-search{position:relative}
+.nav-search input{width:100%;background:var(--surf2);border:1px solid var(--rule);border-radius:6px;color:var(--ink);
+  padding:7px 10px;padding-inline-end:52px;font:inherit;font-size:12px;outline:none}
+.nav-search input:focus{border-color:var(--cy)}
+.nav-search .k{position:absolute;inset-inline-end:8px;unicode-bidi:isolate;pointer-events:none;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dim);
+  border:1px solid var(--rule);border-radius:3px;padding:0 4px;font-family:var(--mono)}
+.nav-groups{flex:1;overflow-y:auto;padding-bottom:10px}
+.nav-grp > button.grp{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;cursor:pointer;
+  font-size:10px;letter-spacing:.12em;color:var(--dim);padding:12px var(--gap) 6px}
+.nav-grp > button.grp:hover{color:var(--ink)}
+.nav-grp > button.grp .chev{margin-inline-start:auto;transition:transform .15s;font-size:9px}
+.nav-grp.closed > button.grp .chev{transform:rotate(90deg)}
+.nav-grp.closed > .items{display:none}
+.sidenav a .badge{margin-inline-start:auto;font-size:10px;font-family:var(--mono);color:var(--dim)}
+.nav-foot{border-top:1px solid var(--rule);padding:8px 10px;display:flex;gap:6px;align-items:center}
+.nav-foot button{all:unset;cursor:pointer;color:var(--dim);font-size:12px;padding:6px 8px;border-radius:6px}
+.nav-foot button:hover{background:var(--hover);color:var(--ink)}
+.nav-empty{padding:10px var(--gap);font-size:12px;color:var(--dim)}
+/* Rail: icons only; the title shows on hover. */
+.shell.rail .sidenav .grp, .shell.rail .sidenav .t, .shell.rail .nav-search, .shell.rail .sidenav a .tail,
+.shell.rail .sidenav a .badge, .shell.rail .nav-foot .t{display:none}
+.shell.rail .sidenav a{justify-content:center;padding:10px 0}
+.shell.rail .nav-grp{border-bottom:1px solid var(--rule-soft)}
+.shell.rail .nav-grp.closed > .items{display:block}
+.shell.rail .nav-foot{flex-direction:column}
+
+/* The top bar */
+.topbar .hamb{display:none;all:unset;cursor:pointer;font-size:18px;padding:4px 8px;border-radius:6px}
+.topbar .hamb:hover{background:var(--hover)}
+.topbar .brand{display:flex;align-items:center;gap:8px}
+.topbar .brand .logo{width:24px;height:24px;border-radius:6px;background:var(--cy);color:var(--on-cy);display:grid;place-items:center;
+  font:700 11px/1 var(--mono);letter-spacing:0}
+.iconbtn{all:unset;cursor:pointer;display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;color:var(--ink);
+  border:1px solid var(--rule)}
+.iconbtn:hover{border-color:var(--cy);color:var(--cy)}
+.usermenu{position:relative}
+.usermenu > button{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:8px;font-size:12px}
+.usermenu > button:hover{background:var(--hover)}
+.usermenu .menu{position:absolute;inset-inline-end:0;top:calc(100% + 6px);min-width:240px;background:var(--surf);border:1px solid var(--rule);
+  border-radius:10px;box-shadow:var(--raise);padding:6px;z-index:40;display:flex;flex-direction:column}
+.usermenu .menu .head{padding:8px 10px;border-bottom:1px solid var(--rule);margin-bottom:4px;display:flex;flex-direction:column;gap:2px}
+.usermenu .menu .head .e{font-size:11px;color:var(--dim);direction:ltr;text-align:right}
+.usermenu .menu button, .usermenu .menu a{all:unset;cursor:pointer;padding:8px 10px;border-radius:6px;font-size:12px;display:flex;gap:8px;align-items:center}
+.usermenu .menu button:hover, .usermenu .menu a:hover{background:var(--hover)}
+.usermenu .menu .danger{color:var(--bad)}
+.role-pill{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--rule);color:var(--dim)}
+.role-pill.developer{color:var(--fld);border-color:var(--fld)}
+.role-pill.admin{color:var(--cy);border-color:var(--cy)}
+
+/* ═══ collapsible form cards ═══ */
+.fold{background:var(--surf);border:1px solid var(--rule);border-radius:8px}
+.fold > .fold-head{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;cursor:pointer;
+  padding:12px var(--gap);font-size:13px;font-weight:600}
+.fold > .fold-head:hover{background:var(--hover)}
+.fold > .fold-head .plus{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:var(--cy-soft);color:var(--cy);
+  font-weight:700;transition:transform .15s}
+.fold.open > .fold-head .plus{transform:rotate(45deg)}
+.fold > .fold-head .hint{position:static;font-weight:400;font-size:11px;color:var(--dim)}
+.fold > .fold-head .x{margin-inline-start:auto;font-size:11px;color:var(--dim);font-weight:400}
+.fold > .fold-body{border-top:1px solid var(--rule);padding:var(--gap)}
+.fold > .fold-body > form.card, .fold > .fold-body > .card,
+.fold-panel > .fold-body > form.card, .fold-panel > .fold-body > .card{border:0;padding:0;background:none;box-shadow:none}
+.fold > .fold-body > form.card > h2:first-child, .fold > .fold-body > form > h2:first-child,
+.fold > .fold-body > .card > h2:first-child,
+.fold-panel > .fold-body > form.card > h2:first-child, .fold-panel > .fold-body > form > h2:first-child,
+.fold-panel > .fold-body > .card > h2:first-child{display:none}
+
+/* ═══ a section's forms: buttons in the card's header row, the form under it ═══ */
+.card[data-actions]{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
+.card[data-actions] > *{grid-column:1 / -1}
+.card[data-actions="head"] > h2:first-child{grid-column:1;grid-row:1}
+.card[data-actions="head"] > .card-actions{grid-column:2;grid-row:1;border-bottom:1px solid var(--rule);padding-bottom:6px;align-self:stretch}
+.card-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+.card-actions:empty, .card-formslot:empty{display:none}
+.fold-btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+  padding:5px 10px;border-radius:6px;border:1px solid var(--cy);color:var(--cy);background:var(--cy-soft);white-space:nowrap}
+.fold-btn:hover{background:var(--cy);color:var(--on-cy)}
+.fold-btn span{color:inherit}
+.fold-btn .plus{font-weight:700;transition:transform .15s}
+.fold-btn.open{background:var(--cy);color:var(--on-cy)}
+.fold-btn.open .plus{transform:rotate(45deg)}
+.fold-panel{border:1px solid var(--cy);border-radius:8px;background:var(--surf2);box-shadow:var(--raise)}
+.fold-panel-head{display:flex;align-items:center;gap:10px;padding:10px var(--gap);border-bottom:1px solid var(--rule);font-size:13px}
+.fold-panel-head .hint{font-size:11px;color:var(--dim)}
+.fold-panel-head .x{all:unset;cursor:pointer;margin-inline-start:auto;font-size:11px;color:var(--dim);padding:3px 8px;border:1px solid var(--rule);border-radius:6px}
+.fold-panel-head .x:hover{color:var(--ink);border-color:var(--ink)}
+.fold-panel > .fold-body{padding:var(--gap)}
+
+/* ═══ a section's pages, as tabs across the top ═══ */
+.section-tabs{max-width:1280px;margin:0 auto var(--gap);display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  border-bottom:1px solid var(--rule);padding-bottom:0}
+.section-tabs .st-title{font-size:12px;color:var(--dim);white-space:nowrap}
+.section-tabs .st-list{display:flex;gap:2px;flex-wrap:wrap}
+.section-tabs .st-list a{padding:8px 14px;font-size:13px;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;
+  text-decoration:none;white-space:nowrap}
+.section-tabs .st-list a:hover{color:var(--ink);background:var(--hover)}
+.section-tabs .st-list a.on{color:var(--ink-strong);border-bottom-color:var(--cy);font-weight:600}
+
+/* ═══ tabs inside a page ═══ */
+.ptabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--rule)}
+.ptabs button{all:unset;cursor:pointer;padding:8px 14px;font-size:13px;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.ptabs button:hover{color:var(--ink);background:var(--hover)}
+.ptabs button[aria-selected="true"]{color:var(--ink-strong);border-bottom-color:var(--cy);font-weight:600}
+.ptabs .badge{margin-inline-start:6px;font-size:10px;padding:1px 6px;border-radius:9px;background:var(--hover-strong);color:var(--dim)}
+.ptabs .badge.warn{background:rgba(224,163,62,.18);color:#e0a33e}
+.ptabs .badge.bad{background:rgba(226,87,76,.18);color:#e2574c}
+.ptab-panel{display:flex;flex-direction:column;gap:var(--gap)}
+.ptabs-wrap{display:flex;flex-direction:column;gap:var(--gap)}
+.ptab-panel > [data-tab-hidden]{display:none !important}
+@media print{.ptab-panel > [data-tab-hidden]{display:revert !important}}
+
+/* ═══ table kit ═══ */
+.tk-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.tk-bar input, .tk-bar select{background:var(--surf2);border:1px solid var(--rule);border-radius:6px;color:var(--ink);
+  padding:6px 9px;font:inherit;font-size:12px;outline:none}
+.tk-bar input:focus, .tk-bar select:focus{border-color:var(--cy)}
+.tk-bar .tk-q{flex:1 1 200px;min-width:160px}
+.tk-bar .tk-n{font-size:11px;color:var(--dim);white-space:nowrap}
+.tk-bar button{all:unset;cursor:pointer;font-size:11px;color:var(--dim);padding:6px 9px;border:1px solid var(--rule);border-radius:6px}
+.tk-bar button:hover{color:var(--cy);border-color:var(--cy)}
+.dtable th.tk-sort{cursor:pointer;user-select:none;white-space:nowrap}
+.dtable th.tk-sort:hover{color:var(--ink)}
+.dtable th.tk-sort::after{content:" ⇅";opacity:.35;font-size:9px}
+.dtable th.tk-sort.asc::after{content:" ▲";opacity:.9}
+.dtable th.tk-sort.desc::after{content:" ▼";opacity:.9}
+.dtable tr[hidden]{display:none}
+.tk .dtable tbody tr[data-tk-sel]{background:var(--cy-soft);box-shadow:inset -3px 0 0 var(--cy)}
+.tk .dtable tbody tr{cursor:default}
+.tk-bar .tk-acts{display:inline-flex;gap:6px;margin-inline-start:auto}
+.tk-bar .tk-acts button[disabled]{opacity:.4;cursor:not-allowed}
+.tk-bar .tk-acts button.danger:not([disabled]):hover{color:#e2574c;border-color:#e2574c}
+.tk-view{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:16px}
+.tk-view > div{background:var(--surf);border:1px solid var(--rule);border-radius:10px;max-width:640px;width:100%;max-height:85vh;overflow:auto;box-shadow:var(--raise)}
+.tk-view header{display:flex;align-items:center;gap:10px;padding:12px var(--gap);border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--surf)}
+.tk-view header button{all:unset;cursor:pointer;margin-inline-start:auto;font-size:12px;color:var(--dim);padding:3px 8px;border:1px solid var(--rule);border-radius:6px}
+.tk-view dl{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:8px 14px;padding:var(--gap);margin:0;font-size:13px}
+.tk-view dt{color:var(--dim);font-size:12px}
+.tk-view dd{margin:0;word-break:break-word}
+.tk-view .tk-extra{padding:0 var(--gap) var(--gap);font-size:12px;color:var(--dim);white-space:pre-wrap}
+.tk-why{margin:-4px 0 8px}
+.tk-view .tk-extra p{margin:0 0 10px;color:var(--ink)}
+mark.tk-hit{background:rgba(224,163,62,.35);color:inherit;border-radius:2px}
+
+/* ── phones: the menu is a drawer ── */
+@media (max-width:900px){
+  .shell, .shell.rail{grid-template-columns:1fr;grid-template-areas:"bar" "body";grid-template-rows:auto 1fr}
+  .topbar .hamb{display:inline-block}
+  .sidenav{position:fixed;inset-block:0;inset-inline-start:0;width:min(300px,86vw);z-index:60;transform:translateX(105%);
+    transition:transform .2s;display:flex !important;flex-direction:column;overflow:hidden;box-shadow:var(--raise);border-inline-end:1px solid var(--rule)}
+  .shell.drawer .sidenav{transform:none}
+  .sidenav > div{display:revert}
+  .sidenav a{border-bottom:0;border-inline-start:2px solid transparent;white-space:normal;border-radius:0}
+  .sidenav a.on{border-bottom:0;border-inline-start-color:var(--cy)}
+  .sidenav .grp{display:flex}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:55}
+  .shell.rail .sidenav .grp, .shell.rail .sidenav .t, .shell.rail .nav-search{display:revert}
+  /* tabs scroll sideways rather than stacking three rows deep */
+  .section-tabs .st-list, .ptabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+}
+
+/* ── joint history ── */
+div.kv{display:grid;gap:10px 16px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+div.kv > div{min-width:0;overflow-wrap:anywhere}
+ol.timeline{list-style:none;margin:0;padding:0;border-inline-start:2px solid var(--line);display:flex;flex-direction:column;gap:8px}
+ol.timeline li{position:relative;padding-inline-start:14px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+ol.timeline li::before{content:"";position:absolute;inset-inline-start:-6px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--dim)}
+ol.timeline li.ok::before{background:var(--ok)}
+ol.timeline li.bad::before{background:var(--bad)}

@@ -1,0 +1,24 @@
+{
+  "id": "R16-valve-bw-no-dimension",
+  "title": "Butt-weld valve with no face-to-face length -> merged weld, reported not silent",
+  "rule": "بدون ابعاد face-to-face، شیر بدنه ندارد و دو جوشش روی یک نقطه ادغام می‌شود — موتور باید این را گزارش کند نه اینکه بی‌صدا کم‌شماری کند",
+  "note": "This locks the degraded path. The register is knowingly one weld short here; what must never regress is the warning that says so. Fixing it is a data problem — read the dimension off the drawing — not an engine problem.",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "valve-bw", "ref": "", "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 8000, "EL": 10000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 12 }
+    ]
+  },
+  "expect": {
+    "weldCount": 3,
+    "fieldWeldCount": 2,
+    "warningLabels": ["face-to-face"]
+  }
+}

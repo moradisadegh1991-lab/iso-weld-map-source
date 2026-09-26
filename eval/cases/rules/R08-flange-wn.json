@@ -1,0 +1,22 @@
+{
+  "id": "R08-flange-wn",
+  "title": "Weld-neck flange -> 1 weld",
+  "rule": "فلنج WN → ۱ جوش",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "flange-wn", "ref": "", "E": 0, "N": 4000, "EL": 10000 }
+    ],
+    "edges": [{ "from": "N1", "to": "N2", "nps": 12 }]
+  },
+  "expect": {
+    "weldCount": 2,
+    "fieldWeldCount": 1,
+    "register": [
+      { "no": "W-01", "loc": "Field", "kind": "Tie-in", "nps": 12 },
+      { "no": "W-02", "loc": "Shop", "kind": "BW", "nps": 12 }
+    ]
+  }
+}
