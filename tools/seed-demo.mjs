@@ -54,6 +54,7 @@ import { ensureUser } from "../lib/db/repos/projects.mjs";
 import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
 import * as prc from "../lib/db/repos/procurement.mjs";
 import * as tender from "../lib/db/repos/tender.mjs";
+import { reserve as reserveStock } from "../lib/db/repos/reserve.mjs";
 import * as dcr from "../lib/db/repos/doc-control.mjs";
 import { setAssetMaster } from "../lib/db/repos/handover.mjs";
 import * as mnt from "../lib/db/repos/maintenance.mjs";
@@ -1018,6 +1019,16 @@ try {
           rated_head: "92", driver_power: "160" } });
     }
     console.log("procurement 2: MR-M-0201 at Rev 1 with 3 bids (one on Rev 0), VDT template PU, P-1203A data incomplete");
+
+    // ── warehouse: a reservation ──────────────────────────────────────────
+    //   The demo's pipe heats are held by MTC review, and held stock cannot
+    //   be promised; the cable is free, so it is the one reserved.
+    const { rows: [haveRes] } = await db.query("SELECT count(*)::int AS n FROM material_reservation WHERE project_id = $1", [p.id]);
+    if (haveRes.n === 0 && it["CBL-3C35-XLPE"]) {
+      await reserveStock(db, { projectId: p.id, itemId: it["CBL-3C35-XLPE"].id, qty: 40, purpose: "Temporary power, laydown area",
+        needBy: dd(7), userId: user.id });
+      console.log("warehouse: 40 m of CBL-3C35-XLPE reserved for temporary power");
+    }
 
     // ── handover phase 2: the maintenance plan, spare parts, calibration ──
     //
