@@ -26,7 +26,9 @@ async function open(viewport) {
 }
 const page = await open({ width: 1366, height: 900 });
 
-await page.locator(".sidenav a", { hasText: "سابقهٔ جوش" }).click();
+// Piping in the menu, then its «سابقهٔ جوش» tab across the top.
+await page.locator(".sidenav a", { hasText: "پایپینگ" }).click(); await page.waitForURL(/\/piping\/overview/);
+await page.locator(".section-tabs a", { hasText: "سابقهٔ جوش" }).click();
 await page.waitForURL("**/piping/joint");
 const rows = page.locator(".tk tbody tr:not([hidden])");
 await rows.first().waitFor();

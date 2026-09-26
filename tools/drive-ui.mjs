@@ -164,8 +164,8 @@ await phone.waitForTimeout(300);
 console.log("phone: drawer open, menu x:", await phone.locator(".sidenav").evaluate((n) => Math.round(n.getBoundingClientRect().left)),
   "| page scrolls sideways:", await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth));
 await phone.screenshot({ path: `${SHOT}/156-phone-drawer.png` });
-await phone.locator(".sidenav a", { hasText: "Punch و NCR" }).click();
-await phone.waitForURL("**/quality");
+await phone.locator(".sidenav a", { hasText: "کیفیت و بازرسی" }).click();   // a section: it opens its first page
+await phone.waitForURL("**/inspection");
 console.log("phone: drawer closes on navigation:", !(await phone.locator(".shell.drawer").count()));
 
 console.log("problems:", problems.length ? problems : "none");
