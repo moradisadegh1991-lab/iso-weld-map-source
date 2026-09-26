@@ -56,6 +56,7 @@ import * as prc from "../lib/db/repos/procurement.mjs";
 import * as tender from "../lib/db/repos/tender.mjs";
 import { reserve as reserveStock } from "../lib/db/repos/reserve.mjs";
 import * as dcr from "../lib/db/repos/doc-control.mjs";
+import * as incoming from "../lib/db/repos/incoming.mjs";
 import { setAssetMaster } from "../lib/db/repos/handover.mjs";
 import * as mnt from "../lib/db/repos/maintenance.mjs";
 import { upsertPackage as upsertTestPackage, addLines as addPackLines } from "../lib/db/repos/completions.mjs";
@@ -1019,6 +1020,26 @@ try {
           rated_head: "92", driver_power: "160" } });
     }
     console.log("procurement 2: MR-M-0201 at Rev 1 with 3 bids (one on Rev 0), VDT template PU, P-1203A data incomplete");
+
+    // ── document control: a designer's transmittal under review ────────────
+    //   The review period is the (demo) engineering contract's. 21-PID-001
+    //   Rev B is out for Process and Piping review with one comment; a
+    //   datasheet came in that is not on the MDR. No files: the demo has no
+    //   real drawings to attach, and each item says so.
+    await db.query("UPDATE project SET doc_review_days = COALESCE(doc_review_days, 14) WHERE id = $1", [p.id]);
+    const { rows: [haveIn] } = await db.query("SELECT count(*)::int AS n FROM transmittal WHERE project_id = $1 AND direction = 'in'", [p.id]);
+    if (haveIn.n === 0) {
+      const r = await incoming.registerIncoming(db, { projectId: p.id, transmittalNo: "DES-TR-0112", fromParty: "Design contractor (demo)",
+        sentOn: dd(-4), receivedOn: dd(-3), purpose: "For approval", userId: user.id, items: [
+          { docNo: "21-PID-001", revision: "B", purpose: "IFA" },
+          { docNo: "21-DS-K2101-01", title: "Datasheet — charge gas compressor K-2101", revision: "0", purpose: "IFA" }] });
+      const [pidItem] = r.items;
+      const reviews = await incoming.assignReview(db, { projectId: p.id, itemId: pidItem.itemId, disciplines: ["Process", "Piping"], userId: user.id });
+      await incoming.raiseComment(db, { projectId: p.id, itemId: pidItem.itemId, discipline: "Process", ref: "Sheet 1, K-2101 suction",
+        text: "Suction drum level trip set point missing on LT-2101", userId: user.id });
+      await incoming.finishReview(db, { projectId: p.id, reviewId: reviews.find((x) => x.discipline === "Piping").id, userId: user.id });
+      console.log("documents: incoming DES-TR-0112 — 21-PID-001 Rev B under review (1 comment), a datasheet outside the MDR");
+    }
 
     // ── warehouse: a reservation ──────────────────────────────────────────
     //   The demo's pipe heats are held by MTC review, and held stock cannot

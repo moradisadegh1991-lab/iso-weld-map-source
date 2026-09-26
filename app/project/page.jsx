@@ -97,6 +97,7 @@ const HSE = [
 const QUALITY = [
   ["ncr_escalation_days", "مهلت تشدید NCR معوق (روز)", "1", "بعد از این تعداد روز تأخیر، NCR به مدیر پروژه می‌رود"],
   ["vdrl_resubmit_days", "مهلت ارسال مجدد مدرک فروشندهٔ کد ۳ (روز)", "1", "طبق قرارداد خرید؛ بعد از آن مدرک معوق است"],
+  ["doc_review_days", "مهلت بررسی مدارک طراح (روز)", "1", "طبق قرارداد مهندسی؛ مهلت پاسخ هر ترانسمیتال ورودی از روی آن حساب می‌شود"],
 ];
 
 /** Handover to maintenance: the CMMS's own conventions. Text; no defaults. */

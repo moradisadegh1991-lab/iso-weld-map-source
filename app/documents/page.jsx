@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import Incoming from "./Incoming";
 
 /**
  * The master document register.
@@ -15,7 +16,19 @@ import Fold from "../../components/ui/Fold";
  */
 const ITEM_STATE = { awaiting: ["", "در انتظار پاسخ"], overdue: ["bad", "معوق"], returned: ["ok", "پاسخ داده شد"], rejected: ["bad", "رد (کد ۳)"] };
 
+const TABS = [["register", "رجیستر و ترانسمیتال خروجی"], ["incoming", "ترانسمیتال‌های ورودی از طراح"]];
+
 export default function DocumentsPage() {
+  const [tab, setTab] = useState("register");
+  const bar = (
+    <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} className={`btn ${tab === k ? "" : "ghost"}`} onClick={() => setTab(k)}>{t}</button>)}
+    </div>
+  );
+  return tab === "register" ? <Register bar={bar} /> : <Incoming bar={bar} />;
+}
+
+function Register({ bar }) {
   const { projectId, role, call } = usePlatform();
   const [onDate, setOnDate] = useState("");
   const { data, error, reload } = useProjectData((id) => `/api/doc-control?projectId=${id}${onDate ? `&onDate=${onDate}` : ""}`, [onDate]);
@@ -46,6 +59,7 @@ export default function DocumentsPage() {
         <h1>کنترل مدارک</h1>
         <span className="sub">{docs.length} مدرک در رجیستر · {data.transmittals.length} ترانسمیتال</span>
       </div>
+      {bar}
       {msg && <p className="err">{msg}</p>}
 
       <div className="card">
