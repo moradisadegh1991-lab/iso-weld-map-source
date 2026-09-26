@@ -1,5 +1,7 @@
 "use client";
-import { useProjectData } from "../../lib/client/platform.mjs";
+import { useState } from "react";
+import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
+import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 
 /**
@@ -16,7 +18,9 @@ const DISCIPLINE_FA = {
 };
 
 export default function SubsystemsPage() {
-  const { data, error } = useProjectData((id) => `/api/subsystems?projectId=${id}`, []);
+  const { projectId, role, call } = usePlatform();
+  const { data, error, reload } = useProjectData((id) => `/api/subsystems?projectId=${id}`, []);
+  const mayFile = can({ role }, ACTIONS.EDIT_EXTRACTION);
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
 
@@ -97,6 +101,40 @@ export default function SubsystemsPage() {
           </TableKit>
         )}
       </div>
+
+      {(data.unfiledLines || []).length > 0 && (
+        <div className="card" data-keep>
+          <h2>خطوطی که زیر هیچ ساب‌سیستمی نیستند</h2>
+          <p className="muted sm">جوش‌های این خطوط در پکیج تست و MC هیچ ساب‌سیستمی دیده نمی‌شوند. خطی که ایزومتریکش در MDR زیر ساب‌سیستمی ثبت شده باشد، خودش همان‌جا می‌رود.</p>
+          <TableKit name="unfiled-lines">
+            <table className="dtable">
+              <thead><tr><th>خط</th><th>کلاس</th><th>جوش</th>{mayFile && <th>ساب‌سیستم</th>}</tr></thead>
+              <tbody>{data.unfiledLines.map((l) => (
+                <tr key={l.id}><td className="mono">{l.line_no}</td><td className="mono">{l.piping_class || "—"}</td><td className="mono">{l.welds}</td>
+                  {mayFile && <td><FileLine line={l} subsystems={data.subsystems} projectId={projectId} call={call} onDone={reload} /></td>}</tr>
+              ))}</tbody>
+            </table>
+          </TableKit>
+        </div>
+      )}
     </div>
+  );
+}
+
+function FileLine({ line, subsystems, projectId, call, onDone }) {
+  const [sub, setSub] = useState("");
+  const [err, setErr] = useState(null);
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <select aria-label={`ساب‌سیستم ${line.line_no}`} value={sub} onChange={(e) => setSub(e.target.value)}>
+        <option value="">—</option>{subsystems.map((s) => <option key={s.id} value={s.id}>{s.code}{s.name ? ` — ${s.name}` : ""}</option>)}
+      </select>
+      <button className="btn ghost" disabled={!sub} onClick={async () => {
+        setErr(null);
+        try { await call("/api/subsystems", { method: "POST", body: JSON.stringify({ projectId, kind: "file-line", lineId: line.id, subsystemId: sub }) }); onDone(); }
+        catch (e) { setErr(e.message); }
+      }}>ثبت</button>
+      {err && <span className="err sm">{err}</span>}
+    </span>
   );
 }

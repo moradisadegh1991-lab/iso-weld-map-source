@@ -8,6 +8,7 @@ import { createRun, saveRegister, getRegister, latestRunForDocument, latestRunFo
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { buildModel } from "../../../lib/engine.js";
 import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
+import { lineForRegister, tieInRefsOf } from "../../../lib/db/repos/spine.mjs";
 
 /**
  * Persist an extraction and the register it produces.
@@ -55,8 +56,14 @@ export async function POST(request) {
         ? await latestRunForDrawing(db, { projectId, docNo, sheetNo })
         : null;
 
+      // The line this drawing belongs to: without one, its welds are in no
+      // test package and no subsystem (lib/db/repos/spine.mjs).
+      const line = lineId ? null : await lineForRegister(db, { projectId, lineNo: payload?.meta?.lineNo || lineNo,
+        docNo, unitCode: payload?.meta?.unit || null, pipingClass: payload?.meta?.pipingClass || null, tieInRefs: tieInRefsOf(payload) });
+      const theLine = lineId || line?.id || null;
+
       const run = await createRun(db, {
-        projectId, documentId, lineId,
+        projectId, documentId, lineId: theLine,
         modelName, modelVersion, passName, inputTokens, outputTokens, rawOutputUri,
         payload,
         validationChecks: model.error ? [] : model.checks,
@@ -79,7 +86,7 @@ export async function POST(request) {
         : null;
 
       const saved = await saveRegister(db, {
-        projectId, runId: run.id, documentId, lineId, model, carryFrom,
+        projectId, runId: run.id, documentId, lineId: theLine, model, carryFrom,
       });
       const register = await getRegister(db, { projectId, runId: run.id });
       return Response.json({

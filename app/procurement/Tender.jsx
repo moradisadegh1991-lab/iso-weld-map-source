@@ -89,12 +89,13 @@ function MrDetail({ m, data, post, may }) {
       <TableKit name="mr-lines" onDelete={may ? (lineId) => post({ kind: "mr-line-remove", lineId }) : undefined}
                 canDelete={() => (draft ? true : "درخواست صادر شده؛ تغییر یعنی رویژن جدید")}>
         <table className="dtable">
-          <thead><tr><th>#</th><th>کالا / تگ</th><th>شرح</th><th>مقدار</th><th>نیاز سایت</th></tr></thead>
+          <thead><tr><th>#</th><th>کالا / تگ</th><th>شرح</th><th>مقدار</th><th>نیاز سایت</th><th>FAT</th></tr></thead>
           <tbody>
             {m.lines.map((l) => (
               <tr key={l.id} data-key={l.id}>
                 <td className="mono">{l.line_no}</td><td className="mono">{l.item_code || l.tag_no}</td><td>{l.description || "—"}</td>
                 <td className="mono">{l.qty} {l.uom}</td><td className="mono">{l.need_on || "—"}</td>
+                <td className="sm">{l.fat_required ? <span className="pill">لازم</span> : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -168,20 +169,21 @@ function NewMr({ post }) {
 }
 
 function MrLineForm({ m, data, post }) {
-  const blank = { what: "", qty: "", needOn: "", description: "" };
+  const blank = { what: "", qty: "", needOn: "", description: "", fatRequired: false };
   const [f, setF] = useState(blank);
   const opts = [...data.items.map((i) => [`i:${i.id}`, `${i.code} — ${i.description} (${i.uom})`]), ...data.tags.map((t) => [`t:${t.id}`, `تگ ${t.tag_no}`])];
   return (
     <form onSubmit={async (e) => {
       e.preventDefault();
       const [k, id] = f.what.split(":");
-      if (await post({ kind: "mr-line", mrId: m.id, itemId: k === "i" ? id : null, tagId: k === "t" ? id : null, qty: f.qty, needOn: f.needOn || null, description: f.description })) setF(blank);
+      if (await post({ kind: "mr-line", mrId: m.id, itemId: k === "i" ? id : null, tagId: k === "t" ? id : null, qty: f.qty, needOn: f.needOn || null, description: f.description, fatRequired: f.fatRequired })) setF(blank);
     }}>
       <div className="grid2">
         <Select id={`ml-w-${m.id}`} label="کالا یا تگ" value={f.what} on={(v) => setF({ ...f, what: v })} opts={opts} blank="—" />
         <Field id={`ml-q-${m.id}`} label="مقدار" type="number" value={f.qty} on={(v) => setF({ ...f, qty: v })} />
         <Field id={`ml-n-${m.id}`} label="نیاز سایت" type="date" value={f.needOn} on={(v) => setF({ ...f, needOn: v })} />
         <Field id={`ml-d-${m.id}`} label="شرح" value={f.description} on={(v) => setF({ ...f, description: v })} />
+        <label className="sm" style={{ alignSelf: "end" }}><input type="checkbox" checked={f.fatRequired} onChange={(e) => setF({ ...f, fatRequired: e.target.checked })} /> بازرسی کارخانه (FAT) لازم است — به ردیف PO منتقل می‌شود</label>
       </div>
       <button className="btn ghost">افزودن ردیف</button>
     </form>
