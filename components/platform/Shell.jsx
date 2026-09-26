@@ -214,9 +214,10 @@ function SectionTabs({ section, here }) {
   return (
     <nav className="section-tabs no-print" aria-label={section.title}>
       <span className="st-title"><span aria-hidden>{section.icon}</span> {section.title}</span>
-      <div className="st-list" role="tablist">
+      {/* Links to pages, not ARIA tabs: each is its own address. */}
+      <div className="st-list">
         {section.tabs.map((t) => (
-          <Link key={t.href} href={t.href} role="tab" aria-selected={t.href === here?.href}
+          <Link key={t.href} href={t.href}
                 aria-current={t.href === here?.href ? "page" : undefined} className={t.href === here?.href ? "on" : ""}>{t.title}</Link>
         ))}
       </div>

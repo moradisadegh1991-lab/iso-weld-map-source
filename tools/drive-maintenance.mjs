@@ -51,7 +51,7 @@ await page.getByRole("button", { name: "ذخیره به‌عنوان پیش‌ن
 await page.waitForTimeout(800);
 console.log("K-2101 PM-01 now:", flat(await k1.innerText()).slice(0, 160), "| approve offered to its author:", await k1.getByRole("button", { name: "تأیید" }).count());
 // A new task without a source reference is refused, with the reason.
-await page.locator(".fold-head", { hasText: "تسک نگهداری جدید" }).click();
+await page.locator(":is(.fold-btn, .fold-head)", { hasText: "تسک نگهداری جدید" }).click();
 await page.fill("#pm-code", "PM-77"); await page.fill("#pm-title", "Coupling alignment check"); await page.fill("#pm-iv", "6");
 await page.getByRole("button", { name: "ذخیره به‌عنوان پیش‌نویس" }).click();
 await page.waitForSelector("p.err");

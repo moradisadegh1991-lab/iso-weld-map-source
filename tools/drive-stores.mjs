@@ -30,7 +30,7 @@ const err = async () => flat(await page.locator("p.err").first().innerText());
 
 const rc = card("رزرو کالا");
 for (const r of await rc.locator("tbody > tr").allInnerTexts()) console.log("  res", flat(r));
-await rc.locator("button.fold-head", { hasText: "رزرو جدید" }).click();
+await rc.locator(":is(.fold-btn, .fold-head)", { hasText: "رزرو جدید" }).click();
 const cableId = await page.locator("#rs-i option", { hasText: "CBL-3C35-XLPE" }).getAttribute("value");
 await page.selectOption("#rs-i", cableId);
 await page.fill("#rs-q", "100000");
@@ -42,7 +42,7 @@ await rc.getByRole("button", { name: "رزرو", exact: true }).click(); await w
 for (const r of await rc.locator("tbody > tr").allInnerTexts()) console.log("  res'", flat(r));
 
 const cc = card("انبارگردانی");
-await cc.locator("button.fold-head", { hasText: "انبارگردانی جدید" }).click();
+await cc.locator(":is(.fold-btn, .fold-head)", { hasText: "انبارگردانی جدید" }).click();
 await page.fill("#sc-no", "SC-DRIVE-01"); await page.fill("#sc-sc", "Cable yard");
 await cc.getByRole("button", { name: "شروع انبارگردانی" }).click(); await wait();
 const lotOpt = await cc.locator("select[id^=cl-l-] option", { hasText: "CBL-3C35-XLPE" }).first().getAttribute("value");

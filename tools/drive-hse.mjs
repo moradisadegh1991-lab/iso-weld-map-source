@@ -53,7 +53,7 @@ await card("مشاهدات ایمنی").scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOT}/93-hse-obs.png` });
 
 // A new observation through the form: kind travels apart from the request kind.
-await page.locator(".fold-head", { hasText: "ثبت مشاهدهٔ ایمنی" }).click();   // the form is folded until asked for
+await page.locator(":is(.fold-btn, .fold-head)", { hasText: "ثبت مشاهدهٔ ایمنی" }).click();   // the form is folded until asked for
 const form = page.locator("form", { has: page.locator("h2", { hasText: "ثبت مشاهده" }) });
 const label = `Scaffold tag expired at PR-1201 (drive ${Date.now() % 100000})`;
 await form.locator("#ob-desc").fill(label);

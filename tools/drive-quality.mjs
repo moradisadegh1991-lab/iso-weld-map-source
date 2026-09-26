@@ -37,7 +37,7 @@ const list = card("Punch list");
 for (const r of (await list.locator("tbody > tr").allInnerTexts()).slice(0, 12)) console.log("  punch", flat(r).slice(0, 150));
 
 // Raise a punch item, clear it, and try to verify as the same person.
-await page.locator(".fold-head", { hasText: "ثبت Punch جدید" }).click();   // the form is folded until asked for
+await page.locator(":is(.fold-btn, .fold-head)", { hasText: "ثبت Punch جدید" }).click();   // the form is folded until asked for
 await page.selectOption("#pf-t", { label: "P-1204A" });
 await page.fill("#pf-d", `${RUN}: casing drain plug missing`);
 await page.selectOption("#pf-c", "B");

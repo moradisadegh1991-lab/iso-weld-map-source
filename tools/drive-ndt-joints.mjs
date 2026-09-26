@@ -28,7 +28,7 @@ console.log("header:", flat(await page.locator(".pagehead .sub").innerText()));
 const card = (h) => page.locator(".card", { has: page.locator("h2", { hasText: h }) }).first();
 for (const r of await card("ماتریس NDT").locator("tbody > tr").allInnerTexts()) console.log("  rule", flat(r).slice(0, 150));
 
-await card("ماتریس NDT").locator("button.fold-head", { hasText: "قاعدهٔ جدید" }).click();
+await card("ماتریس NDT").locator(":is(.fold-btn, .fold-head)", { hasText: "قاعدهٔ جدید" }).click();
 await page.selectOption("#r-j", "fillet"); await page.selectOption("#r-m", "UT"); await page.fill("#r-p", "10"); await page.fill("#r-b", "drive");
 await page.getByRole("button", { name: "ثبت قاعده" }).click(); await wait();
 console.log("UT on fillet:", await msg());

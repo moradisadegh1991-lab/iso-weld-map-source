@@ -88,15 +88,17 @@ console.log("CSV:", dl.suggestedFilename(), csv.split("\r\n").length - 1, "rows,
 await page.screenshot({ path: `${SHOT}/153-table-light.png`, fullPage: true });
 
 // ── a form that opens when asked ──
-const fold = page.locator(".fold", { hasText: "ثبت Punch جدید" });
+// The button sits in the header of its part; the form opens under that header.
+const foldBtn = page.locator(".fold-btn", { hasText: "ثبت Punch جدید" });
+const fold = page.locator(".card", { has: foldBtn }).locator(".card-formslot");
 console.log("punch form closed:", await fold.locator("form").count() === 0);
-await fold.locator(".fold-head").click();
+await foldBtn.click();
 console.log("punch form open:", await fold.locator("form").count() === 1, "| its own heading hidden:",
   await fold.locator("form h2").first().evaluate((h) => getComputedStyle(h).display));
 
 // ── users: invite, link, set password, restricted menu ──
 await page.goto(`${BASE}/admin`, { waitUntil: "networkidle" });
-await page.locator(".fold-head", { hasText: "دعوت کاربر جدید" }).click();
+await page.locator(":is(.fold-btn, .fold-head)", { hasText: "دعوت کاربر جدید" }).click();
 const who = `civil.${stamp}@demo.test`;
 await page.fill("#u-email", who); await page.fill("#u-name", "سرپرست سیویل (آزمون)");
 await page.selectOption("#u-role", "qc");

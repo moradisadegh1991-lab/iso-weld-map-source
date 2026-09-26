@@ -40,7 +40,7 @@ await bids().filter({ hasText: "V-PUMP3" }).getByRole("button", { name: "قاب�
 for (const r of await bids().allInnerTexts()) console.log("  bid'", flat(r).slice(0, 190));
 
 // Award to vendor B (not the lowest): refused without a reason.
-await page.locator("button.fold-head", { hasText: "واگذاری و صدور PO" }).click();
+await page.locator(":is(.fold-btn, .fold-head)", { hasText: "واگذاری و صدور PO" }).click();
 const opt = await page.locator("select[id^=a-b-] option", { hasText: "V-PUMP2" }).getAttribute("value");
 await page.selectOption("select[id^=a-b-]", opt);
 await page.fill("input[id^=a-p-]", "PO-M-0201");

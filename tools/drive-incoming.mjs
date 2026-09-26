@@ -35,7 +35,7 @@ console.log("header:", flat(await page.locator(".pagehead .sub").innerText()));
 for (const r of await page.locator("table.dtable").first().locator("tbody > tr").allInnerTexts()) console.log("  item", flat(r).slice(0, 170));
 
 // Register a designer transmittal with a file.
-await page.locator("button.fold-head", { hasText: "ثبت ترانسمیتال ورودی" }).click();
+await page.locator(":is(.fold-btn, .fold-head)", { hasText: "ثبت ترانسمیتال ورودی" }).click();
 await page.fill("#in-no", "DES-TR-0113"); await page.fill("#in-from", "Design contractor (demo)"); await page.fill("#in-purpose", "For construction");
 await page.fill("input[aria-label='مدرک 1']", "60-PID-001"); await page.fill("input[aria-label='رویژن 1']", "1");
 await page.selectOption("select[aria-label='هدف 1']", "IFC");
@@ -51,7 +51,7 @@ console.log("file:", file);
 const pidRow = page.locator("tbody > tr", { hasText: "21-PID-001" }).first();
 await pidRow.getByRole("button", { name: "بررسی" }).click(); await wait(500);
 await page.getByRole("button", { name: "پایان بررسی" }).first().click(); await wait();
-await page.locator("button.fold-head", { hasText: "پاسخ به DES-TR-0112" }).click();
+await page.locator(":is(.fold-btn, .fold-head)", { hasText: "پاسخ به DES-TR-0112" }).click();
 await page.selectOption("select[aria-label='کد 21-PID-001']", "1");
 await page.fill("input[id^=rp-no-]", "PRJ-TR-0201");
 await page.getByRole("button", { name: "ثبت پاسخ", exact: true }).click(); await wait();

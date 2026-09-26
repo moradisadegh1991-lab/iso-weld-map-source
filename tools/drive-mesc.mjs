@@ -40,7 +40,7 @@ await card.getByRole("button", { name: "ثبت کد" }).click(); await wait();
 console.log("unverified:", flat(await rows.first().innerText()).slice(0, 160));
 
 // Import a (test) catalogue: 99 group, two items in the first item's unit.
-await card.locator("button.fold-head", { hasText: "بارگذاری کاتالوگ MESC" }).click();
+await card.locator(":is(.fold-btn, .fold-head)", { hasText: "بارگذاری کاتالوگ MESC" }).click();
 await page.fill("#mesc-ed", "DRIVE TEST — not a real MESC book");
 await page.fill("#mesc-text", `99,"TEST GROUP"\n9910,"TEST SUBGROUP"\n991012,"TEST SUB-SUB"\n9910120521,"TEST PIPE 10 IN",${uom}\n9910120531,"TEST PIPE 12 IN",${uom}\n12345,broken`);
 await card.getByRole("button", { name: "بارگذاری", exact: true }).click(); await wait();
