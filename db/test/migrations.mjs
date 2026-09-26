@@ -167,7 +167,63 @@ test("044b after 045: applied late, it changes nothing and the new scopes stand"
   assert(/material_general/.test(c.d) && !/'material'::/.test(c.d), c.d);
 });
 
+// ── 048: an RFSU signed before RFC was its own certificate ───────────────
+//
+// It certified pre-commissioning — what RFC now certifies — so it is carried
+// forward as that subsystem's RFC, same signer and dates, labelled. And it
+// is not "reopened" merely because commissioning procedures now exist.
+const staged48 = await mkdtemp(path.join(tmpdir(), "mig-files-48-"));
+for (const f of (await readdir(ALL)).filter((f) => f.endsWith(".sql")).sort()) {
+  if (f < "048") await copyFile(path.join(ALL, f), path.join(staged48, f));
+}
+const db48 = await createClient({ dataDir: await mkdtemp(path.join(tmpdir(), "mig-db-48-")) });
+await migrate(db48, { dir: staged48 });
+const one48 = async (sql, p) => (await db48.query(sql, p)).rows[0];
+const signer = await one48("INSERT INTO app_user (subject) VALUES ('kc|signer') RETURNING id");
+const client = await one48("INSERT INTO app_user (subject) VALUES ('kc|client') RETURNING id");
+const p48 = await one48("INSERT INTO project (code, name) VALUES ('M48','m48') RETURNING id");
+await db48.query("SELECT set_config('app.project_id', $1, false)", [p48.id]);
+const s48 = await one48("INSERT INTO subsystem (project_id, code, system_code) VALUES ($1, '21-01', '21') RETURNING id", [p48.id]);
+const s48b = await one48("INSERT INTO subsystem (project_id, code, system_code) VALUES ($1, '21-02', '21') RETURNING id", [p48.id]);
+await db48.query("INSERT INTO mc_certificate (project_id, subsystem_id, snapshot, signed_by, accepted_by, accepted_at) VALUES ($1,$2,'{}',$3,$4,'2026-05-01')",
+  [p48.id, s48.id, signer.id, client.id]);
+const legacyRfsu = await one48(
+  `INSERT INTO rfsu_certificate (project_id, subsystem_id, snapshot, signed_by, signed_at, accepted_by, accepted_at)
+   VALUES ($1,$2,'{"checks":[{"code":"B-SUB-01"}]}',$3,'2026-06-01',$4,'2026-06-02') RETURNING id`, [p48.id, s48.id, signer.id, client.id]);
+await db48.query("SELECT set_config('app.project_id', '', false)");
+await migrate(db48);
+
+test("048: a signed RFSU is carried forward as the subsystem's RFC, same signatures, labelled; nothing else gets one", async () => {
+  await db48.query("SELECT set_config('app.project_id', $1, false)", [p48.id]);
+  const rows = (await db48.query("SELECT * FROM rfc_certificate")).rows;
+  equal(rows.length, 1, "21-02 had no RFSU, so it gets no RFC");
+  const [r] = rows;
+  equal([r.subsystem_id, r.signed_by, r.accepted_by], [s48.id, signer.id, client.id]);
+  equal([new Date(r.signed_at).toISOString().slice(0, 10), new Date(r.accepted_at).toISOString().slice(0, 10)], ["2026-06-01", "2026-06-02"]);
+  equal([r.snapshot.carriedFrom, r.snapshot.rfsuId, r.snapshot.checks], ["rfsu", legacyRfsu.id, [{ code: "B-SUB-01" }]]);
+  const force = (await db48.query("SELECT relname, relforcerowsecurity FROM pg_class WHERE relname IN ('rfc_certificate','rfsu_certificate') ORDER BY relname")).rows;
+  equal(force.map((x) => x.relforcerowsecurity), [true, true]);
+  equal((await db48.query("SELECT DISTINCT phase FROM precom_template")).rows, [], "no checklists here; existing ones would all be pre-commissioning");
+});
+
+test("048: the legacy RFSU is judged on what it certified — not reopened by procedures declared later, reopened by a punch B", async () => {
+  const prc = await import("../../lib/db/repos/precom.mjs");
+  await db48.query("SELECT set_config('app.project_id', $1, false)", [p48.id]);
+  await db48.query("INSERT INTO precom_template (project_id, code, title, applies_to, phase) VALUES ($1,'B-SUB-01','Flush','subsystem','precom')", [p48.id]);
+  const tpl = await one48("SELECT id FROM precom_template WHERE code = 'B-SUB-01'");
+  await db48.query(`INSERT INTO precom_attempt (project_id, subsystem_id, template_id, item_ref, result, performed_on, performed_by, accepted_by, accepted_at)
+                    VALUES ($1,$2,$3,$6,'pass','2026-05-20',$4,$5,now())`, [p48.id, s48.id, tpl.id, signer.id, client.id, String(s48.id)]);
+  await db48.query("INSERT INTO precom_template (project_id, code, title, applies_to, phase) VALUES ($1,'C-SUB-01','Inerting','subsystem','commissioning')", [p48.id]);
+  let s = await prc.subsystemPrecom(db48, { projectId: p48.id, subsystemId: s48.id });
+  equal([s.legacyRfsu, s.rfsuReopened, s.rfsu.ready], [true, false, false], "procedures owed now, but that is not what it certified");
+  await db48.query("INSERT INTO punch_item (project_id, punch_no, subsystem_id, category, description, raised_on) VALUES ($1,'PL-9',$2,'B','found later','2026-07-01')",
+    [p48.id, s48.id]);
+  s = await prc.subsystemPrecom(db48, { projectId: p48.id, subsystemId: s48.id });
+  equal(s.rfsuReopened, true);
+});
+
 await run();
 await db.close();
 await db45.close();
 await dbAfter.close();
+await db48.close();

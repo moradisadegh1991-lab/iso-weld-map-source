@@ -51,6 +51,7 @@ import {
 import { raisePunch, punchAction, raiseNcr, ncrAction } from "../lib/db/repos/quality.mjs";
 import * as insp from "../lib/db/repos/inspection.mjs";
 import { upsertTemplate } from "../lib/db/repos/precom.mjs";
+import { upsertGuarantee } from "../lib/db/repos/performance.mjs";
 import { ensureUser } from "../lib/db/repos/projects.mjs";
 import { upsertPipingClass } from "../lib/db/repos/piping-class.mjs";
 import * as prc from "../lib/db/repos/procurement.mjs";
@@ -1401,6 +1402,28 @@ try {
       { code: "B-INS-01", title: "Loop function test with DCS", appliesTo: "loop", criteria: "Alarms and trips at set points, graphics tag correct" },
     ]) await upsertTemplate(db, { projectId: p.id, ...t });
     console.log("pre-commissioning: 6 checklists declared; nothing recorded until a subsystem's MC is accepted");
+
+    // ── commissioning procedures and the contract's guarantees ────────────
+    //
+    //   Procedures run between RFC and RFSU; the guarantees are the (demo)
+    //   contract's Annex G. No RFSU is accepted yet, so no performance test
+    //   can be recorded — every guarantee reads "not tested", which is true.
+    for (const t of [
+      { code: "C-SYS-01", title: "Inerting and leak test with nitrogen", appliesTo: "subsystem", criteria: "O2 < 1 % at every vent; leak test per CP-07" },
+      { code: "C-MEC-01", title: "Run on process fluid", appliesTo: "rotating", criteria: "72 h at design flow; bearing temperatures stable" },
+      { code: "C-INS-01", title: "Cause-and-effect test (ESD)", appliesTo: "loop", criteria: "Every C&E row actioned from the field device" },
+    ]) await upsertTemplate(db, { projectId: p.id, ...t, phase: "commissioning" });
+    const { rows: [u21] } = await db.query("SELECT id FROM unit WHERE project_id = $1 AND code = '21'", [p.id]);
+    for (const g of [
+      { code: "PG-01", parameter: "Ethylene production", uom: "kt/a (annualised)", direction: "min", guaranteedValue: 500, minDurationH: 72,
+        basis: "Contract Annex G §1.1 (demo)" },
+      { code: "PG-02", parameter: "Ethylene product purity", uom: "mol %", direction: "min", guaranteedValue: 99.95, basis: "Annex G §1.2 (demo)" },
+      { code: "PG-03", parameter: "Specific energy consumption", uom: "GJ/t ethylene", direction: "max", guaranteedValue: 14.5, minDurationH: 72,
+        basis: "Annex G §1.4 (demo)" },
+      ...(u21 ? [{ code: "PG-21", parameter: "Cracked gas compressor throughput", unitId: u21.id, uom: "t/h", direction: "min",
+        guaranteedValue: 212, basis: "Annex G §2.1 (demo)" }] : []),
+    ]) await upsertGuarantee(db, { projectId: p.id, ...g });
+    console.log("commissioning: 3 procedures between RFC and RFSU; performance guarantees from Annex G, none tested yet");
 
     // The cooling-water drawing belongs to the utilities unit, whose own grade
     // then applies to it — set on every run so an older demo database picks

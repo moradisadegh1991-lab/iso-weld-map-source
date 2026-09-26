@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 /**
- * Pre-commissioning and RFSU: the project declares its checklists, each is
- * owed on every item it applies to, a pass counts once someone else
- * accepts it, and RFSU is signed only with MC accepted, every check
- * accepted, no punch A/B and no NCR open.
+ * Pre-commissioning, RFC, commissioning and RFSU: the project declares its
+ * checklists and procedures, each is owed on every item it applies to, a
+ * pass counts once someone else accepts it; RFC is signed with MC accepted,
+ * every pre-commissioning check accepted, no punch A and no NCR; RFSU with
+ * RFC accepted, every commissioning procedure accepted, no punch A/B and no
+ * NCR open.
  */
 import { test, run, assert, equal, throws } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  templateProblems, expectedChecks, checkState, attemptProblems, acceptProblems, rfsuReadiness,
+  templateProblems, expectedChecks, checkState, attemptProblems, acceptProblems, rfcReadiness, rfsuReadiness,
 } from "../../lib/completions/precom.mjs";
 
 // ── the rules ────────────────────────────────────────────────────────────
@@ -19,6 +21,8 @@ test("a checklist names what it applies to", async () => {
   equal(templateProblems({ code: "B-MEC-01", title: "Motor solo run", appliesTo: "rotating" }), []);
   equal(templateProblems({ code: "x", title: "", appliesTo: "pump" }).length, 3);
   equal(templateProblems({ code: "B MEC", title: "t", appliesTo: "loop" }).length, 1, "no spaces in a code");
+  equal(templateProblems({ code: "C-01", title: "t", appliesTo: "loop", phase: "commissioning" }), []);
+  equal(templateProblems({ code: "C-01", title: "t", appliesTo: "loop", phase: "startup" }).length, 1);
 });
 
 test("each active checklist is owed on every item of its kind", async () => {
@@ -48,6 +52,12 @@ test("an attempt is refused before MC, without a reason for a fail, or dated ahe
   equal(attemptProblems({ ...ok, performedOn: "2026-09-26" }).length, 1);
   equal(attemptProblems({ ...ok, performedOn: "20/09/2026" }).length, 1);
   equal(attemptProblems({ ...ok, applies: false }).length, 1);
+  assert(/RFC/.test(attemptProblems({ ...ok, rfcSigned: true })[0]), "what RFC certified is not added to after it");
+  const com = { ...ok, phase: "commissioning" };
+  assert(/RFC/.test(attemptProblems(com)[0]), "a commissioning record waits for RFC accepted, whatever MC says");
+  equal(attemptProblems({ ...com, rfcAccepted: true }), []);
+  equal(attemptProblems({ ...com, rfcAccepted: true, rfsuSigned: true }).length, 1);
+  equal(attemptProblems({ ...com, rfcAccepted: true, mcAccepted: false }), [], "RFC accepted already implies MC");
 });
 
 test("a pass is accepted by someone else, and only the latest one", async () => {
@@ -60,14 +70,23 @@ test("a pass is accepted by someone else, and only the latest one", async () => 
   equal(acceptProblems({ attempt: null }).length, 1);
 });
 
-test("RFSU: MC accepted, checklists declared and all accepted, no punch A/B, no NCR", async () => {
+test("RFC: MC accepted, checklists declared and all accepted, no punch A, no NCR", async () => {
   const done = [{ state: "accepted", code: "B", label: "x" }];
-  equal(rfsuReadiness({ mcAccepted: true, templatesDeclared: true, checks: done }), { ready: true, blockers: [] });
-  equal(rfsuReadiness({ mcAccepted: true, templatesDeclared: false, checks: [] }).blockers.map((b) => b.kind), ["no_templates"],
+  equal(rfcReadiness({ mcAccepted: true, templatesDeclared: true, checks: done }), { ready: true, blockers: [] });
+  equal(rfcReadiness({ mcAccepted: true, templatesDeclared: false, checks: [] }).blockers.map((b) => b.kind), ["no_templates"],
     "no checklist declared is not a completed pre-commissioning");
-  const r = rfsuReadiness({ mcAccepted: false, templatesDeclared: true, checks: [...done, { state: "passed", code: "B", label: "P-1" }], punchAB: 2, ncrOpen: 1 });
-  equal(r.blockers.map((b) => [b.kind, b.count ?? null]), [["mc", null], ["checks", 1], ["punch", 2], ["ncr", 1]]);
+  const r = rfcReadiness({ mcAccepted: false, templatesDeclared: true, checks: [...done, { state: "passed", code: "B", label: "P-1" }], punchA: 2, ncrOpen: 1 });
+  equal(r.blockers.map((b) => [b.kind, b.count ?? null]), [["mc", null], ["checks", 1], ["punch_a", 2], ["ncr", 1]]);
   equal(r.blockers[1].detail, ["B · P-1"]);
+});
+
+test("RFSU: RFC accepted, procedures declared and all accepted, no punch A/B, no NCR", async () => {
+  const done = [{ state: "accepted", code: "C", label: "x" }];
+  equal(rfsuReadiness({ rfcAccepted: true, templatesDeclared: true, checks: done }), { ready: true, blockers: [] });
+  equal(rfsuReadiness({ rfcAccepted: true, templatesDeclared: false, checks: [] }).blockers.map((b) => b.kind), ["no_procedures"],
+    "no procedure declared is not a completed commissioning");
+  const r = rfsuReadiness({ rfcAccepted: false, templatesDeclared: true, checks: [{ state: "failed", code: "C", label: "P-1" }], punchAB: 1, ncrOpen: 2 });
+  equal(r.blockers.map((b) => [b.kind, b.count ?? null]), [["rfc", null], ["checks", 1], ["punch", 1], ["ncr", 2]]);
 });
 
 // ── against the database ─────────────────────────────────────────────────
@@ -110,7 +129,7 @@ test("the project declares its checklists; one with records keeps its kind", asy
     const s = await prc.subsystemPrecom(db, { projectId: P, subsystemId: sub.id });
     equal(s.checks.map((c) => `${c.code}:${c.label}`).sort(), ["B-INS-01:" + s.checks.find((c) => c.itemKind === "loop").label, "B-MEC-01:P-1", "B-SUB-01:12-01"].sort());
     equal(s.checks.filter((c) => c.itemKind === "loop").length, 1, "the two instruments share one loop");
-    equal(s.blockers.map((b) => b.kind), ["mc", "checks"]);
+    equal(s.rfc.blockers.map((b) => b.kind), ["mc", "checks"]);
   });
 });
 
@@ -121,7 +140,7 @@ test("nothing is recorded before MC is accepted", async () => {
     await db.query(`INSERT INTO mc_certificate (project_id, subsystem_id, snapshot, signed_by) VALUES ($1,$2,'{}',$3)`, [P, sub.id, alice.id]);
     await throws(async () => prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tSub.id, itemRef: sub.id,
       result: "pass", performedOn: TODAY, userId: alice.id }), "پذیرش MC", "signed is not accepted");
-    equal((await prc.subsystemPrecom(db, { projectId: P, subsystemId: sub.id })).blockers[0].kind, "mc", "nor for RFSU");
+    equal((await prc.subsystemPrecom(db, { projectId: P, subsystemId: sub.id })).rfc.blockers[0].kind, "mc", "nor for RFC");
     await db.query("UPDATE mc_certificate SET accepted_by = $2, accepted_at = now() WHERE subsystem_id = $1", [sub.id, bob.id]);
   });
 });
@@ -147,7 +166,7 @@ test("a pass counts once someone else accepts it; the latest attempt decides", a
     const s = await prc.subsystemPrecom(db, { projectId: P, subsystemId: sub.id });
     const mec = s.checks.find((c) => c.code === "B-MEC-01");
     equal([mec.state, mec.attempts.length], ["accepted", 3]);
-    equal(s.counts, { total: 3, accepted: 2, failed: 0, passed: 0 });
+    equal(s.counts.precom, { total: 3, accepted: 2, failed: 0, passed: 0 });
     await throws(async () => prc.upsertTemplate(db, { projectId: P, code: "B-MEC-01", title: "Motor solo run", appliesTo: "static" }), "عوض نمی‌شود");
     await throws(async () => db.query("UPDATE precom_attempt SET result = 'fail'"), "permission denied");
     await throws(async () => db.query("DELETE FROM precom_attempt"), "permission denied");
@@ -155,36 +174,69 @@ test("a pass counts once someone else accepts it; the latest attempt decides", a
   });
 });
 
-test("RFSU waits for every check, every punch A/B and every NCR; the signer does not accept it", async () => {
+test("RFC waits for every check, every punch A and every NCR — not punch B; the signer does not accept it", async () => {
   await inP(async () => {
-    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "checks");
+    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "checks");
     const s0 = await prc.subsystemPrecom(db, { projectId: P, subsystemId: sub.id });
     const loop = s0.checks.find((c) => c.itemKind === "loop");
     const lt = await prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tLoop.id, itemRef: loop.itemRef,
       result: "pass", performedOn: TODAY, userId: alice.id });
     await prc.acceptAttempt(db, { projectId: P, attemptId: lt.id, userId: bob.id });
-    const b = await qa.raisePunch(db, { projectId: P, tagId: pump.id, category: "B", description: "Coupling guard paint", raisedOn: TODAY, userId: bob.id });
-    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "punch (1)");
-    await qa.punchAction(db, { projectId: P, punchId: b.id, action: "clear", note: "painted", userId: alice.id });
-    await qa.punchAction(db, { projectId: P, punchId: b.id, action: "verify", userId: bob.id });
+    const a = await qa.raisePunch(db, { projectId: P, tagId: pump.id, category: "A", description: "Missing holding-down bolt", raisedOn: TODAY, userId: bob.id });
+    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "punch_a (1)");
+    await qa.punchAction(db, { projectId: P, punchId: a.id, action: "clear", note: "fitted", userId: alice.id });
+    await qa.punchAction(db, { projectId: P, punchId: a.id, action: "verify", userId: bob.id });
+    punchB = await qa.raisePunch(db, { projectId: P, tagId: pump.id, category: "B", description: "Coupling guard paint", raisedOn: TODAY, userId: bob.id });
     const n = await qa.raiseNcr(db, { projectId: P, title: "t", description: "d", severity: "minor", tagId: pump.id, raisedOn: TODAY, userId: bob.id });
-    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "ncr (1)");
+    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "ncr (1)");
     await qa.ncrAction(db, { projectId: P, ncrId: n.id, action: "propose", disposition: "rework", dispositionNote: "redo", userId: bob.id });
     await qa.ncrAction(db, { projectId: P, ncrId: n.id, action: "approve", userId: alice.id, actorIsEngineer: true });
     await qa.ncrAction(db, { projectId: P, ncrId: n.id, action: "implement", note: "done", rootCause: "x", correctiveAction: "y", userId: bob.id });
     await qa.ncrAction(db, { projectId: P, ncrId: n.id, action: "close", userId: alice.id });
+    const r = await prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id });
+    assert(r.snapshot.checks.length === 3 && r.snapshot.checks.every((c) => c.attemptId), "what was certified is kept with the signature; punch B did not hold it");
+    await throws(async () => prc.signRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "پیش‌تر");
+    await throws(async () => prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tSub.id, itemRef: sub.id,
+      result: "pass", performedOn: TODAY, userId: alice.id }), "RFC", "pre-commissioning is closed once RFC is signed");
+    await throws(async () => prc.acceptRfc(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "امضاکننده");
+    await throws(async () => db.query("UPDATE rfc_certificate SET accepted_by = signed_by, accepted_at = now()"), "rfc_acceptor_not_signer",
+      "the database too");
+    await throws(async () => db.query("DELETE FROM rfc_certificate"), "permission denied");
+    await throws(async () => db.query("UPDATE rfc_certificate SET snapshot = '{}'"), "permission denied");
+  });
+});
+
+let tCom, punchB;
+test("commissioning procedures are recorded only once RFC is accepted, and RFSU waits for them and for punch B", async () => {
+  await inP(async () => {
+    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "rfc");
+    tCom = await prc.upsertTemplate(db, { projectId: P, code: "C-MEC-01", title: "Pump run on process fluid", appliesTo: "rotating",
+      phase: "commissioning", criteria: "72 h, design flow" });
+    await throws(async () => prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tCom.id, itemRef: pump.id,
+      result: "pass", performedOn: TODAY, userId: alice.id }), "پذیرش RFC", "signed is not accepted");
+    await prc.acceptRfc(db, { projectId: P, subsystemId: sub.id, userId: bob.id });
+    await throws(async () => prc.upsertTemplate(db, { projectId: P, code: "B-MEC-01", title: "Motor solo run", appliesTo: "rotating",
+      phase: "commissioning" }), "عوض نمی‌شود", "a checklist with records keeps its phase");
+    let s = await prc.subsystemPrecom(db, { projectId: P, subsystemId: sub.id });
+    equal(s.rfsu.blockers.map((b) => b.kind), ["checks", "punch"]);
+    equal(s.counts.commissioning, { total: 1, accepted: 0, failed: 0, passed: 0 });
+    const run1 = await prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tCom.id, itemRef: pump.id,
+      result: "pass", performedOn: TODAY, note: "72 h at design flow", userId: alice.id });
+    await prc.acceptAttempt(db, { projectId: P, attemptId: run1.id, userId: bob.id });
+    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "punch (1)");
+    await qa.punchAction(db, { projectId: P, punchId: punchB.id, action: "clear", note: "painted", userId: alice.id });
+    await qa.punchAction(db, { projectId: P, punchId: punchB.id, action: "verify", userId: bob.id });
     const r = await prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id });
-    assert(r.snapshot.checks.length === 3 && r.snapshot.checks.every((c) => c.attemptId), "what was certified is kept with the signature");
-    await throws(async () => prc.signRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "پیش‌تر");
+    equal(r.snapshot.checks.map((c) => c.code), ["C-MEC-01"], "RFSU certifies commissioning; RFC certified the rest");
     await throws(async () => prc.acceptRfsu(db, { projectId: P, subsystemId: sub.id, userId: alice.id }), "امضاکننده");
     await prc.acceptRfsu(db, { projectId: P, subsystemId: sub.id, userId: bob.id });
-    await throws(async () => prc.acceptRfsu(db, { projectId: P, subsystemId: sub.id, userId: bob.id }), "پیش‌تر");
-    await throws(async () => prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tSub.id, itemRef: sub.id,
+    await throws(async () => prc.recordAttempt(db, { projectId: P, subsystemId: sub.id, templateId: tCom.id, itemRef: pump.id,
       result: "pass", performedOn: TODAY, userId: alice.id }), "RFSU");
-    const board = await prc.precomBoard(db, { projectId: P });
-    equal(board.map((x) => [x.code, !!x.rfsu_accepted_at, x.reopened]), [["12-01", true, false]]);
+    let board = await prc.precomBoard(db, { projectId: P });
+    equal(board.map((x) => [x.code, !!x.rfc_accepted_at, !!x.rfsu_accepted_at, x.reopened]), [["12-01", true, true, false]]);
     await qa.raisePunch(db, { projectId: P, tagId: pump.id, category: "B", description: "found after RFSU", raisedOn: TODAY, userId: bob.id });
-    equal((await prc.precomBoard(db, { projectId: P }))[0].reopened, true, "the certificate stands; the board says something reopened");
+    board = await prc.precomBoard(db, { projectId: P });
+    equal([board[0].reopened, board[0].rfcReopened], [true, false], "the certificate stands; the board says what reopened, and punch B is not RFC's");
     await throws(async () => db.query("DELETE FROM rfsu_certificate"), "permission denied");
   });
   await withProject(db, other.id, async () => {
@@ -193,7 +245,7 @@ test("RFSU waits for every check, every punch A/B and every NCR; the signer does
     await db.query("INSERT INTO mc_certificate (project_id, subsystem_id, snapshot, signed_by, accepted_by, accepted_at) VALUES ($1,$2,'{}',$3,$4,now())",
       [other.id, s2.id, alice.id, bob.id]);
     const r2 = await prc.subsystemPrecom(db, { projectId: other.id, subsystemId: s2.id });
-    equal([r2.ready, r2.blockers.map((b) => b.kind)], [false, ["no_templates"]], "no checklist declared: nothing to certify");
+    equal([r2.rfc.ready, r2.rfc.blockers.map((b) => b.kind)], [false, ["no_templates"]], "no checklist declared: nothing to certify");
     equal((await db.query("SELECT count(*)::int AS n FROM precom_attempt")).rows[0].n, 0);
   });
 });
