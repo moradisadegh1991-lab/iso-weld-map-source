@@ -161,7 +161,8 @@ function History({ h }) {
           {h.status.compliance && (
             <p className="sm">الزام: <b>{h.status.compliance.method ? `${h.status.compliance.method} ${h.status.compliance.percent}%` : "تعیین نشده"}</b> —{" "}
               <span className={`pill ${h.status.compliance.done ? "ok" : "warn"}`}>{h.status.compliance.text}</span>
-              {h.status.compliance.lot?.needed > 0 && <span className="muted"> — {h.status.compliance.lot.needed} جوش دیگر از همین جوشکار باید بازرسی شود</span>}</p>
+              {h.status.compliance.lot?.drawNeeded && <span className="muted"> — قرعهٔ بازرسی تدریجی ({h.status.compliance.lot.drawNeeded.count} جوش) در داشبورد پایپینگ کشیده نشده</span>}
+              {h.status.compliance.lot?.needed > 0 && <span className="muted"> — {h.status.compliance.lot.needed} جوش قرعه‌شده هنوز NDT نشده</span>}</p>
           )}
           {h.selection.length > 0 && (
             <p className="sm">نمونه‌گیری: {h.selection.map((s) => `${s.method} ${s.percent}% (${fa(s.on)}): ${s.selected ? "انتخاب شد" : "انتخاب نشد"}`).join(" · ")}</p>

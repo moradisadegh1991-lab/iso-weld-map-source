@@ -256,6 +256,28 @@ try {
           doneAt: "2026-08-10", contractorId: mech.id, userId: user.id });
       }
 
+      // A second welder on the third spool, under the line's random RT: the
+      // sampled weld is rejected, so the lot waits on a progressive draw
+      // (B31.3 §341.3.4) — the piping dashboard offers it.
+      const s3 = spools[2];
+      const random = welds.filter((x) => s3 && x.spool_id === s3.id && x.shop_field === "Shop");
+      const { rows: reqs } = await db.query("SELECT weld_uid, ndt_requirement FROM weld WHERE project_id = $1 AND weld_uid = ANY($2)",
+        [p.id, random.map((x) => x.weld_uid)]);
+      const lot = random.filter((x) => /random/.test(reqs.find((r) => r.weld_uid === x.weld_uid)?.ndt_requirement || ""));
+      if (lot.length >= 2) {
+        const w15 = await upsertWelder(db, { projectId: p.id, stampNo: "W-15", name: "جوشکار نمایشی دوم" });
+        await addQualification(db, { projectId: p.id, welderId: w15.id, process: "GTAW",
+          positions: ["6G"], couponOdMm: 219.1, couponThicknessMm: 8.18 });
+        for (const w of lot) {
+          await assignWeld(db, { projectId: p.id, weldUid: w.weld_uid, welderId: w15.id,
+            weldedAt: "2026-08-12", process: "GTAW", position: "V", lineId: line.id });
+        }
+        await db.query(`INSERT INTO ndt_selection (project_id, line_id, method, percent, seed, selected_uids, created_by)
+                        VALUES ($1,$2,'RT',5,'demo 28-CWR RT 5%',$3,$4)`, [p.id, line.id, [lot[0].weld_uid], user.id]);
+        await recordNdt(db, { projectId: p.id, weldUid: lot[0].weld_uid, method: "RT", result: "reject" });
+        console.log(`piping: W-15 made ${lot.length} random-RT welds; the sampled one is rejected — progressive draw pending`);
+      }
+
       const supports = [
         ["AN-0931", "anchor", null, s1?.id],
         ["G-0932", "guide", null, s1?.id],

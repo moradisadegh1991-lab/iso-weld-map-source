@@ -3,7 +3,7 @@
  * NDT compliance — the examination each weld REQUIRES, B31.3 §341 — and what
  * piping progress counts as tested (F-17).
  */
-import { test, run, assert, equal } from "./harness.mjs";
+import { test, run, assert, equal, throws } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -56,27 +56,41 @@ test("random: a welder with no weld in the sample, or a weld with no welder, is 
   equal([st(res, "b1"), st(res, "x")], ["welder_unsampled", "no_welder"]);
 });
 
-test("§341.3.4: a rejected sample needs two more per defect; if they pass, the lot is accepted", async () => {
+const draw = (tier, uids) => ({ lineId: "L", method: "RT", welderId: "A", tier, selectedUids: uids });
+
+test("§341.3.4: a rejected sample waits on a draw of two more per defect; if they pass, the lot is accepted", async () => {
   const welds = ["s1", "u1", "u2", "u3", "u4"].map((u) => W(u));
   let res = compliance({ welds, selections: sel(["s1"]), records: [R("s1", "reject", "1")] });
-  equal([st(res, "s1"), st(res, "u1"), res.get("u1").lot.needed], ["rejected", "progressive", 2]);
-  res = compliance({ welds, selections: sel(["s1"]), records: [R("s1", "reject", "1"), R("u1", "accept", "2")] });
-  equal([st(res, "u1"), st(res, "u2")], ["accepted", "progressive"], "one of the two additional examined");
-  res = compliance({ welds, selections: sel(["s1"]), records: [R("s1", "reject", "1"), R("u1", "accept", "2"), R("u2", "accept", "3")] });
+  equal([st(res, "s1"), st(res, "u1"), res.get("u1").lot.drawNeeded.count], ["rejected", "progressive", 2]);
+  equal(res.get("u1").lot.drawNeeded.pool, ["u1", "u2", "u3", "u4"], "drawn from the welder's unsampled welds");
+  res = compliance({ welds, selections: sel(["s1"]), records: [R("s1", "reject", "1"), R("u3", "accept", "2"), R("u4", "accept", "3")] });
+  equal([st(res, "u1"), st(res, "u3")], ["progressive", "accepted"],
+    "welds shot outside a draw answer for themselves but do not release the lot");
+  const draws = [draw("a", ["u1", "u2"])];
+  res = compliance({ welds, selections: sel(["s1"]), draws, records: [R("s1", "reject", "1"), R("u1", "accept", "2")] });
+  equal([st(res, "u1"), st(res, "u4"), res.get("u4").lot.waiting], ["accepted", "progressive", ["u2"]]);
+  res = compliance({ welds, selections: sel(["s1"]), draws, records: [R("s1", "reject", "1"), R("u1", "accept", "2"), R("u2", "accept", "3")] });
   equal([st(res, "u3"), st(res, "u4"), st(res, "s1")], ["accepted_by_sample", "accepted_by_sample", "rejected"],
     "the lot is accepted; the defective weld still needs its repair");
 });
 
-test("§341.3.4(b)–(d): a defect among the additional needs two further; a defect there means the whole lot", async () => {
+test("§341.3.4(b)–(d): a defect among the drawn needs two further, drawn from what is left; a defect there means the whole lot", async () => {
   const welds = ["s1", "u1", "u2", "u3", "u4", "u5", "u6"].map((u) => W(u));
   const base = [R("s1", "reject", "1"), R("u1", "reject", "2"), R("u2", "accept", "3")];
-  let res = compliance({ welds, selections: sel(["s1"]), records: base });
-  equal([st(res, "u5"), res.get("u5").lot.tier], ["progressive", "b"]);
-  res = compliance({ welds, selections: sel(["s1"]), records: [...base, R("u3", "accept", "4"), R("u4", "accept", "5")] });
+  let res = compliance({ welds, selections: sel(["s1"]), draws: [draw("a", ["u1", "u2"])], records: base });
+  equal([st(res, "u5"), res.get("u5").lot.tier, res.get("u5").lot.drawNeeded.pool], ["progressive", "b", ["u3", "u4", "u5", "u6"]]);
+  const draws = [draw("a", ["u1", "u2"]), draw("b", ["u3", "u4"])];
+  res = compliance({ welds, selections: sel(["s1"]), draws, records: [...base, R("u3", "accept", "4"), R("u4", "accept", "5")] });
   equal(st(res, "u5"), "accepted_by_sample", "tier (b) passed");
-  res = compliance({ welds, selections: sel(["s1"]), records: [...base, R("u3", "accept", "4"), R("u4", "reject", "5")] });
+  res = compliance({ welds, selections: sel(["s1"]), draws, records: [...base, R("u3", "accept", "4"), R("u4", "reject", "5")] });
   equal([st(res, "u5"), st(res, "u6"), st(res, "u3")], ["full_examination", "full_examination", "accepted"],
     "tier (b) failed: every weld of the lot on its own examination");
+});
+
+test("a lot too small for two per defect draws what is left", async () => {
+  const welds = ["s1", "u1"].map((u) => W(u));
+  const res = compliance({ welds, selections: sel(["s1"]), records: [R("s1", "reject", "1")] });
+  equal(res.get("u1").lot.drawNeeded.count, 1);
 });
 
 test("a new draw for the line replaces the earlier one", async () => {
@@ -90,6 +104,11 @@ test("the lot is the welder's: another welder's reject does not hold this one", 
   const welds = [W("a1"), W("a2"), W("b1", { welderId: "B" }), W("b2", { welderId: "B" })];
   const res = compliance({ welds, selections: sel(["a1", "b1"]), records: [R("a1", "reject", "1"), R("b1", "accept", "2")] });
   equal([st(res, "a2"), st(res, "b2")], ["progressive", "accepted_by_sample"]);
+  const lotA = ["a1", "a2", "a3", "a4"].map((u) => W(u));
+  const bDraw = [{ lineId: "L", method: "RT", welderId: "B", tier: "a", selectedUids: ["a2", "a3"] }];
+  const r2 = compliance({ welds: lotA, selections: sel(["a1"]), draws: bDraw,
+    records: [R("a1", "reject", "1"), R("a2", "accept", "2"), R("a3", "accept", "3")] });
+  equal(st(r2, "a4"), "progressive", "another welder's draw does not release this lot");
 });
 
 test("inch-dia sums weld sizes, and counts welds without a size apart", async () => {
@@ -141,16 +160,29 @@ test("F-17: a weld outside the random sample is tested once its welder's sample 
   });
 });
 
-test("F-17: a rejected sample holds the lot until the progressive examination passes", async () => {
+test("F-17: a rejected sample holds the lot until the drawn progressive examination passes", async () => {
   await inP(async () => {
     await db.query("DELETE FROM ndt_record WHERE project_id = $1", [P]);
     await exec.recordNdt(db, { projectId: P, weldUid: welds[0], method: "RT", result: "reject", inspectedAt: TODAY });
     equal((await ctl.platformCounts(db, { projectId: P, discipline: "piping" })).tested, 0);
-    await exec.recordNdt(db, { projectId: P, weldUid: welds[1], method: "RT", result: "accept", inspectedAt: TODAY });
-    await exec.recordNdt(db, { projectId: P, weldUid: welds[2], method: "RT", result: "accept", inspectedAt: TODAY });
+    let h = await hub.pipingHub(db, { projectId: P });
+    equal([h.lots.length, h.lots[0].drawNeeded, h.lots[0].tier], [1, 2, "a"]);
+    const { rows: [wl] } = await db.query("SELECT id FROM welder WHERE project_id = $1", [P]);
+    const args = { projectId: P, lineId, method: "RT", welderId: wl.id };
+    await throws(() => hub.drawProgressive(db, args), "INVALID_INPUT", "a person draws");
+    const d = await hub.drawProgressive(db, { ...args, userId: alice.id });
+    equal([d.tier, d.selected_uids.length, d.selected_uids.includes(welds[0])], ["a", 2, false]);
+    assert(d.seed.includes("10-P-1|RT|W-01|a|"), d.seed);
+    await throws(() => hub.drawProgressive(db, { ...args, userId: alice.id }), "INVALID_INPUT", "drawn once");
+    await throws(() => db.query("UPDATE ndt_progressive_draw SET selected_uids = '{}'"), "permission denied");
+    // Shooting two other welds does not release the lot; the drawn ones do.
+    const other = welds.slice(1).filter((u) => !d.selected_uids.includes(u)).slice(0, 2);
+    for (const u of other) await exec.recordNdt(db, { projectId: P, weldUid: u, method: "RT", result: "accept", inspectedAt: TODAY });
+    equal((await ctl.platformCounts(db, { projectId: P, discipline: "piping" })).tested, 2, "only the two shot welds, for themselves");
+    for (const u of d.selected_uids) await exec.recordNdt(db, { projectId: P, weldUid: u, method: "RT", result: "accept", inspectedAt: TODAY });
     equal((await ctl.platformCounts(db, { projectId: P, discipline: "piping" })).tested, welds.length - 1, "all but the defective weld");
-    const h = await hub.pipingHub(db, { projectId: P });
-    equal([h.totals.welds, h.totals.ndtDone, h.byStatus.rejected], [welds.length, welds.length - 1, 1]);
+    h = await hub.pipingHub(db, { projectId: P });
+    equal([h.totals.welds, h.totals.ndtDone, h.byStatus.rejected, h.lots.length], [welds.length, welds.length - 1, 1, 0]);
     assert(h.totals.di > 0 && h.lines[0].diDone < h.lines[0].di.di, "inch-dia done is less than total while one weld is rejected");
     const csv = await hub.weldLogCsv(db, { projectId: P });
     assert(csv.split("\r\n").length === welds.length + 1 && csv.includes("رد — تعمیر"), "weld log: one row per weld with its NDT status");

@@ -1,5 +1,7 @@
 "use client";
+import { useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
+import { can, ACTIONS } from "../../../lib/authz.mjs";
 import TableKit from "../../../components/ui/TableKit";
 import PipingNav from "../../../components/ui/PipingNav";
 
@@ -12,8 +14,18 @@ const TONE = { rejected: "bad", full_examination: "bad", progressive: "warn", aw
   sample_not_drawn: "bad", unknown: "bad", no_welder: "bad", welder_unsampled: "bad" };
 
 export default function PipingOverview() {
-  const { projectId } = usePlatform();
-  const { data, error } = useProjectData((id) => `/api/piping/hub?projectId=${id}`, []);
+  const { projectId, role, call } = usePlatform();
+  const { data, error, reload } = useProjectData((id) => `/api/piping/hub?projectId=${id}`, []);
+  const [msg, setMsg] = useState(null);
+  const mayDraw = can({ role }, ACTIONS.DRAW_NDT_SAMPLE);
+  async function drawLot(l) {
+    setMsg(null);
+    try {
+      const r = await call("/api/piping/hub", { method: "POST", body: JSON.stringify({ projectId, kind: "progressive-draw", lineId: l.lineId, method: l.method, welderId: l.welderId }) });
+      setMsg({ ok: true, text: `قرعه کشیده شد: ${r.result.weldNos.join("، ")} — seed ${r.result.seed}` });
+      reload();
+    } catch (e) { setMsg({ ok: false, text: e.message }); }
+  }
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
   const t = data.totals;
@@ -48,6 +60,31 @@ export default function PipingOverview() {
           </div>
         )}
       </div>
+
+      {msg && <p className={msg.ok ? "muted" : "err"}>{msg.text}</p>}
+      {data.lots.length > 0 && (
+        <div className="card">
+          <h2>بازرسی تدریجی (B31.3 §341.3.4)</h2>
+          <p className="muted sm">نمونهٔ جوشکار رد شده: به ازای هر نقص دو جوش دیگر از جوش‌های نمونه‌نشدهٔ همان جوشکار در همان خط، با قرعهٔ ثبت‌شده (seed) انتخاب می‌شود — نه هر جوشی که شات خورده. اگر در مرحلهٔ دوم هم رد باشد، همهٔ جوش‌های لات بازرسی می‌شوند.</p>
+          <TableKit name="progressive-lots">
+            <table className="dtable">
+              <thead><tr><th>خط</th><th>روش</th><th>جوشکار</th><th>مرحله</th><th>جوش‌های معیوب</th><th>قرعه</th><th>وضعیت</th></tr></thead>
+              <tbody>{data.lots.map((l) => (
+                <tr key={`${l.lineId}|${l.method}|${l.welderId}`}>
+                  <td className="mono">{l.lineNo}</td><td className="mono">{l.method}</td><td className="mono">{l.stamp}</td>
+                  <td>{l.status === "full_examination" ? "(d) لات کامل" : l.tier === "a" ? "(a) دو به ازای هر نقص" : "(b) دو به ازای هر نقص جدید"}</td>
+                  <td className="mono">{l.defects.join("، ") || "—"}</td>
+                  <td className="mono">{l.drawn.join("، ") || "—"}</td>
+                  <td>{l.status === "full_examination" ? <span className="pill bad">همهٔ جوش‌های لات</span>
+                    : l.drawNeeded !== null ? (mayDraw ? <button className="btn" onClick={() => drawLot(l)}>قرعهٔ {l.drawNeeded} جوش</button>
+                      : <span className="pill warn">منتظر قرعهٔ {l.drawNeeded} جوش</span>)
+                    : <span className="pill warn">منتظر NDT: {l.waiting.join("، ")}</span>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </TableKit>
+        </div>
+      )}
 
       <div className="card">
         <h2>خطوط</h2>
