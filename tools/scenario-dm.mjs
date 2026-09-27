@@ -23,7 +23,7 @@ import { ensureUser, createProject, addMember } from "../lib/db/repos/projects.m
 import { setPassword } from "../lib/db/repos/credentials.mjs";
 import { SCENARIO, PEOPLE, STEPS, stepsUpTo } from "../lib/scenario/dm-pump.mjs";
 import { context, play, startFor } from "../lib/scenario/runner.mjs";
-import { guideMarkdown } from "../lib/scenario/guide.mjs";
+import { guideMarkdown, daysOf } from "../lib/scenario/guide.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => { const k = args.indexOf(name); return k < 0 ? null : args[k + 1] ?? true; };
@@ -75,6 +75,11 @@ try {
   console.log(`\nPROJECT ${code} — «${SCENARIO.name}»`);
   console.log(`  day 0 = ${start}  (day N = N days after it; the guide's dates are days)`);
   console.log(`  played: ${steps.length} of ${STEPS.length} steps — next: ${STEPS[steps.length]?.id ?? "nothing, the job is done"}`);
+  // The calendar: every day the guide names, as a date to type.
+  const at = (n) => new Date(Date.parse(`${start}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const cal = daysOf(STEPS).map((n) => `روز ${String(n).padStart(3)} = ${at(n)}`);
+  console.log("\nCALENDAR (day → date):");
+  for (let k = 0; k < cal.length; k += 4) console.log("  " + cal.slice(k, k + 4).join("   "));
   console.log("\nTHE OTHER PEOPLE (passwords shown once, stored nowhere else):");
   for (const [title, e, pw] of printed) console.log(`  ${title}\n    email    : ${e}\n    password : ${pw}`);
   console.log("\nGuide: docs/digital-epc/03-scenario-dm-pump.md\n");
