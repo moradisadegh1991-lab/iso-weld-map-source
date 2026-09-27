@@ -12,6 +12,7 @@ import SaveBar from "../../components/SaveBar";
 import TabNav from "../../components/TabNav";
 import TruthBar from "../../components/TruthBar";
 import EquipmentBar from "../../components/EquipmentBar";
+import WeldListEntry from "../../components/WeldListEntry";
 import { StageRail } from "../../components/PlatformShell";
 import { STAGES } from "../../lib/platform/workflow.mjs";
 import ReviewQueue from "../../components/ReviewQueue";
@@ -107,9 +108,12 @@ export default function Page() {
   const unitGrade = units.data?.units?.find((u) => u.code === printedUnit)?.grade_elevation_mm ?? null;
   const gradeElevationMm = unitGrade ?? profile.data?.project?.grade_elevation_mm ?? null;
   const gradeSource = unitGrade !== null ? `گرید واحد ${printedUnit}` : "گرید پروژه";
+  // A register typed from a weld list has no geometry for the engine to
+  // draw: it opens in its own form (components/WeldListEntry.jsx).
+  const listed = Array.isArray(data?.weldList);
   const model = useMemo(
-    () => (data ? buildModel(data, { strictBom, gradeElevationMm }) : null),
-    [data, strictBom, gradeElevationMm]);
+    () => (data && !listed ? buildModel(data, { strictBom, gradeElevationMm }) : null),
+    [data, listed, strictBom, gradeElevationMm]);
   const sel = model && !model.error ? model.register.find((w) => w.no === selected) : null;
 
   /* One serverless invocation per pass. Passes run in parallel so total wall
@@ -449,6 +453,13 @@ export default function Page() {
               it often arrives before a single isometric is issued. Putting
               it only behind the drawing tabs would make it unreachable at
               exactly the moment it is useful. */}
+          {/* No drawing to extract, but a weld map or its Excel: the register
+              is typed or read from the list, and checked the same way. */}
+          <details className="intake-more" id="weld-list-entry">
+            <summary>فهرست جوش دارید؟ سرجوش‌ها را دستی یا از فایل Excel وارد کنید</summary>
+            <WeldListEntry session={session} onSaved={openRunForReview} />
+          </details>
+
           <details className="intake-more">
             <summary>لیست تجهیزات دارید؟ تگ‌ها و زیرسیستم‌ها را همین‌جا بخوانید</summary>
             <EquipmentBar />
@@ -463,7 +474,16 @@ export default function Page() {
         </section>
       )}
 
-      {data && (
+      {data && listed && (
+        <section className="stage">
+          <div className="pane">
+            <WeldListEntry key={openRun?.run?.id || "new"} session={session} initial={data} run={openRun}
+              onSaved={openRunForReview} onClose={() => { setData(null); setOpenRun(null); }} />
+          </div>
+        </section>
+      )}
+
+      {data && !listed && (
         <section className="stage">
           {model.error ? (
             <div className="canvas empty">

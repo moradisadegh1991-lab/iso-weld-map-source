@@ -99,6 +99,9 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
           sheetNo: data.meta.sheet || "1/1",
           contentType: sourceFile?.type || "image/jpeg",
           fileBase64, fileSha256, byteSize, uploaded,
+          // Typed in with no drawing file at hand: say so, rather than
+          // inventing a hash. The file can be attached later to the same revision.
+          noFile: !sourceFile,
         }),
       });
 
@@ -128,6 +131,8 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
           (doc.deduplicated ? " · فایل تکراری بود، دوباره ذخیره نشد" : "") +
           (doc.superseded?.length ? ` · رویژن ${doc.superseded.map((d) => d.revision).join("، ")} منسوخ شد` : "") +
           (uploaded ? " · فایل بزرگ مستقیم در MinIO ذخیره شد" : "") +
+          (doc.noFile ? " · بدون فایل نقشه (داده‌های واردشده) — فایل را بعداً با همین شماره و رویژن بارگذاری کنید تا پیوست شود" : "") +
+          (doc.attached ? " · فایل نقشه به همین رویژن پیوست شد" : "") +
           (fileBase64 === null && !uploaded && sourceFile ? " · فایل بزرگ بود؛ فقط با hash ثبت شد (MinIO وصل نیست)" : ""),
       });
     } catch (e) {

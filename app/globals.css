@@ -777,3 +777,11 @@ ol.timeline li{position:relative;padding-inline-start:14px;display:flex;gap:8px;
 ol.timeline li::before{content:"";position:absolute;inset-inline-start:-6px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--dim)}
 ol.timeline li.ok::before{background:var(--ok)}
 ol.timeline li.bad::before{background:var(--bad)}
+
+/* Weld register from a weld list (components/WeldListEntry.jsx). */
+.weldlist{display:flex;flex-direction:column;gap:10px}
+.weldlist .wl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.weldlist .wl-f{display:flex;flex-direction:column;gap:3px}
+.weldlist .wl-table{overflow-x:auto;max-width:100%}
+.weldlist .wl-table input{width:100%;min-width:70px}
+.weldlist .err ul{margin:4px 0 0;padding-inline-start:18px}

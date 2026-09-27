@@ -6,7 +6,7 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { createRun, saveRegister, getRegister, latestRunForDocument, latestRunForDrawing }
   from "../../../lib/db/repos/runs.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
-import { buildModel } from "../../../lib/engine.js";
+import { modelFor } from "../../../lib/register/weld-list.mjs";
 import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
 import { lineForRegister, tieInRefsOf } from "../../../lib/db/repos/spine.mjs";
 
@@ -32,7 +32,10 @@ export async function POST(request) {
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.RUN_EXTRACTION);
 
-    const model = buildModel(payload, options);
+    const model = modelFor(payload, options);
+    // A typed weld list that is not a register is sent back row by row. It is
+    // not a model run that failed — nothing was extracted — so no run is kept.
+    if (model.problems) return Response.json({ error: model.error, problems: model.problems }, { status: 400 });
 
     return await withProject(db, projectId, async () => {
       // A signed register is not re-extracted over. Correcting it means a new

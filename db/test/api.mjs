@@ -179,6 +179,29 @@ test("a registration with neither bytes nor a valid hash is refused", async () =
   equal(status, 400);
 });
 
+test("a register typed in with no drawing file registers the sheet as having none, and the file attaches later", async () => {
+  // The piping page's «ذخیره در سامانه» after JSON typed by hand: no file,
+  // no hash. It used to be refused outright with an English message.
+  const post = (body) => documentsRoute.POST(req("http://x/api/documents", {
+    method: "POST", body: { projectId, docNo: "SW 666", revision: "0", ...body } })).then(json);
+  const first = await post({ noFile: true });
+  equal(first.status, 201);
+  equal(first.body.noFile, true);
+  assert(first.body.document.storage_uri.startsWith("none://"), "the row says there is no file");
+  const again = await post({ noFile: true });
+  equal(again.status, 200, "saving the typed register again is the same sheet, not a content conflict");
+  equal(again.body.document.id, first.body.document.id);
+  const fileBase64 = Buffer.from("scan of SW 666 rev 0").toString("base64");
+  const attached = await post({ fileBase64, contentType: "application/pdf" });
+  equal(attached.body.attached, true, "the real file is attached to the same revision");
+  equal(attached.body.document.id, first.body.document.id);
+  assert(!attached.body.document.storage_uri.startsWith("none://"));
+  const stays = await post({ noFile: true });
+  equal(stays.body.document.file_sha256, attached.body.document.file_sha256, "«no file» never replaces a file on record");
+  const other = await post({ fileBase64: Buffer.from("another scan").toString("base64"), contentType: "application/pdf" });
+  equal(other.status, 409, "a second, different file for the same revision is still a revision problem");
+});
+
 test("a new revision supersedes the old one through the API", async () => {
   const res = await json(await documentsRoute.POST(req("http://x/api/documents", {
     method: "POST",
@@ -277,6 +300,64 @@ test("an engineer approves, and the approval records what was signed", async () 
   equal(body.run.status, "approved");
   equal(body.run.approved_by, eng.id);
   assert(/^[0-9a-f]{64}$/.test(body.run.approved_sha256), "an approval must say what it covered");
+});
+
+test("a weld list typed by hand becomes a register: as entered, checked, never guessed", async () => {
+  // No drawing file, no geometry: the sheet is registered as having no file
+  // and the register is the list the person typed from the weld map.
+  const doc = await json(await documentsRoute.POST(req("http://x/api/documents", {
+    method: "POST", body: { projectId, docNo: "ISO-LIST-1", revision: "0", noFile: true } })));
+  const meta = { drawingNo: "ISO-LIST-1", rev: "0", lineNo: "36-P-777", nps: 6, schedule: "SCH 40" };
+  const post = (weldList, m = meta) => runsRoute.POST(req("http://x/api/runs", {
+    method: "POST", body: { projectId, documentId: doc.body.document.id, payload: { meta: m, weldList } } })).then(json);
+  const db = await getDb();
+  const runsBefore = (await db.query("SELECT count(*)::int AS n FROM extraction_run WHERE document_id = $1", [doc.body.document.id])).rows[0].n;
+
+  // Every row that is not a register row is named; nothing is saved.
+  const bad = await post([
+    { no: "W-1", spool: "S1", loc: "Shop", kind: "BW" },
+    { no: "W-1", spool: "S1", loc: "Shop", kind: "BW" },
+    { no: "W-2", loc: "somewhere", kind: "BW" },
+    { no: "W-3", loc: "Shop", kind: "BW" },
+    { no: "W-4", spool: "S1", loc: "Field", kind: "" },
+  ]);
+  equal(bad.status, 400);
+  equal(bad.body.problems.length, 4, bad.body.problems.join(" | "));
+  assert(/تکراری/.test(bad.body.problems[0]) && /Shop|Field/.test(bad.body.problems[1]) && /اسپول/.test(bad.body.problems[2]) && /نوع/.test(bad.body.problems[3]));
+  equal((await db.query("SELECT count(*)::int AS n FROM extraction_run WHERE document_id = $1", [doc.body.document.id])).rows[0].n, runsBefore, "no run is kept for a list that is not a register");
+
+  const good = await post([
+    { no: "W-1", spool: "S1", loc: "Shop", kind: "BW" },
+    { no: "W-2", spool: "S1", loc: "کارگاه", kind: "Butt weld", nps: '4"' },
+    { no: "W-3", spool: "", loc: "Field", kind: "Tie-in", ref: "P-777 suction" },
+    { no: "W-4", spool: "S2", loc: "shop", kind: "BW" },
+  ]);
+  equal(good.status, 201, JSON.stringify(good.body).slice(0, 200));
+  const byNo = Object.fromEntries(good.body.register.map((w) => [w.weld_no, w]));
+  equal(byNo["W-2"].shop_field, "Shop", "«کارگاه» is Shop");
+  equal(Number(byNo["W-2"].nps), 4, "the row's own size");
+  equal(Number(byNo["W-1"].nps), 6, "a blank size is the sheet's stated size, which is not a guess");
+  equal(byNo["W-3"].shop_field, "Field");
+  equal(byNo["W-3"].ndt_requirement, "RT 100%", "the same provisional NDT as the engine's");
+  equal(byNo["W-3"].pos_el, null, "no geometry, no elevation");
+  equal(good.body.spools.sort(), ["S1", "S2"]);
+  const { rows: [line] } = await db.query("SELECT id FROM line WHERE project_id = $1 AND line_no = '36-P-777'", [projectId]);
+  assert(line, "the list's line exists, so its welds reach a test package and MC");
+  const { rows: sp } = await db.query("SELECT spool_no, length_mm, nps_max FROM spool WHERE extraction_run_id = $1 ORDER BY spool_no", [good.body.run.id]);
+  equal(sp.map((x) => [x.spool_no, x.length_mm, Number(x.nps_max)]), [["S1", null, 6], ["S2", null, 6]], "a length nobody measured is unknown, not zero");
+
+  // Rev 1 of the same sheet: known by weld number, so W-1..W-3 keep their identity.
+  const doc1 = await json(await documentsRoute.POST(req("http://x/api/documents", {
+    method: "POST", body: { projectId, docNo: "ISO-LIST-1", revision: "1", noFile: true } })));
+  const rev1 = await runsRoute.POST(req("http://x/api/runs", { method: "POST", body: { projectId, documentId: doc1.body.document.id,
+    payload: { meta: { ...meta, rev: "1" }, weldList: [
+      { no: "W-1", spool: "S1", loc: "Shop", kind: "BW" },
+      { no: "W-2", spool: "S1", loc: "Shop", kind: "BW", nps: 4 },
+      { no: "W-3", loc: "Field", kind: "Tie-in", ref: "P-777 suction" },
+    ] } } })).then(json);
+  equal(rev1.status, 201);
+  const uid = (reg, no) => reg.find((w) => w.weld_no === no).weld_uid;
+  for (const no of ["W-1", "W-2", "W-3"]) equal(uid(rev1.body.register, no), uid(good.body.register, no), `${no} keeps its identity`);
 });
 
 test("the latest run round trips through the API", async () => {

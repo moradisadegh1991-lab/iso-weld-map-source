@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { unitByCode } from "../../../lib/db/repos/projects.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
-import { registerDocument, currentRevision, supersedePrevious } from "../../../lib/db/repos/documents.mjs";
+import { registerDocument, currentRevision, supersedePrevious, NO_FILE_URI } from "../../../lib/db/repos/documents.mjs";
 import { getStore } from "../../../lib/storage/index.mjs";
 import { keyFor } from "../../../lib/storage/content-store.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
@@ -53,6 +53,8 @@ export async function POST(request) {
       if (!held) return Response.json({ error: "the file is not in the bucket — upload it first" }, { status: 409 });
       if (held.sha256 !== claimed) return Response.json({ error: "the bucket holds different bytes under that name" }, { status: 409 });
       blob = { digest: claimed, uri, size: held.size, deduplicated: false };
+    } else if (body.noFile === true) {
+      blob = { noFile: true, digest: null, uri: null, size: null, deduplicated: false };
     } else if (claimed) {
       blob = {
         digest: body.fileSha256,
@@ -63,7 +65,7 @@ export async function POST(request) {
       };
     } else {
       return Response.json(
-        { error: "either fileBase64, or a fileSha256 of 64 hex characters, is required" },
+        { error: "فایل نقشه همراه نیست: فایل را بارگذاری کنید، یا صریحاً «بدون فایل» (noFile) ثبت کنید." },
         { status: 400 });
     }
 
@@ -72,17 +74,18 @@ export async function POST(request) {
       // unmatched code attaches nothing — the project grade then applies,
       // which is also what the preview used, so the two still agree.
       const unitId = givenUnitId || (await unitByCode(db, { projectId, code: unitCode }))?.id || null;
-      const { document, created } = await registerDocument(db, {
+      const { document, created, attached = false } = await registerDocument(db, {
         projectId, unitId, docNo, revision, revisionDate, sheetNo,
         fileSha256: blob.digest, storageUri: blob.uri,
-        contentType, byteSize: blob.size, createdBy: user.id,
+        contentType, byteSize: blob.size, createdBy: user.id, noFile: !!blob.noFile,
       });
       // A newer revision retires the ones before it. EPIC-2 builds the
       // register diff on top of this pointer; here it just has to be set.
       const superseded = created && supersede
         ? await supersedePrevious(db, { projectId, documentId: document.id })
         : [];
-      return Response.json({ document, created, deduplicated: blob.deduplicated, superseded },
+      return Response.json({ document, created, attached, noFile: document.storage_uri === NO_FILE_URI,
+        deduplicated: blob.deduplicated, superseded },
         { status: created ? 201 : 200 });
     });
   } catch (e) {
