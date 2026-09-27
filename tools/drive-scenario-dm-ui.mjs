@@ -779,7 +779,7 @@ try {
     at("5.2", "isometric DMW-ISO-7001, keyed by hand and saved with its file");
     await pm.goto(BASE + "/piping", { waitUntil: "networkidle" }); await settle(pm);
     await pm.getByRole("button", { name: /نقشه دوبعدی/ }).click();
-    await pm.locator("input[type=file][accept*=pdf]").setInputFiles({ name: "DMW-ISO-7001_Rev0.pdf", mimeType: "application/pdf", buffer: tinyPdf("DMW-ISO-7001 Rev.0") });
+    await pm.locator(".drop input[type=file][accept*=pdf]").setInputFiles({ name: "DMW-ISO-7001_Rev0.pdf", mimeType: "application/pdf", buffer: tinyPdf("DMW-ISO-7001 Rev.0") });
     await pm.waitForTimeout(3000);
     await pm.getByRole("button", { name: "ورود دستی (JSON) برای همین نقشه" }).click(); await settle(pm);
     await pm.locator(".pane textarea").fill(JSON.stringify(ISO_7001, null, 2));
