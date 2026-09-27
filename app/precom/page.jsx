@@ -109,7 +109,9 @@ function SubsystemPanel({ id, row, data, post, may, stamp }) {
     commissioning: may.record && !!sub.rfc_accepted_at && !sub.rfsu_signed_at };
   const note = { precom: !sub.mc_accepted_at ? "پس از پذیرش MC ثبت می‌شود." : sub.rfc_signed_at ? "RFC امضا شده؛ پیش‌راه‌اندازی بسته است." : null,
     commissioning: !sub.rfc_accepted_at ? "پس از پذیرش RFC ثبت می‌شود." : sub.rfsu_signed_at ? "RFSU امضا شده؛ راه‌اندازی بسته است." : null };
-  const blocked = (r) => r.blockers.map((x) => `${data.blockerNames[x.kind]}${x.count ? ` (${x.count})` : ""}`).join("، ");
+  // In the subsystem's own panel the punch items are named: the list is where someone goes next.
+  const blocked = (r) => r.blockers.map((x) => `${data.blockerNames[x.kind]}${x.count ? ` (${x.count})` : ""}`
+    + (x.detail?.length && (x.kind === "punch" || x.kind === "punch_a") ? `: ${x.detail.join("؛ ")}` : "")).join("، ");
   const phaseView = (phase, title) => {
     const list = s.checks.filter((c) => c.phase === phase);
     return (

@@ -56,7 +56,9 @@ const client = await signIn(creds.people.client.email, creds.people.client.passw
 const settle = (p) => p.waitForTimeout(900);
 async function open(p, path, tab = null) {
   await p.goto(BASE + path, { waitUntil: "networkidle" }); await settle(p);
-  if (tab) { await p.locator(".ptabs [role=tab]", { hasText: tab }).first().click(); await settle(p); }
+  // A page with one part has no tab bar; then the part is simply there.
+  const t = tab && p.locator(".ptabs [role=tab]", { hasText: tab }).first();
+  if (t && await t.count()) { await t.click(); await settle(p); }
 }
 const card = (p, h) => p.locator(".card", { has: p.locator("h2", { hasText: h }) }).first();
 /** The platform's own words after an action: the page's error line, or nothing. */
@@ -67,6 +69,24 @@ async function fold(scope, title) {
   await scope.page().waitForTimeout(300);
 }
 let step = "";
+/** Pre-commissioning › subsystem 70-01's panel, opened. */
+async function precomPanel(p) {
+  const c = card(p, "ساب‌سیستم‌ها");
+  const row = c.locator("tr", { hasText: "70-01" }).first();
+  const btn = row.getByRole("button", { name: "جزئیات" });
+  if (await btn.count()) { await btn.click(); await settle(p); }
+  return row.locator("xpath=following-sibling::tr[1]");
+}
+/** One checklist attempt: «ثبت» on its row, then the form under it. */
+async function attempt(p, panel, code, result, on, witness, note) {
+  const row = panel.locator("tr", { hasText: code }).first();
+  await row.getByRole("button", { name: "ثبت", exact: true }).click(); await settle(p);
+  const f = row.locator("xpath=following-sibling::tr[1]");
+  await f.locator("select[id^=r-]").selectOption(result); await f.locator("input[id^=d-]").fill(on);
+  await f.locator("input[id^=w-]").fill(witness); await f.locator("input[id^=n-]").fill(note);
+  await f.getByRole("button", { name: "ثبت", exact: true }).click(); await settle(p);
+  const e = await errorOf(p); if (e) problems.push(`${step} ${code} ${result}: ${e}`);
+}
 
 /** Quality › a punch item's panel: its action on the given day. */
 async function punchAct(p, desc, button, note, on) {
@@ -951,6 +971,7 @@ try {
       if (day === 98) check(/رد/.test(flat(await cdet.innerText())), "the first IR is a fail, with the core named");
     }
     await tickStep(qc, cdet, "پیوستگی و توالی فاز", d(99));
+    await tickStep(qc, cdet, "آماده برای برق‌دار شدن", d(100));
     check(/تست مقاومت عایق \(IR\)[^]*انجام شد/.test(flat(await cdet.innerText())), "after the second IR the IR step is done");
 
     at("6.4", "instrument index: FT-7001 and LT-7002");
@@ -990,6 +1011,13 @@ try {
       const e = await errorOf(qc); if (e) problems.push(`6.5 loop ${loopNo}: ${e}`);
     }
     check(((flat(await loopsCard.innerText())).match(/لوپ‌چک‌شده/g) || []).length === 2, "both loops checked");
+    await open(qc, "/instrumentation", "ابزارها");
+    for (const tag of ["FT-7001", "LT-7002"]) {
+      const r = card(qc, "ابزارها").locator("tr", { hasText: tag }).first();
+      await r.getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+      await tickStep(qc, r.locator("xpath=following-sibling::tr[1]"), "آماده برای راه‌اندازی", d(104));
+      await r.getByRole("button", { name: "بستن" }).click(); await settle(qc);
+    }
     if (stop("6.5")) throw new Error("stop");
   }
   if (!skipPhase(7)) {
@@ -1005,6 +1033,7 @@ try {
     await closeTagSteps("P-7001");
     const d71 = await tagSteps("D-7002");
     await tickStep(pm, d71, "اتصال پایپینگ", d(99), "70-DMW-7001");
+    await tickStep(pm, d71, "ترمینیشن برق", d(99), "ERT-D-7002");
     await tickStep(pm, d71, "آمادگی راه‌اندازی", d(105));
     await closeTagSteps("D-7002");
 
@@ -1051,6 +1080,198 @@ try {
     const e75c = await errorOf(client); if (e75c) problems.push(`7.5 accept: ${e75c}`);
     check(/پذیرفته/.test(flat(await cRow.innerText())), "70-01: MC accepted by the client");
     if (stop("7.5")) throw new Error("stop");
+  }
+  if (!skipPhase(8)) {
+    // ── 8 ────────────────────────────────────────────────────────────────
+    at("8.1", "pre-commissioning checklists and commissioning procedures");
+    await open(pm, "/precom", "چک‌لیست‌ها و روال‌ها");
+    const tpl = card(pm, "چک‌لیست‌ها و روال‌های راه‌اندازی پروژه");
+    for (const [code, title, applies, phase, criteria] of [
+      ["B-PIP-01", "Line flushing with DM water & reinstatement", "line", "precom", "Clear water at outlet, no debris on temporary strainer"],
+      ["B-ROT-01", "Motor solo run & rotation check", "rotating", "precom", "Rotation per arrow; vibration < 2.8 mm/s"],
+      ["C-ROT-01", "Pump run test on DM water, 4 h", "rotating", "commissioning", "Flow ≥ 30 m³/h at rated head; bearing temp < 80 °C"],
+      ["C-SUB-01", "Drum level control in automatic", "subsystem", "commissioning", "LT-7002 holds 50 % ± 5 % for 30 min"],
+    ]) {
+      await fold(tpl, "چک‌لیست جدید");
+      await pm.fill("#t-code", code); await pm.fill("#t-title", title);
+      await pm.selectOption("#t-ph", phase); await pm.selectOption("#t-app", applies); await pm.fill("#t-cr", criteria);
+      await tpl.getByRole("button", { name: "ذخیرهٔ چک‌لیست" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`8.1 ${code}: ${e}`);
+    }
+    const tplText = flat(await tpl.innerText());
+    check(["B-PIP-01", "B-ROT-01", "C-ROT-01", "C-SUB-01"].every((c) => tplText.includes(c)), "four templates registered");
+
+    at("8.2", "negative: a commissioning procedure before RFC (QC)");
+    await open(qc, "/precom", "ساب‌سیستم‌ها");
+    const qpanel = await precomPanel(qc);
+    const c82 = qpanel.locator("tr", { hasText: "C-ROT-01" }).first();
+    check(!(await c82.getByRole("button", { name: "ثبت" }).count()) && /پس از پذیرش RFC ثبت می‌شود/.test(flat(await qpanel.innerText())),
+      "commissioning rows have no «ثبت» and say «پس از پذیرش RFC ثبت می‌شود»");
+
+    at("8.3", "flushing; a failed then a passed motor solo run; client accepts (QC, client)");
+    await attempt(qc, qpanel, "B-PIP-01", "pass", d(109), "Client", "");
+    await attempt(qc, qpanel, "B-ROT-01", "fail", d(109), "Client", "Reverse rotation — phases swapped at MCC");
+    await attempt(qc, qpanel, "B-ROT-01", "pass", d(110), "Client", "");
+    check(/2 بار/.test(flat(await qpanel.locator("tr", { hasText: "B-ROT-01" }).first().innerText())), "B-ROT-01 keeps both attempts");
+    await open(client, "/precom", "ساب‌سیستم‌ها");
+    const cpanel = await precomPanel(client);
+    for (const code of ["B-PIP-01", "B-ROT-01"]) {
+      await cpanel.locator("tr", { hasText: code }).first().getByRole("button", { name: "پذیرش" }).click(); await settle(client);
+      const e = await errorOf(client); if (e) problems.push(`8.3 accept ${code}: ${e}`);
+    }
+
+    at("8.4", "RFC signed (EPC), accepted (client)");
+    await open(pm, "/precom", "ساب‌سیستم‌ها");
+    const ppanel = await precomPanel(pm);
+    await ppanel.getByRole("button", { name: "امضای RFC" }).click(); await settle(pm);
+    const e84 = await errorOf(pm); if (e84) problems.push(`8.4 sign: ${e84}`);
+    await open(client, "/precom", "ساب‌سیستم‌ها");
+    await (await precomPanel(client)).getByRole("button", { name: "پذیرش RFC (کارفرما)" }).click(); await settle(client);
+    const e84b = await errorOf(client); if (e84b) problems.push(`8.4 accept: ${e84b}`);
+
+    at("8.5", "pump run test and drum level control (QC); client accepts");
+    await open(qc, "/precom", "ساب‌سیستم‌ها");
+    const qp5 = await precomPanel(qc);
+    await attempt(qc, qp5, "C-ROT-01", "pass", d(114), "Client", "Flow 32 m³/h, bearing 61 °C");
+    await attempt(qc, qp5, "C-SUB-01", "pass", d(115), "Client", "");
+    await open(client, "/precom", "ساب‌سیستم‌ها");
+    const cp5 = await precomPanel(client);
+    for (const code of ["C-ROT-01", "C-SUB-01"]) {
+      await cp5.locator("tr", { hasText: code }).first().getByRole("button", { name: "پذیرش" }).click(); await settle(client);
+      const e = await errorOf(client); if (e) problems.push(`8.5 accept ${code}: ${e}`);
+    }
+
+    at("8.6", "negative: RFSU with punch B open — the refusal names it");
+    await open(pm, "/precom", "ساب‌سیستم‌ها");
+    const pp6 = flat(await (await precomPanel(pm)).innerText());
+    check(/RFSU — باز: Punch A\/B باز \(1\): [^،]*Drum nameplate photo missing in dossier/.test(pp6), `RFSU is held by the named punch B («${(pp6.match(/RFSU — باز:.*$/) || [""])[0].slice(0, 140)}»)`);
+
+    at("8.7", "punch B closed; RFSU signed and accepted");
+    await open(pm, "/quality", "Punch");
+    await punchAct(pm, "Drum nameplate photo missing", "رفع شد", "Photo added to dossier", d(116));
+    await open(qc, "/quality", "Punch");
+    await punchAct(qc, "Drum nameplate photo missing", "تأیید و بستن", "", d(116));
+    await open(pm, "/precom", "ساب‌سیستم‌ها");
+    await (await precomPanel(pm)).getByRole("button", { name: "امضای RFSU" }).click(); await settle(pm);
+    const e87 = await errorOf(pm); if (e87) problems.push(`8.7 sign: ${e87}`);
+    await open(client, "/precom", "ساب‌سیستم‌ها");
+    await (await precomPanel(client)).getByRole("button", { name: "پذیرش RFSU (کارفرما)" }).click(); await settle(client);
+    const e87b = await errorOf(client); if (e87b) problems.push(`8.7 accept: ${e87b}`);
+    check(/RFSU — امضا:.*پذیرش:/.test(flat(await (await precomPanel(client)).innerText())), "70-01: RFSU signed and accepted");
+    if (stop("8.7")) throw new Error("stop");
+  }
+  if (!skipPhase(9)) {
+    // ── 9 ────────────────────────────────────────────────────────────────
+    at("9.0", "vendor O&M manual (IOM) for the pump");
+    await open(pm, "/procurement");
+    const po9 = await poDetail("PO-7001");
+    const vf = po9.locator("form", { has: pm.locator("b", { hasText: "مدرک فروشنده (VDRL)" }) });
+    await vf.locator("input[id^=dk-]").fill("IOM"); await vf.locator("input[id^=dt-]").fill("Operation and maintenance manual"); await vf.locator("input[id^=dd-]").fill(d(110));
+    await vf.getByRole("button", { name: "افزودن مدرک" }).click(); await settle(pm);
+    const iom = () => po9.locator("tr", { has: pm.locator("td", { hasText: /^IOM$/ }) }).first();
+    await iom().locator("input[id^=dr-]").fill("0"); await iom().locator("input[id^=ds-]").fill(d(105));
+    await iom().getByRole("button", { name: "ارسال شد" }).click(); await settle(pm);
+    await iom().locator("select[id^=dc-]").selectOption("1"); await iom().locator("input[id^=do-]").fill(d(108));
+    await iom().getByRole("button", { name: "برگشت" }).click(); await settle(pm);
+    const e90 = await errorOf(pm); if (e90) problems.push(`9.0: ${e90}`);
+    check(/پذیرفته/.test(flat(await iom().innerText())), "IOM accepted (code 1)");
+
+    at("9.1", "asset master: the pump from its datasheet, the drum as far as known");
+    await open(pm, "/handover", "شناسنامهٔ تجهیزات");
+    const am = card(pm, "شناسنامهٔ نگهداری تجهیزات");
+    const amRow = (tag) => am.locator("tr", { has: pm.locator("td a", { hasText: new RegExp(`^${tag}$`) }) }).first();
+    await amRow("P-7001").getByRole("button", { name: "ویرایش" }).click(); await settle(pm);
+    const pf = amRow("P-7001").locator("xpath=following-sibling::tr[1]");
+    await pf.locator("select[id^=ic-]").selectOption("PU"); await pf.locator("select[id^=cr-]").selectOption("A");
+    await pf.locator("input[id^=cb-]").fill("CA-DMW-01 (boiler feed make-up, single pump)");
+    await pf.locator("input[id^=mf-]").fill("Pump Maker A"); await pf.locator("input[id^=md-]").fill("ISO 2858 end-suction 50-32-200");
+    await pf.locator("input[id^=sn-]").fill("PMA-24-7001"); await pf.locator("input[id^=yb-]").fill("2026");
+    const dsv = await pf.locator("select[id^=ds-] option").evaluateAll((os) => os.find((o) => /DMW-DS-P-7001/.test(o.textContent) && /0/.test(o.textContent))?.value);
+    if (dsv) await pf.locator("select[id^=ds-]").selectOption(dsv); else problems.push("9.1: the pump datasheet DMW-DS-P-7001 Rev.0 is not offered");
+    await pf.locator("input[id^=dp-]").fill("16"); await pf.locator("input[id^=tmin-]").fill("5"); await pf.locator("input[id^=tmax-]").fill("60");
+    await pf.getByRole("button", { name: "ذخیره", exact: true }).click(); await settle(pm);
+    const e91 = await errorOf(pm); if (e91) problems.push(`9.1 P-7001: ${e91}`);
+    for (const [label, dcs, hist, uom] of [["Discharge flow", "70FT7001.PV", "DMW:70FT7001.PV", "m3/h"], ["Run status", "P7001_RUN.STS", "", ""]]) {
+      await pf.locator("input[id^=pl-]").fill(label); await pf.locator("input[id^=pd-]").fill(dcs);
+      await pf.locator("input[id^=ph-]").fill(hist); await pf.locator("input[id^=pu-]").fill(uom);
+      await pf.getByRole("button", { name: "افزودن" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`9.1 DCS ${label}: ${e}`);
+    }
+    await amRow("P-7001").getByRole("button", { name: "بستن" }).click(); await settle(pm);
+    await amRow("D-7002").getByRole("button", { name: "ویرایش" }).click(); await settle(pm);
+    const df = amRow("D-7002").locator("xpath=following-sibling::tr[1]");
+    await df.locator("select[id^=ic-]").selectOption("VE"); await df.locator("select[id^=cr-]").selectOption("B");
+    await df.locator("input[id^=cb-]").fill("CA-DMW-01"); await df.locator("input[id^=mf-]").fill("Local fabricator");
+    await df.getByRole("button", { name: "ذخیره", exact: true }).click(); await settle(pm);
+    const e91b = await errorOf(pm); if (e91b) problems.push(`9.1 D-7002: ${e91b}`);
+    await amRow("D-7002").getByRole("button", { name: "بستن" }).click(); await settle(pm);
+    const pRow = flat(await amRow("P-7001").innerText());
+    check(/16 barg/.test(pRow) && /DCS\/Historian: 2/.test(pRow) && /DMW-70-P-7001/.test(pRow), `P-7001: design conditions, 2 DCS points, FLOC DMW-70-P-7001 («${pRow.slice(0, 160)}»)`);
+
+    at("9.2", "PM plan (drafted by EPC, approved by the client) and a spare part");
+    await open(pm, "/handover", "برنامهٔ PM");
+    await fold(pm.locator("main"), "تسک نگهداری جدید");
+    const pmTag = await pm.locator("#pm-tag option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("P-7001"))?.value);
+    await pm.selectOption("#pm-tag", pmTag);
+    await pm.fill("#pm-code", "PM-01"); await pm.fill("#pm-title", "Bearing lubrication"); await pm.selectOption("#pm-strategy", "time_based");
+    await pm.fill("#pm-iv", "3"); await pm.selectOption("#pm-unit", "month"); await pm.selectOption("#pm-craft", "mechanical");
+    await pm.fill("#pm-dur", "1"); await pm.selectOption("#pm-src", "oem"); await pm.fill("#pm-ref", "IOM PMA §6.2");
+    await pm.getByRole("button", { name: "ذخیره به‌عنوان پیش‌نویس" }).click(); await settle(pm);
+    const e92 = await errorOf(pm); if (e92) problems.push(`9.2 PM draft: ${e92}`);
+    check(!(await card(pm, "برنامهٔ نگهداری (PM)").locator("tr", { hasText: "PM-01" }).first().getByRole("button", { name: "تأیید" }).count()),
+      "the preparer is offered no «تأیید»");
+    await open(client, "/handover", "برنامهٔ PM");
+    await card(client, "برنامهٔ نگهداری (PM)").locator("tr", { hasText: "PM-01" }).first().getByRole("button", { name: "تأیید" }).click(); await settle(client);
+    const e92b = await errorOf(client); if (e92b) problems.push(`9.2 PM approve: ${e92b}`);
+    await open(pm, "/handover", "قطعات یدکی");
+    const spc = card(pm, "قطعات یدکی (SPIR)");
+    await fold(pm.locator("main"), "ثبت قطعهٔ یدکی");
+    const spTag = await pm.locator("#sp-tag option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("P-7001"))?.value);
+    await pm.selectOption("#sp-tag", spTag); await pm.fill("#sp-no", "MS-50-PMA"); await pm.fill("#sp-mf", "Pump Maker A");
+    await pm.fill("#sp-desc", "Mechanical seal cartridge"); await pm.selectOption("#sp-cat", "commissioning"); await pm.fill("#sp-uom", "EA");
+    await pm.fill("#sp-inst", "1"); await pm.fill("#sp-rec", "1"); await pm.fill("#sp-app", "1"); await pm.fill("#sp-ref", "SPIR-P-7001");
+    await pm.locator("form", { has: pm.locator("#sp-no") }).getByRole("button", { name: "ذخیره", exact: true }).click(); await settle(pm);
+    const e92c = await errorOf(pm); if (e92c) problems.push(`9.2 spare: ${e92c}`);
+    check(/MS-50-PMA/.test(flat(await spc.innerText())), "the seal is on the pump's SPIR");
+
+    at("9.3", "CMMS export");
+    await open(pm, "/handover", "شناسنامهٔ تجهیزات");
+    const csv = await pm.evaluate(async () => (await fetch([...document.querySelectorAll("a")].find((a) => a.textContent.includes("خروجی CSV (همه)"))?.href || "")).text()).catch(() => "");
+    const pLine = csv.split("\n").find((l) => l.includes("P-7001")) || "", dLine = csv.split("\n").find((l) => l.includes("D-7002")) || "";
+    check(/DMW-70-P-7001/.test(pLine) && /"yes"/.test(pLine), `P-7001: DMW-70-P-7001, ready = yes («${pLine.slice(0, 120)}»)`);
+    check(/"no"/.test(dLine), `D-7002: ready = no, and says why («${dLine.slice(0, 160)}»)`);
+
+    at("9.4", "performance guarantee PG-01 and test PT-7001");
+    await open(pm, "/precom", "تضمین‌های عملکرد");
+    const gc = card(pm, "تضمین‌های عملکرد");
+    await fold(gc, "تضمین جدید");
+    await pm.fill("#gu-code", "PG-01"); await pm.fill("#gu-par", "DM water transfer capacity at rated head");
+    const u70 = await pm.locator("#gu-unit option").evaluateAll((os) => os.find((o) => /70/.test(o.textContent))?.value);
+    if (u70) await pm.selectOption("#gu-unit", u70);
+    await pm.selectOption("#gu-dir", "min"); await pm.fill("#gu-val", "30"); await pm.fill("#gu-uom", "m3/h"); await pm.fill("#gu-dur", "4");
+    await pm.fill("#gu-basis", "PO-7001 Annex B §2");
+    await gc.getByRole("button", { name: "ذخیرهٔ تضمین" }).click(); await settle(pm);
+    const e94 = await errorOf(pm); if (e94) problems.push(`9.4 guarantee: ${e94}`);
+    await open(pm, "/precom", "آزمون عملکرد");
+    const tc = card(pm, "آزمون عملکرد (Performance Test)");
+    await fold(tc, "ثبت آزمون");
+    await pm.fill("#pt-no2", "PT-7001");
+    const tu = await pm.locator("#pt-unit option").evaluateAll((os) => os.find((o) => /واحد 70/.test(o.textContent))?.value);
+    if (tu) await pm.selectOption("#pt-unit", tu);
+    await pm.fill("#pt-from2", `${d(120)}T08:00`); await pm.fill("#pt-to2", `${d(120)}T14:00`); await pm.fill("#pt-note", "After RFSU");
+    await tc.getByRole("button", { name: "ثبت آزمون", exact: true }).click(); await settle(pm);
+    const e94b = await errorOf(pm); if (e94b) problems.push(`9.4 test: ${e94b}`);
+    const tcard = tc.locator(".card", { hasText: "PT-7001" }).first();
+    await tcard.locator("input[id^=pr-m-]").fill("32"); await tcard.locator("input[id^=pr-x-]").fill("Magflow FT-7001 average");
+    await tcard.getByRole("button", { name: "ثبت نتیجه" }).click(); await settle(pm);
+    await tcard.getByRole("button", { name: "امضای آزمون" }).click(); await settle(pm);
+    const e94c = await errorOf(pm); if (e94c) problems.push(`9.4 sign: ${e94c}`);
+    await open(client, "/precom", "آزمون عملکرد");
+    const ctc = card(client, "آزمون عملکرد (Performance Test)").locator(".card", { hasText: "PT-7001" }).first();
+    await ctc.getByRole("button", { name: "پذیرش (کارفرما)" }).click(); await settle(client);
+    const e94d = await errorOf(client); if (e94d) problems.push(`9.4 accept: ${e94d}`);
+    const pt = flat(await ctc.innerText());
+    check(/پذیرفته/.test(pt) && /PG-01.*32.*برآورده/.test(pt), `PT-7001 accepted; PG-01 met at 32 («${pt.slice(0, 160)}»)`);
   }
 } catch (e) {
   if (e.message !== "stop") { problems.push(`${step}: ${e.message.split("\n")[0]}`); for (const [who, p] of [["pm", pm], ["qc", qc], ["client", client]]) await p.screenshot({ path: `${SHOT}/scenario-ui-${step}-${who}.png`, fullPage: true }).catch(() => {}); }

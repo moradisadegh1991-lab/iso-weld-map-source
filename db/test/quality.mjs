@@ -30,8 +30,10 @@ test("punch: overdue past its date; what a list blocks counts anything not close
   equal(punchState({ status: "open", dueOn: "2026-09-01" }, "2026-09-02"), "overdue");
   equal(punchState({ status: "open", dueOn: "2026-09-02" }, "2026-09-02"), "open");
   equal(punchState({ status: "cleared", dueOn: "2026-01-01" }, "2026-09-02"), "cleared");
-  equal(punchBlocks([{ category: "A", status: "cleared" }, { category: "A", status: "closed" },
-    { category: "B", status: "open" }, { category: "C", status: "open" }]), { mc: 1, rfsu: 2, carried: 1 });
+  const pb = punchBlocks([{ category: "A", status: "cleared", punch_no: "PL-1", description: "Guard" }, { category: "A", status: "closed" },
+    { category: "B", status: "open", punch_no: "PL-3" }, { category: "C", status: "open" }]);
+  equal({ mc: pb.mc, rfsu: pb.rfsu, carried: pb.carried }, { mc: 1, rfsu: 2, carried: 1 });
+  equal([pb.mcItems, pb.rfsuItems], [["PL-1 — Guard"], ["PL-1 — Guard", "PL-3"]], "and named, so the list sends someone somewhere");
 });
 
 test("NCR: the path, and every guard on it", async () => {
@@ -194,8 +196,10 @@ test("what each subsystem's punch list and NCRs hold against MC", async () => {
       tagId: loose.id, raisedOn: TODAY, userId: alice.id });
     await spine.upsertTag(db, { projectId: P, tagNo: "E-9999", discipline: "equipment", subsystemId: s21.id });
     const b = await qa.qualityBlocks(db, { projectId: P });
-    equal(b[s21.id], { mc: 0, rfsu: 1, carried: 0, ncr: 1 }, "A verified, B still open, NCR-0001 closed, the late-filed tag's NCR open");
-    equal(b[s22.id], { mc: 0, rfsu: 1, carried: 0, ncr: 1 }, "the recategorised B and the open NCR");
+    const counts = (x) => ({ mc: x.mc, rfsu: x.rfsu, carried: x.carried, ncr: x.ncr });
+    equal(counts(b[s21.id]), { mc: 0, rfsu: 1, carried: 0, ncr: 1 }, "A verified, B still open, NCR-0001 closed, the late-filed tag's NCR open");
+    equal(counts(b[s22.id]), { mc: 0, rfsu: 1, carried: 0, ncr: 1 }, "the recategorised B and the open NCR");
+    equal(b[s21.id].rfsuItems.length, 1, "the open B is named");
     const board = await qa.qualityBoard(db, { projectId: P });
     equal(board.subsystems.map((s) => s.code), ["21-01", "22-01"]);
   });
