@@ -8,7 +8,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  individualLimit, strengthTest, evaluateClass, samplesRequired, curingComplete,
+  individualLimit, strengthTest, evaluateClass, samplesRequired, curingComplete, pourDateProblem, latestToday,
 } from "../../lib/civil/concrete.mjs";
 
 // ── the individual limit, both sides of 35 MPa ───────────────────────────
@@ -253,6 +253,22 @@ test("a break cannot be dated before the cylinder is that old, nor in the future
     equal(n.n, 0, "nothing was written");
     await db.query("DELETE FROM concrete_pour WHERE id = $1", [young.id]);
   });
+});
+
+test("a pour cannot be dated in the future — and 'today' is nobody's tomorrow", async () => {
+  // A future pour card let a 28-day result be dated after it, and the break
+  // was then refused as «not yet» with no word about the pour that caused it.
+  await withProject(db, proj.id, async () => {
+    const e = await throws(() => civil.recordPour(db, { projectId: proj.id, tagId: fdn.id, pourNo: "PC-0198",
+      pouredOn: daysAgo(-3), volumeM3: 5, concreteClass: "C30", fcMpa: 30, userId: alice.id }), "INVALID_INPUT");
+    assert(/هنوز نرسیده/.test(e.message), e.message);
+    const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM concrete_pour WHERE pour_no = 'PC-0198'");
+    equal(n.n, 0, "nothing was written");
+  });
+  // 00:30 in Tehran (UTC+3:30) is still yesterday in UTC; that local date is today, not the future.
+  const justAfterMidnight = Date.parse("2026-09-29T21:00:00Z");
+  equal(pourDateProblem("2026-09-30", latestToday(justAfterMidnight)), null);
+  assert(pourDateProblem("2026-10-02", latestToday(justAfterMidnight)), "two days ahead is still the future");
 });
 
 test("a 7-day break leaves strength waiting, and says what it showed", async () => {

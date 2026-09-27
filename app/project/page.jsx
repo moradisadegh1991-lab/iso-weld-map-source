@@ -118,7 +118,7 @@ const INSTRUMENTS = [
 ];
 
 export default function ProjectPage() {
-  const { projectId, role, call } = usePlatform();
+  const { projectId, role, call, reload: reloadPlatform } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/project?projectId=${id}`, []);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -147,7 +147,7 @@ export default function ProjectPage() {
         body: JSON.stringify({ projectId, patch: form }),
       });
       setSaved(true);
-      await reload();
+      await reload(); reloadPlatform(); // the start date is project day 0 on every work date
     } catch (e2) {
       setSaveErr(e2.message);
     } finally { setSaving(false); }

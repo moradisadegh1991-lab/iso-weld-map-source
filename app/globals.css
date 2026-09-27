@@ -459,6 +459,7 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
    missed it for three rounds because the full-page capture stopped at the
    fold; measuring the hints' boxes found it. */
 .field .hint{position:static;display:block;font-size:10px;color:var(--dim)}
+.field .hint.bad{color:var(--bad-ink)}
 
 .btn{background:var(--cy);border:1px solid var(--cy);color:var(--on-cy);border-radius:4px;
   padding:8px 16px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}

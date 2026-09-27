@@ -6,7 +6,7 @@ import { SPECIMENS, individualLimit } from "../../lib/civil/concrete.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tabs from "../../components/ui/Tabs";
-import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/WorkDate";
+import { WorkDateScope, WorkDateField, useWorkDate, DayHint, localToday } from "../../components/ui/WorkDate";
 
 /**
  * Civil: foundations from excavation to handover, and the concrete that
@@ -193,7 +193,13 @@ function Pours({ f, pours, mayRecord, post, contractors = [] }) {
   const blank = { pourNo: "", pouredOn: today(), volumeM3: f.volume_m3 ?? "",
     concreteClass: "", fcMpa: "", ticketRef: "", contractorId: "" };
   const [p, setP] = useState(blank);
-  const [sp, setSp] = useState({ pourId: "", sampleNo: "", specimenType: "cyl150", ageDays: 28, results: "", testedOn: today(), labRef: "" });
+  // The test date is the pour date plus the specimen's age unless the lab
+  // says otherwise: blank means "derived", and it follows the pour and age.
+  const [sp, setSp] = useState({ pourId: "", sampleNo: "", specimenType: "cyl150", ageDays: 28, results: "", testedOn: "", labRef: "" });
+  const pour = pours.find((x) => x.id === sp.pourId) || pours[pours.length - 1];
+  const age = Number(sp.ageDays);
+  const dueOn = pour && Number.isInteger(age) && age > 0 ? addDays(String(pour.poured_on).slice(0, 10), age) : "";
+  const testedOn = sp.testedOn || dueOn;
 
   return (
     <div className="card" style={{ padding: 12 }}>
@@ -230,7 +236,8 @@ function Pours({ f, pours, mayRecord, post, contractors = [] }) {
             if (await post({ kind: "pour", tagId: f.id, ...p, contractorId: p.contractorId || null })) setP(blank);
           }}>
             <Field id="p-no" label="شمارهٔ پور کارت" value={p.pourNo} on={(v) => setP({ ...p, pourNo: v })} required />
-            <Field id="p-on" label="تاریخ بتن‌ریزی" type="date" value={p.pouredOn} on={(v) => setP({ ...p, pouredOn: v })} required />
+            <Field id="p-on" label="تاریخ بتن‌ریزی" type="date" value={p.pouredOn} on={(v) => setP({ ...p, pouredOn: v })} required
+                   max={localToday()} after={<DayHint date={p.pouredOn} />} />
             <Field id="p-vol" label="حجم (m³)" type="number" value={p.volumeM3} on={(v) => setP({ ...p, volumeM3: v })} />
             <Field id="p-cls" label={`کلاس تحویلی (مشخصات: ${f.concrete_class})`} value={p.concreteClass}
                    on={(v) => setP({ ...p, concreteClass: v })} required
@@ -250,12 +257,12 @@ function Pours({ f, pours, mayRecord, post, contractors = [] }) {
             <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
               e.preventDefault();
               const results = sp.results.split(/[\s,،]+/).filter(Boolean).map(Number);
-              if (await post({ kind: "specimens", ...sp, pourId: sp.pourId || pours[pours.length - 1].id,
-                ageDays: Number(sp.ageDays), results })) setSp({ ...sp, results: "" });
+              if (await post({ kind: "specimens", ...sp, pourId: pour.id, testedOn,
+                ageDays: Number(sp.ageDays), results })) setSp({ ...sp, results: "", testedOn: "" });
             }}>
               <div className="field"><label htmlFor="s-pour">پور</label>
                 <select id="s-pour" value={sp.pourId || pours[pours.length - 1].id}
-                        onChange={(e) => setSp({ ...sp, pourId: e.target.value })}>
+                        onChange={(e) => setSp({ ...sp, pourId: e.target.value, testedOn: "" })}>
                   {pours.map((x) => <option key={x.id} value={x.id}>{x.pour_no}</option>)}
                 </select></div>
               <Field id="s-no" label="شمارهٔ نمونه" value={sp.sampleNo} on={(v) => setSp({ ...sp, sampleNo: v })} required />
@@ -263,12 +270,14 @@ function Pours({ f, pours, mayRecord, post, contractors = [] }) {
                 <select id="s-type" value={sp.specimenType} onChange={(e) => setSp({ ...sp, specimenType: e.target.value })}>
                   {Object.entries(SPECIMENS).map(([k, v]) => <option key={k} value={k}>{v.title}</option>)}
                 </select></div>
-              <Field id="s-age" label="سن (روز)" type="number" value={sp.ageDays} on={(v) => setSp({ ...sp, ageDays: v })} required />
+              <Field id="s-age" label="سن (روز)" type="number" value={sp.ageDays} on={(v) => setSp({ ...sp, ageDays: v, testedOn: "" })} required />
               <Field id="s-res" label="نتایج شکست (MPa)، با فاصله" value={sp.results}
                      on={(v) => setSp({ ...sp, results: v })} required
                      hint={`هر استوانه جدا — یک آزمون دست‌کم ${SPECIMENS[sp.specimenType]?.minPerTest} نمونه`} />
-              <Field id="s-on" label="تاریخ آزمون" type="date" value={sp.testedOn} on={(v) => setSp({ ...sp, testedOn: v })} required
-                     hint="نمونهٔ N روزه پیش از روز Nام بتن‌ریزی پذیرفته نمی‌شود" />
+              <Field id="s-on" label="تاریخ آزمون" type="date" value={testedOn} on={(v) => setSp({ ...sp, testedOn: v })} required
+                     max={localToday()}
+                     hint={sp.testedOn ? "نمونهٔ N روزه پیش از روز Nام بتن‌ریزی پذیرفته نمی‌شود" : `تاریخ بتن‌ریزی + ${age || "?"} روز — اگر آزمایشگاه روز دیگری شکسته، عوضش کنید`}
+                     after={<DayHint date={testedOn} />} />
               <Field id="s-lab" label="شمارهٔ گزارش آزمایشگاه" value={sp.labRef} on={(v) => setSp({ ...sp, labRef: v })} />
               <div><button className="btn" type="submit">ثبت نتایج</button></div>
             </form>
@@ -366,14 +375,15 @@ function AddFoundation({ equipment, post }) {
   );
 }
 
-function Field({ id, label, value, on, type = "text", required, hint }) {
+function Field({ id, label, value, on, type = "text", required, hint, max, after }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <input id={id} type={type} step={type === "number" ? "any" : undefined}
-             dir={type === "text" ? "auto" : "ltr"} required={required}
+             dir={type === "text" ? "auto" : "ltr"} required={required} max={max}
              value={value} onChange={(e) => on(e.target.value)} />
       {hint && <span className="hint">{hint}</span>}
+      {after}
     </div>
   );
 }
@@ -397,7 +407,8 @@ function groupSpecimens(specimens) {
   return [...g.entries()].map(([k, v]) => `${k}: ${v.join(" / ")}`).join(" — ");
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = localToday;
+const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
 const fa = (d) => new Date(d).toLocaleDateString("fa-IR");
 
 /** Every one-click record on this page carries the day chosen at its head (components/ui/WorkDate). */

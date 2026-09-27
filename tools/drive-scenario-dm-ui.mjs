@@ -631,11 +631,22 @@ try {
 
     at("3.4", "pours and cylinder breaks (QC)");
     await open(qc, "/civil");
+    // Day N of the guide is typed as N: the project's start date is day 0.
+    await qc.fill("#work-day", "60");
+    check(await qc.inputValue("#work-date") === d(60), `«روز پروژه» 60 sets «تاریخ انجام کار» to ${d(60)}`);
+    await qc.fill("#work-day", "999");
+    const late = flat(await qc.locator(".workdate").innerText());
+    check(/روز 999 هنوز نرسیده/.test(late) && await qc.inputValue("#work-date") === d(60),
+      `a day still to come is said so, and the date is left alone («${late.slice(0, 90)}»)`);
+    await qc.getByRole("button", { name: "امروز" }).click();
     const qf = card(qc, "فونداسیون‌ها");
     for (const [no, pourNo, vol, breaks] of [["FDN-P-7001", "PC-P-7001", "6", [[7, "22.0 23.0"], [28, "36.5 37.5"]]],
       ["FDN-D-7002", "PC-D-7002", "10", [[28, "35.0 36.0"]]]]) {
       await qf.locator("tr", { hasText: no }).getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
-      await qc.fill("#p-no", pourNo); await qc.fill("#p-on", d(60)); await qc.fill("#p-vol", vol);
+      await qc.fill("#p-no", pourNo); await qc.fill("#p-on", d(200));
+      const ahead = flat(await qc.locator("#p-on").locator("xpath=..").innerText());
+      check(/هنوز نرسیده/.test(ahead), `a pour date still to come is flagged under the field («${ahead.slice(-60)}»)`);
+      await qc.fill("#p-on", d(60)); await qc.fill("#p-vol", vol);
       await qc.fill("#p-cls", "C30"); await qc.fill("#p-fc", "30");
       const con = await qc.locator("#p-con option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("C-CIV"))?.value);
       if (con) await qc.selectOption("#p-con", con); else problems.push("3.4: contractor C-CIV not offered on the pour form");
@@ -643,7 +654,12 @@ try {
       const e = await errorOf(qc); if (e) problems.push(`3.4 ${pourNo}: ${e}`);
       for (const [age, res] of breaks) {
         await qc.fill("#s-no", "S1"); await qc.selectOption("#s-type", "cyl150"); await qc.fill("#s-age", String(age));
-        await qc.fill("#s-res", res); await qc.fill("#s-on", d(60 + age)); await qc.fill("#s-lab", `LAB-${pourNo}-${age}`);
+        // The test date is not typed: it is the pour date plus the age.
+        const on = await qc.inputValue("#s-on");
+        const hint = flat(await qc.locator("#s-on").locator("xpath=..").innerText());
+        check(on === d(60 + age) && hint.includes(`روز ${60 + age} پروژه`),
+          `${pourNo} ${age}d: test date offered as pour + ${age} = ${on} («${hint.slice(-40)}»)`);
+        await qc.fill("#s-res", res); await qc.fill("#s-lab", `LAB-${pourNo}-${age}`);
         await qc.getByRole("button", { name: "ثبت نتایج" }).click(); await settle(qc);
         const e2 = await errorOf(qc); if (e2) problems.push(`3.4 ${pourNo} ${age}d: ${e2}`);
       }
