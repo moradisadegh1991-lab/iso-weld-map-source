@@ -22,7 +22,7 @@ import SignIn from "./SignIn";
  * The menu searches every tab (Ctrl+K), its groups fold and remember it, it
  * narrows to icons, and on a phone it is a drawer.
  */
-export const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", developer: "توسعه‌دهنده" };
+export const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", designer: "طراح", developer: "توسعه‌دهنده" };
 const store = {
   get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -97,6 +97,12 @@ function Frame({ p, pathname, children }) {
   const nav = navigationFor(membership, can);
   const here = activeTab(pathname);
   const section = nav.flatMap((g) => g.items).find((s) => s.key === here?.section) || null;
+  // A page this person's role does not open (a designer on the launchpad)
+  // sends them to the first page it does, instead of a page of refusals.
+  const allowed = nav.flatMap((g) => g.items.flatMap((s) => s.tabs.map((t) => t.href)));
+  const firstAllowed = nav[0]?.items[0]?.href || null;
+  const blocked = !!(p.projectId && p.role && here && firstAllowed && !allowed.includes(here.href));
+  useEffect(() => { if (blocked) router.replace(firstAllowed); }, [blocked, firstAllowed, router]);
   // Search finds a page by its tab, its section or its group.
   const found = useMemo(() => {
     const n = q.trim().toLowerCase();

@@ -100,6 +100,23 @@ await withProject(db, P, async () => {
   vendor = await prc.upsertVendor(db, { projectId: P, code: "v-ksb", name: "Pump Vendor GmbH", country: "DE" });
 });
 
+test("a vendor carries its contact details; the same code updates it, and a malformed address is refused", async () => {
+  await withProject(db, P, async () => {
+    const v = await prc.upsertVendor(db, { projectId: P, code: "v-ksb", name: "Pump Vendor GmbH", country: "DE", city: "Frankenthal",
+      contactName: "Sales desk", email: "Sales@Pump-Vendor.example", phone: "+49 6233 86-0", address: "Johann-Klein-Str. 9",
+      website: "pump-vendor.example", scope: "Centrifugal pumps" });
+    equal(v.id, vendor.id, "the code is the key: no second vendor");
+    equal([v.email, v.phone, v.city, v.scope], ["sales@pump-vendor.example", "+49 6233 86-0", "Frankenthal", "Centrifugal pumps"]);
+    const e = await throws(() => prc.upsertVendor(db, { projectId: P, code: "v-x", name: "X", email: "not-an-address" }), "INVALID_INPUT");
+    assert(/ایمیل/.test(e.message), e.message);
+    await throws(() => prc.upsertVendor(db, { projectId: P, code: "v-x", name: "X", phone: "call me" }), "INVALID_INPUT");
+    await throws(() => db.query("UPDATE vendor SET email = 'nope' WHERE id = $1", [vendor.id]), "vendor_email_shape", "the table holds the same line");
+    const b = await prc.procurementBoard(db, { projectId: P });
+    const row = b.vendors.find((x) => x.id === vendor.id);
+    equal([row.contact_name, row.po_count], ["Sales desk", 0]);
+  });
+});
+
 test("a PO line buys an item or a tag, in the item's own unit", async () => {
   await withProject(db, P, async () => {
     po = await prc.createPo(db, { projectId: P, poNo: "po-1001", vendorId: vendor.id, title: "Pumps and pipe", currency: "EUR", placedOn: shift(-60), userId: alice.id });

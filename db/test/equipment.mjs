@@ -284,4 +284,18 @@ test("a tag with no subsystem is imported and named, not dropped", async () => {
   });
 });
 
+test("a tag typed by hand goes through the list's own checks, and never overwrites one", async () => {
+  await withProject(db, proj.id, async () => {
+    const r = await equip.addEquipmentTag(db, { projectId: proj.id, tagNo: "P-7101", description: "Condensate pump", subsystem: "71-01" });
+    equal([r.tag.kind, r.kindSource, r.tag.subsystem], ["rotating", "read", "71-01"], "read from its description, filed, subsystem made");
+    const chosen = await equip.addEquipmentTag(db, { projectId: proj.id, tagNo: "PK-7102", description: "Dosing package", tagKind: undefined, kind: "static" });
+    equal([chosen.tag.kind, chosen.kindSource], ["static", "chosen"], "the engineer's choice wins over a description that says nothing");
+    const open = await equip.addEquipmentTag(db, { projectId: proj.id, tagNo: "X-7103", description: "Skid" });
+    equal([open.tag.kind, open.kindSource], [null, null], "unreadable and unchosen: added, unclassified, queued");
+    await throws(() => equip.addEquipmentTag(db, { projectId: proj.id, tagNo: "p-7101", description: "Other pump" }), "DUPLICATE");
+    await throws(() => equip.addEquipmentTag(db, { projectId: proj.id, tagNo: "TOTAL", description: "Pump" }), "INVALID_INPUT");
+    await throws(() => equip.addEquipmentTag(db, { projectId: proj.id, tagNo: "P-7104", kind: "gearbox" }), "INVALID_INPUT");
+  });
+});
+
 await run();

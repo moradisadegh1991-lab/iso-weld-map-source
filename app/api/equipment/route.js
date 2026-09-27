@@ -7,7 +7,7 @@ import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { blockedTags, tagStatus, recordActivity } from "../../../lib/db/repos/activities.mjs";
 import { holdsFor } from "../../../lib/db/repos/inspection.mjs";
 import {
-  importEquipmentList, unclassifiedTags, classifyTag,
+  importEquipmentList, unclassifiedTags, classifyTag, addEquipmentTag,
 } from "../../../lib/db/repos/equipment.mjs";
 
 export async function GET(request) {
@@ -38,6 +38,7 @@ export async function GET(request) {
           ORDER BY t.tag_no`, [projectId]);
       return Response.json({
         tags,
+        subsystems: (await db.query("SELECT code, name FROM subsystem WHERE project_id = $1 ORDER BY code", [projectId])).rows,
         unclassified: await unclassifiedTags(db, { projectId }),
         blocked: await blockedTags(db, { projectId }),
       });
@@ -61,6 +62,10 @@ export async function POST(request) {
       if (kind === "activity") {
         const { code, doneAt, refNo = null } = body;
         return Response.json({ activity: await recordActivity(db, { projectId, tagId, code, doneAt, refNo, userId: user.id }) });
+      }
+      if (kind === "manual") {
+        const { tagNo, description, type, tagKind, subsystem } = body;
+        return Response.json(await addEquipmentTag(db, { projectId, tagNo, description, type, kind: tagKind || null, subsystem, userId: user.id }));
       }
       if (kind === "classify") {
         return Response.json({ tag: await classifyTag(db, { projectId, tagId, kind: body.tagKind }) });

@@ -33,6 +33,7 @@ const DISCIPLINE_FA = {
 function EquipmentPageBody() {
   const { projectId, role, call } = usePlatform();
   const mayRecord = can({ role }, ACTIONS.ASSIGN_WELD);
+  const mayRegister = can({ role }, ACTIONS.EDIT_EXTRACTION);
   const [open, setOpen] = useState(null);
   const { data, error, reload } = useProjectData((id) => `/api/equipment?projectId=${id}`, []);
   const [text, setText] = useState("");
@@ -187,6 +188,8 @@ function EquipmentPageBody() {
         </div>
       )}
 
+      {mayRegister && <ManualTag data={data} onDone={reload} />}
+
       <div className="card">
         <h2>ورود لیست تجهیزات</h2>
         <p className="muted sm">
@@ -234,6 +237,59 @@ function EquipmentPageBody() {
         )}
       </div>
       </Tabs>
+    </div>
+  );
+}
+
+/**
+ * One tag typed by hand. The server reads its description with the same
+ * classifier as a list; a kind chosen here is the engineer's decision and
+ * wins. A subsystem not yet in the project is created, as a list would.
+ */
+function ManualTag({ data, onDone }) {
+  const { projectId, call } = usePlatform();
+  const blank = { tagNo: "", description: "", type: "", tagKind: "", subsystem: "" };
+  const [f, setF] = useState(blank);
+  const [res, setRes] = useState(null);
+  const [err, setErr] = useState(null);
+  const on = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  async function save(e) {
+    e.preventDefault(); setErr(null); setRes(null);
+    try {
+      const r = await call("/api/equipment", { method: "POST", body: JSON.stringify({ projectId, kind: "manual", ...f }) });
+      setRes(r); setF({ ...blank, subsystem: f.subsystem }); onDone?.();
+    } catch (x) { setErr(x.message); }
+  }
+  return (
+    <div className="card">
+      <h2>ثبت دستی تجهیز</h2>
+      <p className="muted sm">برای یک یا چند تگ، بدون فایل. نوع را خالی بگذارید تا از شرح تشخیص داده شود، یا خودتان انتخاب کنید.</p>
+      <form onSubmit={save}>
+        <div className="grid2">
+          <div className="field"><label htmlFor="eq-no">شمارهٔ تگ</label>
+            <input id="eq-no" dir="ltr" required value={f.tagNo} onChange={on("tagNo")} placeholder="P-7001" /></div>
+          <div className="field"><label htmlFor="eq-desc">شرح</label>
+            <input id="eq-desc" dir="auto" value={f.description} onChange={on("description")} placeholder="DM Water Transfer Pump" /></div>
+          <div className="field"><label htmlFor="eq-type">نوع در لیست سازنده (اختیاری)</label>
+            <input id="eq-type" dir="auto" value={f.type} onChange={on("type")} placeholder="Centrifugal" /></div>
+          <div className="field"><label htmlFor="eq-kind">نوع زنجیره</label>
+            <select id="eq-kind" value={f.tagKind} onChange={on("tagKind")}>
+              <option value="">— از شرح تشخیص داده شود —</option>
+              {Object.entries(KIND_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select></div>
+          <div className="field"><label htmlFor="eq-sub">ساب‌سیستم</label>
+            <input id="eq-sub" dir="ltr" list="eq-subs" value={f.subsystem} onChange={on("subsystem")} placeholder="70-01" />
+            <datalist id="eq-subs">{(data?.subsystems || []).map((s) => <option key={s.code} value={s.code}>{s.name || ""}</option>)}</datalist></div>
+        </div>
+        {err && <p className="err">{err}</p>}
+        {res && (
+          <p className={`pill ${res.tag.kind ? "ok" : "warn"}`}>
+            {res.tag.tag_no} ثبت شد · {res.tag.kind ? `${KIND_FA[res.tag.kind]} (${res.kindSource === "chosen" ? "انتخاب شما" : "از شرح"})` : `نوع نامشخص — ${res.reason}؛ در صف «نامشخص» تعیین کنید`}
+            {res.tag.subsystem ? ` · ${res.tag.subsystem}` : " · بدون ساب‌سیستم"}
+          </p>
+        )}
+        <button className="btn" type="submit">ثبت تگ</button>
+      </form>
     </div>
   );
 }

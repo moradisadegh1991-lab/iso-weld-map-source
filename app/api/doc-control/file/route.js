@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { authenticate, errorResponse } from "../../../../lib/server/session.mjs";
 import { withProject } from "../../../../lib/db/scope.mjs";
-import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
+import { assertCan, can, ACTIONS } from "../../../../lib/authz.mjs";
 import { getStore } from "../../../../lib/storage/index.mjs";
 import { revisionFile } from "../../../../lib/db/repos/incoming.mjs";
 
@@ -17,9 +17,19 @@ export async function GET(request) {
     if (!/^[0-9a-f-]{36}$/i.test(revisionId)) return Response.json({ error: "not found" }, { status: 404 });
     const { db, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
-    assertCan(membership, ACTIONS.VIEW_PROJECT);
+    // The designer sees only the files it sent: revisions on an incoming transmittal.
+    const designerOnly = !can(membership, ACTIONS.VIEW_PROJECT);
+    if (designerOnly) assertCan(membership, ACTIONS.SUBMIT_DESIGN);
     const store = await getStore();
-    const f = await withProject(db, projectId, () => revisionFile(db, { projectId, revisionId, store }));
+    const f = await withProject(db, projectId, async () => {
+      if (designerOnly) {
+        const { rows: [own] } = await db.query(
+          `SELECT 1 FROM transmittal_item i JOIN transmittal t ON t.id = i.transmittal_id
+            WHERE i.revision_id = $1 AND t.project_id = $2 AND t.direction = 'in' LIMIT 1`, [revisionId, projectId]);
+        if (!own) throw Object.assign(new Error("not found"), { status: 404 });
+      }
+      return revisionFile(db, { projectId, revisionId, store });
+    });
     const safe = f.name.replace(/[^\w.\- ]/g, "_");
     return new Response(f.bytes, { headers: {
       "Content-Type": f.type === "application/pdf" ? "application/pdf" : "application/octet-stream",

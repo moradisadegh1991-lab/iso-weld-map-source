@@ -13,7 +13,7 @@ const MR_STATUS = { draft: ["warn", "پیش‌نویس"], issued: ["", "صادر
 const TECH = { pending: "", acceptable: "ok", not_acceptable: "bad" };
 const VDT = { no_class: "bad", no_template: "warn", awaiting: "", incomplete: "bad", review: "warn", returned: "warn", accepted: "ok" };
 
-export default function Tender({ tab, bar }) {
+export default function Tender({ tab, bar, goVendors }) {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/procurement/tender?projectId=${id}`, []);
   const [msg, setMsg] = useState(null);
@@ -29,7 +29,7 @@ export default function Tender({ tab, bar }) {
 
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
-  const ctx = { data, post, mayBuy: can({ role }, ACTIONS.MANAGE_PROCUREMENT), mayHandover: can({ role }, ACTIONS.MANAGE_HANDOVER) };
+  const ctx = { data, post, goVendors, mayBuy: can({ role }, ACTIONS.MANAGE_PROCUREMENT), mayHandover: can({ role }, ACTIONS.MANAGE_HANDOVER) };
   const open = data.mrs.filter((m) => m.status === "issued").length;
   const vdtOpen = data.vdt.tags.filter((t) => ["incomplete", "review"].includes(t.state.code)).length;
 
@@ -50,7 +50,7 @@ export default function Tender({ tab, bar }) {
 
 // ── MR and tender ────────────────────────────────────────────────────────
 
-function Requisitions({ data, post, mayBuy }) {
+function Requisitions({ data, post, mayBuy, goVendors }) {
   const [open, setOpen] = useState(null);
   return (
     <div className="card">
@@ -74,13 +74,13 @@ function Requisitions({ data, post, mayBuy }) {
           </table>
         </TableKit>
       )}
-      {data.mrs.filter((m) => m.id === open).map((m) => <MrDetail key={m.id} m={m} data={data} post={post} may={mayBuy} />)}
+      {data.mrs.filter((m) => m.id === open).map((m) => <MrDetail key={m.id} m={m} data={data} post={post} may={mayBuy} goVendors={goVendors} />)}
       {mayBuy && <Fold title="درخواست خرید جدید"><NewMr post={post} /></Fold>}
     </div>
   );
 }
 
-function MrDetail({ m, data, post, may }) {
+function MrDetail({ m, data, post, may, goVendors }) {
   const t = m.tender;
   const draft = m.status === "draft";
   return (
@@ -135,7 +135,7 @@ function MrDetail({ m, data, post, may }) {
       {t.ranking.reason && t.bids.length > 0 && <p className="muted sm">رتبه‌بندی: {t.ranking.reason}</p>}
       {m.status === "awarded" && <p className="sm"><span className="pill ok">واگذار شد</span> PO {m.po_no} به {m.awarded_vendor} — {fa(m.awarded_at)}{m.justification && ` — دلیل: «${m.justification}»`}</p>}
       {may && m.status === "issued" && <>
-        <Fold title="ثبت پیشنهاد"><BidForm m={m} data={data} post={post} /></Fold>
+        <Fold title="ثبت پیشنهاد"><BidForm m={m} data={data} post={post} goVendors={goVendors} /></Fold>
         <Fold title="واگذاری و صدور PO"><AwardForm m={m} post={post} /></Fold>
       </>}
     </div>
@@ -200,7 +200,7 @@ function IssueForm({ m, post }) {
   );
 }
 
-function BidForm({ m, data, post }) {
+function BidForm({ m, data, post, goVendors }) {
   const blank = { vendorId: "", bidRef: "", receivedOn: today(), validUntil: "", currency: "", totalPrice: "", deliveryWeeks: "" };
   const [f, setF] = useState(blank);
   const on = (k) => (v) => setF({ ...f, [k]: v });
@@ -216,6 +216,7 @@ function BidForm({ m, data, post }) {
         <Field id={`b-p-${m.id}`} label="قیمت کل" type="number" value={f.totalPrice} on={on("totalPrice")} />
         <Field id={`b-w-${m.id}`} label="زمان تحویل (هفته)" type="number" value={f.deliveryWeeks} on={on("deliveryWeeks")} />
       </div>
+      <p className="muted sm">فروشنده در فهرست نیست؟ <button type="button" className="linkish" onClick={goVendors}>در تب «فروشندگان» ثبتش کنید</button> — نام، ایمیل، تلفن و نشانی یک بار آن‌جا ثبت می‌شود.</p>
       <button className="btn">ثبت پیشنهاد</button>
     </form>
   );

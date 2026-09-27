@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tender from "./Tender";
+import Vendors from "./Vendors";
 
 /**
  * Procurement and expediting.
@@ -17,7 +18,7 @@ import Tender from "./Tender";
 const DOC_STATE = { pending: ["", "در انتظار"], overdue: ["bad", "معوق"], under_review: ["warn", "در بررسی"],
   resubmit: ["warn", "ارسال مجدد"], resubmit_overdue: ["bad", "ارسال مجدد — معوق"], accepted: ["ok", "پذیرفته"] };
 
-const TABS = [["orders", "سفارش‌ها و پیگیری"], ["tender", "درخواست خرید و مناقصه"], ["vdt", "دادهٔ فنی وندور (VDT)"]];
+const TABS = [["orders", "سفارش‌ها و پیگیری"], ["tender", "درخواست خرید و مناقصه"], ["vendors", "فروشندگان"], ["vdt", "دادهٔ فنی وندور (VDT)"]];
 
 export default function ProcurementPage() {
   const [tab, setTab] = useState("orders");
@@ -26,10 +27,13 @@ export default function ProcurementPage() {
       {TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>)}
     </div>
   );
-  return tab === "orders" ? <Orders bar={bar} /> : <Tender key={tab} tab={tab} bar={bar} />;
+  const goVendors = () => setTab("vendors");
+  return tab === "orders" ? <Orders bar={bar} goVendors={goVendors} />
+    : tab === "vendors" ? <Vendors bar={bar} />
+    : <Tender key={tab} tab={tab} bar={bar} goVendors={goVendors} />;
 }
 
-function Orders({ bar }) {
+function Orders({ bar, goVendors }) {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/procurement?projectId=${id}`, []);
   const [msg, setMsg] = useState(null);
@@ -110,7 +114,7 @@ function Orders({ bar }) {
         </div>
       ))}
 
-      {may && <Fold title="PO یا فروشندهٔ جدید"><NewPo data={data} post={post} /></Fold>}
+      {may && <Fold title="سفارش خرید (PO) جدید"><NewPo data={data} post={post} goVendors={goVendors} /></Fold>}
     </div>
   );
 }
@@ -313,26 +317,21 @@ function PoForms({ o, data, post }) {
   );
 }
 
-function NewPo({ data, post }) {
-  const [v, setV] = useState({ code: "", name: "", country: "" });
+function NewPo({ data, post, goVendors }) {
   const [p, setP] = useState({ poNo: "", vendorId: "", title: "", currency: "", placedOn: today() });
   return (
-    <div className="card grid2">
+    <div className="card">
       <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "po", ...p })) setP({ ...p, poNo: "", title: "" }); }}>
         <h2>سفارش خرید جدید</h2>
-        <Field id="po-no" label="شمارهٔ PO" value={p.poNo} on={(x) => setP({ ...p, poNo: x })} />
-        <Select id="po-v" label="فروشنده" value={p.vendorId} on={(x) => setP({ ...p, vendorId: x })} opts={data.vendors.map((x) => [x.id, `${x.code} — ${x.name}`])} blank="—" />
-        <Field id="po-t" label="عنوان" value={p.title} on={(x) => setP({ ...p, title: x })} />
-        <Field id="po-c" label="ارز PO" value={p.currency} on={(x) => setP({ ...p, currency: x })} />
-        <Field id="po-d" label="تاریخ صدور" type="date" value={p.placedOn} on={(x) => setP({ ...p, placedOn: x })} />
+        <div className="grid2">
+          <Field id="po-no" label="شمارهٔ PO" value={p.poNo} on={(x) => setP({ ...p, poNo: x })} />
+          <Select id="po-v" label="فروشنده" value={p.vendorId} on={(x) => setP({ ...p, vendorId: x })} opts={data.vendors.map((x) => [x.id, `${x.code} — ${x.name}`])} blank="—" />
+          <Field id="po-t" label="عنوان" value={p.title} on={(x) => setP({ ...p, title: x })} />
+          <Field id="po-c" label="ارز PO" value={p.currency} on={(x) => setP({ ...p, currency: x })} />
+          <Field id="po-d" label="تاریخ صدور" type="date" value={p.placedOn} on={(x) => setP({ ...p, placedOn: x })} />
+        </div>
+        <p className="muted sm">فروشنده در فهرست نیست؟ <button type="button" className="linkish" onClick={goVendors}>در تب «فروشندگان» ثبتش کنید</button>.</p>
         <div><button className="btn" type="submit">ثبت PO</button></div>
-      </form>
-      <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "vendor", ...v })) setV({ code: "", name: "", country: "" }); }}>
-        <h2>فروشنده</h2>
-        <Field id="vd-c" label="کد" value={v.code} on={(x) => setV({ ...v, code: x })} />
-        <Field id="vd-n" label="نام" value={v.name} on={(x) => setV({ ...v, name: x })} />
-        <Field id="vd-k" label="کشور" value={v.country} on={(x) => setV({ ...v, country: x })} />
-        <div><button className="btn" type="submit">ثبت فروشنده</button></div>
       </form>
     </div>
   );

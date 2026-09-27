@@ -34,13 +34,18 @@ await page.getByRole("tab", { name: "ترانسمیتال‌های ورودی ا
 console.log("header:", flat(await page.locator(".pagehead .sub").innerText()));
 for (const r of await page.locator("table.dtable").first().locator("tbody > tr").allInnerTexts()) console.log("  item", flat(r).slice(0, 170));
 
-// Register a designer transmittal with a file.
-await page.locator(":is(.fold-btn, .fold-head)", { hasText: "ثبت ترانسمیتال ورودی" }).click();
+// A designer transmittal with a file — sent from the designer portal (an
+// admin holds both sides; a reviewer does not have this form).
+await page.goto(BASE + "/documents/designer", { waitUntil: "networkidle" }); await wait();
+await page.getByRole("tab", { name: "ترانسمیتال‌های ارسالی" }).click().catch(() => {}); await wait(300);
+await page.locator(":is(.fold-btn, .fold-head)", { hasText: "ارسال ترانسمیتال" }).click();
 await page.fill("#in-no", "DES-TR-0113"); await page.fill("#in-from", "Design contractor (demo)"); await page.fill("#in-purpose", "For construction");
 await page.fill("input[aria-label='مدرک 1']", "60-PID-001"); await page.fill("input[aria-label='رویژن 1']", "1");
 await page.selectOption("select[aria-label='هدف 1']", "IFC");
 await page.setInputFiles("input[aria-label='فایل 1']", pdfPath);
 await page.getByRole("button", { name: "ثبت ترانسمیتال", exact: true }).click(); await wait(2000);
+await page.goto(BASE + "/documents", { waitUntil: "networkidle" });
+await page.getByRole("tab", { name: "ترانسمیتال‌های ورودی از طراح" }).click(); await wait();
 const newRow = page.locator("tbody > tr", { hasText: "60-PID-001" }).first();
 console.log("registered:", flat(await newRow.innerText()).slice(0, 170));
 const href = await newRow.locator("a").first().getAttribute("href");

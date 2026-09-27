@@ -465,6 +465,7 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .btn:disabled{opacity:.35;cursor:not-allowed;filter:grayscale(1)}
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
 .btn.ghost:hover:not(:disabled){border-color:var(--cy)}
+.linkish{background:none;border:0;padding:0;color:var(--cy);font:inherit;text-decoration:underline;cursor:pointer}
 .btn.danger{background:#c9483e;border-color:#c9483e;color:#fff}
 
 .dtable{width:100%;border-collapse:collapse;font-size:12px}

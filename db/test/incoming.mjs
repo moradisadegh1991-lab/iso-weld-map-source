@@ -166,6 +166,43 @@ test("receipt out of order is recorded and flagged, not refused: IFC before any 
   });
 });
 
+test("the designer's side: only what the project returned, answered in the designer's own name", async () => {
+  const { can, ACTIONS } = await import("../../lib/authz.mjs");
+  equal([can({ role: "designer" }, ACTIONS.SUBMIT_DESIGN), can({ role: "designer" }, ACTIONS.VIEW_PROJECT),
+    can({ role: "designer" }, ACTIONS.CONTROL_DOCUMENTS), can({ role: "engineer" }, ACTIONS.SUBMIT_DESIGN)],
+    [true, false, false, false], "a designer holds its portal and nothing else; a reviewer does not hold the portal");
+  const dan = await projects.ensureUser(db, { subject: "kc|dan" });
+  await projects.addMember(db, { projectId: P, userId: dan.id, role: "designer" });
+  await inP(async () => {
+    const ds = await dc.upsertMdr(db, { projectId: P, docNo: "OLF-ME-DS-0201", title: "Datasheet P-6101", discipline: "Mechanical" });
+    const r = await inc.registerIncoming(db, { projectId: P, transmittalNo: "DES-T-020", fromParty: "Designer", sentOn: "2026-09-14",
+      receivedOn: "2026-09-14", purpose: "IFR", store, userId: dan.id, items: [{ docNo: "OLF-ME-DS-0201", revision: "A", purpose: "IFR", file: pdf("ds-a") }] });
+    const item = r.items[0].itemId;
+    const [rv] = await inc.assignReview(db, { projectId: P, itemId: item, disciplines: ["Mechanical"], userId: alice.id });
+    const c = await inc.raiseComment(db, { projectId: P, itemId: item, discipline: "Mechanical", ref: "Sec 3", text: "Seal plan missing", userId: bob.id });
+
+    let d = await inc.designerBoard(db, { projectId: P });
+    assert(!d.comments.some((x) => x.id === c.id), "an internal comment, not yet returned, is not on the designer's page");
+    assert(!("reviews" in d.transmittals.flatMap((t) => t.items).find((i) => i.id === item)), "nor who is reviewing");
+    await throws(() => inc.designerReply(db, { projectId: P, commentId: c.id, reply: "Plan 53B", userId: dan.id }), "not found");
+
+    await inc.finishReview(db, { projectId: P, reviewId: rv.id, userId: bob.id });
+    await inc.sendReply(db, { projectId: P, incomingId: r.transmittal.id, replyNo: "PRJ-R-020", sentOn: "2026-09-15", codes: [{ itemId: item, code: 3 }], userId: alice.id });
+    d = await inc.designerBoard(db, { projectId: P });
+    const back = d.comments.find((x) => x.id === c.id);
+    equal([back.returnedIn, back.designerReply, d.transmittals.flatMap((t) => t.items).find((i) => i.id === item).returnCode],
+      ["PRJ-R-020", null, 3], "returned with the reply that carries it");
+    await throws(() => inc.closeComment(db, { projectId: P, commentId: c.id, userId: bob.id }), "INVALID_INPUT", "no reply yet: nothing to close on");
+
+    await inc.designerReply(db, { projectId: P, commentId: c.id, reply: "Plan 53B added, sheet 2", userId: dan.id });
+    const closed = await inc.closeComment(db, { projectId: P, commentId: c.id, userId: bob.id });
+    equal([closed.status, closed.designer_reply, closed.designer_replied_by], ["closed", "Plan 53B added, sheet 2", dan.id], "closed on the designer's own words");
+    await throws(() => inc.designerReply(db, { projectId: P, commentId: c.id, reply: "changed", userId: dan.id }), "INVALID_INPUT", "a closed comment's reply stays");
+    const crs = await inc.crsCsv(db, { projectId: P, mdrId: ds.id, releasedOnly: true });
+    assert(crs.csv.includes("Plan 53B added, sheet 2"), crs.csv);
+  });
+});
+
 test("incoming records belong to one project", async () => {
   const other = await projects.createProject(db, { code: "OTH", name: "O", ownerUserId: alice.id });
   await withProject(db, other.id, async () => {

@@ -6,8 +6,10 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 
 /**
- * What the designer sends: receipt with files, distribution to disciplines,
- * comments that stay with the document, and the coded reply.
+ * The reviewers' side of what the designer sends: distribution to
+ * disciplines, comments that stay with the document, and the coded reply.
+ * Submitting a transmittal and answering a comment are the designer's own,
+ * in the designer portal (app/documents/designer) — not forms here.
  * Rules: lib/documents/review.mjs.
  */
 const STATE = { received: "", in_review: "warn", ready: "ok", overdue: "bad", replied: "ok" };
@@ -70,7 +72,7 @@ export default function Incoming({ bar }) {
             {may.dcc && t.items.some((i) => !i.returnCode) && <Fold title={`پاسخ به ${t.transmittalNo}`}><ReplyForm t={t} data={data} post={post} /></Fold>}
           </div>
         ))}
-        {may.dcc && <Fold title="ثبت ترانسمیتال ورودی"><Register data={data} projectId={projectId} reload={reload} setMsg={setMsg} /></Fold>}
+        <p className="muted sm">ترانسمیتال ورودی را خود طراح از «پرتال طراح» ارسال می‌کند؛ این‌جا صف بررسی آن است.</p>
       </div>
     </div>
   );
@@ -134,14 +136,10 @@ function ItemDetail({ i, projectId, post, may }) {
   );
 }
 
+/** A reviewer closes on the designer's own answer from the portal; it does not type one. */
 function CloseComment({ m, itemId, post }) {
-  const [reply, setReply] = useState("");
-  return (
-    <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-      <input aria-label="پاسخ طراح" placeholder="پاسخ طراح" value={reply} onChange={(e) => setReply(e.target.value)} style={{ width: 160 }} />
-      <button className="btn ghost" onClick={() => post({ kind: "close-comment", commentId: m.id, designerReply: reply, onItemId: itemId })}>بستن کامنت</button>
-    </span>
-  );
+  if (!m.designerReply) return <span className="pill warn" title="طراح هنوز از پرتال پاسخ نداده">باز — منتظر پاسخ طراح</span>;
+  return <button className="btn ghost" onClick={() => post({ kind: "close-comment", commentId: m.id, onItemId: itemId })}>بستن کامنت</button>;
 }
 
 function ReplyForm({ t, data, post }) {
@@ -170,57 +168,6 @@ function ReplyForm({ t, data, post }) {
         <Field id={`rp-on-${t.id}`} label="تاریخ پاسخ" type="date" value={f.sentOn} on={(v) => setF({ ...f, sentOn: v })} />
       </div>
       <button className="btn">ثبت پاسخ</button>
-    </form>
-  );
-}
-
-function Register({ data, projectId, reload, setMsg }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const blankRow = { docNo: "", title: "", revision: "", purpose: "IFA", file: null };
-  const [f, setF] = useState({ transmittalNo: "", fromParty: "", sentOn: today, receivedOn: today, purpose: "" });
-  const [rows, setRows] = useState([{ ...blankRow }]);
-  const [busy, setBusy] = useState(false);
-  const setRow = (k, patch) => setRows(rows.map((r, j) => (j === k ? { ...r, ...patch } : r)));
-  async function submit(e) {
-    e.preventDefault();
-    setMsg(null); setBusy(true);
-    const form = new FormData();
-    form.set("meta", JSON.stringify({ projectId, ...f, items: rows.map(({ file, ...r }) => r) }));
-    rows.forEach((r, k) => { if (r.file) form.set(`file_${k}`, r.file); });
-    try {
-      const res = await fetch("/api/doc-control/incoming", { method: "POST", body: form, credentials: "same-origin" });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `پاسخ ${res.status}`);
-      setRows([{ ...blankRow }]); setF({ ...f, transmittalNo: "" });
-      reload();
-    } catch (err) { setMsg(err.message); } finally { setBusy(false); }
-  }
-  return (
-    <form onSubmit={submit}>
-      <div className="grid2">
-        <Field id="in-no" label="شمارهٔ ترانسمیتال طراح" value={f.transmittalNo} on={(v) => setF({ ...f, transmittalNo: v })} />
-        <Field id="in-from" label="فرستنده (طراح)" value={f.fromParty} on={(v) => setF({ ...f, fromParty: v })} />
-        <Field id="in-sent" label="تاریخ ترانسمیتال" type="date" value={f.sentOn} on={(v) => setF({ ...f, sentOn: v })} />
-        <Field id="in-recv" label="تاریخ دریافت" type="date" value={f.receivedOn} on={(v) => setF({ ...f, receivedOn: v })} />
-        <Field id="in-purpose" label="هدف ارسال" value={f.purpose} on={(v) => setF({ ...f, purpose: v })} />
-      </div>
-      <table className="dtable">
-        <thead><tr><th>شمارهٔ مدرک</th><th>عنوان (اگر در MDR نیست)</th><th>رویژن</th><th>هدف</th><th>فایل</th><th /></tr></thead>
-        <tbody>{rows.map((r, k) => (
-          <tr key={k}>
-            <td><input aria-label={`مدرک ${k + 1}`} dir="ltr" value={r.docNo} onChange={(e) => setRow(k, { docNo: e.target.value })} /></td>
-            <td><input aria-label={`عنوان ${k + 1}`} dir="auto" value={r.title} onChange={(e) => setRow(k, { title: e.target.value })} /></td>
-            <td><input aria-label={`رویژن ${k + 1}`} dir="ltr" style={{ width: 60 }} value={r.revision} onChange={(e) => setRow(k, { revision: e.target.value })} /></td>
-            <td><select aria-label={`هدف ${k + 1}`} value={r.purpose} onChange={(e) => setRow(k, { purpose: e.target.value })}>
-              {Object.entries(data.purposes).map(([p, t]) => <option key={p} value={p}>{t}</option>)}</select></td>
-            <td><input aria-label={`فایل ${k + 1}`} type="file" onChange={(e) => setRow(k, { file: e.target.files?.[0] || null })} /></td>
-            <td>{rows.length > 1 && <button type="button" className="btn ghost" onClick={() => setRows(rows.filter((_, j) => j !== k))}>حذف</button>}</td>
-          </tr>
-        ))}</tbody>
-      </table>
-      <p><button type="button" className="btn ghost" onClick={() => setRows([...rows, { ...blankRow }])}>ردیف دیگر</button>{" "}
-        <button className="btn" disabled={busy}>{busy ? "در حال ثبت…" : "ثبت ترانسمیتال"}</button></p>
-      <p className="muted sm">کل ترانسمیتال با هم ثبت می‌شود یا هیچ‌کدام. فایلی که عیناً همان فایل رویژن قبلی باشد رد می‌شود؛ مدرکِ خارج از MDR با برچسب ثبت می‌شود.</p>
     </form>
   );
 }

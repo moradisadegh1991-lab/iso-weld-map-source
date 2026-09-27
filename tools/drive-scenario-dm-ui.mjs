@@ -14,7 +14,7 @@
  */
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
-import { ISO_7001 } from "../lib/scenario/dm-pump.mjs";
+import { ISO_7001, VENDORS } from "../lib/scenario/dm-pump.mjs";
 
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
@@ -52,6 +52,7 @@ async function signIn(email, password) {
 const pm = await signIn(EMAIL, PASSWORD);
 const qc = await signIn(creds.people.qc.email, creds.people.qc.password);
 const client = await signIn(creds.people.client.email, creds.people.client.password);
+const designer = await signIn(creds.people.designer.email, creds.people.designer.password);
 
 const settle = (p) => p.waitForTimeout(900);
 async function open(p, path, tab = null) {
@@ -69,6 +70,9 @@ async function fold(scope, title) {
   await scope.page().waitForTimeout(300);
 }
 let step = "";
+
+/** The project id a signed-in page is working in (the top bar's selection). */
+const projectIdOf = (p) => p.locator(".topbar select").first().inputValue();
 /** Pre-commissioning › subsystem 70-01's panel, opened. */
 async function precomPanel(p) {
   const c = card(p, "ساب‌سیستم‌ها");
@@ -210,11 +214,16 @@ async function mrDetail(no) {
   if (!(await panel.count())) { await c.locator("tr", { hasText: no }).getByRole("button", { name: "جزئیات" }).click(); await settle(pm); }
   return panel.first();
 }
-async function vendor(code, name) {
-  await fold(pm.locator("main"), "PO یا فروشندهٔ جدید");
-  await pm.fill("#vd-c", code); await pm.fill("#vd-n", name); await pm.fill("#vd-k", code === "V-PIPE" ? "IR" : "DE");
-  await pm.getByRole("button", { name: "ثبت فروشنده" }).click(); await settle(pm);
+async function vendor(code) {
+  const v = VENDORS[code];
+  await open(pm, "/procurement", "فروشندگان");
+  const c = card(pm, "فروشندگان");
+  await fold(c, "فروشندهٔ جدید");
+  for (const [id, val] of [["vn-code", code], ["vn-name", v.name], ["vn-scope", v.scope], ["vn-contact", v.contactName], ["vn-email", v.email],
+    ["vn-phone", v.phone], ["vn-country", v.country], ["vn-city", v.city], ["vn-address", v.address]]) await pm.fill(`#${id}`, val);
+  await c.getByRole("button", { name: "ثبت فروشنده" }).click(); await settle(pm);
   const e = await errorOf(pm); if (e) problems.push(`${step} vendor ${code}: ${e}`);
+  check(new RegExp(`${code}.*${v.email.replace(/\./g, "\\.")}`).test(flat(await c.innerText())), `${code} in the vendor register with its email`);
 }
 async function award(mrNo, vendorCode, poNo, on) {
   const m = await mrDetail(mrNo);
@@ -242,23 +251,25 @@ async function fat(p, poNo, what, on, irn, inspector) {
 const fa = (iso) => new Date(iso).toLocaleDateString("fa-IR");
 
 /** Documents › incoming: one designer transmittal, a file per row. */
+/** The designer portal: a transmittal sent with a file per row. */
 async function incoming(no, from, sent, recv, purpose, rows) {
-  const c = card(pm, "ترانسمیتال‌های ورودی از طراح");
-  await fold(c, "ثبت ترانسمیتال ورودی");
-  await pm.fill("#in-no", no); await pm.fill("#in-from", from);
-  await pm.fill("#in-sent", sent); await pm.fill("#in-recv", recv); await pm.fill("#in-purpose", purpose);
+  await open(designer, "/documents/designer", "ترانسمیتال‌های ارسالی");
+  const c = card(designer, "ترانسمیتال‌های ارسالی");
+  await fold(c, "ارسال ترانسمیتال");
+  await designer.fill("#in-no", no); await designer.fill("#in-from", from);
+  await designer.fill("#in-sent", sent); await designer.fill("#in-recv", recv); await designer.fill("#in-purpose", purpose);
   for (const [k, [doc, rev, purp]] of rows.entries()) {
     if (k > 0) await c.getByRole("button", { name: "ردیف دیگر" }).click();
-    await pm.getByLabel(`مدرک ${k + 1}`, { exact: true }).fill(doc);
-    await pm.getByLabel(`رویژن ${k + 1}`, { exact: true }).fill(rev);
-    await pm.getByLabel(`هدف ${k + 1}`, { exact: true }).selectOption(purp);
-    await pm.getByLabel(`فایل ${k + 1}`, { exact: true }).setInputFiles({ name: `${doc}_Rev${rev}.pdf`, mimeType: "application/pdf",
+    await designer.getByLabel(`مدرک ${k + 1}`, { exact: true }).fill(doc);
+    await designer.getByLabel(`رویژن ${k + 1}`, { exact: true }).fill(rev);
+    await designer.getByLabel(`هدف ${k + 1}`, { exact: true }).selectOption(purp);
+    await designer.getByLabel(`فایل ${k + 1}`, { exact: true }).setInputFiles({ name: `${doc}_Rev${rev}.pdf`, mimeType: "application/pdf",
       buffer: Buffer.from(`%PDF-1.4\n% ${doc} Rev.${rev}\n%%EOF\n`) });
   }
-  await c.getByRole("button", { name: "ثبت ترانسمیتال", exact: true }).click(); await settle(pm);
-  const e = await errorOf(pm); if (e) problems.push(`${step} ${no}: ${e}`);
+  await c.getByRole("button", { name: "ثبت ترانسمیتال", exact: true }).click(); await settle(designer);
+  const e = await errorOf(designer); if (e) problems.push(`${step} ${no}: ${e}`);
+  await open(pm, "/documents", "ترانسمیتال‌های ورودی");
 }
-/** One incoming transmittal's block: its heading line, table, item panel and reply form. */
 const trBlock = (no) => card(pm, "ترانسمیتال‌های ورودی از طراح").locator(`xpath=./div[p/b[normalize-space()="${no}"]]`);
 /** Open a row's review panel («بررسی») and return it. */
 async function review(block, doc, rev) {
@@ -308,12 +319,19 @@ try {
     check(/24 h/.test(flat(await pm.locator(".kpis").innerText())), "inspection notice: 24 h");
 
     at("0.3", "equipment list");
-    await open(pm, "/equipment");
-    const csv = "Tag No,Description,Type,Subsystem,Unit\nP-7001,DM Water Transfer Pump,Centrifugal,70-01,70\nD-7002,DM Water Drum,Horizontal,70-01,70\n";
+    // One tag by the hand form, the other by a list file: both ways the guide offers.
+    await open(pm, "/equipment", "ثبت دستی تجهیز");
+    await pm.fill("#eq-no", "P-7001"); await pm.fill("#eq-desc", "DM Water Transfer Pump"); await pm.fill("#eq-type", "Centrifugal");
+    await pm.fill("#eq-sub", "70-01");
+    await pm.getByRole("button", { name: "ثبت تگ" }).click(); await settle(pm);
+    const e03 = flat(await card(pm, "ثبت دستی تجهیز").innerText());
+    check(/P-7001 ثبت شد · دوّار \(از شرح\) · 70-01/.test(e03), `P-7001 by hand: rotating, read from its description («${e03.slice(-90)}»)`);
+    await open(pm, "/equipment", "ورود لیست تجهیزات");
+    const csv = "Tag No,Description,Type,Subsystem,Unit\nD-7002,DM Water Drum,Horizontal,70-01,70\n";
     await pm.locator("input[type=file]").first().setInputFiles({ name: "dmw-equipment.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
     await settle(pm);
-    const imp = pm.getByRole("button", { name: /ثبت|وارد|تأیید/ }).filter({ hasNotText: "ثبت‌نام" });
-    if (await imp.count()) { await imp.first().click(); await settle(pm); }
+    await card(pm, "ورود لیست تجهیزات").getByRole("button", { name: "ثبت در پروژه" }).click(); await settle(pm);
+    await open(pm, "/equipment", "تگ‌ها");
     const eq = flat(await pm.locator("main").innerText());
     check(/P-7001/.test(eq) && /D-7002/.test(eq), `both tags registered («${eq.slice(0, 120)}»)`);
     if (stop("0.3")) throw new Error("stop");
@@ -344,8 +362,18 @@ try {
     check(/DMW-DS-P-7001.*P-7001/.test(reg), "the pump datasheet names its tag");
     if (stop("1.1")) throw new Error("stop");
 
-    at("1.2", "incoming transmittal DES-TR-7001 (IFR)");
-    await open(pm, "/documents", "ترانسمیتال‌های ورودی");
+    at("1.2", "the designer sends DES-TR-7001 (IFR) from its portal");
+    await designer.goto(BASE + "/documents", { waitUntil: "networkidle" }); await designer.waitForURL(/\/documents\/designer/, { timeout: 8000 }).catch(() => {});
+    check(/\/documents\/designer$/.test(new URL(designer.url()).pathname), `a designer sent to «/documents» lands on its portal (${new URL(designer.url()).pathname})`);
+    const dnav = flat(await designer.locator(".sidenav").innerText());
+    check(/پرتال طراح|مدارک/.test(dnav) && !/پایپینگ|HSE|خرید و انبار|کیفیت/.test(dnav), `the designer's menu is its portal only («${dnav.slice(0, 80)}»)`);
+    const dapi = await designer.evaluate(async (pid) => Promise.all(["/api/doc-control/incoming", "/api/procurement", "/api/doc-control"]
+      .map(async (u) => (await fetch(`${u}?projectId=${pid}`)).status)), await projectIdOf(designer));
+    check(dapi.every((st) => st === 403), `the review queue, procurement and the register are refused to the designer (${dapi.join(", ")})`);
+    const capi = await client.evaluate(async (pid) => (await fetch(`/api/doc-control/designer?projectId=${pid}`)).status, await projectIdOf(client));
+    check(capi === 403, `the portal is refused to a reviewer (${capi})`);
+    await open(client, "/documents");
+    check(!(await client.locator(".section-tabs a", { hasText: "پرتال طراح" }).count()), "a reviewer has no «پرتال طراح» tab");
     await incoming("DES-TR-7001", "Designer", d(1), d(2), "برای بررسی",
       ["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002"].map((no) => [no, "A", "IFR"]));
     const tr1 = trBlock("DES-TR-7001");
@@ -386,24 +414,38 @@ try {
     check(/1 کامنت باز/.test(flat(await pm.locator(".pagehead").innerText())), "the pump datasheet's comment is still open");
     if (stop("1.5")) throw new Error("stop");
 
-    at("1.6", "DES-TR-7002 for construction (IFC)");
+    at("1.6", "the designer answers the returned comment and sends Rev.0 for construction");
+    await open(designer, "/documents/designer", "کامنت‌های برگشتی");
+    const dc = card(designer, "کامنت‌های برگشتی");
+    const dcText = flat(await dc.innerText());
+    check(/NPSHr at rated flow missing/.test(dcText) && /EPC-RT-7001/.test(dcText), "the NPSHr comment reached the designer with EPC-RT-7001");
+    await dc.getByLabel(/^پاسخ DMW-DS-P-7001/).fill("NPSHr 2.1 m added to curve, Rev.0");
+    await dc.getByRole("button", { name: "ثبت پاسخ" }).click(); await settle(designer);
+    const e16r = await errorOf(designer); if (e16r) problems.push(`1.6 reply: ${e16r}`);
+    check(/پاسخ داده شد — منتظر بستن/.test(flat(await card(designer, "کامنت‌های برگشتی").innerText())), "answered, waiting for the reviewer to close it");
     await incoming("DES-TR-7002", "Designer", d(14), d(15), "برای ساخت",
       ["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002", "DMW-ISO-7001"].map((no) => [no, "0", "IFC"]));
+    if (stop("1.6")) throw new Error("stop");
+
+    at("1.7", "the reviewer closes on the designer's reply and codes Rev.0 for construction");
     const tr2 = trBlock("DES-TR-7002");
     const pump0 = await review(tr2, "DMW-DS-P-7001", "0");
-    await pump0.getByLabel("پاسخ طراح").fill("NPSHr 2.1 m added to curve, Rev.0");
+    check(/NPSHr 2\.1 m added to curve/.test(flat(await pump0.innerText())) && !(await pump0.getByLabel("پاسخ طراح").count()),
+      "the reviewer reads the designer's reply and has no box to type one");
     await pump0.getByRole("button", { name: "بستن کامنت" }).click(); await settle(pm);
-    const e16a = await errorOf(pm); if (e16a) problems.push(`1.6 close comment: ${e16a}`);
+    const e16a = await errorOf(pm); if (e16a) problems.push(`1.7 close comment: ${e16a}`);
     check(/بسته در Rev\.0/.test(flat(await review(tr2, "DMW-DS-P-7001", "0").then((c) => c.innerText()))), "the NPSHr comment is closed on Rev.0");
     await reply("DES-TR-7002", Object.fromEntries(["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002", "DMW-ISO-7001"].map((n) => [n, "1"])), "EPC-RT-7002", d(18));
-    const e16 = await errorOf(pm); if (e16) problems.push(`1.6: ${e16}`);
+    const e16 = await errorOf(pm); if (e16) problems.push(`1.7: ${e16}`);
     await open(pm, "/documents", "رجیستر");
     const regRows = await card(pm, "رجیستر مدارک (MDR)").locator("tbody tr").allInnerTexts();
     for (const no of ["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002", "DMW-ISO-7001"]) {
       const row = flat(regRows.find((r) => r.includes(no)) || "");
       check(/Rev\.0 · IFC.*Rev\.0/.test(row), `${no}: construction revision Rev.0 («${row.slice(0, 90)}»)`);
     }
-    if (stop("1.6")) throw new Error("stop");
+    await open(designer, "/documents/designer", "کامنت‌های برگشتی");
+    check(/بسته در Rev\.0/.test(flat(await card(designer, "کامنت‌های برگشتی").innerText())), "the designer sees its comment closed on Rev.0");
+    if (stop("1.7")) throw new Error("stop");
   }
 
   if (!skipPhase(2)) {
@@ -427,7 +469,7 @@ try {
 
     at("2.2", "two bids, both technically acceptable");
     await open(pm, "/procurement");
-    for (const [code, name] of [["V-PMP-A", "Pump Maker A"], ["V-PMP-B", "Pump Maker B"], ["V-PIPE", "Pipe Stockist"]]) await vendor(code, name);
+    for (const code of Object.keys(VENDORS)) await vendor(code);
     await open(pm, "/procurement", "درخواست خرید و مناقصه");
     const mr2 = await mrDetail("MR-7001");
     for (const [code, price, weeks] of [["V-PMP-A", 38000, 10], ["V-PMP-B", 41500, 8]]) {
@@ -516,7 +558,7 @@ try {
     await lots.getByRole("button", { name: "ثبت کالا" }).click(); await settle(pm);
     const e29a = await errorOf(pm); if (e29a) problems.push(`2.9 item: ${e29a}`);
     await open(pm, "/procurement");
-    await fold(pm.locator("main"), "PO یا فروشندهٔ جدید");
+    await fold(pm.locator("main"), "سفارش خرید (PO) جدید");
     await pm.fill("#po-no", "PO-7002"); await pm.selectOption("#po-v", { label: "V-PIPE — Pipe Stockist" });
     await pm.fill("#po-t", "Line pipe 3in"); await pm.fill("#po-c", "EUR"); await pm.fill("#po-d", d(30));
     await pm.getByRole("button", { name: "ثبت PO" }).click(); await settle(pm);
