@@ -5,7 +5,7 @@
  * without reaching accounts through it; a password is set only by its owner,
  * through a one-time link kept as a hash.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -50,7 +50,7 @@ test("the menu is the member's areas, plus what is common", async () => {
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "usr-db-"));
+process.env.PGLITE_DIR = await scratchDir("usr-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

@@ -34,14 +34,14 @@ page.on("console", (m) => { if (m.type() === "error" && !/status of 409/.test(m.
 const menu = await page.locator(".sidenav a").allInnerTexts();
 console.log("menu:", menu.map(flat).join(" | "));
 check(menu.length <= 16, `the menu holds sections, not every page (${menu.length} entries)`);
-check(menu.some((t) => /پایپینگ/.test(t)) && !menu.some((t) => /^NDT و جوشکار$/.test(flat(t))), "piping pages are not menu entries of their own");
+check(menu.some((t) => /پایپینگ/.test(t)) && !menu.some((t) => /^(داشبورد NDT|جوشکاری و NDT)$/.test(flat(t))), "piping pages are not menu entries of their own");
 
 await page.locator(".sidenav a", { hasText: "پایپینگ" }).first().click(); await page.waitForURL(/\/piping\/overview/); await settle();
 const stabs = flat(await page.locator(".section-tabs").innerText());
-check(/داشبورد/.test(stabs) && /ایزومتریک/.test(stabs) && /اجرا/.test(stabs) && /NDT و جوشکار/.test(stabs) && /سابقهٔ جوش/.test(stabs), `piping's pages are tabs across the top: «${stabs}»`);
+check(/داشبورد/.test(stabs) && /ایزومتریک/.test(stabs) && /اجرا/.test(stabs) && /جوشکاری و NDT/.test(stabs) && /داشبورد NDT/.test(stabs) && /سابقهٔ جوش/.test(stabs), `piping's pages are tabs across the top: «${stabs}»`);
 check(await page.locator(".pnav").count() === 0, "the old piping sub-menu is gone");
-await page.locator(".section-tabs a", { hasText: "NDT و جوشکار" }).click(); await page.waitForURL(/\/qc/); await settle();
-check(await page.locator(".section-tabs a.on", { hasText: "NDT و جوشکار" }).count() === 1, "the open page is the highlighted tab");
+await page.locator(".section-tabs a", { hasText: "داشبورد NDT" }).click(); await page.waitForURL(/\/qc/); await settle();
+check(await page.locator(".section-tabs a.on", { hasText: "داشبورد NDT" }).count() === 1, "the open page is the highlighted tab");
 check(await page.locator(".sidenav a.on", { hasText: "پایپینگ" }).count() === 1, "…and piping stays the highlighted menu entry");
 await page.screenshot({ path: `${SHOT}/300-section-tabs.png` });
 

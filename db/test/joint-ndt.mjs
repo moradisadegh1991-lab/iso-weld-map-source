@@ -3,7 +3,7 @@
  * NDT of support, structural and equipment welds — the project's NDT
  * matrix, the joint register, samples, and the chain steps that read them.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -59,7 +59,7 @@ test("lots are per group, joint type and welder", async () => {
 
 // ── against the database ─────────────────────────────────────────────────
 
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "jndt-db-"));
+process.env.PGLITE_DIR = await scratchDir("jndt-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

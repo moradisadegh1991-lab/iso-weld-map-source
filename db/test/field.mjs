@@ -5,7 +5,7 @@
  * once, in the order it happened, each operation judged by the same
  * engines as a desk entry — refusals kept, not dropped.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -98,7 +98,7 @@ test("IR readings and calibration points are read on the phone as the server rea
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "fld-db-"));
+process.env.PGLITE_DIR = await scratchDir("fld-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");
@@ -271,7 +271,7 @@ test("cable and instrument steps: recorded as at a desk, derived ones refused, t
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1]);
 const WEBP = Buffer.concat([Buffer.from("RIFF"), Buffer.from([4, 0, 0, 0]), Buffer.from("WEBPVP8 ")]);
-const storeRoot = await mkdtemp(path.join(tmpdir(), "fld-store-"));
+const storeRoot = await scratchDir("fld-store-");
 const store = createLocalStore({ root: storeRoot });
 const photos = await import("../../lib/db/repos/punch-photos.mjs");
 

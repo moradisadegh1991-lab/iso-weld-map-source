@@ -3,7 +3,7 @@
  * The structural module: erection tolerance, bolt pretension, and a steel
  * structure standing on civil's foundations.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -139,7 +139,7 @@ test("a failed batch is cleared only by a later valid batch of the same bolts", 
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "steel-db-"));
+process.env.PGLITE_DIR = await scratchDir("steel-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

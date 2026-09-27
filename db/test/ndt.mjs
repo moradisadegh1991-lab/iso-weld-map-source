@@ -8,7 +8,7 @@
  * nobody can reproduce is not auditable, and one that misses a welder defeats
  * the clause that asked for it.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { codeRequirement, isRadiographable, SERVICE } from "../../lib/ndt/b31-3.mjs";
 import { ndtRequirement, matchesRule } from "../../lib/ndt/requirement.mjs";
 import { selectSample, coverage, seedFrom } from "../../lib/ndt/sampling.mjs";
@@ -176,7 +176,7 @@ test("coverage counts first shots and names the welder with nothing examined", a
 // ── through the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "ndt-db-"));
+process.env.PGLITE_DIR = await scratchDir("ndt-db-");
 
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");

@@ -9,7 +9,7 @@
  *   S3_TEST_ENDPOINT=http://127.0.0.1:9000 S3_TEST_ACCESS_KEY_ID=… S3_TEST_SECRET_ACCESS_KEY=…
  * and says it was skipped otherwise.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -39,12 +39,12 @@ test("the environment chooses the store, and a half-configured bucket is an erro
   await throws(async () => storageConfig({ STORAGE_DRIVER: "ftp" }), "local or s3");
   const c = storageConfig({ STORAGE_DRIVER: "S3", S3_ENDPOINT: "http://minio:9000", S3_BUCKET: "b", S3_ACCESS_KEY_ID: "k", S3_SECRET_ACCESS_KEY: "s" });
   equal([c.driver, c.region, c.publicEndpoint], ["s3", "us-east-1", "http://minio:9000"], "browsers use the same address unless told otherwise");
-  const local = await createStore({ STORAGE_ROOT: await mkdtemp(path.join(tmpdir(), "sto-")) });
+  const local = await createStore({ STORAGE_ROOT: await scratchDir("sto-") });
   equal(local.driver, "local");
 });
 
 test("on disk: kept under its hash, and a file changed on disk is not returned", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "sto-local-"));
+  const root = await scratchDir("sto-local-");
   const store = createLocalStore({ root });
   const a = await contract(store, "local");
   await writeFile(path.join(root, keyFor(a.digest, ".jpg")), OTHER);
@@ -123,7 +123,7 @@ if (!S3) {
   });
 
   test("MinIO: migrate copies a disk store into the bucket, checked, and again copies only what is new", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "sto-mig-"));
+    const root = await scratchDir("sto-mig-");
     const disk = createLocalStore({ root });
     const one = await disk.put(Buffer.from("iso sheet 1"), { ext: ".jpg" });
     const two = await disk.put(Buffer.from("iso sheet 2"), { ext: ".png" });

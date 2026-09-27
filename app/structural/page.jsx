@@ -9,6 +9,7 @@ import {
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tabs from "../../components/ui/Tabs";
+import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/WorkDate";
 
 /**
  * Structural steel: pipe racks, platforms and shelters, from the foundation
@@ -20,7 +21,7 @@ import Tabs from "../../components/ui/Tabs";
  * When a rack is waiting on its foundations, the board says so in civil's
  * words, because that is the crew that has to move.
  */
-export default function StructuralPage() {
+function StructuralPageBody() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/structural?projectId=${id}`, []);
   const [open, setOpen] = useState(null);
@@ -65,6 +66,7 @@ export default function StructuralPage() {
           {onCivil > 0 && ` · ${onCivil} منتظر فونداسیون`}
         </span>
       </div>
+      <WorkDateField />
 
       <Tabs name="structural">
       {msg && <p className="err">{msg}</p>}
@@ -154,6 +156,7 @@ function Verdict({ v }) {
 }
 
 function Detail({ s, detail, mayRecord, post, standard }) {
+  const workOn = useWorkDate();
   const steps = detail.status.steps || [];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -176,8 +179,8 @@ function Detail({ s, detail, mayRecord, post, standard }) {
             {x.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
             {mayRecord && !x.derived && x.status !== "done" && !x.blocked && (
               <button className="btn" style={{ padding: "4px 10px" }}
-                      onClick={() => post({ kind: "activity", tagId: s.id, code: x.code, doneAt: today() })}>
-                ثبت انجام (امروز)</button>
+                      onClick={() => post({ kind: "activity", tagId: s.id, code: x.code, doneAt: workOn })}>
+                ثبت انجام</button>
             )}
           </div>
         ))}
@@ -426,3 +429,8 @@ function Bar({ pct }) {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const fa = (d) => (d ? new Date(d).toLocaleDateString("fa-IR") : "—");
+
+/** Every one-click record on this page carries the day chosen at its head (components/ui/WorkDate). */
+export default function StructuralPage() {
+  return <WorkDateScope><StructuralPageBody /></WorkDateScope>;
+}

@@ -4,7 +4,7 @@
  * query would, tag by tag, and costs a fixed number of queries instead of
  * nine per tag.
  */
-import { test, run, assert, equal } from "./harness.mjs";
+import { test, run, assert, equal, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -13,7 +13,7 @@ import path from "node:path";
 // status twice on purpose and would defeat what is measured here.
 delete process.env.TAGSTATUS_CROSSCHECK;
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "ldr-db-"));
+process.env.PGLITE_DIR = await scratchDir("ldr-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

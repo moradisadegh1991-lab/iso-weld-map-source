@@ -9,13 +9,13 @@
  * test may create and drop databases on (pg_dump / pg_restore on PATH):
  *   BACKUP_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/postgres
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp, readdir, writeFile, readFile, mkdir, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const root = await mkdtemp(path.join(tmpdir(), "backup-test-"));
+const root = await scratchDir("backup-test-");
 const { createClient } = await import("../../lib/db/client.mjs");
 const { migrate } = await import("../../lib/db/migrate.mjs");
 const B = await import("../../lib/db/backup.mjs");

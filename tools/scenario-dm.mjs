@@ -78,6 +78,13 @@ try {
   console.log("\nTHE OTHER PEOPLE (passwords shown once, stored nowhere else):");
   for (const [title, e, pw] of printed) console.log(`  ${title}\n    email    : ${e}\n    password : ${pw}`);
   console.log("\nGuide: docs/digital-epc/03-scenario-dm-pump.md\n");
+  // For a browser drive: where to find the other people's sign-ins. Never
+  // inside the repository — a path the caller chose, outside it.
+  const creds = flag("--creds");
+  if (creds && creds !== true) {
+    await writeFile(creds, JSON.stringify({ project: code, start,
+      people: Object.fromEntries(printed.map(([title, e, pw], k) => [Object.values(PEOPLE).filter((q) => q.email)[k].key, { email: e, password: pw }])) }, null, 2), { mode: 0o600 });
+  }
 } finally {
   await db.close();
 }

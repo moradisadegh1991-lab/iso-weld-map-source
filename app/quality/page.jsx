@@ -156,7 +156,9 @@ function PunchPanel({ p, post, may, categories }) {
   const [stage, setStage] = useState(p.status === "open" ? "raised" : "cleared");
   const [shot, setShot] = useState(null);           // null | "busy" | error text
   const [n, setN] = useState(0);
-  const act = async (action, extra = {}) => { if (await post({ kind: "punch-action", punchId: p.id, action, note, ...extra })) setNote(""); };
+  // The day it was cleared or verified — typed, because the walk-down sheet is often entered the day after.
+  const [onDate, setOnDate] = useState(today());
+  const act = async (action, extra = {}) => { if (await post({ kind: "punch-action", punchId: p.id, action, note, onDate, ...extra })) setNote(""); };
   // A photo from the desk goes the way a phone's does: one operation, with
   // its own id, through the same sync — so a double click is one photo.
   async function upload(file) {
@@ -192,6 +194,8 @@ function PunchPanel({ p, post, may, categories }) {
           <div className="field" style={{ flex: "1 1 260px" }}><label htmlFor={`pn-${p.id}`}>یادداشت</label>
             <input id={`pn-${p.id}`} value={note} onChange={(e) => setNote(e.target.value)}
                    placeholder={p.status === "open" ? "چه کاری انجام شد" : "دلیل"} /></div>
+          <div className="field"><label htmlFor={`pd-${p.id}`}>تاریخ</label>
+            <input id={`pd-${p.id}`} type="date" dir="ltr" value={onDate} onChange={(e) => setOnDate(e.target.value)} /></div>
           {p.status === "open" && <button className="btn" onClick={() => act("clear")}>رفع شد</button>}
           {p.status === "cleared" && <>
             <button className="btn" onClick={() => act("verify")}>تأیید و بستن</button>

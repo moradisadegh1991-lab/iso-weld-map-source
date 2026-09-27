@@ -167,9 +167,9 @@ function LotRow({ l, open, onToggle, data, post, mayRecord, mayInspect, call, pr
 }
 
 function LotDetail({ l, data, post, mayRecord, mayInspect, call, projectId }) {
-  const [ins, setIns] = useState({ qtyAccepted: l.accepted || l.qtyReceived, qtyRejected: 0, mirRef: "" });
+  const [ins, setIns] = useState({ qtyAccepted: l.accepted || l.qtyReceived, qtyRejected: 0, mirRef: "", inspectedOn: today() });
   const [mtc, setMtc] = useState({ mtcRef: l.mtcRef || "", heatNo: l.heatNo || "" });
-  const [mv, setMv] = useState({ kind: "issue", qty: "", refNo: "", spoolId: "", contractorId: "", purpose: "" });
+  const [mv, setMv] = useState({ kind: "issue", qty: "", refNo: "", spoolId: "", contractorId: "", purpose: "", movedOn: today() });
   const [dest, setDest] = useState(null);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -186,12 +186,13 @@ function LotDetail({ l, data, post, mayRecord, mayInspect, call, projectId }) {
       {mayInspect && (
         <div className="grid2">
           <form className="card grid2" style={{ padding: 10, alignItems: "end" }} onSubmit={(e) => {
-            e.preventDefault(); post({ kind: "inspect", lotId: l.id, ...ins, inspectedOn: today() });
+            e.preventDefault(); post({ kind: "inspect", lotId: l.id, ...ins });
           }}>
             <b className="sm" style={{ gridColumn: "1/-1" }}>بازرسی ورود (MIR)</b>
             <Field id={`ia-${l.id}`} label="پذیرفته" type="number" value={ins.qtyAccepted} on={(v) => setIns({ ...ins, qtyAccepted: v })} />
             <Field id={`ir-${l.id}`} label="ردشده" type="number" value={ins.qtyRejected} on={(v) => setIns({ ...ins, qtyRejected: v })} />
             <Field id={`im-${l.id}`} label="شمارهٔ MIR" value={ins.mirRef} on={(v) => setIns({ ...ins, mirRef: v })} />
+            <Field id={`id-${l.id}`} label="تاریخ بازرسی" type="date" value={ins.inspectedOn} on={(v) => setIns({ ...ins, inspectedOn: v })} />
             <div><button className="btn" type="submit">ثبت MIR</button></div>
           </form>
           {l.traceable && (
@@ -210,7 +211,7 @@ function LotDetail({ l, data, post, mayRecord, mayInspect, call, projectId }) {
       {mayRecord && (
         <form className="card grid2" style={{ padding: 10, alignItems: "end" }} onSubmit={async (e) => {
           e.preventDefault();
-          if (await post({ kind: mv.kind, lotId: l.id, qty: mv.qty, movedOn: today(), refNo: mv.refNo || null,
+          if (await post({ kind: mv.kind, lotId: l.id, qty: mv.qty, movedOn: mv.movedOn, refNo: mv.refNo || null,
             spoolId: mv.spoolId || null, contractorId: mv.contractorId || null, purpose: mv.purpose || null })) {
             setMv({ ...mv, qty: "", refNo: "" });
           }
@@ -233,6 +234,7 @@ function LotDetail({ l, data, post, mayRecord, mayInspect, call, projectId }) {
             </select></div>
           <Field id={`mp-${l.id}`} label="شرح مصرف (اگر اسپول نیست)" value={mv.purpose} on={(v) => setMv({ ...mv, purpose: v })} />
           <Field id={`mn-${l.id}`} label="شمارهٔ حواله" value={mv.refNo} on={(v) => setMv({ ...mv, refNo: v })} />
+          <Field id={`mo-${l.id}`} label="تاریخ" type="date" value={mv.movedOn} on={(v) => setMv({ ...mv, movedOn: v })} />
           <div><button className="btn" type="submit" disabled={!mv.qty}>ثبت</button></div>
         </form>
       )}
@@ -292,10 +294,10 @@ function HeatTrace({ call, projectId }) {
 }
 
 function Receive({ items, post }) {
-  const blank = { itemId: items[0].id, receiptNo: "", poRef: "", supplier: "", heatNo: "", mtcRef: "", qtyReceived: "", location: "" };
+  const blank = { itemId: items[0].id, receiptNo: "", poRef: "", supplier: "", heatNo: "", mtcRef: "", qtyReceived: "", location: "", receivedOn: today() };
   const [f, setF] = useState(blank);
   return (
-    <form className="card" onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "receive", ...f, receivedOn: today() })) setF({ ...blank, itemId: f.itemId }); }}>
+    <form className="card" onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "receive", ...f })) setF({ ...blank, itemId: f.itemId, receivedOn: f.receivedOn }); }}>
       <h2>رسید کالا (MRR)</h2>
       <div className="grid2">
         <div className="field"><label htmlFor="rc-item">کالا</label>
@@ -309,6 +311,7 @@ function Receive({ items, post }) {
         <Field id="rc-mtc" label="شمارهٔ MTC" value={f.mtcRef} on={(v) => setF({ ...f, mtcRef: v })} />
         <Field id="rc-qty" label="مقدار دریافتی" type="number" value={f.qtyReceived} on={(v) => setF({ ...f, qtyReceived: v })} required />
         <Field id="rc-loc" label="محل انبار" value={f.location} on={(v) => setF({ ...f, location: v })} />
+        <Field id="rc-on" label="تاریخ رسید" type="date" value={f.receivedOn} on={(v) => setF({ ...f, receivedOn: v })} required />
       </div>
       <p className="muted sm">لات تا ثبت MIR (و برای مواد ردیابی‌پذیر، پذیرش MTC) قرنطینه است.</p>
       <div><button className="btn" type="submit">ثبت رسید</button></div>

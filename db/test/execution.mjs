@@ -2,7 +2,7 @@
 /**
  * Plant siting, piping execution and supports.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -132,7 +132,7 @@ test("a spool with no welds at all gets no verdict", async () => {
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "exec-db-"));
+process.env.PGLITE_DIR = await scratchDir("exec-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");
@@ -251,6 +251,21 @@ test("a spool walks its chain, and welding answers itself", async () => {
     assert([DONE, IN_PROGRESS].includes(sw.status), "nobody told the system; the register did");
     equal(sw.derived, true);
     equal(s.steps.find((x) => x.code === "fit_up").refNo, "FU-0012", "with the report number");
+  });
+});
+
+test("NDT is refused on a joint nobody welded, before it was welded, or on a day not yet come", async () => {
+  await withProject(db, proj.id, async () => {
+    const welded = await db.query("SELECT weld_uid, welded_at FROM weld_execution WHERE project_id = $1 LIMIT 1", [proj.id]);
+    const uid = welded.rows[0].weld_uid;
+    const unwelded = welds.find((w) => w.weld_uid !== uid && !welded.rows.some((r) => r.weld_uid === w.weld_uid));
+    const e1 = await throws(() => exec.recordNdt(db, { projectId: proj.id, weldUid: unwelded.weld_uid, method: "RT", result: "accept" }), "INVALID_INPUT");
+    assert(/جوشکاری ثبت‌شده ندارد/.test(e1.message), e1.message);
+    const e2 = await throws(() => exec.recordNdt(db, { projectId: proj.id, weldUid: uid, method: "RT", result: "accept", inspectedAt: "2026-08-04" }), "INVALID_INPUT");
+    assert(/پیش از جوشکاری/.test(e2.message), e2.message);
+    await throws(() => exec.recordNdt(db, { projectId: proj.id, weldUid: uid, method: "RT", result: "accept", inspectedAt: "2999-01-01" }), "INVALID_INPUT");
+    const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM ndt_record WHERE project_id = $1", [proj.id]);
+    equal(n.n, 0, "none of the three was written");
   });
 });
 

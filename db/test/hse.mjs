@@ -3,7 +3,7 @@
  * HSE: incident class from facts, rates on a stated base, permits that do
  * not activate on unstated limits, and observations that go overdue.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -104,7 +104,7 @@ test("an observation goes overdue past its due date; good practice never does", 
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "hse-db-"));
+process.env.PGLITE_DIR = await scratchDir("hse-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

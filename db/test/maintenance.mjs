@@ -6,7 +6,7 @@
  * the warehouse), and periodic calibration (due from the last PASSING
  * calibration, never guessed).
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -68,7 +68,7 @@ test("stock covers an approved quantity, or says why it cannot be judged", async
 
 // ── against the database ─────────────────────────────────────────────────
 
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "mnt-db-"));
+process.env.PGLITE_DIR = await scratchDir("mnt-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

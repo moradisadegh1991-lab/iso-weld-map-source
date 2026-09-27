@@ -3,7 +3,7 @@
  * Procurement before and after the PO: MR revisions, bid evaluation and
  * ranking, award, and the Vendor Data Template into the asset master.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -71,7 +71,7 @@ test("the template and the vendor's values are checked, and nameplate data flows
 
 // ── against the database ─────────────────────────────────────────────────
 
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "tender-db-"));
+process.env.PGLITE_DIR = await scratchDir("tender-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

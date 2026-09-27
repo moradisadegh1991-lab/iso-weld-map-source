@@ -6,6 +6,7 @@ import { CATEGORIES } from "../../lib/instrumentation/isa.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tabs from "../../components/ui/Tabs";
+import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/WorkDate";
 
 /**
  * Instrumentation: the instrument index read by ISA 5.1, each instrument
@@ -15,7 +16,7 @@ import Tabs from "../../components/ui/Tabs";
  * comes from its points; a loop check is signed once for the loop, and only
  * when every instrument in it is calibrated, installed, hooked up and wired.
  */
-export default function InstrumentationPage() {
+function InstrumentationPageBody() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/instrumentation?projectId=${id}`, []);
   const [open, setOpen] = useState(null);
@@ -62,6 +63,7 @@ export default function InstrumentationPage() {
           {unread > 0 && ` · ${unread} تگ ناخوانا`}
         </span>
       </div>
+      <WorkDateField />
       <Tabs name="instrumentation">
       {msg && <p className="err">{msg}</p>}
 
@@ -109,7 +111,6 @@ export default function InstrumentationPage() {
 }
 
 function Loops({ loops, mayRecord, post }) {
-  const [ref, setRef] = useState("");
   if (!loops.length) return null;
   return (
     <div className="card">
@@ -118,29 +119,37 @@ function Loops({ loops, mayRecord, post }) {
       <TableKit name="instrumentation">
         <table className="dtable">
           <thead><tr><th>لوپ</th><th>ابزارها</th><th>وضعیت</th><th /></tr></thead>
-          <tbody>
-            {loops.map((l) => (
-              <tr key={l.loopNo}>
-                <td className="mono">{l.loopNo}</td>
-                <td className="mono sm">{l.members.join("، ")}</td>
-                <td>{l.checked ? <span className="pill ok">لوپ‌چک‌شده</span>
-                  : l.ready ? <span className="pill">آمادهٔ لوپ چک</span>
-                  : <span className="muted sm">ابزارها هنوز کامل نیستند</span>}</td>
-                <td>{mayRecord && !l.checked && l.ready && (
-                  <span style={{ display: "flex", gap: 6 }}>
-                    <input className="search" placeholder="شمارهٔ فرم لوپ چک" value={ref} onChange={(e) => setRef(e.target.value)}
-                           style={{ maxWidth: 150 }} aria-label="شمارهٔ فرم" />
-                    <button className="btn" style={{ padding: "4px 10px" }}
-                            onClick={() => post({ kind: "loop", loopNo: l.loopNo, checkedOn: today(), refNo: ref || null })}>
-                      امضای لوپ چک</button>
-                  </span>
-                )}</td>
-              </tr>
-            ))}
-          </tbody>
+          <tbody>{loops.map((l) => <LoopRow key={l.loopNo} l={l} mayRecord={mayRecord} post={post} />)}</tbody>
         </table>
       </TableKit>
     </div>
+  );
+}
+
+/** One loop's sign-off: its own form number and witness — two loops signed the same day are two forms. */
+function LoopRow({ l, mayRecord, post }) {
+  const workOn = useWorkDate();
+  const [ref, setRef] = useState("");
+  const [witness, setWitness] = useState("");
+  return (
+    <tr>
+      <td className="mono">{l.loopNo}</td>
+      <td className="mono sm">{l.members.join("، ")}</td>
+      <td>{l.checked ? <span className="pill ok">لوپ‌چک‌شده</span>
+        : l.ready ? <span className="pill">آمادهٔ لوپ چک</span>
+        : <span className="muted sm">ابزارها هنوز کامل نیستند</span>}</td>
+      <td>{mayRecord && !l.checked && l.ready && (
+        <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <input className="search" placeholder="شمارهٔ فرم لوپ چک" value={ref} onChange={(e) => setRef(e.target.value)}
+                 style={{ maxWidth: 150 }} aria-label={`شمارهٔ فرم ${l.loopNo}`} />
+          <input className="search" placeholder="شاهد (کارفرما / TPI)" value={witness} onChange={(e) => setWitness(e.target.value)}
+                 style={{ maxWidth: 150 }} aria-label={`شاهد ${l.loopNo}`} />
+          <button className="btn" style={{ padding: "4px 10px" }}
+                  onClick={() => post({ kind: "loop", loopNo: l.loopNo, checkedOn: workOn, refNo: ref || null, witnessedBy: witness || null })}>
+            امضای لوپ چک</button>
+        </span>
+      )}</td>
+    </tr>
   );
 }
 
@@ -180,6 +189,7 @@ function Row({ i, open, detail, onToggle, mayRecord, mayRegister, post, tags }) 
 }
 
 function Detail({ i, s, mayRecord, mayRegister, post, tags }) {
+  const workOn = useWorkDate();
   const req = s.calibration.requirement;
   const v = s.calibration.verdict;
   const [pts, setPts] = useState("");
@@ -208,8 +218,8 @@ function Detail({ i, s, mayRecord, mayRegister, post, tags }) {
             {x.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
             {mayRecord && !x.derived && x.status !== "done" && !x.blocked && (
               <button className="btn" style={{ padding: "4px 10px" }}
-                      onClick={() => post({ kind: "activity", instrumentId: i.id, code: x.code, doneAt: today() })}>
-                ثبت انجام (امروز)</button>
+                      onClick={() => post({ kind: "activity", instrumentId: i.id, code: x.code, doneAt: workOn })}>
+                ثبت انجام</button>
             )}
           </div>
         ))}
@@ -240,7 +250,7 @@ function Detail({ i, s, mayRecord, mayRegister, post, tags }) {
           {mayRecord && !req.reason && (
             <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
               e.preventDefault();
-              if (await post({ kind: "calibration", instrumentId: i.id, points: pts, calibratedOn: today(),
+              if (await post({ kind: "calibration", instrumentId: i.id, points: pts, calibratedOn: workOn,
                 calibratorRef: cref || null })) setPts("");
             }}>
               <Field id="cal-p" label="نقاط (اعمالی:خروجی)، با فاصله" value={pts} on={setPts} required hint={hint} />
@@ -344,3 +354,8 @@ function Bar({ pct }) {
 const round = (n) => Math.round(n * 1000) / 1000;
 const today = () => new Date().toISOString().slice(0, 10);
 const fa = (d) => (d ? new Date(d).toLocaleDateString("fa-IR") : "—");
+
+/** Every one-click record on this page carries the day chosen at its head (components/ui/WorkDate). */
+export default function InstrumentationPage() {
+  return <WorkDateScope><InstrumentationPageBody /></WorkDateScope>;
+}

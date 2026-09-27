@@ -4,7 +4,7 @@
  * approval is required, one answer to "which revision on that day", and an
  * uploaded sheet checked against the construction revision of its day.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -70,7 +70,7 @@ test("IFC lateness, and a transmittal item's state", async () => {
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "doc-db-"));
+process.env.PGLITE_DIR = await scratchDir("doc-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

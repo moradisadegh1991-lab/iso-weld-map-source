@@ -4,14 +4,14 @@
  * records the platform already holds — and F-15: a superseded revision's
  * register no longer counts in the reports.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
 
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "joint-db-"));
+process.env.PGLITE_DIR = await scratchDir("joint-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

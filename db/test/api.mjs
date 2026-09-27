@@ -7,7 +7,7 @@
  * authentication, the permission check, row level security and persistence in
  * one pass, without a server, a browser or a port.
  */
-import { test, run, assert, equal } from "./harness.mjs";
+import { test, run, assert, equal, scratchDir } from "./harness.mjs";
 import { mergePasses } from "../../lib/extraction/merge.mjs";
 import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs";
 import { buildModel } from "../../lib/engine.js";
@@ -20,8 +20,8 @@ process.env.AUTH_MODE = "dev";
 // A fresh database and a fresh blob store per run. Pointing at the shared
 // .pglite directory would make the suite pass once and then fail on its own
 // leftovers, which is a slow way to learn that a test was never isolated.
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "api-db-"));
-process.env.STORAGE_ROOT = await mkdtemp(path.join(tmpdir(), "api-store-"));
+process.env.PGLITE_DIR = await scratchDir("api-db-");
+process.env.STORAGE_ROOT = await scratchDir("api-store-");
 
 const projectsRoute = await import("../../app/api/projects/route.js");
 const documentsRoute = await import("../../app/api/documents/route.js");

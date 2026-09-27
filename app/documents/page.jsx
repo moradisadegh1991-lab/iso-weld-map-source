@@ -184,14 +184,15 @@ function Revisions({ d, data, post, may }) {
 
 /**
  * New, or the same form filled with a register row to amend (its number is
- * the key and stays). The row's tag travels with it: the register saves
- * every column, and a form that does not show the tag must not clear it.
+ * the key and stays). The tag is the equipment a datasheet or vendor
+ * document describes — the asset master and the handover find a tag's
+ * documents through it.
  */
 function MdrForm({ data, post, initial = null, onDone }) {
-  const blank = { docNo: "", title: "", discipline: "", docType: "", originator: "EPC", subsystemId: "", approvalRequired: false, plannedIfcOn: "" };
+  const blank = { docNo: "", title: "", discipline: "", docType: "", originator: "EPC", subsystemId: "", approvalRequired: false, plannedIfcOn: "", tagId: "" };
   const [f, setF] = useState(initial ? { docNo: initial.doc_no, title: initial.title, discipline: initial.discipline || "", docType: initial.doc_type || "",
     originator: initial.originator || "EPC", subsystemId: initial.subsystem_id || "", approvalRequired: !!initial.approval_required,
-    plannedIfcOn: initial.planned_ifc_on ? String(initial.planned_ifc_on).slice(0, 10) : "", tagId: initial.tag_id || null } : blank);
+    plannedIfcOn: initial.planned_ifc_on ? String(initial.planned_ifc_on).slice(0, 10) : "", tagId: initial.tag_id || "" } : blank);
   const x = initial ? "me" : "md";
   return (
     <form style={{ marginTop: 10 }} onSubmit={async (e) => {
@@ -207,6 +208,8 @@ function MdrForm({ data, post, initial = null, onDone }) {
         <Select id={`${x}-o`} label="تهیه‌کننده" value={f.originator} on={(v) => setF({ ...f, originator: v })}
                 opts={[["EPC", "EPC"], ["vendor", "فروشنده"], ["contractor", "پیمانکار"], ["client", "کارفرما"]]} />
         <Select id={`${x}-s`} label="ساب‌سیستم" value={f.subsystemId} on={(v) => setF({ ...f, subsystemId: v })} opts={data.subsystems.map((s) => [s.id, s.code])} blank="—" />
+        <Select id={`${x}-g`} label="تگ تجهیز (دیتاشیت، مدرک فروشنده)" value={f.tagId} on={(v) => setF({ ...f, tagId: v })}
+                opts={(data.tags || []).map((t) => [t.id, t.tag_no])} blank="—" />
         <Field id={`${x}-p`} label="تاریخ برنامه‌ای IFC" type="date" value={f.plannedIfcOn} on={(v) => setF({ ...f, plannedIfcOn: v })} />
         <label className="sm" style={{ alignSelf: "end" }}><input type="checkbox" checked={f.approvalRequired} onChange={(e) => setF({ ...f, approvalRequired: e.target.checked })} /> تأیید کارفرما پیش از IFC لازم است</label>
       </div>
@@ -241,12 +244,13 @@ function TransmittalForm({ data, post }) {
 }
 
 function ReturnForm({ i, data, post }) {
-  const [f, setF] = useState({ code: "1", comment: "" });
+  const [f, setF] = useState({ code: "1", comment: "", on: today() });
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "end" }}>
       <Select id={`rc-${i.id}`} label="کد" value={f.code} on={(v) => setF({ ...f, code: v })} opts={Object.entries(data.returnCodes)} />
       <Field id={`rm-${i.id}`} label="کامنت" value={f.comment} on={(v) => setF({ ...f, comment: v })} />
-      <button className="btn ghost" onClick={() => post({ kind: "return", itemId: i.id, code: f.code, returnedOn: today(), comment: f.comment })}>ثبت پاسخ</button>
+      <Field id={`ro-${i.id}`} label="تاریخ پاسخ" type="date" value={f.on} on={(v) => setF({ ...f, on: v })} />
+      <button className="btn ghost" onClick={() => post({ kind: "return", itemId: i.id, code: f.code, returnedOn: f.on, comment: f.comment })}>ثبت پاسخ</button>
     </div>
   );
 }

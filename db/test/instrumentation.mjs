@@ -3,7 +3,7 @@
  * The instrumentation module: ISA 5.1 tags, bench calibration, loop checks
  * signed per loop, and a machine's instrument step answered by its devices.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -88,7 +88,7 @@ test("an index without a Loop column takes the ISA loop, marked as derived", asy
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "inst-db-"));
+process.env.PGLITE_DIR = await scratchDir("inst-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

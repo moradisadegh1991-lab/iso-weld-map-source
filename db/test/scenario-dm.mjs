@@ -5,13 +5,13 @@
  * guide promises must happen, for the reason it gives
  * (lib/scenario/dm-pump.mjs).
  */
-import { test, run, assert, equal } from "./harness.mjs";
+import { test, run, assert, equal, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "scenario-db-"));
+process.env.PGLITE_DIR = await scratchDir("scenario-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");
 const { STEPS, PHASES, PEOPLE, SCENARIO } = await import("../../lib/scenario/dm-pump.mjs");

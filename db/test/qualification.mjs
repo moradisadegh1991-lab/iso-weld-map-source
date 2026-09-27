@@ -7,7 +7,7 @@
  * rack, so the cases below are written from the failure side: each one is a
  * way an unqualified weld gets made on a real site.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { diameterRange, baseThicknessRange, positionRange, continuityDeadline }
   from "../../lib/qualification/asme-ix.mjs";
 import { checkAssignment } from "../../lib/qualification/check.mjs";
@@ -202,8 +202,8 @@ test("a WPS for another process contradicts the weld", async () => {
 // ── persistence and the API ──────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "qual-db-"));
-process.env.STORAGE_ROOT = await mkdtemp(path.join(tmpdir(), "qual-store-"));
+process.env.PGLITE_DIR = await scratchDir("qual-db-");
+process.env.STORAGE_ROOT = await scratchDir("qual-store-");
 
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");

@@ -44,8 +44,12 @@ export async function GET(request) {
         `SELECT id, tag_no, description, discipline FROM tag
           WHERE project_id = $1 AND discipline IN ('equipment', 'structural') ORDER BY tag_no`,
         [projectId]);
+      // Who placed the concrete: a pour is the civil contractor's work, and
+      // their progress and NCRs are counted from it.
+      const { rows: contractors } = await db.query(
+        "SELECT id, code, name FROM contractor WHERE project_id = $1 ORDER BY code", [projectId]);
       return Response.json({
-        foundations,
+        foundations, contractors,
         classes: await concreteClasses(db, { projectId }),
         spec: { curingDays: spec?.concrete_curing_days ?? null,
                 samplePerM3: spec?.concrete_sample_per_m3 == null ? null : Number(spec.concrete_sample_per_m3) },

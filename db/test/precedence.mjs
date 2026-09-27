@@ -6,7 +6,7 @@
  * engineering practice: the two orderings people get wrong in the field are
  * asserted by name, and would fail loudly if someone "tidied" the list.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -141,7 +141,7 @@ test("a step recorded done out of order is reported, not contradicted", async ()
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "prec-db-"));
+process.env.PGLITE_DIR = await scratchDir("prec-db-");
 
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");

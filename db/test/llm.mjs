@@ -6,7 +6,7 @@
  * stream, so the parsing, the usage accounting and the stop-reason mapping
  * are all covered without a model, a key or a network.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { parseLoose, cleanJsonText } from "../../lib/llm/parse.mjs";
 import { createAnthropicProvider } from "../../lib/llm/anthropic.mjs";
 import { createOpenAiCompatProvider } from "../../lib/llm/openai-compat.mjs";
@@ -234,7 +234,7 @@ test("an unknown provider fails loudly at startup, not on the first drawing", as
 // ── the route ────────────────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "llm-db-"));
+process.env.PGLITE_DIR = await scratchDir("llm-db-");
 const extractRoute = await import("../../app/api/extract/route.js");
 const modelsRoute = await import("../../app/api/models/route.js");
 

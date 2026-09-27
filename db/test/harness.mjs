@@ -1,6 +1,23 @@
 /** A test harness small enough to read in one sitting, and with no dependency
  *  of its own — same rule as eval/. */
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 export const tests = [];
+
+/**
+ * A fresh directory under the system temp dir for this test file's
+ * database or files. When every test in the file passes it is removed; when
+ * one fails it is kept and named, to look at. (Left behind, a full db:test
+ * run leaves gigabytes of databases in /tmp.)
+ */
+const scratch = [];
+export async function scratchDir(prefix) {
+  const dir = await mkdtemp(path.join(tmpdir(), prefix));
+  scratch.push(dir);
+  return dir;
+}
 export const test = (name, fn) => tests.push({ name, fn });
 
 export function assert(cond, msg) {
@@ -38,5 +55,7 @@ export async function run() {
     }
   }
   console.log(`\n${failed ? C.r : C.g}${C.b}${tests.length - failed}/${tests.length} passed${C.o}`);
+  if (failed) { if (scratch.length) console.log(`${C.d}kept for a look: ${scratch.join(" ")}${C.o}`); }
+  else for (const dir of scratch) await rm(dir, { recursive: true, force: true }).catch(() => {});
   process.exit(failed ? 1 : 0);
 }

@@ -3,7 +3,7 @@
  * MESC numbers on stock items: the ten-digit structure, the owner's
  * catalogue as the only authority, and one number per material.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -57,7 +57,7 @@ test("search offers candidates by code prefix or description words, best match f
 
 // ── against the database ─────────────────────────────────────────────────
 
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "mesc-db-"));
+process.env.PGLITE_DIR = await scratchDir("mesc-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

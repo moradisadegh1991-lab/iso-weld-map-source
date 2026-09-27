@@ -3,7 +3,7 @@
  * Reservations (stock set aside for a destination) and stock counts
  * (physical count against the book, decided by a second person).
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -38,7 +38,7 @@ test("a count is a gain, a loss or a match; accuracy is exact matches", async ()
 
 // ── against the database ─────────────────────────────────────────────────
 
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "rsv-db-"));
+process.env.PGLITE_DIR = await scratchDir("rsv-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

@@ -6,6 +6,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import { useRemove } from "../../lib/client/remove.mjs";
 import Tabs from "../../components/ui/Tabs";
+import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/WorkDate";
 
 /**
  * Project controls: each control account's planned curve, what has been
@@ -18,7 +19,7 @@ import Tabs from "../../components/ui/Tabs";
  */
 const RISK = { open: ["", "باز"], overdue: ["bad", "معوق"], no_response: ["warn", "بدون پاسخ"], closed: ["ok", "بسته"] };
 
-export default function ControlsPage() {
+function ControlsPageBody() {
   const { projectId, role, call } = usePlatform();
   const [asOf, setAsOf] = useState("");
   const { data, error, reload } = useProjectData((id) => `/api/controls?projectId=${id}${asOf ? `&asOf=${asOf}` : ""}`, [asOf]);
@@ -55,6 +56,7 @@ export default function ControlsPage() {
           {overdueRisks > 0 && ` · ${overdueRisks} اقدام معوق`} · ارز: {cur || "تعیین نشده"}
         </span>
       </div>
+      <WorkDateField />
       {msg && <p className="err">{msg}</p>}
       {!cur && <p className="err">ارز قرارداد در <a href="/project">مشخصات پروژه</a> تعیین نشده — بودجه و هزینه ثبت نمی‌شود و فقط SPI درصدی نشان داده می‌شود.</p>}
 
@@ -317,6 +319,7 @@ function AccountForm({ data, post, initial = null, onDone }) {
 }
 
 function Risks({ data, post, may }) {
+  const workOn = useWorkDate();
   const blank = { code: "", title: "", category: "", owner: "", probability: "3", impact: "3", response: "", dueOn: "", residualP: "", residualI: "" };
   const [f, setF] = useState(blank);
   return (
@@ -344,7 +347,7 @@ function Risks({ data, post, may }) {
                     <td className="mono sm">{r.due_on ? fa(r.due_on) : "—"}</td>
                     <td className="mono">{r.residualScore ?? "—"}</td>
                     <td><span className={`pill ${st}`}>{label}</span></td>
-                    <td>{may && r.status === "open" && <button className="btn ghost" onClick={() => post({ kind: "risk-close", riskId: r.id, closedOn: today() })}>بستن</button>}</td>
+                    <td>{may && r.status === "open" && <button className="btn ghost" onClick={() => post({ kind: "risk-close", riskId: r.id, closedOn: workOn })}>بستن</button>}</td>
                   </tr>
                 );
               })}
@@ -486,4 +489,9 @@ function money(v, cur) {
   const a = Math.abs(v);
   const s = a >= 1e9 ? `${(a / 1e9).toFixed(2)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(2)}M` : a >= 1e3 ? `${(a / 1e3).toFixed(1)}k` : a.toFixed(0);
   return (v < 0 ? "−" : "") + s;
+}
+
+/** Every one-click record on this page carries the day chosen at its head (components/ui/WorkDate). */
+export default function ControlsPage() {
+  return <WorkDateScope><ControlsPageBody /></WorkDateScope>;
 }

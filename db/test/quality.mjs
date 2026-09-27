@@ -5,7 +5,7 @@
  * NCR does not close without a cause, and escalation waits for a stated
  * period.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -67,7 +67,7 @@ test("NCR escalation: on time, overdue, and past the stated period — never a p
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "qa-db-"));
+process.env.PGLITE_DIR = await scratchDir("qa-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");
@@ -116,6 +116,10 @@ test("clear, reject, clear again, and verify by someone who did not clear", asyn
     await qa.punchAction(db, { projectId: P, punchId: pA.id, action: "reject", note: "Guard not bolted", userId: alice.id });
     await qa.punchAction(db, { projectId: P, punchId: pA.id, action: "clear", note: "Guard bolted", userId: bob.id });
     await throws(() => qa.punchAction(db, { projectId: P, punchId: pA.id, action: "verify", userId: bob.id }), "INVALID_INPUT");
+    // Dated before the clearance it verifies, or on a day not yet come: refused.
+    const early = await throws(() => qa.punchAction(db, { projectId: P, punchId: pA.id, action: "verify", onDate: "2000-01-01", userId: carol.id }), "INVALID_INPUT");
+    assert(/پیش از رفع/.test(early.message), early.message);
+    await throws(() => qa.punchAction(db, { projectId: P, punchId: pA.id, action: "verify", onDate: "2999-01-01", userId: carol.id }), "INVALID_INPUT");
     await throws(() => db.query("UPDATE punch_item SET status = 'closed', closed_by = cleared_by WHERE id = $1", [pA.id]),
       "punch_verifier_not_clearer", "the database holds the same line");
     const v = await qa.punchAction(db, { projectId: P, punchId: pA.id, action: "verify", userId: carol.id });

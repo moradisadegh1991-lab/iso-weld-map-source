@@ -7,7 +7,7 @@
  * security policies being tested here are the ones that will be deployed,
  * not an approximation of them.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { createClient } from "../../lib/db/client.mjs";
 import { migrate } from "../../lib/db/migrate.mjs";
 import { withProject, withoutProject } from "../../lib/db/scope.mjs";
@@ -97,7 +97,7 @@ test("membership decides which projects a user sees", async () => {
 // ── story 1.2 · content-addressed storage ────────────────────────────────
 
 test("the same bytes are stored once and reported as deduplicated", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "store-"));
+  const root = await scratchDir("store-");
   try {
     const store = createLocalStore({ root });
     const first = await store.put(bytes, { ext: ".png" });

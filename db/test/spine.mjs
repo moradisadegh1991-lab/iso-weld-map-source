@@ -7,13 +7,13 @@
  * with no way to file its work. That is exactly the drift this whole table
  * exists to prevent, and it would otherwise be discovered by a user.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "spine-db-"));
+process.env.PGLITE_DIR = await scratchDir("spine-db-");
 
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");

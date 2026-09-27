@@ -6,6 +6,7 @@ import { CHAINS, spoolStageTitle } from "../../../lib/platform/precedence.mjs";
 import TableKit from "../../../components/ui/TableKit";
 import Tabs from "../../../components/ui/Tabs";
 import Fold from "../../../components/ui/Fold";
+import { WorkDateScope, WorkDateField, useWorkDate } from "../../../components/ui/WorkDate";
 
 /**
  * Piping execution: every spool's place in its chain, the supports, and
@@ -23,7 +24,8 @@ const KIND_FA = {
   resting: "نشیمن", other: "سایر",
 };
 
-export default function PipingExecution() {
+function PipingExecutionBody() {
+  const workOn = useWorkDate();
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/piping/execution?projectId=${id}`, []);
   const [open, setOpen] = useState(null);
@@ -39,11 +41,11 @@ export default function PipingExecution() {
     try { setDetail(await call(detailUrl(spoolId))); } catch (e) { setMsg(e.message); }
   }
 
-  async function record(spoolId, code) {
+  async function record(spoolId, code, refNo = null) {
     setMsg(null);
     try {
       await call("/api/piping/execution", { method: "POST", body: JSON.stringify({
-        projectId, kind: "activity", spoolId, code, doneAt: today() }) });
+        projectId, kind: "activity", spoolId, code, doneAt: workOn, refNo }) });
       setDetail(await call(detailUrl(spoolId)));
       reload();
     } catch (e) { setMsg(e.message); }
@@ -66,11 +68,10 @@ export default function PipingExecution() {
         <h1>اجرای پایپینگ</h1>
         <span className="sub">{data.board.length} اسپول · {data.supports.length} ساپورت</span>
       </div>
+      <WorkDateField />
 
       <Tabs name="piping-execution">
       {msg && <p className="err">{msg}</p>}
-
-      <Buried data={data} />
 
       <div className="card">
         <h2>مراحل اجرا</h2>
@@ -94,7 +95,7 @@ export default function PipingExecution() {
                   <SpoolRow key={b.spoolId} b={b} open={open === b.spoolId}
                     detail={open === b.spoolId ? detail : null}
                     onToggle={() => expand(b.spoolId)}
-                    onRecord={mayRecord ? (code) => record(b.spoolId, code) : null}
+                    onRecord={mayRecord ? (code, ref) => record(b.spoolId, code, ref) : null}
                     onReserve={mayRecord ? () => reserveMaterial(b.spoolId) : null} />
                 ))}
               </tbody>
@@ -105,12 +106,15 @@ export default function PipingExecution() {
 
       <Supports data={data} projectId={projectId} call={call} reload={reload}
                 mayRecord={mayRecord} setMsg={setMsg} />
+
+      <Buried data={data} />
       </Tabs>
     </div>
   );
 }
 
 function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve }) {
+  const [refs, setRefs] = useState({});
   return (
     <>
       <tr>
@@ -149,8 +153,12 @@ function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve }) {
                     </span>
                     {s.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
                     {onRecord && !s.derived && s.status !== "done" && !s.blocked && (
-                      <button className="btn" style={{ padding: "4px 10px" }}
-                              onClick={() => onRecord(s.code)}>ثبت انجام (امروز)</button>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input aria-label={`مرجع ${s.title}`} placeholder="مرجع (فرم، گزارش)" dir="ltr" style={{ width: 120 }}
+                               value={refs[s.code] || ""} onChange={(e) => setRefs({ ...refs, [s.code]: e.target.value })} />
+                        <button className="btn" style={{ padding: "4px 10px" }}
+                                onClick={() => onRecord(s.code, refs[s.code] || null)}>ثبت انجام</button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -251,7 +259,8 @@ function Buried({ data }) {
 }
 
 function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
-  const blank = { supportNo: "", supportKind: "shoe", loadKn: "", drawingRef: "" };
+  const workOn = useWorkDate();
+  const blank = { supportNo: "", supportKind: "shoe", loadKn: "", drawingRef: "", spoolId: "" };
   const [f, setF] = useState(blank);
 
   async function add(e) {
@@ -261,7 +270,7 @@ function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
       // `kind` routes the request; the support's own type travels as
       // `supportKind`. Sending both as `kind` made every support a "support".
       await call("/api/piping/execution", { method: "POST",
-        body: JSON.stringify({ projectId, kind: "support", ...f }) });
+        body: JSON.stringify({ projectId, kind: "support", ...f, spoolId: f.spoolId || null }) });
       setF({ ...blank, supportKind: f.supportKind });
       reload();
     } catch (e2) { setMsg(e2.message); }
@@ -271,7 +280,7 @@ function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
     setMsg(null);
     try {
       await call("/api/piping/execution", { method: "POST",
-        body: JSON.stringify({ projectId, kind: "support_mark", supportId: id, step, on: today() }) });
+        body: JSON.stringify({ projectId, kind: "support_mark", supportId: id, step, on: workOn }) });
       reload();
     } catch (e) { setMsg(e.message); }
   }
@@ -328,6 +337,12 @@ function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
                    onChange={(e) => setF({ ...f, loadKn: e.target.value })} />
             {f.supportKind === "spring_hanger" && <span className="hint">برای اسپرینگ هنگر الزامی است.</span>}
           </div>
+          <div className="field"><label htmlFor="s-spool">اسپول (خطش از آن خوانده می‌شود)</label>
+            <select id="s-spool" value={f.spoolId} onChange={(e) => setF({ ...f, spoolId: e.target.value })}>
+              <option value="">—</option>
+              {data.board.map((b) => <option key={b.spoolId} value={b.spoolId}>{b.lineNo} / {b.spoolNo}</option>)}
+            </select>
+            <span className="hint">بدون اسپول، ساپورت در پکیج تست و MC خط شمرده نمی‌شود.</span></div>
           <div className="field"><label htmlFor="s-ref">نقشهٔ استاندارد</label>
             <input id="s-ref" dir="ltr" value={f.drawingRef}
                    onChange={(e) => setF({ ...f, drawingRef: e.target.value })} /></div>
@@ -350,3 +365,8 @@ function Bar({ pct }) {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const fa = (d) => new Date(d).toLocaleDateString("fa-IR");
+
+/** Every one-click record on this page carries the day chosen at its head (components/ui/WorkDate). */
+export default function PipingExecution() {
+  return <WorkDateScope><PipingExecutionBody /></WorkDateScope>;
+}

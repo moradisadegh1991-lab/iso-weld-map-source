@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import TableKit from "../../../components/ui/TableKit";
 import Tabs from "../../../components/ui/Tabs";
+import Fold from "../../../components/ui/Fold";
 
 /**
  * Piping on one page: progress in welds and inch-dia, NDT compliance as each
@@ -138,7 +139,77 @@ export default function PipingOverview() {
           </ul>
         </div>
       )}
+      <PipingClasses may={can({ role }, ACTIONS.MANAGE_PIPING_CLASS)} />
       </Tabs>
+    </div>
+  );
+}
+
+const SERVICE_FA = { normal: "Normal", category_d: "Category D", category_m: "Category M", severe_cyclic: "Severe cyclic", high_pressure: "High pressure (Ch. IX)" };
+
+/**
+ * The project's piping classes. A line names its class on the drawing; the
+ * class's design pressure is what a test pack's pressure is computed from
+ * (B31.3 §345.4.2), and its service category is the floor under every
+ * weld's NDT. Without a class the pack cannot say what pressure is enough.
+ */
+function PipingClasses({ may }) {
+  const { projectId, call } = usePlatform();
+  const { data, reload } = useProjectData((id) => `/api/piping-classes?projectId=${id}`, []);
+  const blank = { code: "", description: "", serviceCategory: "normal", materialSpec: "", corrosionAllowMm: "", designTempC: "", designPressBarg: "", pwhtAboveMm: "" };
+  const [f, setF] = useState(blank);
+  const [msg, setMsg] = useState(null);
+  const num = (v) => (v === "" ? null : Number(v));
+  async function save(e) {
+    e.preventDefault(); setMsg(null);
+    try {
+      await call("/api/piping-classes", { method: "POST", body: JSON.stringify({ projectId, ...f,
+        corrosionAllowMm: num(f.corrosionAllowMm), designTempC: num(f.designTempC), designPressBarg: num(f.designPressBarg), pwhtAboveMm: num(f.pwhtAboveMm) }) });
+      setF(blank); reload();
+    } catch (err) { setMsg(err.message); }
+  }
+  const on = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const classes = data?.classes || [];
+  return (
+    <div className="card">
+      <h2>کلاس‌های لوله (Piping Class)</h2>
+      {classes.length === 0 ? <p className="empty-note">کلاس لوله‌ای تعریف نشده — فشار تست پکیج‌ها و کف NDT خطوط از کلاس خوانده می‌شوند.</p> : (
+        <TableKit name="piping-class" onEdit={may ? (id) => { const c = classes.find((x) => x.id === id);
+          setF({ code: c.code, description: c.description || "", serviceCategory: c.service_category, materialSpec: c.material_spec || "",
+            corrosionAllowMm: c.corrosion_allow_mm ?? "", designTempC: c.design_temp_c ?? "", designPressBarg: c.design_press_barg ?? "", pwhtAboveMm: c.pwht_above_mm ?? "" }); } : undefined}>
+          <table className="dtable">
+            <thead><tr><th>کلاس</th><th>شرح</th><th>سرویس B31.3</th><th>مواد</th><th>CA mm</th><th>T طراحی °C</th><th>P طراحی barg</th><th>PWHT بالای mm</th></tr></thead>
+            <tbody>{classes.map((c) => (
+              <tr key={c.id} data-key={c.id}>
+                <td className="mono">{c.code}</td><td>{c.description || "—"}</td><td className="sm">{SERVICE_FA[c.service_category] || c.service_category}</td>
+                <td className="sm">{c.material_spec || "—"}</td><td className="mono">{c.corrosion_allow_mm ?? "—"}</td>
+                <td className="mono">{c.design_temp_c ?? "—"}</td><td className="mono">{c.design_press_barg ?? <span className="pill warn">نامعلوم</span>}</td>
+                <td className="mono">{c.pwht_above_mm ?? "—"}</td>
+              </tr>))}</tbody>
+          </table>
+        </TableKit>
+      )}
+      {may && (
+        <Fold title="کلاس لولهٔ جدید یا ویرایش">
+          <form onSubmit={save}>
+            <div className="grid2">
+              <div className="field"><label htmlFor="pc-code">کد کلاس</label><input id="pc-code" dir="ltr" value={f.code} onChange={on("code")} required /></div>
+              <div className="field"><label htmlFor="pc-desc">شرح</label><input id="pc-desc" dir="auto" value={f.description} onChange={on("description")} /></div>
+              <div className="field"><label htmlFor="pc-svc">سرویس (B31.3)</label>
+                <select id="pc-svc" value={f.serviceCategory} onChange={on("serviceCategory")}>
+                  {Object.entries(SERVICE_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+              <div className="field"><label htmlFor="pc-mat">مشخصات مواد</label><input id="pc-mat" dir="ltr" value={f.materialSpec} onChange={on("materialSpec")} /></div>
+              <div className="field"><label htmlFor="pc-ca">خوردگی مجاز (mm)</label><input id="pc-ca" type="number" step="any" dir="ltr" value={f.corrosionAllowMm} onChange={on("corrosionAllowMm")} /></div>
+              <div className="field"><label htmlFor="pc-t">دمای طراحی (°C)</label><input id="pc-t" type="number" step="any" dir="ltr" value={f.designTempC} onChange={on("designTempC")} /></div>
+              <div className="field"><label htmlFor="pc-p">فشار طراحی (barg)</label><input id="pc-p" type="number" step="any" dir="ltr" value={f.designPressBarg} onChange={on("designPressBarg")} /></div>
+              <div className="field"><label htmlFor="pc-pwht">PWHT برای ضخامت بالای (mm)</label><input id="pc-pwht" type="number" step="any" dir="ltr" value={f.pwhtAboveMm} onChange={on("pwhtAboveMm")} /></div>
+            </div>
+            {msg && <p className="err">{msg}</p>}
+            <div><button className="btn" type="submit">ثبت کلاس</button></div>
+            <p className="muted sm">همان کد دوباره ثبت شود، کلاس به‌روز می‌شود. خالی یعنی نامعلوم — پیش‌فرضی جای آن نمی‌نشیند.</p>
+          </form>
+        </Fold>
+      )}
     </div>
   );
 }

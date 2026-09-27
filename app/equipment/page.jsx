@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
+import { can, ACTIONS } from "../../lib/authz.mjs";
 import { parseEquipmentList, summarise } from "../../lib/equipment/parse.mjs";
 import { EQUIPMENT_KINDS } from "../../lib/platform/precedence.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Tabs from "../../components/ui/Tabs";
+import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/WorkDate";
 
 /**
  * Equipment tags: import a list, then work the two queues it produces.
@@ -13,6 +15,13 @@ import Tabs from "../../components/ui/Tabs";
  * chain, so nothing knows what it is waiting for; a tag that IS classified
  * has a chain, and the useful question becomes which crew can move today.
  * Both are shown by name — a count sends nobody anywhere.
+ *
+ * Each tag's own chain — set, grout, alignment, piping connection… — opens
+ * under its row, and a step is recorded there on the day in «تاریخ انجام
+ * کار». Steps another discipline answers (⚙: the foundation from civil,
+ * the piping connection from the line) have no button; a step an ITP hold
+ * point still holds says which inspection, instead of a button the server
+ * would refuse.
  */
 // One list, declared beside the chains — see EQUIPMENT_KINDS.
 const KIND_FA = EQUIPMENT_KINDS;
@@ -21,8 +30,10 @@ const DISCIPLINE_FA = {
   instrumentation: "ابزار دقیق", civil: "سیویل", equipment: "تجهیزات",
 };
 
-export default function EquipmentPage() {
-  const { projectId, call } = usePlatform();
+function EquipmentPageBody() {
+  const { projectId, role, call } = usePlatform();
+  const mayRecord = can({ role }, ACTIONS.ASSIGN_WELD);
+  const [open, setOpen] = useState(null);
   const { data, error, reload } = useProjectData((id) => `/api/equipment?projectId=${id}`, []);
   const [text, setText] = useState("");
   const [parsed, setParsed] = useState(null);
@@ -66,7 +77,7 @@ export default function EquipmentPage() {
 
   async function classify(tagId, kind) {
     try {
-      await call("/api/equipment", { method: "POST", body: JSON.stringify({ projectId, tagId, kind }) });
+      await call("/api/equipment", { method: "POST", body: JSON.stringify({ projectId, kind: "classify", tagId, tagKind: kind }) });
       await reload();
     } catch (e) { setMsg(e.message); }
   }
@@ -80,6 +91,8 @@ export default function EquipmentPage() {
         <h1>تجهیزات</h1>
         <span className="sub">{data ? `${data.tags.length} تگ` : "…"}</span>
       </div>
+      <WorkDateField />
+      {msg && <p className="err">{msg}</p>}
 
       <Tabs name="equipment">
       {data?.unclassified?.length > 0 && (
@@ -151,16 +164,23 @@ export default function EquipmentPage() {
           <h2>تگ‌ها</h2>
           <TableKit name="equipment">
             <table className="dtable">
-              <thead><tr><th>تگ</th><th>شرح</th><th>نوع</th><th>ساب‌سیستم</th></tr></thead>
+              <thead><tr><th>تگ</th><th>شرح</th><th>نوع</th><th>ساب‌سیستم</th><th /></tr></thead>
               <tbody>
-                {data.tags.map((t) => (
+                {data.tags.map((t) => [
                   <tr key={t.id}>
                     <td className="mono"><a className="cy" href={`/asset?tag=${encodeURIComponent(t.tag_no)}`}>{t.tag_no}</a></td>
                     <td>{t.description || "—"}</td>
                     <td className={t.kind ? "" : "muted"}>{KIND_FA[t.kind] || "نامشخص"}</td>
                     <td className="mono">{t.subsystem || "—"}</td>
-                  </tr>
-                ))}
+                    <td>{t.kind && <button className="btn ghost" style={{ padding: "4px 10px" }} onClick={() => setOpen(open === t.id ? null : t.id)}>
+                      {open === t.id ? "بستن" : "مراحل"}</button>}</td>
+                  </tr>,
+                  open === t.id && (
+                    <tr key={t.id + "-x"}><td colSpan={5} style={{ background: "rgba(255,255,255,.02)" }}>
+                      <TagSteps tagId={t.id} mayRecord={mayRecord} onChange={reload} setMsg={setMsg} />
+                    </td></tr>
+                  ),
+                ])}
               </tbody>
             </table>
           </TableKit>
@@ -189,8 +209,6 @@ export default function EquipmentPage() {
                     placeholder={"Tag No,Description,Type,Subsystem\nP-2101A,Feed Pump,Centrifugal,21-01"} />
         </div>
 
-        {msg && <p className="err">{msg}</p>}
-
         {sum && (
           <>
             <p className="mono sm">
@@ -218,4 +236,62 @@ export default function EquipmentPage() {
       </Tabs>
     </div>
   );
+}
+
+/** One tag's chain, each step recorded on the page's work date. */
+function TagSteps({ tagId, mayRecord, onChange, setMsg }) {
+  const { projectId, call } = usePlatform();
+  const workOn = useWorkDate();
+  const { data, error, reload } = useProjectData((id) => `/api/equipment?projectId=${id}&tagId=${tagId}`, [tagId]);
+  const [refs, setRefs] = useState({});
+  if (error) return <p className="err">{error}</p>;
+  if (!data) return <span className="muted sm">در حال بارگذاری…</span>;
+  const { status, holds } = data;
+  if (!status.steps) return <p className="muted sm">این تگ زنجیره‌ای ندارد — نوع آن تعیین نشده.</p>;
+
+  async function record(code) {
+    setMsg(null);
+    try {
+      await call("/api/equipment", { method: "POST", body: JSON.stringify({ projectId, kind: "activity", tagId, code, doneAt: workOn, refNo: refs[code] || null }) });
+      reload(); onChange?.();
+    } catch (e) { setMsg(e.message); }
+  }
+  return (
+    <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))" }}>
+      {status.steps.map((s) => {
+        const hold = holds[s.code];
+        return (
+          <div key={s.code} className="card" style={{ padding: 10, gap: 6,
+            borderColor: s.status === "done" ? "rgba(63,178,127,.5)" : hold ? "rgba(224,163,62,.6)" : s.blocked ? undefined : "rgba(67,160,180,.6)" }}>
+            <span className="sm"><b>{s.derived ? "⚙ " : ""}{s.title}</b></span>
+            <span className="sm muted">
+              {s.status === "done" ? `انجام شد${s.doneAt ? " · " + fa(s.doneAt) : ""}`
+                : s.status === "in_progress" ? "در حال انجام"
+                : s.blocked ? `منتظر: ${s.waitingOn.map((w) => w.title).join("، ")}`
+                : "آمادهٔ شروع"}
+              {s.refNo ? ` · ${s.refNo}` : ""}
+            </span>
+            {s.note && <span className={"sm " + (s.note.level === "bad" ? "err" : "muted")}>{s.note.text}</span>}
+            {s.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
+            {hold && s.status !== "done" && (
+              <span className="pill warn">نقطهٔ توقف {hold.itpNo} ردیف {hold.seq}{hold.irNo ? ` · ${hold.irNo}` : " · IR درخواست نشده"}</span>
+            )}
+            {mayRecord && !s.derived && s.status !== "done" && !s.blocked && !hold && (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input aria-label={`مرجع ${s.title}`} placeholder="مرجع (فرم، گزارش)" dir="ltr" style={{ width: 130 }}
+                       value={refs[s.code] || ""} onChange={(e) => setRefs({ ...refs, [s.code]: e.target.value })} />
+                <button className="btn" style={{ padding: "4px 10px" }} onClick={() => record(s.code)}>ثبت انجام</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const fa = (d) => (d ? new Date(d).toLocaleDateString("fa-IR") : "—");
+
+export default function EquipmentPage() {
+  return <WorkDateScope><EquipmentPageBody /></WorkDateScope>;
 }

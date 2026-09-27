@@ -416,6 +416,7 @@ function IncidentForm({ data, post }) {
 function ObservationRow({ o, data, post, mayRecord }) {
   const [closing, setClosing] = useState(false);
   const [note, setNote] = useState("");
+  const [closedOn, setClosedOn] = useState(today());
   const [st, label] = OBS[o.state];
   return (
     <>
@@ -433,9 +434,10 @@ function ObservationRow({ o, data, post, mayRecord }) {
       {closing && (
         <tr><td colSpan={9}>
           <form style={{ display: "flex", gap: 8 }} onSubmit={async (e) => {
-            e.preventDefault(); if (await post({ kind: "observation-close", observationId: o.id, closedOn: today(), note })) setClosing(false);
+            e.preventDefault(); if (await post({ kind: "observation-close", observationId: o.id, closedOn, note })) setClosing(false);
           }}>
             <input className="search" aria-label="اقدام انجام‌شده" placeholder="اقدام انجام‌شده" value={note} onChange={(e) => setNote(e.target.value)} required />
+            <input type="date" dir="ltr" aria-label="تاریخ بستن" value={closedOn} onChange={(e) => setClosedOn(e.target.value)} required />
             <button className="btn" type="submit">ثبت بستن</button>
           </form>
         </td></tr>

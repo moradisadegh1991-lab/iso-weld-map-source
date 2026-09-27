@@ -7,7 +7,7 @@
  * RFC accepted, every commissioning procedure accepted, no punch A/B and no
  * NCR open.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -92,7 +92,7 @@ test("RFSU: RFC accepted, procedures declared and all accepted, no punch A/B, no
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "prc-db-"));
+process.env.PGLITE_DIR = await scratchDir("prc-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

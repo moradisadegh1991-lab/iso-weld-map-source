@@ -4,7 +4,7 @@
  * date, inter-discipline review, comments that follow the document across
  * revisions, and the coded reply.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -46,7 +46,7 @@ test("a reply code that contradicts the record is refused", async () => {
 
 // ── against the database ─────────────────────────────────────────────────
 
-const dir = await mkdtemp(path.join(tmpdir(), "inc-db-"));
+const dir = await scratchDir("inc-db-");
 process.env.PGLITE_DIR = dir;
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");

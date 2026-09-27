@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tabs from "../../components/ui/Tabs";
+import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/WorkDate";
 
 /**
  * Electrical: the cable schedule, each cable from route to energisation, and
@@ -16,7 +17,7 @@ import Tabs from "../../components/ui/Tabs";
  * with a default. The IR column cannot be ticked: the recorded readings and
  * IEC 60364-6 answer it.
  */
-export default function ElectricalPage() {
+function ElectricalPageBody() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/electrical?projectId=${id}`, []);
   const [open, setOpen] = useState(null);
@@ -67,6 +68,7 @@ export default function ElectricalPage() {
           {noClass > 0 && ` · ${noClass} با مشخصات ناخوانا`}
         </span>
       </div>
+      <WorkDateField />
 
       <Tabs name="electrical">
       {msg && <p className="err">{msg}</p>}
@@ -152,8 +154,9 @@ function CableRow({ c, open, detail, onToggle, mayRecord, mayRegister, post, tag
 }
 
 function Detail({ c, s, mayRecord, mayRegister, post, tags }) {
+  const workOn = useWorkDate();
   const req = s.ir.requirement;
-  const [t, setT] = useState({ testVoltageV: req.testV || "", readings: "", testedOn: today(), instrumentRef: "" });
+  const [t, setT] = useState({ testVoltageV: req.testV || "", readings: "", testedOn: today(), instrumentRef: "", tester: "" });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))" }}>
@@ -175,8 +178,8 @@ function Detail({ c, s, mayRecord, mayRegister, post, tags }) {
             {x.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
             {mayRecord && !x.derived && !x.na && x.status !== "done" && !x.blocked && (
               <button className="btn" style={{ padding: "4px 10px" }}
-                      onClick={() => post({ kind: "activity", cableId: c.id, code: x.code, doneAt: today() })}>
-                ثبت انجام (امروز)</button>
+                      onClick={() => post({ kind: "activity", cableId: c.id, code: x.code, doneAt: workOn })}>
+                ثبت انجام</button>
             )}
           </div>
         ))}
@@ -217,6 +220,7 @@ function Detail({ c, s, mayRecord, mayRegister, post, tags }) {
             <Field id="ir-on" label="تاریخ" type="date" value={t.testedOn} on={(v) => setT({ ...t, testedOn: v })} required />
             <Field id="ir-inst" label="دستگاه / شمارهٔ کالیبراسیون" value={t.instrumentRef}
                    on={(v) => setT({ ...t, instrumentRef: v })} />
+            <Field id="ir-by" label="آزمایش‌گر" value={t.tester} on={(v) => setT({ ...t, tester: v })} />
             <div><button className="btn" type="submit">ثبت تست</button></div>
           </form>
         )}
@@ -316,3 +320,8 @@ function Bar({ pct }) {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const fa = (d) => (d ? new Date(d).toLocaleDateString("fa-IR") : "—");
+
+/** Every one-click record on this page carries the day chosen at its head (components/ui/WorkDate). */
+export default function ElectricalPage() {
+  return <WorkDateScope><ElectricalPageBody /></WorkDateScope>;
+}

@@ -19,7 +19,10 @@ export async function GET(request) {
     return await withProject(db, projectId, async () => {
       const board = await registerBoard(db, { projectId, onDate: url.searchParams.get("onDate") || null });
       const { rows: subsystems } = await db.query("SELECT id, code FROM subsystem WHERE project_id = $1 ORDER BY code", [projectId]);
-      return Response.json({ ...board, subsystems });
+      // A datasheet or vendor document belongs to a tag: the asset master and
+      // the handover read a tag's documents through it.
+      const { rows: tags } = await db.query("SELECT id, tag_no FROM tag WHERE project_id = $1 ORDER BY tag_no", [projectId]);
+      return Response.json({ ...board, subsystems, tags });
     });
   } catch (e) { return errorResponse(e); }
 }

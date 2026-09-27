@@ -3,7 +3,7 @@
  * The civil module: concrete acceptance, the foundation chain, and the
  * foundation handing over to the equipment it carries.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -124,7 +124,7 @@ test("curing is complete only against a stated period", async () => {
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "civil-db-"));
+process.env.PGLITE_DIR = await scratchDir("civil-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");
@@ -235,6 +235,26 @@ test("curing gets no verdict until the project states its period", async () => {
   });
 });
 
+test("a break cannot be dated before the cylinder is that old, nor in the future", async () => {
+  // A «28-day» result entered the day after the pour would tick strength
+  // with a number nobody could have measured.
+  await withProject(db, proj.id, async () => {
+    const early = await throws(() => civil.recordSpecimens(db, { projectId: proj.id, pourId: pour1.id, sampleNo: "SX",
+      specimenType: "cyl150", ageDays: 28, results: [40, 41], testedOn: daysAgo(40 - 20) }), "INVALID_INPUT");
+    assert(/زودتر از/.test(early.message), early.message);
+    await throws(() => civil.recordSpecimens(db, { projectId: proj.id, pourId: pour1.id, sampleNo: "SX",
+      specimenType: "cyl150", ageDays: 7, results: [40, 41], testedOn: daysAgo(-3) }), "INVALID_INPUT");
+    const young = await civil.recordPour(db, { projectId: proj.id, tagId: fdn.id, pourNo: "PC-0199",
+      pouredOn: daysAgo(10), volumeM3: 5, concreteClass: "C30", fcMpa: 30, userId: alice.id });
+    const undated = await throws(() => civil.recordSpecimens(db, { projectId: proj.id, pourId: young.id, sampleNo: "S1",
+      specimenType: "cyl150", ageDays: 28, results: [40, 41] }), "INVALID_INPUT");
+    assert(/امروز هنوز به آن سن نرسیده/.test(undated.message), undated.message);
+    const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM concrete_specimen WHERE sample_no = 'SX' OR pour_id = $1", [young.id]);
+    equal(n.n, 0, "nothing was written");
+    await db.query("DELETE FROM concrete_pour WHERE id = $1", [young.id]);
+  });
+});
+
 test("a 7-day break leaves strength waiting, and says what it showed", async () => {
   await withProject(db, proj.id, async () => {
     await specimens(pour1.id, "S1", 7, [21.5, 22.5]);
@@ -334,7 +354,9 @@ test("a low three-test average of a class holds every foundation in the window",
 
 test("a later-age break is information, not a failure", async () => {
   await withProject(db, proj.id, async () => {
-    await specimens(pour1.id, "S9", 56, [36]);                        // one extra 56-day cylinder
+    // One extra cylinder kept back and broken later — at 35 days, since the
+    // pour is 40 days old (a 56-day result could not exist yet).
+    await specimens(pour1.id, "S9", 35, [36]);
     equal(step(await status(fdn.id), "strength").status, "done");
   });
 });

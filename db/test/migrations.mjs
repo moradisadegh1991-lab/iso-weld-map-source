@@ -7,7 +7,7 @@
  * migrated before it. So this builds exactly that: a database at 011, legacy
  * values written the old way, and then 012 applied on top.
  */
-import { test, run, assert, equal } from "./harness.mjs";
+import { test, run, assert, equal, scratchDir } from "./harness.mjs";
 import { mkdtemp, readdir, copyFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -16,12 +16,12 @@ import { createClient } from "../../lib/db/client.mjs";
 import { migrate } from "../../lib/db/migrate.mjs";
 
 const ALL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "migrations");
-const staged = await mkdtemp(path.join(tmpdir(), "mig-files-"));
+const staged = await scratchDir("mig-files-");
 for (const f of (await readdir(ALL)).filter((f) => f.endsWith(".sql")).sort()) {
   if (f < "012") await copyFile(path.join(ALL, f), path.join(staged, f));
 }
 
-const db = await createClient({ dataDir: await mkdtemp(path.join(tmpdir(), "mig-db-")) });
+const db = await createClient({ dataDir: await scratchDir("mig-db-") });
 await migrate(db, { dir: staged });
 
 // ── the world before 012: spools with free-set statuses ──────────────────
@@ -98,11 +98,11 @@ test("row level security is forced again after the carry-over", async () => {
 // 'material' — so a migration that only ever ran on an empty schema can pass
 // every other test and still fail on the first real project it meets. 045
 // as released did exactly that; 044b repairs it without editing it.
-const staged45 = await mkdtemp(path.join(tmpdir(), "mig-files-45-"));
+const staged45 = await scratchDir("mig-files-45-");
 for (const f of (await readdir(ALL)).filter((f) => f.endsWith(".sql")).sort()) {
   if (f < "044b") await copyFile(path.join(ALL, f), path.join(staged45, f));
 }
-const db45 = await createClient({ dataDir: await mkdtemp(path.join(tmpdir(), "mig-db-45-")) });
+const db45 = await createClient({ dataDir: await scratchDir("mig-db-45-") });
 await migrate(db45, { dir: staged45 });
 const one45 = async (sql, p) => (await db45.query(sql, p)).rows[0];
 const prep = await one45("INSERT INTO app_user (subject) VALUES ('kc|prep') RETURNING id");
@@ -141,11 +141,11 @@ test("045: the approved ITP is fixed again afterwards, and row level security is
 // The other history: 045 as released already applied (no 'material' ITP
 // then, so it succeeded), and 044b arrives afterwards. It must change
 // nothing and fail on nothing.
-const stagedAfter = await mkdtemp(path.join(tmpdir(), "mig-files-after-"));
+const stagedAfter = await scratchDir("mig-files-after-");
 for (const f of (await readdir(ALL)).filter((f) => f.endsWith(".sql")).sort()) {
   if (f !== "044b_material_itp_reassign.sql") await copyFile(path.join(ALL, f), path.join(stagedAfter, f));
 }
-const dbAfter = await createClient({ dataDir: await mkdtemp(path.join(tmpdir(), "mig-db-after-")) });
+const dbAfter = await createClient({ dataDir: await scratchDir("mig-db-after-") });
 await migrate(dbAfter, { dir: stagedAfter });
 const pa = (await dbAfter.query("INSERT INTO project (code, name) VALUES ('M45B','m') RETURNING id")).rows[0];
 const ua = (await dbAfter.query("INSERT INTO app_user (subject) VALUES ('kc|a') RETURNING id")).rows[0];
@@ -172,11 +172,11 @@ test("044b after 045: applied late, it changes nothing and the new scopes stand"
 // It certified pre-commissioning — what RFC now certifies — so it is carried
 // forward as that subsystem's RFC, same signer and dates, labelled. And it
 // is not "reopened" merely because commissioning procedures now exist.
-const staged48 = await mkdtemp(path.join(tmpdir(), "mig-files-48-"));
+const staged48 = await scratchDir("mig-files-48-");
 for (const f of (await readdir(ALL)).filter((f) => f.endsWith(".sql")).sort()) {
   if (f < "048") await copyFile(path.join(ALL, f), path.join(staged48, f));
 }
-const db48 = await createClient({ dataDir: await mkdtemp(path.join(tmpdir(), "mig-db-48-")) });
+const db48 = await createClient({ dataDir: await scratchDir("mig-db-48-") });
 await migrate(db48, { dir: staged48 });
 const one48 = async (sql, p) => (await db48.query(sql, p)).rows[0];
 const signer = await one48("INSERT INTO app_user (subject) VALUES ('kc|signer') RETURNING id");

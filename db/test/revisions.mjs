@@ -8,7 +8,7 @@
  * and not the others is what made a derived weld id unworkable in the first
  * place.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { matchRegisters, alignmentShift, MIN_SCORE } from "../../lib/register/match.mjs";
 import { diffRegisters, spoolImpact } from "../../lib/register/diff.mjs";
 import { fromEngine, fromDb } from "../../lib/register/normalize.mjs";
@@ -141,8 +141,8 @@ test("a weld moving between spools damages both", async () => {
 // ── end to end, through the database and the API ─────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "rev-db-"));
-process.env.STORAGE_ROOT = await mkdtemp(path.join(tmpdir(), "rev-store-"));
+process.env.PGLITE_DIR = await scratchDir("rev-db-");
+process.env.STORAGE_ROOT = await scratchDir("rev-store-");
 
 const projectsRoute = await import("../../app/api/projects/route.js");
 const documentsRoute = await import("../../app/api/documents/route.js");

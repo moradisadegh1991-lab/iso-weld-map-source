@@ -4,7 +4,7 @@
  * the walkdown finds anything, a pass accepted by someone else, the spool's
  * test step answered by its package, and MC signed only with nothing open.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -65,7 +65,7 @@ test("MC readiness names every kind of thing still open, and an empty subsystem 
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "cmp-db-"));
+process.env.PGLITE_DIR = await scratchDir("cmp-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

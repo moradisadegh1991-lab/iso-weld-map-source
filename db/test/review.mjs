@@ -7,7 +7,7 @@
  * useful dataset the programme produces, so the tests care about its
  * precision — a log full of false corrections is worse than no log.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { diffPayload, editHotspots } from "../../lib/review/payload-diff.mjs";
 import { DISCLAIMER_FA, approvalLine, disclaimerRows } from "../../lib/disclaimer.mjs";
 import { mkdtemp } from "node:fs/promises";
@@ -78,7 +78,7 @@ test("the spreadsheet rows carry both languages and the approval state", async (
 // ── through the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "review-db-"));
+process.env.PGLITE_DIR = await scratchDir("review-db-");
 
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");

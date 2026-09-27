@@ -7,6 +7,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import { useRemove } from "../../lib/client/remove.mjs";
 import Tabs from "../../components/ui/Tabs";
+import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/WorkDate";
 
 /**
  * Painting and insulation: the systems from the painting specification, the
@@ -18,7 +19,7 @@ import Tabs from "../../components/ui/Tabs";
  * §345.3.1). The dew point is computed as the inspector types, so a coat is
  * not applied into condensation that nobody calculated.
  */
-export default function CoatingPage() {
+function CoatingPageBody() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/coating?projectId=${id}`, []);
   const [open, setOpen] = useState(null);
@@ -62,6 +63,7 @@ export default function CoatingPage() {
           {` · ${data.unassigned.spools.length} اسپول بدون سیستم رنگ`}
         </span>
       </div>
+      <WorkDateField />
       <Tabs name="coating">
       {msg && <p className="err">{msg}</p>}
 
@@ -212,6 +214,7 @@ function ItemRow({ i, open, detail, onToggle, mayRecord, mayRegister, post, spec
 }
 
 function Detail({ i, s, mayRecord, mayRegister, post, spec }) {
+  const workOn = useWorkDate();
   const it = s.item;
   const need = minReadings(it.area_m2);
   return (
@@ -237,8 +240,8 @@ function Detail({ i, s, mayRecord, mayRegister, post, spec }) {
             {x.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
             {mayRecord && !x.derived && !x.na && x.status !== "done" && !x.blocked && (
               <button className="btn" style={{ padding: "4px 10px" }}
-                      onClick={() => post({ kind: "activity", itemId: i.id, code: x.code, doneAt: today() })}>
-                ثبت انجام (امروز)</button>
+                      onClick={() => post({ kind: "activity", itemId: i.id, code: x.code, doneAt: workOn })}>
+                ثبت انجام</button>
             )}
           </div>
         ))}
@@ -259,6 +262,7 @@ function Detail({ i, s, mayRecord, mayRegister, post, spec }) {
 }
 
 function Coats({ i, s, mayRecord, post, spec, need }) {
+  const workOn = useWorkDate();
   const [c, setC] = useState({ coatNo: String((s.coats.find((x) => !x.ok)?.no) || 1), airC: "", rh: "", steelC: "", readings: "" });
   const air = c.airC === "" ? NaN : Number(c.airC), rh = c.rh === "" ? NaN : Number(c.rh);
   const td = Number.isFinite(air) && rh > 0 && rh <= 100 ? dewPoint(air, rh) : null;
@@ -290,7 +294,7 @@ function Coats({ i, s, mayRecord, post, spec, need }) {
       {mayRecord && (
         <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
           e.preventDefault();
-          if (await post({ kind: "record", recordKind: "coat", itemId: i.id, recordedOn: today(), ...c })) {
+          if (await post({ kind: "record", recordKind: "coat", itemId: i.id, recordedOn: workOn, ...c })) {
             setC({ ...c, readings: "" });
           }
         }}>
@@ -311,11 +315,12 @@ function Coats({ i, s, mayRecord, post, spec, need }) {
 }
 
 function Prep({ i, s, post }) {
+  const workOn = useWorkDate();
   const [p, setP] = useState({ grade: s.item.prep_grade, profile: "" });
   return (
     <form className="card grid2" style={{ padding: 12, alignItems: "end" }} onSubmit={async (e) => {
       e.preventDefault();
-      if (await post({ kind: "record", recordKind: "prep", itemId: i.id, recordedOn: today(), ...p })) setP({ ...p, profile: "" });
+      if (await post({ kind: "record", recordKind: "prep", itemId: i.id, recordedOn: workOn, ...p })) setP({ ...p, profile: "" });
     }}>
       <h2 style={{ gridColumn: "1 / -1" }}>آماده‌سازی سطح {s.prep && (s.prep.ok ? <span className="pill ok">پذیرفته</span> : <span className="pill bad">رد</span>)}</h2>
       <Select id="pp-grade" label="درجهٔ حاصل (ISO 8501-1)" value={p.grade} on={(v) => setP({ ...p, grade: v })}
@@ -327,11 +332,12 @@ function Prep({ i, s, post }) {
 }
 
 function Insulation({ i, s, post }) {
+  const workOn = useWorkDate();
   const [t, setT] = useState("");
   return (
     <form className="card grid2" style={{ padding: 12, alignItems: "end" }} onSubmit={async (e) => {
       e.preventDefault();
-      if (await post({ kind: "record", recordKind: "insulation", itemId: i.id, recordedOn: today(), thicknessMm: t })) setT("");
+      if (await post({ kind: "record", recordKind: "insulation", itemId: i.id, recordedOn: workOn, thicknessMm: t })) setT("");
     }}>
       <h2 style={{ gridColumn: "1 / -1" }}>عایق‌کاری — {INSULATION[s.item.insulation]} {Number(s.item.insulation_thk_mm)} mm</h2>
       <Field id="in-t" label="ضخامت‌های اندازه‌گیری‌شده (mm)" value={t} on={setT} required
@@ -443,3 +449,8 @@ function Bar({ pct }) {
 const round1 = (n) => Math.round(n * 10) / 10;
 const today = () => new Date().toISOString().slice(0, 10);
 const fa = (d) => (d ? new Date(d).toLocaleDateString("fa-IR") : "—");
+
+/** Every one-click record on this page carries the day chosen at its head (components/ui/WorkDate). */
+export default function CoatingPage() {
+  return <WorkDateScope><CoatingPageBody /></WorkDateScope>;
+}

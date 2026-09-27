@@ -293,6 +293,21 @@ export default function Page() {
     setEditing(JSON.stringify(DEMO, null, 2));
   }
 
+  /**
+   * The drawing is here but no model read it (none configured, or the read
+   * failed): the register is keyed by hand, in the JSON tab, and saved with
+   * THIS file — the engine still computes every weld. Nothing is prefilled:
+   * a drawing number guessed from a file name would be a fact nobody read.
+   */
+  function manualEntry() {
+    const blank = { meta: { drawingNo: "", rev: "", sheet: "1/1", lineNo: "", unit: "", pipingClass: "", nps: null, schedule: "" },
+      bom: [], nodes: [], edges: [], notes: [] };
+    setErr(null); setNote(null); setPdf(null); setOpenRun(null); setSelected(null);
+    setData(blank);
+    setEditing(JSON.stringify(blank, null, 2));
+    setTab("json");
+  }
+
   function applyEdit() {
     try {
       setData(JSON.parse(editing)); setErr(null); setSelected(null);
@@ -408,6 +423,12 @@ export default function Page() {
 
           {note && <div className="note mono">{note}</div>}
           {err && <div className="err">{err}</div>}
+          {sourceFile && !busy && (
+            <div className="row">
+              <button className="ghost" onClick={manualEntry}>ورود دستی (JSON) برای همین نقشه</button>
+              <span className="muted sm">«{sourceFile.name}» همراه رجیستر ذخیره می‌شود؛ هندسه و MTO را در تب JSON بنویسید یا بچسبانید — جوش‌ها را باز هم موتور می‌سازد.</span>
+            </div>
+          )}
 
           {pdf && pdf.pages.length > 1 && !data && (
             <div className="queuebox">

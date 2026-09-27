@@ -3,7 +3,7 @@
  * Safe work before the permit: competence cards, scaffold and crane
  * inspection, JSA — and the permit that is not issued without them.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -90,7 +90,7 @@ test("a permit's JSA: required and missing, draft, superseded", async () => {
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "hsesw-db-"));
+process.env.PGLITE_DIR = await scratchDir("hsesw-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

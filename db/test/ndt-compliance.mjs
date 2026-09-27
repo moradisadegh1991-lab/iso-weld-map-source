@@ -3,7 +3,7 @@
  * NDT compliance — the examination each weld REQUIRES, B31.3 §341 — and what
  * piping progress counts as tested (F-17).
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -117,7 +117,7 @@ test("inch-dia sums weld sizes, and counts welds without a size apart", async ()
 
 // ── against the database: F-17 ───────────────────────────────────────────
 
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "ndtc-db-"));
+process.env.PGLITE_DIR = await scratchDir("ndtc-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

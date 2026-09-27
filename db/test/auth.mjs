@@ -6,7 +6,7 @@
  * public URL, so the tests are written as an attacker would read them: what
  * does a wrong answer reveal, and what happens when someone keeps trying.
  */
-import { test, run, assert, equal, throws } from "./harness.mjs";
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -144,7 +144,7 @@ test("the cookie is found among others and ignored when absent", async () => {
 // ── against the database ─────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "auth-db-"));
+process.env.PGLITE_DIR = await scratchDir("auth-db-");
 
 const { getDb } = await import("../../lib/server/db.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");

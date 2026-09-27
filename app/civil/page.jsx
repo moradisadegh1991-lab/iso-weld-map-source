@@ -6,6 +6,7 @@ import { SPECIMENS, individualLimit } from "../../lib/civil/concrete.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tabs from "../../components/ui/Tabs";
+import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/WorkDate";
 
 /**
  * Civil: foundations from excavation to handover, and the concrete that
@@ -25,7 +26,7 @@ const VERDICT = {
   investigate: ["bad", "بررسی مقاومت پایین"],
 };
 
-export default function CivilPage() {
+function CivilPageBody() {
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/civil?projectId=${id}`, []);
   const [open, setOpen] = useState(null);
@@ -67,6 +68,7 @@ export default function CivilPage() {
           {held > 0 && ` · ${held} با مقاومت پذیرفته‌نشده`}
         </span>
       </div>
+      <WorkDateField />
 
       <Tabs name="civil">
       {msg && <p className="err">{msg}</p>}
@@ -97,7 +99,7 @@ export default function CivilPage() {
                 {data.foundations.map((f) => (
                   <FoundationRow key={f.id} f={f} open={open === f.id}
                     detail={open === f.id ? detail : null} onToggle={() => expand(f.id)}
-                    mayRecord={mayRecord} post={post} />
+                    mayRecord={mayRecord} post={post} contractors={data.contractors} />
                 ))}
               </tbody>
             </table>
@@ -112,7 +114,7 @@ export default function CivilPage() {
   );
 }
 
-function FoundationRow({ f, open, detail, onToggle, mayRecord, post }) {
+function FoundationRow({ f, open, detail, onToggle, mayRecord, post, contractors }) {
   const s = f.strength;
   return (
     <>
@@ -139,7 +141,7 @@ function FoundationRow({ f, open, detail, onToggle, mayRecord, post }) {
         <tr>
           <td colSpan={8} style={{ background: "rgba(255,255,255,.02)" }}>
             {!detail ? <span className="muted sm">در حال بارگذاری…</span>
-              : <FoundationDetail f={f} detail={detail} mayRecord={mayRecord} post={post} />}
+              : <FoundationDetail f={f} detail={detail} mayRecord={mayRecord} post={post} contractors={contractors} />}
           </td>
         </tr>
       )}
@@ -147,7 +149,8 @@ function FoundationRow({ f, open, detail, onToggle, mayRecord, post }) {
   );
 }
 
-function FoundationDetail({ f, detail, mayRecord, post }) {
+function FoundationDetail({ f, detail, mayRecord, post, contractors }) {
+  const workOn = useWorkDate();
   const steps = detail.status.steps || [];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -170,8 +173,8 @@ function FoundationDetail({ f, detail, mayRecord, post }) {
             {s.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
             {mayRecord && !s.derived && s.status !== "done" && !s.blocked && (
               <button className="btn" style={{ padding: "4px 10px" }}
-                      onClick={() => post({ kind: "activity", tagId: f.id, code: s.code, doneAt: today() })}>
-                ثبت انجام (امروز)</button>
+                      onClick={() => post({ kind: "activity", tagId: f.id, code: s.code, doneAt: workOn })}>
+                ثبت انجام</button>
             )}
           </div>
         ))}
@@ -181,16 +184,16 @@ function FoundationDetail({ f, detail, mayRecord, post }) {
         {f.anchor_bolt_ref && <> نقشهٔ انکر بولت وندور: <span className="mono">{f.anchor_bolt_ref}</span>.</>}
       </p>
 
-      <Pours f={f} pours={detail.pours} mayRecord={mayRecord} post={post} />
+      <Pours f={f} pours={detail.pours} mayRecord={mayRecord} post={post} contractors={contractors} />
     </div>
   );
 }
 
-function Pours({ f, pours, mayRecord, post }) {
+function Pours({ f, pours, mayRecord, post, contractors = [] }) {
   const blank = { pourNo: "", pouredOn: today(), volumeM3: f.volume_m3 ?? "",
-    concreteClass: "", fcMpa: "", ticketRef: "" };
+    concreteClass: "", fcMpa: "", ticketRef: "", contractorId: "" };
   const [p, setP] = useState(blank);
-  const [sp, setSp] = useState({ pourId: "", sampleNo: "", specimenType: "cyl150", ageDays: 28, results: "" });
+  const [sp, setSp] = useState({ pourId: "", sampleNo: "", specimenType: "cyl150", ageDays: 28, results: "", testedOn: today(), labRef: "" });
 
   return (
     <div className="card" style={{ padding: 12 }}>
@@ -224,7 +227,7 @@ function Pours({ f, pours, mayRecord, post }) {
         <>
           <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
             e.preventDefault();
-            if (await post({ kind: "pour", tagId: f.id, ...p })) setP(blank);
+            if (await post({ kind: "pour", tagId: f.id, ...p, contractorId: p.contractorId || null })) setP(blank);
           }}>
             <Field id="p-no" label="شمارهٔ پور کارت" value={p.pourNo} on={(v) => setP({ ...p, pourNo: v })} required />
             <Field id="p-on" label="تاریخ بتن‌ریزی" type="date" value={p.pouredOn} on={(v) => setP({ ...p, pouredOn: v })} required />
@@ -234,6 +237,12 @@ function Pours({ f, pours, mayRecord, post }) {
                    hint="از بارنامه، نه از مشخصات — مقایسه همین‌جا انجام می‌شود" />
             <Field id="p-fc" label={`f′c تحویلی MPa (مشخصات: ${Number(f.fc_mpa)})`} type="number"
                    value={p.fcMpa} on={(v) => setP({ ...p, fcMpa: v })} required />
+            <Field id="p-tk" label="شمارهٔ بارنامه (تیکت)" value={p.ticketRef} on={(v) => setP({ ...p, ticketRef: v })} />
+            <div className="field"><label htmlFor="p-con">پیمانکار</label>
+              <select id="p-con" value={p.contractorId} onChange={(e) => setP({ ...p, contractorId: e.target.value })}>
+                <option value="">—</option>
+                {contractors.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+              </select></div>
             <div><button className="btn" type="submit">ثبت بتن‌ریزی</button></div>
           </form>
 
@@ -258,6 +267,9 @@ function Pours({ f, pours, mayRecord, post }) {
               <Field id="s-res" label="نتایج شکست (MPa)، با فاصله" value={sp.results}
                      on={(v) => setSp({ ...sp, results: v })} required
                      hint={`هر استوانه جدا — یک آزمون دست‌کم ${SPECIMENS[sp.specimenType]?.minPerTest} نمونه`} />
+              <Field id="s-on" label="تاریخ آزمون" type="date" value={sp.testedOn} on={(v) => setSp({ ...sp, testedOn: v })} required
+                     hint="نمونهٔ N روزه پیش از روز Nام بتن‌ریزی پذیرفته نمی‌شود" />
+              <Field id="s-lab" label="شمارهٔ گزارش آزمایشگاه" value={sp.labRef} on={(v) => setSp({ ...sp, labRef: v })} />
               <div><button className="btn" type="submit">ثبت نتایج</button></div>
             </form>
           )}
@@ -387,3 +399,8 @@ function groupSpecimens(specimens) {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const fa = (d) => new Date(d).toLocaleDateString("fa-IR");
+
+/** Every one-click record on this page carries the day chosen at its head (components/ui/WorkDate). */
+export default function CivilPage() {
+  return <WorkDateScope><CivilPageBody /></WorkDateScope>;
+}

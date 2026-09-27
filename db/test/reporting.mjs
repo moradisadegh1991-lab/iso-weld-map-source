@@ -8,13 +8,13 @@
  * anyone who can read it. That is a leak with no symptom — the numbers just
  * look bigger — so it is checked directly rather than trusted.
  */
-import { test, run, assert, equal } from "./harness.mjs";
+import { test, run, assert, equal, scratchDir } from "./harness.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 process.env.AUTH_MODE = "dev";
-process.env.PGLITE_DIR = await mkdtemp(path.join(tmpdir(), "rpt-db-"));
+process.env.PGLITE_DIR = await scratchDir("rpt-db-");
 
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");

@@ -159,7 +159,7 @@ function PoDetail({ o, data, post, may, role }) {
               <td className="mono">{s.shipment_no}</td><td className="mono sm">{fa(s.shipped_on)}</td><td className="mono sm">{fa(s.eta_on)}</td>
               <td className="mono sm">{s.arrived_on ? fa(s.arrived_on) : <span className="muted">در راه</span>}</td>
               <td className="mono sm">{(s.lines || []).map((x) => `${x.lineNo}×${Number(x.qty)}`).join("، ")}</td>
-              <td>{may && !s.arrived_on && <button className="btn ghost" onClick={() => post({ kind: "arrive", shipmentId: s.id, arrivedOn: today() })}>ورود به سایت (امروز)</button>}</td>
+              <td>{may && !s.arrived_on && <Arrive s={s} post={post} />}</td>
             </tr>))}</tbody>
         </table></TableKit>
       )}
@@ -192,9 +192,19 @@ function PoDetail({ o, data, post, may, role }) {
   );
 }
 
+function Arrive({ s, post }) {
+  const [on, setOn] = useState(today());
+  return (
+    <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
+      <input type="date" dir="ltr" aria-label={`تاریخ ورود ${s.shipment_no}`} value={on} onChange={(e) => setOn(e.target.value)} />
+      <button className="btn ghost" onClick={() => post({ kind: "arrive", shipmentId: s.id, arrivedOn: on })}>ورود به سایت</button>
+    </span>
+  );
+}
+
 function LineAction({ l, kind, data, post, done }) {
   const [f, setF] = useState({ forecastOn: l.forecast || "", source: "", inspectedOn: today(), result: "pass", irnNo: "", inspector: "", note: "",
-    receiptNo: "", receivedOn: today(), qty: "", heatNo: "", mtcRef: "" });
+    receiptNo: "", receivedOn: today(), qty: "", heatNo: "", mtcRef: "", location: "" });
   const [hist, setHist] = useState(null);
   const { projectId, call } = usePlatform();
   useEffect(() => {
@@ -229,25 +239,32 @@ function LineAction({ l, kind, data, post, done }) {
       <Field id={`rq-${l.id}`} label={`مقدار (${l.uom}) — باقی ${l.qty - l.receivedQty}`} type="number" value={f.qty} on={(v) => setF({ ...f, qty: v })} />
       <Field id={`rh-${l.id}`} label="Heat No." value={f.heatNo} on={(v) => setF({ ...f, heatNo: v })} />
       <Field id={`rm-${l.id}`} label="MTC" value={f.mtcRef} on={(v) => setF({ ...f, mtcRef: v })} />
-      <button className="btn" onClick={() => go({ kind: "receive", poLineId: l.id, ...f })}>رسید به انبار</button>
+      <Field id={`rl-${l.id}`} label="محل انبار" value={f.location} on={(v) => setF({ ...f, location: v })} />
+      <button className="btn" onClick={() => go({ kind: "receive", poLineId: l.id, receiptNo: f.receiptNo, receivedOn: f.receivedOn, qty: f.qty, heatNo: f.heatNo, mtcRef: f.mtcRef, location: f.location })}>رسید به انبار</button>
     </div>
   );
 }
 
+/**
+ * The vendor's submission and our return, each on the day it happened — a
+ * record entered late must not carry the day it was typed.
+ */
 function DocAction({ d, data, post }) {
-  const [f, setF] = useState({ revision: "", code: "2", comment: "" });
+  const [f, setF] = useState({ revision: "", code: "2", comment: "", on: today() });
   if (d.state === "accepted") return null;
   if (d.state === "under_review") return (
     <div style={{ display: "flex", gap: 6, alignItems: "end" }}>
       <Select id={`dc-${d.id}`} label="کد" value={f.code} on={(v) => setF({ ...f, code: v })} opts={Object.entries(data.reviewCodes)} />
       <Field id={`dm-${d.id}`} label="کامنت" value={f.comment} on={(v) => setF({ ...f, comment: v })} />
-      <button className="btn ghost" onClick={() => post({ kind: "review", docId: d.id, returnedOn: today(), code: f.code, comment: f.comment })}>برگشت</button>
+      <Field id={`do-${d.id}`} label="تاریخ برگشت" type="date" value={f.on} on={(v) => setF({ ...f, on: v })} />
+      <button className="btn ghost" onClick={() => post({ kind: "review", docId: d.id, returnedOn: f.on, code: f.code, comment: f.comment })}>برگشت</button>
     </div>
   );
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "end" }}>
       <Field id={`dr-${d.id}`} label="رویژن" value={f.revision} on={(v) => setF({ ...f, revision: v })} />
-      <button className="btn ghost" onClick={() => post({ kind: "submit", docId: d.id, revision: f.revision, submittedOn: today() })}>ارسال شد</button>
+      <Field id={`ds-${d.id}`} label="تاریخ ارسال فروشنده" type="date" value={f.on} on={(v) => setF({ ...f, on: v })} />
+      <button className="btn ghost" onClick={() => post({ kind: "submit", docId: d.id, revision: f.revision, submittedOn: f.on })}>ارسال شد</button>
     </div>
   );
 }
