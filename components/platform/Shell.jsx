@@ -22,7 +22,7 @@ import SignIn from "./SignIn";
  * The menu searches every tab (Ctrl+K), its groups fold and remember it, it
  * narrows to icons, and on a phone it is a drawer.
  */
-export const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", designer: "طراح", developer: "توسعه‌دهنده" };
+export const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", designer: "طراح", contracts: "امور قراردادها", finance: "مالی", hr: "منابع انسانی", developer: "توسعه‌دهنده" };
 const store = {
   get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },

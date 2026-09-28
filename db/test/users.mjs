@@ -39,7 +39,8 @@ test("the menu is the member's areas, plus what is common", async () => {
   assert(civil.includes("/civil") && civil.includes("/") && civil.includes("/field") && civil.includes("/asset"), civil.join(" "));
   assert(!civil.includes("/piping") && !civil.includes("/hse") && !civil.includes("/admin"), civil.join(" "));
   const sections = navigationFor({ role: "engineer", areas: ["civil"] }, can).flatMap((g) => g.items);
-  equal(sections.find((s) => s.key === "civil").tabs.map((t) => t.href), ["/civil"], "a section shows only the tabs a member may open");
+  equal(sections.find((s) => s.key === "civil").tabs.map((t) => t.href), ["/civil", "/log/civil"], "a section shows only the tabs a member may open, and its log");
+  assert(!sections.some((s) => s.key === "piping"), "a section is not in the menu for its log alone");
   const all = hrefs({ role: "engineer", areas: [] });
   assert(all.includes("/hse") && all.includes("/piping"));
   assert(hrefs({ role: "developer" }).includes("/admin"));

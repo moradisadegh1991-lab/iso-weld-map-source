@@ -18,9 +18,10 @@ import Fold from "../../components/ui/Fold";
  * The permission matrix is generated from lib/authz.mjs rather than written
  * out, so it cannot drift from the rules the server enforces.
  */
-const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", designer: "طراح", developer: "توسعه‌دهنده" };
+const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", designer: "طراح", contracts: "امور قراردادها", finance: "مالی", hr: "منابع انسانی", developer: "توسعه‌دهنده" };
 const ROLE_HINT = {
   viewer: "فقط دیدن", qc: "ثبت کار سایت، NDT، Punch، بازرسی", engineer: "تأیید رجیستر و امضاهای مهندسی", admin: "همهٔ کارها + مدیریت کاربران پروژه", designer: "فقط پرتال طراح: ارسال ترانسمیتال و پاسخ به کامنت‌ها",
+  contracts: "قرارداد و ردیف‌های پرداخت، تهیه و تأیید نهایی صورت وضعیت", finance: "پرداخت‌ها و گزارش مالی", hr: "پرسنل و کارکرد روزانه",
 };
 const PARTY_FA = { contractor: "پیمانکار", company: "کارفرما", tpi: "بازرس شخص ثالث (TPI)" };
 const STATUS = { active: ["ok", "فعال"], invited: ["warn", "دعوت‌شده — منتظر تنظیم رمز"], no_password: ["warn", "بدون رمز"],
@@ -34,6 +35,8 @@ const ACTION_FA = {
   MANAGE_PROCUREMENT: "خرید", CONTROL_DOCUMENTS: "کنترل مدارک", MANAGE_HANDOVER: "تحویل به نگهداری",
   RECORD_INSPECTION: "درخواست و امضای بازرسی", MANAGE_ITP: "تهیه و تأیید ITP",
   SUBMIT_DESIGN: "پرتال طراح: ارسال ترانسمیتال و پاسخ به کامنت",
+  MANAGE_CONTRACTS: "قرارداد و ردیف‌های پرداخت", PREPARE_STATEMENT: "تهیه و ارسال صورت وضعیت", VERIFY_STATEMENT: "تأیید فنی صورت وضعیت",
+  APPROVE_STATEMENT: "تأیید نهایی صورت وضعیت", MANAGE_FINANCE: "ثبت پرداخت", MANAGE_HR: "پرسنل و کارکرد", COMMENT: "کامنت در لاگ",
 };
 
 export default function AdminPage() {
