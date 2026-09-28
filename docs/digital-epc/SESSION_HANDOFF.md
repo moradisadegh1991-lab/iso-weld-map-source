@@ -92,8 +92,9 @@ then a canonical master context.
 See the master context §22.
 
 ## Next Tasks
-See the master context §24. First: update the user guide PDF
-for the new sections (the markdown guide already has phase 10).
+See the master context §24. The user guide PDF and the interactive
+scenario guide were updated with contracts, finance, HR, the log and phase 10.
+First on the list now: replace `xlsx`.
 
 ## Important Context
 - Before committing, run `npm run db:test`, `npm run eval:check` and `npm run build`.

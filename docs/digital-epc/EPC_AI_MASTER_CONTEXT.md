@@ -669,25 +669,27 @@ stage names, typed-subject dev identity (replaced by real auth).
 - Docs: `docs/digital-epc/00-master-plan-alignment.md` (plan vs built),
   `01-ecosystem-review.md`, `02-project-review.md` (R1–R11), `03-scenario-dm-pump.md`,
   `04-glossary.md` (§19 contracts terms); `docs/epc-llm/00–05`.
-- Delivered outside repo: DMW scenario PDF report, user guide PDF (roles,
-  prerequisites); guide artifact https://claude.ai/artifact/DTDZqMrkeqZxk9fAb79sxb
-  [UNCONFIRMED: guide does not yet cover contracts/finance/HR/log].
+- Delivered outside repo:
+  - DMW scenario PDF report (phases 0–9).
+  - User guide PDF (19 sections, 8 roles, including contracts, finance, HR and
+    the log).
+  - Interactive scenario guide https://claude.ai/artifact/DTDZqMrkeqZxk9fAb79sxb
+    (72 steps, phases 0–10).
 
 ## 24. Next 10 Development Tasks
 
-1. Update the user guide (PDF/artifact) with contracts, statements, finance, HR and
-   «لاگ و گردش», incl. who does each step and prerequisites.
-2. Replace `xlsx` 0.18.5 (R4) now that the browser reads user files; keep
+1. Replace `xlsx` 0.18.5 (R4) now that the browser reads user files; keep
    export and import tests.
-3. Merge PR #1 (R5), then one PR per module.
-4. Measure extraction accuracy on real project isometrics with contractor weld
+2. Merge PR #1 (R5), then one PR per module.
+3. Measure extraction accuracy on real project isometrics with contractor weld
    registers (`extraction:report`, «حقیقت مرجع»).
-5. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
-6. PAC certificate and start-up log after performance tests.
-7. Statement extensions: variation orders, price adjustment, multi-currency with
+4. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
+5. PAC certificate and start-up log after performance tests.
+6. Statement extensions: variation orders, price adjustment, multi-currency with
    an explicit FX source (no guessed rates).
-8. Heat traceability to single weld + instruments as independent assets; then
+7. Heat traceability to single weld + instruments as independent assets; then
     Power BI model on reporting views with agreed KPI formulas.
-9. Schedule `db:backup` on the server and run the first restore drill (R2).
-10. Second statement period in the DMW scenario: carried-forward measured quantities,
+8. Schedule `db:backup` on the server and run the first restore drill (R2).
+9. Second statement period in the DMW scenario: carried-forward measured quantities,
     retention release, closing the contract.
+10. Extend the DMW scenario PDF report with phase 10 (re-collect from a played project).
