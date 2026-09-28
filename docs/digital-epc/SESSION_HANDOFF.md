@@ -74,18 +74,17 @@ then a canonical master context.
   api 24/24 and removal 9/9.
 - `eval:check` passes and `build` is clean.
 - The `drive-contracts` browser drive found no problems.
+- Full DMW scenario UI drive after the navigation change: 106/106 ok,
+  problems: none.
 
 ## Known Issues
-- The full DMW scenario UI regression after the navigation change was still
-  running at handoff. It was all ok through phase 6.5; the result is not yet
-  confirmed.
 - `xlsx` 0.18.5 is now used to read files in the browser (R4).
 
 ## Open Questions
 See the master context §22.
 
 ## Next Tasks
-See the master context §24. First: confirm the regression, update the user guide
+See the master context §24. First: update the user guide
 for the new sections, and add contracts steps to the DMW scenario.
 
 ## Important Context

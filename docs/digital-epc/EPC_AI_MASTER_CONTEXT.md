@@ -620,8 +620,6 @@ stage names, typed-subject dev identity (replaced by real auth).
 - Backups: `db:backup`/`db:restore` exist; server schedule + first restore drill
   not done.
 - PR #1 very large (~70+ commits); unmerged.
-- Scenario UI regression after navigation change (log tabs) was mid-run at writing
-  (reached phase 6.5 all ok) [UNCONFIRMED final result].
 
 ## 22. Open Questions
 
@@ -653,7 +651,8 @@ stage names, typed-subject dev identity (replaced by real auth).
 - Migrations 001–053; 56 `db/test` suites in `npm run db:test`, all passing at
   404c4ed (incl. contracts 14/14, users 12/12, api 24/24, removal 9/9);
   `eval:check` gate passed; `next build` clean; `tools/drive-contracts.mjs`
-  problems: none.
+  problems: none; full DMW scenario UI drive after the log-tab navigation change:
+  106/106 ok, problems: none.
 - Docs: `docs/digital-epc/00-master-plan-alignment.md` (plan vs built),
   `01-ecosystem-review.md`, `02-project-review.md` (R1–R11), `03-scenario-dm-pump.md`,
   `04-glossary.md` (§19 contracts terms); `docs/epc-llm/00–05`.
@@ -663,20 +662,19 @@ stage names, typed-subject dev identity (replaced by real auth).
 
 ## 24. Next 10 Development Tasks
 
-1. Confirm the full DMW scenario UI regression after the log-tab navigation change
-   ("problems: none"); fix anything it finds.
-2. Update the user guide (PDF/artifact) with contracts, statements, finance, HR and
+1. Update the user guide (PDF/artifact) with contracts, statements, finance, HR and
    «لاگ و گردش», incl. who does each step and prerequisites.
-3. Add contracts/statement steps to the DMW scenario (`dm-pump.mjs`) so guide,
+2. Add contracts/statement steps to the DMW scenario (`dm-pump.mjs`) so guide,
    auto-play and `scenario-dm` test cover them.
-4. Replace `xlsx` 0.18.5 (R4) now that the browser reads user files; keep
+3. Replace `xlsx` 0.18.5 (R4) now that the browser reads user files; keep
    export and import tests.
-5. Merge PR #1 (R5), then one PR per module.
-6. Measure extraction accuracy on real project isometrics with contractor weld
+4. Merge PR #1 (R5), then one PR per module.
+5. Measure extraction accuracy on real project isometrics with contractor weld
    registers (`extraction:report`, «حقیقت مرجع»).
-7. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
-8. PAC certificate and start-up log after performance tests.
-9. Statement extensions: variation orders, price adjustment, multi-currency with
+6. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
+7. PAC certificate and start-up log after performance tests.
+8. Statement extensions: variation orders, price adjustment, multi-currency with
    an explicit FX source (no guessed rates).
-10. Heat traceability to single weld + instruments as independent assets; then
+9. Heat traceability to single weld + instruments as independent assets; then
     Power BI model on reporting views with agreed KPI formulas.
+10. Schedule `db:backup` on the server and run the first restore drill (R2).
