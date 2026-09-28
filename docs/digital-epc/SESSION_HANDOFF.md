@@ -25,6 +25,8 @@ then a canonical master context.
   `/log/[section]` and `EntityLog`.
 - PDFs delivered outside the repo: DMW scenario report and user guide.
 - This file and `EPC_AI_MASTER_CONTEXT.md`.
+- R4: `xlsx` 0.18.5 → SheetJS 0.20.3 (vendor CDN, integrity-pinned). Browser read,
+  template write and the 5-sheet export were driven; the Node drive now needs `XLSX.set_fs(fs)`.
 - DMW scenario phase 10 (steps 10.1–10.11): WBS, subcontract SC-70-MEC, advance,
   statement 1 measured by the platform and a measurement sheet, four-eyes
   verify/approve, payment, HR welder and timesheet, and the log. New scenario
@@ -86,7 +88,7 @@ then a canonical master context.
   without it.
 
 ## Known Issues
-- `xlsx` 0.18.5 is now used to read files in the browser (R4).
+- None open from this session. R4 is fixed: `xlsx` 0.20.3, and `npm audit` reports 0.
 
 ## Open Questions
 See the master context §22.
@@ -94,7 +96,7 @@ See the master context §22.
 ## Next Tasks
 See the master context §24. The user guide PDF and the interactive
 scenario guide were updated with contracts, finance, HR, the log and phase 10.
-First on the list now: replace `xlsx`.
+R4 (`xlsx`) is done. First on the list now: merge PR #1.
 
 ## Important Context
 - Before committing, run `npm run db:test`, `npm run eval:check` and `npm run build`.

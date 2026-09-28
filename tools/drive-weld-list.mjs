@@ -11,7 +11,10 @@ import { chromium } from "playwright";
 import { readFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as fs from "node:fs";
 import * as XLSX from "xlsx";
+// SheetJS 0.20 (ESM) writes files in Node only with the fs module handed to it.
+XLSX.set_fs(fs);
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const SHOT = process.env.SHOT_DIR || "/tmp/shots";

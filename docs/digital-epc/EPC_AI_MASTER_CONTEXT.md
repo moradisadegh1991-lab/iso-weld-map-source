@@ -144,6 +144,8 @@ LLM layer lib/llm (anthropic | openai-compatible/vLLM) — only called by /api/e
 ```
 
 - Runtime: Node, Next.js 15.5 (App Router), React; JS/ESM (`.mjs`), no TypeScript.
+- Excel: SheetJS `xlsx` 0.20.3 from `cdn.sheetjs.com` (vendor's own channel; npm's 0.18.5
+  has unfixed advisories). Reads in the browser; in Node, file writes need `XLSX.set_fs(fs)`.
 - DB: `@electric-sql/pglite` (dev/test/single-node) or `pg` with `DATABASE_URL`;
   migrations in `db/migrations/NNN_*.sql`, `DB_AUTO_MIGRATE`.
 - Storage: `STORAGE_DRIVER=local` (`STORAGE_ROOT`, default `.storage`) or `s3`
@@ -625,9 +627,6 @@ stage names, typed-subject dev identity (replaced by real auth).
 - No PAC certificate, no start-up log, no IOGP monthly report, no crew
   competence per role, no inventory valuation, no pipe cut-waste.
 - No vendor self-service VDT portal; no weighted bid scoring policy.
-- `xlsx` 0.18.5 (R4): advisories on **reading**; since 36477f4 the weld-list import
-  reads user-chosen xlsx **in the browser** (`WeldListEntry.jsx`) — exposure is
-  now client-side read [OPEN: replace with maintained SheetJS or `exceljs`].
 - SSO/Keycloak seam only; no identity server.
 - Backups: `db:backup`/`db:restore` exist; server schedule + first restore drill
   not done.
@@ -678,18 +677,18 @@ stage names, typed-subject dev identity (replaced by real auth).
 
 ## 24. Next 10 Development Tasks
 
-1. Replace `xlsx` 0.18.5 (R4) now that the browser reads user files; keep
-   export and import tests.
-2. Merge PR #1 (R5), then one PR per module.
-3. Measure extraction accuracy on real project isometrics with contractor weld
+1. Merge PR #1 (R5), then one PR per module.
+2. Measure extraction accuracy on real project isometrics with contractor weld
    registers (`extraction:report`, «حقیقت مرجع»).
-4. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
-5. PAC certificate and start-up log after performance tests.
-6. Statement extensions: variation orders, price adjustment, multi-currency with
+3. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
+4. PAC certificate and start-up log after performance tests.
+5. Statement extensions: variation orders, price adjustment, multi-currency with
    an explicit FX source (no guessed rates).
-7. Heat traceability to single weld + instruments as independent assets; then
-    Power BI model on reporting views with agreed KPI formulas.
-8. Schedule `db:backup` on the server and run the first restore drill (R2).
-9. Second statement period in the DMW scenario: carried-forward measured quantities,
-    retention release, closing the contract.
-10. Extend the DMW scenario PDF report with phase 10 (re-collect from a played project).
+6. Heat traceability to single weld + instruments as independent assets; then
+   Power BI model on reporting views with agreed KPI formulas.
+7. Schedule `db:backup` on the server and run the first restore drill (R2).
+8. Second statement period in the DMW scenario: carried-forward measured quantities,
+   retention release, closing the contract.
+9. Extend the DMW scenario PDF report with phase 10 (re-collect from a played project).
+10. One shared helper for the browser drives (`tools/drive-*.mjs`): sign-in, project
+    select, fold and errorOf are copied into each drive today.

@@ -38,7 +38,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "three": "0.160.1",
-    "xlsx": "0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "overrides": {
     "postcss": "8.5.28",
