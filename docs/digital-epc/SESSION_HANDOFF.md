@@ -25,6 +25,11 @@ then a canonical master context.
   `/log/[section]` and `EntityLog`.
 - PDFs delivered outside the repo: DMW scenario report and user guide.
 - This file and `EPC_AI_MASTER_CONTEXT.md`.
+- DMW scenario phase 10 (steps 10.1–10.11): WBS, subcontract SC-70-MEC, advance,
+  statement 1 measured by the platform and a measurement sheet, four-eyes
+  verify/approve, payment, HR welder and timesheet, and the log. New scenario
+  people: `contracts`, `finance` and `hr`. The guide was regenerated (72 steps),
+  and the browser drive gained phase 10.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`
@@ -76,6 +81,9 @@ then a canonical master context.
 - The `drive-contracts` browser drive found no problems.
 - Full DMW scenario UI drive after the navigation change: 106/106 ok,
   problems: none.
+- `scenario-dm`: 72 steps, 22 refusals. The phase 10 browser drive found no
+  problems. The "sender signs" guard was revert-checked: the scenario test fails
+  without it.
 
 ## Known Issues
 - `xlsx` 0.18.5 is now used to read files in the browser (R4).
@@ -84,8 +92,8 @@ then a canonical master context.
 See the master context §22.
 
 ## Next Tasks
-See the master context §24. First: update the user guide
-for the new sections, and add contracts steps to the DMW scenario.
+See the master context §24. First: update the user guide PDF
+for the new sections (the markdown guide already has phase 10).
 
 ## Important Context
 - Before committing, run `npm run db:test`, `npm run eval:check` and `npm run build`.

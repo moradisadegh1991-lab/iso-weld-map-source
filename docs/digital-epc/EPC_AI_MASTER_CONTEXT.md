@@ -510,8 +510,9 @@ upload (browser → /api/documents/upload-url → S3 PUT, or multipart/local)
 ## 17. Demo Dataset
 
 - [FINAL] **DMW scenario** (`lib/scenario/dm-pump.mjs`): DM-water transfer pump
-  `P-7001` feeding drum `D-7002`; 61 steps, 10 phases, 4 people
-  (pm/qc/client/designer), 16 refusal ("آزمون منفی") gates. Same step list →
+  `P-7001` feeding drum `D-7002`; 72 steps, 11 phases (0–10), 7 people
+  (pm/qc/client/designer + contracts/finance/hr for phase 10), 22 refusals
+  (11 "آزمون منفی" steps + refusals checked inside other steps). Same step list →
   guide `docs/digital-epc/03-scenario-dm-pump.md` (`npm run scenario:dm -- --doc`),
   auto-play (`npm run scenario:dm -- <email> [--upto step|all] [--creds file]`,
   runner `startFor(150)`), test `db/test/scenario-dm.mjs`. Step 0.1 sets
@@ -544,10 +545,21 @@ DMW scenario phases (who / where) — [FINAL], details in `03-scenario-dm-pump.m
 7. Quality/completions: punch, NCR, MC (refused with named open blockers, e.g.
    «MC امضا نمی‌شود — باز: Punch A باز (1): …»).
 8. Pre-commissioning → RFC → commissioning procedures → RFSU.
-9. Handover: asset master, PM, SPIR, CMMS export.
+9. Handover: asset master, PM, SPIR, CMMS export, performance test.
+10. Contracts/finance/HR: WBS-70-PIP/WBS-70-EQP (pm) → subcontract SC-70-MEC
+    with 4 items (3 platform metrics + 1 measured) sent for review (contracts;
+    sender cannot sign) → signed (pm) → advance 6000 (finance; second advance
+    over 10% refused) → statement 1 to day 125 (qc): 9 + 9 inch-dia, 2 set,
+    2 supports on MS-70-01; gross 3,945, net 2,800.95 → verify + comment (pm;
+    no final approval offered to the verifier) → approve (contracts; AC
+    WBS-70-PIP 945, WBS-70-EQP 3,000) → pay (finance; over-net refused) →
+    HR welder + 12 h on WBS-70-PIP (hr; day before mobilisation refused) →
+    log shows every step and person.
 
 - Browser drives: `tools/drive-*.mjs` (e.g. `drive-contracts.mjs` 35 checks,
-  `drive-weld-list.mjs`); scenario UI drive via scratch scripts.
+  `drive-weld-list.mjs`); the whole scenario through the forms:
+  `tools/drive-scenario-dm-ui.mjs` (`SCENARIO_FROM=<phase>`, `SCENARIO_UNTIL=<step>`),
+  one signed-in browser per person.
 - Contracts demo flow: contract (draft → in_review → signed; sender cannot sign)
   → BOQ lines → PDMS import → statement create → remeasure → submit (qc/contracts)
   → verify (engineer) → approve (contracts) → payment (finance) → `cost_entry` →
@@ -652,7 +664,8 @@ stage names, typed-subject dev identity (replaced by real auth).
   404c4ed (incl. contracts 14/14, users 12/12, api 24/24, removal 9/9);
   `eval:check` gate passed; `next build` clean; `tools/drive-contracts.mjs`
   problems: none; full DMW scenario UI drive after the log-tab navigation change:
-  106/106 ok, problems: none.
+  106/106 ok, problems: none; phase 10 (contracts → statement → payment →
+  HR → log) through the forms: problems: none.
 - Docs: `docs/digital-epc/00-master-plan-alignment.md` (plan vs built),
   `01-ecosystem-review.md`, `02-project-review.md` (R1–R11), `03-scenario-dm-pump.md`,
   `04-glossary.md` (§19 contracts terms); `docs/epc-llm/00–05`.
@@ -664,17 +677,17 @@ stage names, typed-subject dev identity (replaced by real auth).
 
 1. Update the user guide (PDF/artifact) with contracts, statements, finance, HR and
    «لاگ و گردش», incl. who does each step and prerequisites.
-2. Add contracts/statement steps to the DMW scenario (`dm-pump.mjs`) so guide,
-   auto-play and `scenario-dm` test cover them.
-3. Replace `xlsx` 0.18.5 (R4) now that the browser reads user files; keep
+2. Replace `xlsx` 0.18.5 (R4) now that the browser reads user files; keep
    export and import tests.
-4. Merge PR #1 (R5), then one PR per module.
-5. Measure extraction accuracy on real project isometrics with contractor weld
+3. Merge PR #1 (R5), then one PR per module.
+4. Measure extraction accuracy on real project isometrics with contractor weld
    registers (`extraction:report`, «حقیقت مرجع»).
-6. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
-7. PAC certificate and start-up log after performance tests.
-8. Statement extensions: variation orders, price adjustment, multi-currency with
+5. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
+6. PAC certificate and start-up log after performance tests.
+7. Statement extensions: variation orders, price adjustment, multi-currency with
    an explicit FX source (no guessed rates).
-9. Heat traceability to single weld + instruments as independent assets; then
+8. Heat traceability to single weld + instruments as independent assets; then
     Power BI model on reporting views with agreed KPI formulas.
-10. Schedule `db:backup` on the server and run the first restore drill (R2).
+9. Schedule `db:backup` on the server and run the first restore drill (R2).
+10. Second statement period in the DMW scenario: carried-forward measured quantities,
+    retention release, closing the contract.

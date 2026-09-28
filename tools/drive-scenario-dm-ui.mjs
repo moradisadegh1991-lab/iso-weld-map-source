@@ -5,8 +5,10 @@
  *   npm run scenario:dm -- you@… --creds /tmp/creds.json     (a fresh project at 0.1)
  *   DRIVE_EMAIL=you@… DRIVE_PASSWORD=… SCENARIO_CREDS=/tmp/creds.json node tools/drive-scenario-dm-ui.mjs
  *
- * Three signed-in browsers: you (the EPC's project engineer), the
- * contractor's QC inspector and the client's representative. Every step
+ * Signed-in browsers for each person of the scenario: you (the EPC's
+ * project engineer), the contractor's QC inspector, the client's
+ * representative, the designer — and, for phase 10, the contracts, finance
+ * and HR officers. Every step
  * fills the fields docs/digital-epc/03-scenario-dm-pump.md names, and
  * checks what the guide says should appear — refusals included.
  * `SCENARIO_UNTIL=2.10` stops after that step; `SCENARIO_FROM=5` starts at
@@ -1330,6 +1332,187 @@ try {
     const e94d = await errorOf(client); if (e94d) problems.push(`9.4 accept: ${e94d}`);
     const pt = flat(await ctc.innerText());
     check(/پذیرفته/.test(pt) && /PG-01.*32.*برآورده/.test(pt), `PT-7001 accepted; PG-01 met at 32 («${pt.slice(0, 160)}»)`);
+  }
+  if (!skipPhase(10)) {
+    // ── 10 ───────────────────────────────────────────────────────────────
+    const cu = await signIn(creds.people.contracts.email, creds.people.contracts.password);
+    const fu = await signIn(creds.people.finance.email, creds.people.finance.password);
+    const hu = await signIn(creds.people.hr.email, creds.people.hr.password);
+
+    at("10.1", "WBS elements for the mechanical subcontractor");
+    await open(pm, "/controls");
+    const acc = card(pm, "حساب‌های کنترلی");
+    for (const [code, title, bac] of [["WBS-70-PIP", "پایپینگ واحد 70", "20000"], ["WBS-70-EQP", "نصب تجهیزات واحد 70", "5000"]]) {
+      await fold(acc, "حساب کنترلی جدید");
+      await pm.fill("#ac-code", code); await pm.fill("#ac-title", title);
+      const mec = await pm.locator("#ac-c option").evaluateAll((os) => os.find((o) => o.textContent === "C-MEC")?.value);
+      await pm.selectOption("#ac-c", mec); await pm.fill("#ac-bac", bac); await pm.selectOption("#ac-m", "manual");
+      await acc.getByRole("button", { name: "ثبت حساب" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`10.1 ${code}: ${e}`);
+    }
+    const accText = flat(await acc.innerText());
+    check(/WBS-70-PIP/.test(accText) && /WBS-70-EQP/.test(accText), "two WBS elements on the controls page");
+
+    at("10.2", "subcontract SC-70-MEC with its payment items, sent for review");
+    await open(cu, "/contracts");
+    await fold(cu.locator("main"), "قرارداد جدید");
+    await cu.fill("#ct-no", "SC-70-MEC"); await cu.fill("#ct-title", "عملیات مکانیکال و پایپینگ واحد 70");
+    await cu.selectOption("#ct-kind", "subcontract");
+    const mecC = await cu.locator("#ct-con option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("C-MEC"))?.value);
+    await cu.selectOption("#ct-con", mecC); await cu.fill("#ct-value", "60000");
+    for (const [id, v] of [["#ct-adv", "10"], ["#ct-advrec", "20"], ["#ct-ret", "10"], ["#ct-ins", "5"], ["#ct-wht", "3"], ["#ct-vat", "9"]]) await cu.fill(id, v);
+    await cu.getByRole("button", { name: "ثبت قرارداد" }).click(); await settle(cu);
+    const e102 = await errorOf(cu); if (e102) problems.push(`10.2 contract: ${e102}`);
+    const crow = () => cu.locator("tr", { hasText: "SC-70-MEC" }).first();
+    check(/پیش‌نویس/.test(flat(await crow().innerText())) && /EUR/.test(flat(await crow().innerText())), "SC-70-MEC is a draft, in the project's EUR");
+    await crow().getByRole("button", { name: "جزئیات" }).click(); await settle(cu);
+    const lines = [
+      { no: "01", desc: "جوش سایت", method: "platform", metric: "piping_inchdia_field", qty: "20", rate: "40", wbs: "WBS-70-PIP" },
+      { no: "02", desc: "جوش کارگاهی", method: "platform", metric: "piping_inchdia_shop", qty: "40", rate: "25", wbs: "WBS-70-PIP" },
+      { no: "03", desc: "استقرار و تراز تجهیز", method: "platform", metric: "equipment_set", qty: "2", rate: "1500", wbs: "WBS-70-EQP" },
+      { no: "04", desc: "ساخت و نصب ساپورت لوله", method: "measured", unit: "عدد", qty: "4", rate: "180", wbs: "WBS-70-PIP" },
+    ];
+    for (const l of lines) {
+      if (!(await cu.locator("#ln-no").count())) await fold(cu.locator("main"), "ردیف پرداخت جدید");
+      await cu.fill("#ln-no", l.no); await cu.fill("#ln-desc", l.desc); await cu.selectOption("#ln-method", l.method);
+      if (l.metric) {
+        await cu.selectOption("#ln-metric", l.metric);
+        const sub = await cu.locator("#ln-sub option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("70-01"))?.value);
+        if (sub) await cu.selectOption("#ln-sub", sub); else problems.push("10.2: subsystem 70-01 is not offered for a platform item");
+      }
+      if (l.unit) await cu.fill("#ln-unit", l.unit);
+      await cu.fill("#ln-qty", l.qty); await cu.fill("#ln-rate", l.rate);
+      const w = await cu.locator("#ln-wbs option").evaluateAll((os, c) => os.find((o) => o.textContent.startsWith(c))?.value, l.wbs);
+      await cu.selectOption("#ln-wbs", w);
+      await cu.getByRole("button", { name: "ثبت ردیف" }).click(); await settle(cu);
+      const e = await errorOf(cu); if (e) problems.push(`10.2 item ${l.no}: ${e}`);
+    }
+    const boq = flat(await cu.locator(".card", { hasText: "ردیف‌های پرداخت" }).last().innerText());
+    check(["جوش سایت", "جوش کارگاهی", "استقرار و تراز تجهیز", "ساخت و نصب ساپورت لوله"].every((t) => boq.includes(t)) && /inch-dia/.test(boq),
+      "four items on the WBS; the platform items in their metric's unit");
+    await cu.getByRole("button", { name: "ارسال برای بررسی" }).click(); await settle(cu);
+    check(/در بررسی/.test(flat(await crow().innerText())), "SC-70-MEC is in review");
+
+    at("10.3", "negative: the sender signs the contract");
+    await cu.getByRole("button", { name: "امضای قرارداد" }).click(); await settle(cu);
+    const e103 = await errorOf(cu);
+    check(/فرستاده/.test(e103), `refused («${e103.slice(0, 90)}»)`);
+
+    at("10.4", "the project manager signs; finance pays the advance");
+    await open(pm, "/contracts");
+    await pm.locator("tr", { hasText: "SC-70-MEC" }).first().getByRole("button", { name: "جزئیات" }).click(); await settle(pm);
+    await pm.getByRole("button", { name: "امضای قرارداد" }).click(); await settle(pm);
+    const e104 = await errorOf(pm); if (e104) problems.push(`10.4 sign: ${e104}`);
+    check(/امضاشده/.test(flat(await pm.locator("tr", { hasText: "SC-70-MEC" }).first().innerText())), "SC-70-MEC signed");
+    await open(fu, "/finance", "به تفکیک قرارداد");
+    async function advance(amount, ref, day) {
+      await fold(fu.locator("main"), "پیش‌پرداخت یا آزادسازی حسن انجام کار");
+      const cid = await fu.locator("#op-c option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+      await fu.selectOption("#op-c", cid); await fu.selectOption("#op-k", "advance");
+      await fu.fill("#op-a", amount); await fu.fill("#op-d", d(day)); await fu.fill("#op-r", ref);
+      await fu.locator("form", { has: fu.locator("#op-a") }).getByRole("button", { name: "ثبت", exact: true }).click(); await settle(fu);
+      return errorOf(fu);
+    }
+    const eAdv = await advance("6000", "TR-70-ADV", 50); if (eAdv) problems.push(`10.4 advance: ${eAdv}`);
+    const eAdv2 = await advance("100", "TR-70-ADV2", 51);
+    check(/پیش‌پرداخت از/.test(eAdv2), `a second advance beyond 10% is refused («${eAdv2.slice(0, 90)}»)`);
+
+    at("10.5", "statement 1 to day 125: measured by the platform and the sheet");
+    await open(qc, "/contracts/statements");
+    const cSel = await qc.locator("#ps-contract option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+    if (cSel) { await qc.selectOption("#ps-contract", cSel); await settle(qc); }
+    await qc.fill("#ps-to", d(125));
+    await qc.getByRole("button", { name: /صورت وضعیت جدید/ }).click(); await settle(qc);
+    const e105 = await errorOf(qc); if (e105) problems.push(`10.5 create: ${e105}`);
+    const st = qc.locator(".card", { hasText: "صورت وضعیت 1 — SC-70-MEC" }).first();
+    const rowQty = async (t) => flat(await st.locator("tr", { hasText: t }).first().innerText());
+    check(/\b9\b/.test(await rowQty("جوش سایت")) && /3 مورد/.test(flat(await st.innerText())), `field welds: 9 inch-dia from 3 welds («${(await rowQty("جوش سایت")).slice(0, 110)}»)`);
+    check(/\b9\b/.test(await rowQty("جوش کارگاهی")), `shop welds: 9 inch-dia («${(await rowQty("جوش کارگاهی")).slice(0, 110)}»)`);
+    check(/\b2\b/.test(await rowQty("استقرار و تراز تجهیز")), "equipment set: 2");
+    check(await st.getByRole("button", { name: "ارسال برای تأیید" }).isDisabled(), "submission waits for the measurement sheet");
+    await qc.getByLabel("مقدار تجمعی ردیف 04").fill("2"); await qc.getByLabel("صورت‌جلسهٔ ردیف 04").fill("MS-70-01");
+    await st.locator("tr", { hasText: "ساخت و نصب ساپورت لوله" }).getByRole("button", { name: "ثبت" }).click(); await settle(qc);
+    const net = flat(await st.locator("[data-net]").innerText());
+    check(net.startsWith("2,800.95"), `net = 3945 − 789 − 394.5 − 197.25 − 118.35 + 355.05 = 2,800.95 («${net}»)`);
+    await st.getByRole("button", { name: "ارسال برای تأیید" }).click(); await settle(qc);
+    check(/ارسال‌شده/.test(flat(await st.locator("[data-status]").innerText())), "submitted");
+
+    at("10.6", "technical verification with a comment");
+    await open(pm, "/contracts/statements");
+    const pSel = await pm.locator("#ps-contract option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+    if (pSel) { await pm.selectOption("#ps-contract", pSel); await settle(pm); }
+    await pm.locator("tr", { hasText: "ارسال‌شده" }).first().getByRole("button", { name: "باز کردن" }).click(); await settle(pm);
+    await pm.getByLabel(/کامنت روی صورت وضعیت 1/).fill("جوش‌ها با گزارش RT-7001/RT-7002 و ساپورت‌ها با MS-70-01 تطبیق داده شد.");
+    await pm.getByRole("button", { name: "ثبت کامنت" }).click(); await settle(pm);
+    await pm.getByRole("button", { name: "تأیید فنی" }).click(); await settle(pm);
+    const e106 = await errorOf(pm); if (e106) problems.push(`10.6 verify: ${e106}`);
+    check(/تأیید فنی/.test(flat(await pm.locator("[data-status]").first().innerText())), "verified");
+
+    at("10.7", "negative: the verifier is offered no final approval");
+    check((await pm.getByRole("button", { name: /تأیید نهایی/ }).count()) === 0, "no «تأیید نهایی» for the one who verified");
+
+    at("10.8", "final approval — actual cost on the WBS");
+    await open(cu, "/contracts/statements");
+    const cSel2 = await cu.locator("#ps-contract option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+    if (cSel2) { await cu.selectOption("#ps-contract", cSel2); await settle(cu); }
+    await cu.locator("tr", { hasText: "تأیید فنی" }).first().getByRole("button", { name: "باز کردن" }).click(); await settle(cu);
+    await cu.getByRole("button", { name: /تأیید نهایی/ }).click(); await settle(cu);
+    const e108 = await errorOf(cu); if (e108) problems.push(`10.8 approve: ${e108}`);
+    check(/تأییدشده — منتظر پرداخت/.test(flat(await cu.locator("[data-status]").first().innerText())), "approved, awaiting payment");
+    await open(pm, "/controls");
+    const pipRow = flat(await card(pm, "حساب‌های کنترلی").locator("tr", { hasText: "WBS-70-PIP" }).first().innerText());
+    const eqpRow = flat(await card(pm, "حساب‌های کنترلی").locator("tr", { hasText: "WBS-70-EQP" }).first().innerText());
+    check(/\b945\b/.test(pipRow) && /3\.0k/.test(eqpRow), `AC: WBS-70-PIP 945, WBS-70-EQP 3.0k («${pipRow.slice(0, 100)}» · «${eqpRow.slice(0, 100)}»)`);
+
+    at("10.9", "finance pays the net");
+    await open(fu, "/finance");
+    const q = fu.locator(".card", { hasText: "منتظر پرداخت" }).first();
+    check(/SC-70-MEC/.test(flat(await q.innerText())), "the approved statement is in finance's queue");
+    async function pay(amount) {
+      await fold(q, "ثبت پرداخت");
+      await q.getByLabel(/^مبلغ .*صورت وضعیت 1 SC-70-MEC/).fill(amount);
+      await q.locator("input[type=date]").first().fill(d(130));
+      await q.getByLabel(/^سند .*صورت وضعیت 1 SC-70-MEC/).fill("TR-70-001");
+      await q.getByRole("button", { name: "ثبت پرداخت" }).last().click(); await settle(fu);
+      return errorOf(fu);
+    }
+    const eOver = await pay("3000");
+    check(/خالص قابل پرداخت/.test(eOver), `more than the net is refused («${eOver.slice(0, 90)}»)`);
+    const ePay = await pay("2800.95"); if (ePay) problems.push(`10.9 pay: ${ePay}`);
+    await fu.locator("[role=tab]", { hasText: "به تفکیک WBS" }).first().click().catch(() => {}); await settle(fu);
+    const wr = flat(await fu.locator("tr", { hasText: "WBS-70-PIP" }).first().innerText());
+    check(/945/.test(wr), `finance by WBS: WBS-70-PIP actual 945 («${wr.slice(0, 100)}»)`);
+
+    at("10.10", "HR: the contractor's welder and a day's hours on the WBS");
+    await open(hu, "/hr");
+    await fold(hu.locator("main"), "ثبت فرد");
+    await hu.fill("#hr-id", "7001001"); await hu.fill("#hr-name", "جوشکار سناریو"); await hu.selectOption("#hr-emp", "contractor");
+    const hc = await hu.locator("#hr-con option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("C-MEC"))?.value);
+    await hu.selectOption("#hr-con", hc); await hu.fill("#hr-pos", "جوشکار"); await hu.fill("#hr-trade", "Welder"); await hu.fill("#hr-mob", d(60));
+    await hu.locator("form", { has: hu.locator("#hr-id") }).getByRole("button", { name: "ثبت فرد" }).click(); await settle(hu);
+    const e1010 = await errorOf(hu); if (e1010) problems.push(`10.10 person: ${e1010}`);
+    check(/جوشکار سناریو/.test(flat(await hu.locator("table").first().innerText())), "the welder is on the register");
+    await hu.locator("[role=tab]", { hasText: "کارکرد روزانه" }).first().click(); await settle(hu);
+    const pid = await hu.locator("#ts-p option").evaluateAll((os) => os.find((o) => o.textContent.includes("جوشکار سناریو"))?.value);
+    await hu.selectOption("#ts-p", pid); await hu.fill("#ts-d", d(55)); await hu.fill("#ts-h", "8"); await hu.fill("#ts-o", "0");
+    await hu.getByRole("button", { name: "ثبت کارکرد" }).click(); await settle(hu);
+    const eEarly = await errorOf(hu);
+    check(/نیامده/.test(eEarly), `a day before mobilisation is refused («${eEarly.slice(0, 90)}»)`);
+    await hu.fill("#ts-d", d(93)); await hu.fill("#ts-h", "10"); await hu.fill("#ts-o", "2");
+    const w = await hu.locator("#ts-w option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("WBS-70-PIP"))?.value);
+    await hu.selectOption("#ts-w", w);
+    await hu.getByRole("button", { name: "ثبت کارکرد" }).click(); await settle(hu);
+    const eTs = await errorOf(hu); if (eTs) problems.push(`10.10 timesheet: ${eTs}`);
+    check(/جوشکار سناریو/.test(flat(await hu.locator(".card", { hasText: "کارکرد روزانه" }).last().innerText())), "12 hours on WBS-70-PIP recorded");
+
+    at("10.11", "the log: every step, who signed, and the comment");
+    await open(pm, "/log/contracts");
+    await pm.getByLabel("جستجو در لاگ").fill("SC-70-MEC"); await settle(pm);
+    const lg = flat(await pm.locator(".loglist").innerText());
+    for (const a of ["ایجاد", "ارسال", "امضا", "کامنت", "تأیید فنی", "پرداخت"]) check(lg.includes(a), `contracts log has «${a}»`);
+    const who = flat(await pm.locator(".card", { hasText: "چه کسانی" }).innerText());
+    check(["امور قراردادها (سناریو)", "مالی (سناریو)", "بازرس QC (سناریو)"].every((n) => who.includes(n)), `the people of the log («${who.slice(0, 160)}»)`);
+    for (const p of [cu, fu, hu]) await p.context().close();
   }
 } catch (e) {
   if (e.message !== "stop") { problems.push(`${step}: ${e.message.split("\n")[0]}`); for (const [who, p] of [["pm", pm], ["qc", qc], ["client", client]]) await p.screenshot({ path: `${SHOT}/scenario-ui-${step}-${who}.png`, fullPage: true }).catch(() => {}); }

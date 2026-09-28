@@ -7,9 +7,10 @@
  *   npm run scenario:dm -- --doc                      rewrite docs/digital-epc/03-scenario-dm-pump.md
  *
  * Each run makes a NEW project (DMW, then DMW2, DMW3…), so nothing you did
- * in an earlier one is touched. It also makes the two other people the
- * scenario needs — the contractor's QC inspector and the client's
- * representative — and prints their passwords once; nothing stores them.
+ * in an earlier one is touched. It also makes the other people the
+ * scenario needs (lib/scenario/dm-pump.mjs PEOPLE: QC inspector, client's
+ * representative, designer, contracts, finance and HR officers) and prints
+ * their passwords once; nothing stores them.
  *
  * Every date is «day N» of the job; day 0 is printed, and sits far enough
  * back that the whole job is in the past (a 28-day cube break cannot be
