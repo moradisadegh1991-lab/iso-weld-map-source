@@ -6,6 +6,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tender from "./Tender";
 import Vendors from "./Vendors";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Procurement and expediting.
@@ -238,7 +239,7 @@ function LineAction({ l, kind, data, post, done }) {
   );
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}>
-      <Field id={`rn-${l.id}`} label="شمارهٔ رسید (MRR)" value={f.receiptNo} on={(v) => setF({ ...f, receiptNo: v })} />
+      <FormNo id={`rn-${l.id}`} form="receipt" label="شمارهٔ رسید (MRR)" value={f.receiptNo} on={(v) => setF({ ...f, receiptNo: v })} />
       <Field id={`rd-${l.id}`} label="تاریخ" type="date" value={f.receivedOn} on={(v) => setF({ ...f, receivedOn: v })} />
       <Field id={`rq-${l.id}`} label={`مقدار (${l.uom}) — باقی ${l.qty - l.receivedQty}`} type="number" value={f.qty} on={(v) => setF({ ...f, qty: v })} />
       <Field id={`rh-${l.id}`} label="Heat No." value={f.heatNo} on={(v) => setF({ ...f, heatNo: v })} />
@@ -296,7 +297,7 @@ function PoForms({ o, data, post }) {
         const lines = Object.entries(s.qty).filter(([, q]) => Number(q) > 0).map(([poLineId, qty]) => ({ poLineId, qty }));
         if (await post({ kind: "shipment", poId: o.po.id, shipmentNo: s.shipmentNo, shippedOn: s.shippedOn, etaOn: s.etaOn, mode: s.mode, lines })) setS({ ...s, shipmentNo: "", qty: {} }); }}>
         <b>محمولهٔ جدید</b>
-        <Field id={`sn-${o.po.id}`} label="شمارهٔ محموله (PL / BL)" value={s.shipmentNo} on={(v) => setS({ ...s, shipmentNo: v })} />
+        <FormNo id={`sn-${o.po.id}`} form="shipment" label="شمارهٔ محموله (PL / BL)" value={s.shipmentNo} on={(v) => setS({ ...s, shipmentNo: v })} />
         <Field id={`sd-${o.po.id}`} label="تاریخ حمل" type="date" value={s.shippedOn} on={(v) => setS({ ...s, shippedOn: v })} />
         <Field id={`se-${o.po.id}`} label="ETA" type="date" value={s.etaOn} on={(v) => setS({ ...s, etaOn: v })} />
         {open.map((x) => (
@@ -324,7 +325,7 @@ function NewPo({ data, post, goVendors }) {
       <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "po", ...p })) setP({ ...p, poNo: "", title: "" }); }}>
         <h2>سفارش خرید جدید</h2>
         <div className="grid2">
-          <Field id="po-no" label="شمارهٔ PO" value={p.poNo} on={(x) => setP({ ...p, poNo: x })} />
+          <FormNo id="po-no" form="po" label="شمارهٔ PO" value={p.poNo} on={(x) => setP({ ...p, poNo: x })} />
           <Select id="po-v" label="فروشنده" value={p.vendorId} on={(x) => setP({ ...p, vendorId: x })} opts={data.vendors.map((x) => [x.id, `${x.code} — ${x.name}`])} blank="—" />
           <Field id="po-t" label="عنوان" value={p.title} on={(x) => setP({ ...p, title: x })} />
           <Field id="po-c" label="ارز PO" value={p.currency} on={(x) => setP({ ...p, currency: x })} />

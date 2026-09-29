@@ -7,6 +7,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tabs from "../../components/ui/Tabs";
 import { WorkDateScope, WorkDateField, useWorkDate, DayHint, localToday } from "../../components/ui/WorkDate";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Civil: foundations from excavation to handover, and the concrete that
@@ -235,7 +236,7 @@ function Pours({ f, pours, mayRecord, post, contractors = [] }) {
             e.preventDefault();
             if (await post({ kind: "pour", tagId: f.id, ...p, contractorId: p.contractorId || null })) setP(blank);
           }}>
-            <Field id="p-no" label="شمارهٔ پور کارت" value={p.pourNo} on={(v) => setP({ ...p, pourNo: v })} required />
+            <FormNo id="p-no" form="pour" label="شمارهٔ پور کارت" value={p.pourNo} on={(v) => setP({ ...p, pourNo: v })} />
             <Field id="p-on" label="تاریخ بتن‌ریزی" type="date" value={p.pouredOn} on={(v) => setP({ ...p, pouredOn: v })} required
                    max={localToday()} after={<DayHint date={p.pouredOn} />} />
             <Field id="p-vol" label="حجم (m³)" type="number" value={p.volumeM3} on={(v) => setP({ ...p, volumeM3: v })} />

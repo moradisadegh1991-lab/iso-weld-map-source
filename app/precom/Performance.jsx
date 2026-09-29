@@ -4,6 +4,7 @@ import { usePlatform } from "../../lib/client/platform.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import { useRemove } from "../../lib/client/remove.mjs";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Performance test against the contract's guarantees
@@ -173,7 +174,7 @@ function TestForm({ p, post, scopeText }) {
       e.preventDefault();
       if (await post({ kind: "perf-test", ...f, startedAt: new Date(f.startedAt).toISOString(), endedAt: new Date(f.endedAt).toISOString() })) setF(blank);
     }}>
-      <Field id="pt-no2" label="شمارهٔ آزمون" value={f.testNo} on={(v) => setF({ ...f, testNo: v })} ltr required />
+      <FormNo id="pt-no2" form="perf_test" label="شمارهٔ آزمون" value={f.testNo} on={(v) => setF({ ...f, testNo: v })} />
       <div className="field"><label htmlFor="pt-unit">محدوده</label>
         <select id="pt-unit" value={f.unitId} onChange={(e) => setF({ ...f, unitId: e.target.value })}>
           <option value="">کل کارخانه — {scopeText(null)}</option>

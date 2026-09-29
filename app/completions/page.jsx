@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import Tabs from "../../components/ui/Tabs";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Mechanical completion, subsystem by subsystem, and the pressure-test
@@ -221,7 +222,7 @@ function PackForm({ data, post }) {
     <form style={{ marginTop: 10 }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "package", ...f })) setF(blank); }}>
       <h2>پکیج تست جدید / ویرایش</h2>
       <div className="grid2">
-        <Field id="pk-no" label="شمارهٔ پکیج" value={f.packNo} on={(v) => setF({ ...f, packNo: v })} required />
+        <FormNo id="pk-no" form="test_pack" label="شمارهٔ پکیج" value={f.packNo} on={(v) => setF({ ...f, packNo: v })} />
         <Select id="pk-s" label="ساب‌سیستم" value={f.subsystemId} on={(v) => setF({ ...f, subsystemId: v })} opts={data.subsystems.map((s) => [s.id, s.code])} blank="—" />
         <Select id="pk-m" label="نوع تست" value={f.medium} on={(v) => setF({ ...f, medium: v })} opts={Object.entries(data.media)} />
         {f.medium === "hydrostatic" && <Field id="pk-rr" label="Rr = ST/S (از محاسبات مهندسی)" type="number" value={f.stressRatio} on={(v) => setF({ ...f, stressRatio: v })} />}

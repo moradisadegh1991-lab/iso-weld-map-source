@@ -3,6 +3,7 @@ import { useState } from "react";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import { useRemove } from "../../lib/client/remove.mjs";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Safe work before the permit: the project's rules, people and their
@@ -384,7 +385,7 @@ function JsaForm({ data, post }) {
   const [f, setF] = useState(blank);
   return (
     <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "jsa", ...f })) setF(blank); }}>
-      <Field id="jn-no" label="شمارهٔ JSA" value={f.jsaNo} on={(v) => setF({ ...f, jsaNo: v })} required />
+      <FormNo id="jn-no" form="jsa" label="شمارهٔ JSA" value={f.jsaNo} on={(v) => setF({ ...f, jsaNo: v })} />
       <Field id="jn-rev" label="رویژن" value={f.revision} on={(v) => setF({ ...f, revision: v })} required />
       <Field id="jn-t" label="عنوان کار" value={f.title} on={(v) => setF({ ...f, title: v })} required />
       <Field id="jn-a" label="محدوده" value={f.area} on={(v) => setF({ ...f, area: v })} />

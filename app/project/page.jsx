@@ -327,6 +327,8 @@ export default function ProjectPage() {
       <UnitsCard projectId={projectId} call={call} editable={editable}
                  projectGrade={p.grade_elevation_mm} />
 
+      <FormCodesCard projectId={projectId} call={call} editable={editable} />
+
       <div className="card" data-keep>
         <h2>کد پروژه</h2>
         <p className="muted sm">
@@ -464,6 +466,54 @@ function UnitsCard({ projectId, call, editable, projectGrade }) {
             <span className="hint">خالی = همان گرید پروژه</span></div>
           <div><button className="btn" type="submit" disabled={!f.code}>افزودن واحد</button></div>
         </form>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The code of every form whose numbers the platform issues, and the number
+ * each will take next. A project may name a form its own way (DMW-PTW);
+ * an empty code goes back to the platform's default.
+ */
+function FormCodesCard({ projectId, call, editable }) {
+  const { data, error, reload } = useProjectData((id) => `/api/numbering?projectId=${id}`, []);
+  const [draft, setDraft] = useState({});
+  const [msg, setMsg] = useState(null);
+  async function save(form) {
+    setMsg(null);
+    try {
+      await call("/api/numbering", { method: "POST", body: JSON.stringify({ projectId, form, code: draft[form] ?? "" }) });
+      setDraft((d) => { const n = { ...d }; delete n[form]; return n; }); reload();
+    } catch (e) { setMsg(e.message); }
+  }
+  return (
+    <div className="card">
+      <h2>کد فرم‌ها و شماره‌گذاری خودکار</h2>
+      <p className="muted sm">
+        هر رکوردی که پلتفرم صادر می‌کند شماره‌اش را از کد فرم و شمارهٔ بعدی همان فرم می‌گیرد (مثلاً PTW-0001)؛
+        فیلد شماره را در فرم خالی بگذارید. شمارهٔ دستی نگه داشته می‌شود و هرگز دوباره صادر نمی‌شود.
+        شماره‌هایی که از بیرون می‌آیند (ترانسمیتال طراح، شمارهٔ ذوب، تگ و خط نقشه) خودکار نیستند.
+      </p>
+      {error && <p className="err">{error}</p>}
+      {msg && <p className="err">{msg}</p>}
+      {data && (
+        <table className="dtable">
+          <thead><tr><th>فرم</th><th>کد</th><th>صادرشده</th><th>شمارهٔ بعدی</th>{editable && <th />}</tr></thead>
+          <tbody>{data.forms.map((f) => (
+            <tr key={f.form} data-form={f.form}>
+              <td>{f.title}</td>
+              <td>{editable
+                ? <input aria-label={`کد فرم ${f.title}`} dir="ltr" style={{ width: 110 }} value={draft[f.form] ?? f.code}
+                         onChange={(e) => setDraft({ ...draft, [f.form]: e.target.value })} />
+                : <span className="mono">{f.code}</span>}
+                {f.own && <span className="muted sm"> (پیش‌فرض {f.defaultCode})</span>}</td>
+              <td className="mono">{f.issued}</td>
+              <td className="mono">{f.scoped ? <span className="muted sm">به ازای هر ساب‌سیستم: 70-01-{f.code}001</span> : f.next}</td>
+              {editable && <td><button className="btn ghost" type="button" disabled={draft[f.form] === undefined} onClick={() => save(f.form)}>ذخیره</button></td>}
+            </tr>
+          ))}</tbody>
+        </table>
       )}
     </div>
   );

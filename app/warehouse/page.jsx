@@ -9,6 +9,7 @@ import Fold from "../../components/ui/Fold";
 import Mesc from "./Mesc";
 import Stores from "./Stores";
 import Tabs from "../../components/ui/Tabs";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Warehouse: what arrived, what inspection and the certificates allow out,
@@ -304,7 +305,7 @@ function Receive({ items, post }) {
           <select id="rc-item" value={f.itemId} onChange={(e) => setF({ ...f, itemId: e.target.value })}>
             {items.map((i) => <option key={i.id} value={i.id}>{i.code} — {i.description}</option>)}
           </select></div>
-        <Field id="rc-no" label="شمارهٔ رسید" value={f.receiptNo} on={(v) => setF({ ...f, receiptNo: v })} required />
+        <FormNo id="rc-no" form="receipt" label="شمارهٔ رسید" value={f.receiptNo} on={(v) => setF({ ...f, receiptNo: v })} />
         <Field id="rc-po" label="PO" value={f.poRef} on={(v) => setF({ ...f, poRef: v })} />
         <Field id="rc-sup" label="تأمین‌کننده" value={f.supplier} on={(v) => setF({ ...f, supplier: v })} />
         <Field id="rc-heat" label="شمارهٔ ذوب (Heat)" value={f.heatNo} on={(v) => setF({ ...f, heatNo: v })} />

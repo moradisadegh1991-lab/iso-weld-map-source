@@ -6,6 +6,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import { useRemove } from "../../lib/client/remove.mjs";
 import Incoming from "./Incoming";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * The master document register.
@@ -226,7 +227,7 @@ function TransmittalForm({ data, post }) {
       if (await post({ kind: "transmittal", ...f, revisionIds: f.picked })) setF({ ...f, transmittalNo: "", picked: [] }); }}>
       <h2>ترانسمیتال جدید</h2>
       <div className="grid2">
-        <Field id="tr-no" label="شمارهٔ ترانسمیتال" value={f.transmittalNo} on={(v) => setF({ ...f, transmittalNo: v })} />
+        <FormNo id="tr-no" form="transmittal" label="شمارهٔ ترانسمیتال" value={f.transmittalNo} on={(v) => setF({ ...f, transmittalNo: v })} />
         <Field id="tr-to" label="گیرنده" value={f.toParty} on={(v) => setF({ ...f, toParty: v })} />
         <Select id="tr-p" label="هدف" value={f.purpose} on={(v) => setF({ ...f, purpose: v })}
                 opts={[["review", "بررسی"], ["approval", "تأیید"], ["construction", "ساخت"], ["information", "اطلاع"]]} />

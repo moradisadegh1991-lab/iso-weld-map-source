@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Before the PO and after it: the material requisition and its tender, and
@@ -159,7 +160,7 @@ function NewMr({ post }) {
   return (
     <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "mr", ...f })) setF(blank); }}>
       <div className="grid2">
-        <Field id="mr-no" label="شمارهٔ MR" value={f.mrNo} on={(v) => setF({ ...f, mrNo: v })} />
+        <FormNo id="mr-no" form="mr" label="شمارهٔ MR" value={f.mrNo} on={(v) => setF({ ...f, mrNo: v })} />
         <Field id="mr-title" label="عنوان" value={f.title} on={(v) => setF({ ...f, title: v })} />
         <Field id="mr-disc" label="رشته (اختیاری)" value={f.discipline} on={(v) => setF({ ...f, discipline: v })} />
       </div>
@@ -234,7 +235,7 @@ function AwardForm({ m, post }) {
       <div className="grid2">
         <Select id={`a-b-${m.id}`} label="پیشنهاد برنده" value={f.bidId} on={on("bidId")}
                 opts={ok.map((b) => [b.id, `${b.vendorCode} — ${b.totalPrice?.toLocaleString("en-US")} ${b.currency}${b.lowest ? " (کمترین)" : ""}`])} blank="—" />
-        <Field id={`a-p-${m.id}`} label="شمارهٔ PO" value={f.poNo} on={on("poNo")} />
+        <FormNo id={`a-p-${m.id}`} form="po" label="شمارهٔ PO" value={f.poNo} on={on("poNo")} />
         <Field id={`a-d-${m.id}`} label="تاریخ PO" type="date" value={f.placedOn} on={on("placedOn")} />
       </div>
       {chosen && !chosen.lowest && <Field id={`a-j-${m.id}`} label="دلیل انتخاب (کمترین قیمت نیست)" value={f.justification} on={on("justification")} />}

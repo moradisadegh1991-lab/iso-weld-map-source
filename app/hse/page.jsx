@@ -6,6 +6,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import SafeWork, { Dates } from "./SafeWork";
 import Tabs from "../../components/ui/Tabs";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * HSE: hours worked, what went wrong, the permits that let work start, and
@@ -256,7 +257,7 @@ function PermitForm({ data, post }) {
     }}>
       <h2>درخواست مجوز</h2>
       <div className="grid2">
-        <Field id="pt-no" label="شمارهٔ مجوز" value={f.permitNo} on={(v) => setF({ ...f, permitNo: v })} required />
+        <FormNo id="pt-no" form="permit" label="شمارهٔ مجوز" value={f.permitNo} on={(v) => setF({ ...f, permitNo: v })} />
         <div className="field"><label htmlFor="pt-type">نوع</label>
           <select id="pt-type" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value, equipmentId: "" })}>
             {Object.entries(data.permitTypes).map(([k, t]) => <option key={k} value={k}>{t.title}{t.gas ? " — تست گاز" : ""}</option>)}
@@ -396,7 +397,7 @@ function IncidentForm({ data, post }) {
     }}>
       <h2>گزارش رویداد</h2>
       <div className="grid2">
-        <Field id="in-ref" label="شماره" value={f.refNo} on={(v) => setF({ ...f, refNo: v })} required />
+        <FormNo id="in-ref" form="incident" label="شماره" value={f.refNo} on={(v) => setF({ ...f, refNo: v })} />
         <Field id="in-at" label="زمان" type="datetime-local" value={f.occurredAt} on={(v) => setF({ ...f, occurredAt: v })} required />
         <Field id="in-area" label="محدوده" value={f.area} on={(v) => setF({ ...f, area: v })} />
         <div className="field"><label htmlFor="in-c">پیمانکار</label>

@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * The reviewers' side of what the designer sends: distribution to
@@ -164,7 +165,7 @@ function ReplyForm({ t, data, post }) {
         ))}</tbody>
       </table>
       <div className="grid2">
-        <Field id={`rp-no-${t.id}`} label="شمارهٔ ترانسمیتال پاسخ" value={f.replyNo} on={(v) => setF({ ...f, replyNo: v })} />
+        <FormNo id={`rp-no-${t.id}`} form="reply" label="شمارهٔ ترانسمیتال پاسخ" value={f.replyNo} on={(v) => setF({ ...f, replyNo: v })} />
         <Field id={`rp-on-${t.id}`} label="تاریخ پاسخ" type="date" value={f.sentOn} on={(v) => setF({ ...f, sentOn: v })} />
       </div>
       <button className="btn">ثبت پاسخ</button>

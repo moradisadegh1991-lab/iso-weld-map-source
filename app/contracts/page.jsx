@@ -6,6 +6,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import EntityLog from "../../components/ui/EntityLog";
 import { money, Field } from "../../components/contracts/ui";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Contracts and subcontracts: the terms every payment statement applies,
@@ -79,7 +80,7 @@ export default function ContractsPage() {
               await post({ ...rest, kind: "contract", contractKind, contractorId: f.contractorId || null }, () => { setF(BLANK); setEditing(false); });
             }}>
               <div className="grid2">
-                <Field id="ct-no" label="شمارهٔ قرارداد" value={f.contractNo} on={on("contractNo")} required readOnly={editing} ltr />
+                <FormNo id="ct-no" form="contract" label="شمارهٔ قرارداد" value={f.contractNo} on={(v) => setF({ ...f, contractNo: v })} readOnly={editing} />
                 <Field id="ct-title" label="عنوان" value={f.title} on={on("title")} required />
                 <div className="field"><label htmlFor="ct-kind">نوع</label>
                   <select id="ct-kind" value={f.kind} onChange={on("kind")}>{Object.entries(data.kinds).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>

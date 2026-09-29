@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useProjectData } from "../../lib/client/platform.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
+import FormNo from "../../components/ui/FormNo";
 
 /**
  * Reservations and stock counts. Rules: lib/warehouse/reserve.mjs.
@@ -187,7 +188,7 @@ function OpenCount({ post }) {
   return (
     <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "count-open", ...f })) setF(blank); }}>
       <div className="grid2">
-        <Field id="sc-no" label="شمارهٔ انبارگردانی" value={f.countNo} on={(v) => setF({ ...f, countNo: v })} />
+        <FormNo id="sc-no" form="stock_count" label="شمارهٔ انبارگردانی" value={f.countNo} on={(v) => setF({ ...f, countNo: v })} />
         <Field id="sc-on" label="تاریخ شمارش" type="date" value={f.countedOn} on={(v) => setF({ ...f, countedOn: v })} />
         <Field id="sc-sc" label="محدوده (محل یا گروه کالا)" value={f.scope} on={(v) => setF({ ...f, scope: v })} />
       </div>
