@@ -169,6 +169,8 @@ function Detail({ c, s, mayRecord, mayRegister, post, tags }) {
             <span className="sm muted">
               {x.na ? "برای کابل فشار ضعیف کاربرد ندارد"
                 : x.status === "done" ? `انجام شد${x.doneAt ? " · " + fa(x.doneAt) : ""}`
+                : x.claimedOn ? `منتظر تأیید کارفرما · اعلام ${fa(x.claimedOn)}`
+                : x.rejected ? `رد کارفرما: ${x.rejected}`
                 : x.note?.level === "bad" ? "رد — اصلاح لازم است"
                 : x.derived && x.note?.level === "warn" ? "بدون حکم"
                 : x.blocked ? `منتظر: ${x.waitingOn.map((w) => w.title).join("، ")}`

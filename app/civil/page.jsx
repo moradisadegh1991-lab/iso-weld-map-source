@@ -164,6 +164,8 @@ function FoundationDetail({ f, detail, mayRecord, post, contractors }) {
             <span className="sm"><b>{s.derived ? "⚙ " : ""}{s.title}</b></span>
             <span className="sm muted">
               {s.status === "done" ? `انجام شد${s.doneAt ? " · " + fa(s.doneAt) : ""}`
+              : s.claimedOn ? `منتظر تأیید کارفرما · اعلام ${fa(s.claimedOn)}`
+              : s.rejected ? `رد کارفرما: ${s.rejected}`
                 : s.note?.level === "bad" ? "رد — اصلاح لازم است"
                 : s.status === "in_progress" ? "در حال انجام"
                 : s.blocked ? `منتظر: ${s.waitingOn.map((w) => w.title).join("، ")}`

@@ -229,6 +229,8 @@ function Detail({ i, s, mayRecord, mayRegister, post, spec }) {
             <span className="sm muted">
               {x.na ? "این آیتم عایق ندارد"
                 : x.status === "done" ? `انجام شد${x.doneAt ? " · " + fa(x.doneAt) : ""}`
+                : x.claimedOn ? `منتظر تأیید کارفرما · اعلام ${fa(x.claimedOn)}`
+                : x.rejected ? `رد کارفرما: ${x.rejected}`
                 : x.note?.level === "bad" ? "رد — اصلاح لازم است"
                 : x.note?.level === "hold" ? "منتظر تست فشار اسپول"
                 : x.status === "in_progress" ? "در حال انجام"

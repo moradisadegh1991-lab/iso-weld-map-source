@@ -146,6 +146,8 @@ function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve }) {
                     <span className="sm muted">
                       {s.na ? "ندارد — این اسپول جوشی از این نوع ندارد"
                         : s.status === "done" ? `انجام شد${s.doneAt ? " · " + fa(s.doneAt) : ""}`
+                        : s.claimedOn ? `منتظر تأیید کارفرما · اعلام ${fa(s.claimedOn)}`
+                        : s.rejected ? `رد کارفرما: ${s.rejected}`
                         : s.status === "in_progress" ? "در حال انجام"
                         : s.blocked ? `منتظر: ${s.waitingOn.map((w) => w.title).join("، ")}`
                         : "آمادهٔ شروع"}

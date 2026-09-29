@@ -208,6 +208,8 @@ function Detail({ i, s, mayRecord, mayRegister, post, tags }) {
             <span className="sm"><b>{x.derived ? "⚙ " : ""}{x.title}</b></span>
             <span className="sm muted">
               {x.status === "done" ? `انجام شد${x.doneAt ? " · " + fa(x.doneAt) : ""}${x.refNo ? " · " + x.refNo : ""}`
+              : x.claimedOn ? `منتظر تأیید کارفرما · اعلام ${fa(x.claimedOn)}`
+              : x.rejected ? `رد کارفرما: ${x.rejected}`
                 : x.note?.level === "bad" ? "رد — اصلاح لازم است"
                 : x.derived && x.note?.level === "warn" ? "بدون حکم"
                 : x.blocked ? `منتظر: ${x.waitingOn.map((w) => w.title).join("، ")}`

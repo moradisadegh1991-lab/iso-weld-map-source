@@ -170,6 +170,8 @@ function Detail({ s, detail, mayRecord, post, standard }) {
             <span className="sm muted">
               {x.na ? "لازم نیست (طبق مشخصات سازه)"
                 : x.status === "done" ? `انجام شد${x.doneAt ? " · " + fa(x.doneAt) : ""}`
+                : x.claimedOn ? `منتظر تأیید کارفرما · اعلام ${fa(x.claimedOn)}`
+                : x.rejected ? `رد کارفرما: ${x.rejected}`
                 : x.note?.level === "bad" ? "رد — اصلاح لازم است"
                 : x.status === "in_progress" ? "در حال انجام"
                 : x.blocked ? `منتظر: ${x.waitingOn.map((w) => w.title).join("، ")}`
