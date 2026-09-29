@@ -149,12 +149,13 @@ function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve }) {
                         : s.claimedOn ? `منتظر تأیید کارفرما · اعلام ${fa(s.claimedOn)}`
                         : s.rejected ? `رد کارفرما: ${s.rejected}`
                         : s.status === "in_progress" ? "در حال انجام"
+                        : s.claimable ? `پیش‌نیاز منتظر تأیید کارفرما — قابل اعلام`
                         : s.blocked ? `منتظر: ${s.waitingOn.map((w) => w.title).join("، ")}`
                         : "آمادهٔ شروع"}
                       {s.refNo ? ` · ${s.refNo}` : ""}
                     </span>
                     {s.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
-                    {onRecord && !s.derived && s.status !== "done" && !s.blocked && (
+                    {onRecord && !s.derived && s.status !== "done" && (!s.blocked || s.claimable) && (
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <input aria-label={`مرجع ${s.title}`} placeholder="مرجع (فرم، گزارش)" dir="ltr" style={{ width: 120 }}
                                value={refs[s.code] || ""} onChange={(e) => setRefs({ ...refs, [s.code]: e.target.value })} />

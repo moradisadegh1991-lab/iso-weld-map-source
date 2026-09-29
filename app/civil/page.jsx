@@ -168,13 +168,14 @@ function FoundationDetail({ f, detail, mayRecord, post, contractors }) {
               : s.rejected ? `رد کارفرما: ${s.rejected}`
                 : s.note?.level === "bad" ? "رد — اصلاح لازم است"
                 : s.status === "in_progress" ? "در حال انجام"
+                : s.claimable ? `پیش‌نیاز منتظر تأیید کارفرما — قابل اعلام`
                 : s.blocked ? `منتظر: ${s.waitingOn.map((w) => w.title).join("، ")}`
                 : "آمادهٔ شروع"}
               {s.refNo ? ` · ${s.refNo}` : ""}
             </span>
             {s.note && <span className={"sm " + (s.note.level === "bad" ? "err" : "muted")}>{s.note.text}</span>}
             {s.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
-            {mayRecord && !s.derived && s.status !== "done" && !s.blocked && (
+            {mayRecord && !s.derived && s.status !== "done" && (!s.blocked || s.claimable) && (
               <button className="btn" style={{ padding: "4px 10px" }}
                       onClick={() => post({ kind: "activity", tagId: f.id, code: s.code, doneAt: workOn })}>
                 ثبت انجام</button>

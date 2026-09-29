@@ -5,6 +5,7 @@ import TableKit from "../../../components/ui/TableKit";
 import Tabs from "../../../components/ui/Tabs";
 import Fold from "../../../components/ui/Fold";
 import SubmitForm from "../SubmitForm";
+import { DesignerTqs, DesignerAsBuilt } from "./DesignerChanges";
 
 /**
  * The designer portal: the designer's side of document control, and all a
@@ -122,6 +123,8 @@ export default function DesignerPortal() {
             </TableKit>
           )}
         </div>
+        <DesignerTqs />
+        <DesignerAsBuilt />
       </Tabs>
     </div>
   );

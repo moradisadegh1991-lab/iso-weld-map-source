@@ -123,6 +123,23 @@ Built — [FINAL] (each with migration, repo, API, page, `db/test/*`, browser dr
   with zero references (catalog-counted `USED_IN`).
 - **Dates**: «روز پروژه» (project day N from `project.start_date`) beside every
   work date; no future pours; derived test dates.
+- **Form numbers** (2026-09-29, `054`): every platform-issued form number is
+  its form code + sequence (`PTW-0001`, `IR-00031`, `70-01-P001`), issued when
+  the field is left blank, after validation, skipping numbers typed by hand;
+  codes per project (`form_code`). A test audits that every table has a PK.
+- **Work handover** (`055`): with `site_work_approval` on, a contractor-side
+  record is a claim (draft) until a company-party member approves it
+  («تحویل کار پیمانکار»); rejected with a reason, it stays open. A step
+  waiting only on claimed steps is `claimable` (never a sign-off).
+- **Work front** (`/workfront`): startable work per front (spool shop, civil,
+  equipment, piping site, E&I, coating) by material on hand/arriving — today,
+  ≤7 days, ≤30 days, later; unknown material and blocked work apart; parallel
+  fronts shown together.
+- **Changes** (`056`, `/changes` + designer portal): TQ (designer answers,
+  engineer closes), site change (site-run / field change / as-built; approved
+  by another; designer's as-built revision must reach the MDR before closing),
+  work order for work outside the contract (issued by someone other than its
+  preparer; becomes a measured `WO-…` contract item paid by the next statement).
 
 ## 5. Technical Architecture
 
@@ -393,6 +410,18 @@ Migrations `001`–`053` (+`044b`). All project tables RLS. Tables by domain:
   - `hr_timesheet` (person, `work_date`, `hours`, `overtime`, `account_id`; ≤24 h)
   - `workflow_event` (`section`, `entity_type`, `entity_id`, `entity_label`,
     `action`, `from_state`, `to_state`, `comment`, `user_id`, `at`; append-only).
+- Numbering/claims/changes (`054`–`056`):
+  - `form_counter` (project, form, `last_no`), `form_code` (project, form, `code`)
+  - `project.site_work_approval`; on `tag_activity`, `spool_activity`,
+    `cable_activity`, `instrument_activity`, `coating_activity`: `claimed_on`,
+    `approved_by/at`, `rejected_by/at/reason`
+  - `tech_query` (`tq_no`, status open|answered|closed, outcome
+    no_change|change_required, `mdr_document_id`, `line_id`, `tag_id`)
+  - `site_change` (`fcr_no`, kind site_run|field_change|as_built, status
+    raised|approved|rejected|asbuilt_submitted|closed, `asbuilt_revision`)
+  - `work_order` (`wo_no`, `contract_id`, origin tq|site_change|client|other,
+    `unit`/`qty`/`rate`, status draft|issued|completed|cancelled, `line_id`);
+    `contract_line.work_order_id`.
 - Reporting views: `006_reporting.sql` (fact views e.g. `fact_weld` with
   `is_accepted`). [UNCONFIRMED] full view list — read the migration.
 - [OBSOLETE] concept-doc table names (`projects`, `joints`, `nde_records`,
@@ -610,6 +639,9 @@ DMW scenario phases (who / where) — [FINAL], details in `03-scenario-dm-pump.m
 | D19 | Python only as separate services beside the DB | FINAL (none built) |
 | D20 | OT segregated; operational data only via historian/DMZ | FINAL |
 | D21 | One PR per module from now on (R5) | FINAL (process) |
+| D22 | Form numbers = form code + sequence, issued at INSERT, never reused | FINAL |
+| D23 | Contractor site work is a claim until the employer approves (per project switch) | FINAL |
+| D24 | Work outside the contract only by an issued work order → measured contract item; as-built closes only on the revision in the MDR | FINAL |
 
 Obsolete ideas: FastAPI core, monorepo `apps/packages/services`, concept-doc
 table names, ETH500 as the live demo, `fab_status` stored column, per-module
@@ -646,7 +678,7 @@ stage names, typed-subject dev identity (replaced by real auth).
 [OPEN] KPI formulas for dashboards (Power BI model on reporting views)
 [OPEN] CMMS/SAP/ERP integration contract (export format consumed by owner's CMMS)
 [OPEN] Actual project document formats and real drawings for accuracy measurement
-[OPEN] Statement edge cases: price adjustment/escalation, variation orders, multi-currency FX — not modelled
+[OPEN] Statement edge cases: price adjustment/escalation, multi-currency FX — not modelled (variation via work orders is built)
 [OPEN] HR: payroll/leave out of scope? (only personnel + timesheets built)
 [OPEN] Finance: budget vs commitment approvals, invoices beyond statements/advances
 [OPEN] Merge strategy for PR #1
@@ -658,7 +690,11 @@ stage names, typed-subject dev identity (replaced by real auth).
   (vendor register, manual equipment, designer portal), 9d5510d (project day,
   no future pours), 36477f4 (no-file save; weld register by hand/Excel),
   b7122d9 (scenario drive upload), f037706 (MC refusal in words), 404c4ed
-  (contracts, statements on WBS/PDMS, finance, HR, section log).
+  (contracts, statements on WBS/PDMS, finance, HR, section log), d8c5792 (R4
+  xlsx), 5612dc7 (form numbers), 933b14d (work claims), then work front,
+  TQ/site changes/work orders and scenario phase 11.
+- 2026-09-29: migrations 001–056; 60 `db/test` suites all passing; DMW scenario
+  88 steps (24 refusals); browser drives of phases 3–10 and 11: problems: none.
 - Migrations 001–053; 56 `db/test` suites in `npm run db:test`, all passing at
   404c4ed (incl. contracts 14/14, users 12/12, api 24/24, removal 9/9);
   `eval:check` gate passed; `next build` clean; `tools/drive-contracts.mjs`
@@ -682,8 +718,9 @@ stage names, typed-subject dev identity (replaced by real auth).
    registers (`extraction:report`, «حقیقت مرجع»).
 3. P&ID / SLD reading on the isometric pattern (schema + engine rules first).
 4. PAC certificate and start-up log after performance tests.
-5. Statement extensions: variation orders, price adjustment, multi-currency with
-   an explicit FX source (no guessed rates).
+5. Statement extensions: price adjustment, multi-currency with an explicit FX
+   source (no guessed rates); work-order cancellation after issue (contract
+   amendment).
 6. Heat traceability to single weld + instruments as independent assets; then
    Power BI model on reporting views with agreed KPI formulas.
 7. Schedule `db:backup` on the server and run the first restore drill (R2).

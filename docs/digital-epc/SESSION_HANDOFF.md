@@ -1,7 +1,7 @@
 # Session Handoff
 
 ```yaml
-date: 2026-09-28
+date: 2026-09-29
 branch: claude/vigilant-brown-wnaksu   # draft PR #1
 canonical_context: docs/digital-epc/EPC_AI_MASTER_CONTEXT.md
 ```
@@ -11,6 +11,11 @@ Owner requests (Persian): day-N date entry, «ذخیره در سامانه» err
 hand/Excel, DMW scenario PDF report + user guide, contracts/subcontracts +
 payment statements (صورت وضعیت) on WBS and PDMS, finance, HR, a log per section;
 then a canonical master context.
+Follow-up request (2026-09-29): an automatic PK for every table; form numbers
+from form code + sequence; contractor site work as a draft until the employer
+approves; parallel work fronts (spool shop beside civil); a work-front page by
+material (day/week/month/all); work orders for work outside the contract,
+from a TQ or a site change (site-run / as-built), with the designer's part.
 
 ## Completed
 - 9d5510d: «روز پروژه» input and `DayHint` beside work dates; test date derived
@@ -32,6 +37,33 @@ then a canonical master context.
   verify/approve, payment, HR welder and timesheet, and the log. New scenario
   people: `contracts`, `finance` and `hr`. The guide was regenerated (72 steps),
   and the browser drive gained phase 10.
+- 5612dc7: migration 054 `form_counter`/`form_code`; `lib/numbering.mjs` FORMS
+  registry (PTW, INC, JSA, PC, TP, PT, MR, PO, SH, MRR, STK, CT, TR, RT, NCR,
+  IR, P per subsystem; now also TQ, FCR, WO). A blank number field is issued
+  `CODE-0001` right before INSERT, skipping numbers typed by hand; the project
+  may change a form's code (پروژه › «کد فرم‌ها و شماره‌گذاری خودکار»). A test
+  audits that every table has a primary key.
+- 933b14d: migration 055 claims. With `project.site_work_approval` on, a step
+  recorded by a contractor-side member is a claim (`in_progress` + `claimed_on`)
+  that counts nowhere until a company-party member approves it on
+  «تحویل کار پیمانکار» (`/work-approval`); reject needs a reason.
+- Work front (`lib/workfront.mjs`, `/workfront`): what each front (spool shop,
+  civil, equipment, piping site, E&I, coating) can start by material on hand or
+  arriving — today / within a week / within a month / later, unknown material
+  and blocked work listed separately; the parallel fronts shown together.
+- Changes (migration 056, `lib/db/repos/changes.mjs`, `/changes`, designer
+  portal tabs): TQ → designer answers → engineer closes (no change / change
+  required); site change (site-run, field change, as-built) → approved by
+  another → designer declares the as-built revision → closed only when that
+  revision is in the MDR; work order → issued by someone other than its
+  preparer → becomes a measured `WO-…` item on the signed contract → paid via
+  the next statement on its WBS.
+- A step waiting only on claimed steps is `claimable`: the contractor may
+  declare it while approval catches up; it stays `blocked` for sign-offs.
+- Scenario: 5.1–5.4 (spool shop) now run beside civil (after 3.4), with 5.2a
+  checking the parallel fronts; phase 11 (11.1–11.15) plays claims, TQ, FCR,
+  as-built and WO-0001 through statement 2. Guide regenerated (88 steps) and
+  printed in play order («فاز 3 (ادامه)»).
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`
@@ -56,18 +88,24 @@ then a canonical master context.
 - New roles: `contracts`, `finance`, `hr`, plus the `COMMENT` action.
 
 ## Database Changes
+- 054 form numbering, 055 work claims, 056 `tech_query`, `site_change`,
+  `work_order`, `contract_line.work_order_id` (all RLS project-isolated).
 - Migration 053 adds `contract`, `contract_line`, `design_quantity`,
   `pay_statement`, `pay_statement_line`, `contract_payment`, `hr_timesheet` and
   `workflow_event`.
 - It also adds `contract_package.contract_id` and the `hse_person` HR fields.
 
 ## API Changes
-- New routes: `/api/contracts`, `/api/finance`, `/api/hr`, `/api/log`.
+- New routes: `/api/contracts`, `/api/finance`, `/api/hr`, `/api/log`,
+  `/api/numbering`, `/api/work`, `/api/workfront`, `/api/changes`.
 - `/api/documents` accepts `noFile`.
 - `/api/runs` returns 400 on weld-list problems.
 
 ## UI Changes
 - New nav group «قرارداد، مالی و منابع انسانی».
+- New section «جبهه کاری و تحویل کار» (اجرا): جبههٔ کاری، تحویل کار پیمانکار،
+  دستور کار، TQ و تغییرات، and its log.
+- `FormNo` field: a blank number shows «خودکار: X».
 - A «لاگ و گردش» tab on every mapped section.
 - A section with only its log visible is hidden.
 
@@ -83,7 +121,10 @@ then a canonical master context.
 - The `drive-contracts` browser drive found no problems.
 - Full DMW scenario UI drive after the navigation change: 106/106 ok,
   problems: none.
-- `scenario-dm`: 72 steps, 22 refusals. The phase 10 browser drive found no
+- 2026-09-29: all 60 db suites pass (numbering 4, claims 7, workfront 4,
+  changes 4; each revert-checked). Browser: drive-numbering, drive-claims,
+  DMW phases 3–10 and phase 11 — problems: none.
+- `scenario-dm`: 88 steps, 24 refusals (was 72 steps, 22 refusals). The phase 10 browser drive found no
   problems. The "sender signs" guard was revert-checked: the scenario test fails
   without it.
 

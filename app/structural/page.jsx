@@ -174,12 +174,13 @@ function Detail({ s, detail, mayRecord, post, standard }) {
                 : x.rejected ? `رد کارفرما: ${x.rejected}`
                 : x.note?.level === "bad" ? "رد — اصلاح لازم است"
                 : x.status === "in_progress" ? "در حال انجام"
+                : x.claimable ? `پیش‌نیاز منتظر تأیید کارفرما — قابل اعلام`
                 : x.blocked ? `منتظر: ${x.waitingOn.map((w) => w.title).join("، ")}`
                 : "آمادهٔ شروع"}
             </span>
             {x.note && <span className={"sm " + (x.note.level === "bad" ? "err" : "muted")}>{x.note.text}</span>}
             {x.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
-            {mayRecord && !x.derived && x.status !== "done" && !x.blocked && (
+            {mayRecord && !x.derived && x.status !== "done" && (!x.blocked || x.claimable) && (
               <button className="btn" style={{ padding: "4px 10px" }}
                       onClick={() => post({ kind: "activity", tagId: s.id, code: x.code, doneAt: workOn })}>
                 ثبت انجام</button>

@@ -235,12 +235,13 @@ function Detail({ i, s, mayRecord, mayRegister, post, spec }) {
                 : x.note?.level === "hold" ? "منتظر تست فشار اسپول"
                 : x.status === "in_progress" ? "در حال انجام"
                 : x.derived && x.note?.level === "warn" ? "بدون حکم"
+                : x.claimable ? `پیش‌نیاز منتظر تأیید کارفرما — قابل اعلام`
                 : x.blocked ? `منتظر: ${x.waitingOn.map((w) => w.title).join("، ")}`
                 : "آمادهٔ شروع"}
             </span>
             {x.note && <span className={"sm " + (x.note.level === "bad" ? "err" : "muted")}>{x.note.text}</span>}
             {x.outOfOrder && <span className="pill bad">خارج از ترتیب ثبت شده</span>}
-            {mayRecord && !x.derived && !x.na && x.status !== "done" && !x.blocked && (
+            {mayRecord && !x.derived && !x.na && x.status !== "done" && (!x.blocked || x.claimable) && (
               <button className="btn" style={{ padding: "4px 10px" }}
                       onClick={() => post({ kind: "activity", itemId: i.id, code: x.code, doneAt: workOn })}>
                 ثبت انجام</button>

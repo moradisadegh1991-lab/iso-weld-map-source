@@ -110,4 +110,19 @@ test("the employer's own record needs no approval", async () => {
   });
 });
 
+test("a step waiting only on declared steps may be declared too; a sign-off may not", async () => {
+  await withProject(db, P, async () => {
+    await elec.importCableSchedule(db, { projectId: P, text: "Cable No,From,To,Cable Type,Voltage,Length (m)\nCBL-2,LDB-70,LP-70-01,3Cx2.5 XLPE/SWA/PVC,0.6/1kV,40" });
+    const c2 = (await db.query("SELECT id FROM cable WHERE cable_no = 'CBL-2'")).rows[0];
+    const route = await elec.recordCableActivity(db, { projectId: P, cableId: c2.id, code: "route", doneAt: daysAgo(4), userId: con.id });
+    let st = await elec.cableStatus(db, { projectId: P, cableId: c2.id });
+    const pulled = st.steps.find((s) => s.code === "pulled");
+    equal([pulled.blocked, pulled.claimable], [true, true], "the crew moves on while the approval catches up — still blocked for a sign-off");
+    equal(st.steps.find((s) => s.code === "ready").claimable, false, "the sign-off is never declared on a claim");
+    await claims.decideClaims(db, { projectId: P, items: [{ table: "cable_activity", id: route.id }], decision: "approve", userId: emp.id });
+    st = await elec.cableStatus(db, { projectId: P, cableId: c2.id });
+    equal(st.steps.find((s) => s.code === "pulled").blocked, false);
+  });
+});
+
 await run();
