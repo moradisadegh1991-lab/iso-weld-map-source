@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { parseDelimited, guessMapping, toRegister } from "../lib/truth/parse.mjs";
+import { parseDelimited, guessMapping, toRegister, scopeRows } from "../lib/truth/parse.mjs";
 import { compareRegister, toGoldenExpect } from "../lib/truth/compare.mjs";
 
 /**
@@ -13,11 +13,19 @@ import { compareRegister, toGoldenExpect } from "../lib/truth/compare.mjs";
  *
  * Paste or a file: a register arrives as an Excel sheet about as often as a
  * CSV, and on a phone pasting is easier than finding a file, so both work.
+ * A contractor's joint history covers the whole project; when it has a
+ * drawing column, only this sheet's rows are compared (lib/truth/parse.mjs
+ * scopeRows).
+ *
+ * `computed` overrides the model's register — for a register read from the
+ * drawing's printed weld numbers, which is compared as it was read, before
+ * anyone completes it.
  */
+const BIG = 200_000;
 
 const FIELD_FA = { loc: "محل (Field/Shop)", kind: "نوع جوش", nps: "قطر" };
 
-export default function TruthBar({ model, data }) {
+export default function TruthBar({ model, data, computed: given = null }) {
   const [text, setText] = useState("");
   const [parsed, setParsed] = useState(null);
   const [err, setErr] = useState(null);
@@ -33,13 +41,19 @@ export default function TruthBar({ model, data }) {
           "از Excel کپی کنید (Tab می‌گذارد)، یا ستون‌ها را با «کاما» یا " +
           "«دست‌کم دو فاصله» از هم جدا کنید.");
       }
-      const { mapping, unmapped } = guessMapping(headers);
+      const { mapping, unmapped } = guessMapping(headers, undefined, rows);
       if (mapping.no == null) {
         return setErr(`ستون شمارهٔ جوش پیدا نشد. سرستون‌ها: ${headers.join(" · ")}`);
       }
-      const truth = toRegister(rows, mapping);
-      if (!truth.length) return setErr("هیچ ردیفی با شمارهٔ جوش پیدا نشد.");
-      setParsed({ headers, mapping, unmapped, truth });
+      const meta = data?.meta || {};
+      const scope = scopeRows(headers, rows, { drawingNo: meta.drawingNo, sheet: meta.sheet, rev: meta.rev });
+      const truth = toRegister(scope.rows, mapping);
+      if (!truth.length) {
+        return setErr(scope.scoped
+          ? (scope.note || `در رجیستر (${rows.length} ردیف) جوشی برای نقشهٔ «${meta.drawingNo || "—"}» برگ ${meta.sheet || "—"} پیدا نشد.`)
+          : "هیچ ردیفی با شمارهٔ جوش پیدا نشد.");
+      }
+      setParsed({ headers, mapping, unmapped, truth, scope: { ...scope, total: rows.length } });
     } catch (e) { setErr(e.message); }
   }
 
@@ -53,7 +67,9 @@ export default function TruthBar({ model, data }) {
         const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const csv = XLSX.utils.sheet_to_csv(sheet);
-        setText(csv);
+        // A project's joint history runs to megabytes: read it, but do not
+        // put it in the text box, where it would freeze the page.
+        setText(csv.length > BIG ? "" : csv);
         read(csv);
       } else {
         const t = await file.text();
@@ -63,7 +79,7 @@ export default function TruthBar({ model, data }) {
     } catch (e) { setErr("فایل خوانده نشد: " + e.message); }
   }
 
-  const computed = model && !model.error ? model.register : [];
+  const computed = given || (model && !model.error ? model.register : []);
   const result = parsed ? compareRegister(parsed.truth, computed) : null;
 
   function downloadGolden() {
@@ -118,8 +134,10 @@ export default function TruthBar({ model, data }) {
         <>
           <div className="tot mono">
             {parsed.truth.length} ردیف خوانده شد
+            {parsed.scope.scoped && ` (از ${parsed.scope.total} ردیف کل رجیستر، فقط این نقشه و برگ)`}
             {parsed.unmapped.length > 0 && ` · ستون نگاشته‌نشده: ${parsed.unmapped.join("، ")}`}
           </div>
+          {parsed.scope.note && <p className="muted sm">{parsed.scope.note}</p>}
           {parsed.unmapped.length > 0 && (
             <p className="muted sm">
               ستونی که شناخته نشد <b>حدس زده نمی‌شود</b> — آن فیلد اصلاً سنجیده

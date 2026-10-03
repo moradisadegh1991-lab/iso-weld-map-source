@@ -30,6 +30,9 @@ const FIELDS = [
   ["planned_end_date", "پایان برنامه‌ای", "date"],
 ];
 
+/** The frame shapes a weld number is printed in (migration 057). */
+const WELD_SYMBOLS = { circle: "دایره", square: "مربع", diamond: "لوزی", hexagon: "شش‌ضلعی" };
+
 /**
  * Where the plant is on the earth, and where its ground is.
  *
@@ -133,6 +136,8 @@ export default function ProjectPage() {
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
       .concat([["description", p.description ?? ""],
                ["steel_erection_standard", p.steel_erection_standard ?? ""],
+               ["weld_symbol_shop", p.weld_symbol_shop ?? ""], ["weld_symbol_field", p.weld_symbol_field ?? ""],
+               ["weld_thd_labelled", Boolean(p.weld_thd_labelled)],
                ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING, ...HSE, ...QUALITY, ...CMMS].map(([k]) => [k, p[k] ?? ""])])));
   }, [data]);
 
@@ -222,6 +227,28 @@ export default function ProjectPage() {
             </div>
           ))}
         </div>
+
+        <h2 style={{ marginTop: 8 }}>نماد جوش روی ایزومتریک</h2>
+        <div className="grid2">
+          {[["weld_symbol_shop", "جوش کارگاهی (Shop) با"], ["weld_symbol_field", "جوش سایت (Field) با"]].map(([k, label]) => (
+            <div className="field" key={k}>
+              <label htmlFor={k}>{label}</label>
+              <select id={k} disabled={!editable} value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)}>
+                <option value="">— ثبت نشده —</option>
+                {Object.entries(WELD_SYMBOLS).map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+        <label className="sm" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" disabled={!editable} checked={Boolean(form.weld_thd_labelled)}
+                 onChange={(e) => set("weld_thd_labelled", e.target.checked)} />
+          نقشه‌ها کنار <b>همهٔ</b> جوش‌های رزوه‌ای «THD» چاپ می‌کنند
+        </label>
+        <p className="hint" style={{ marginTop: -4 }}>
+          شکل قابی که شمارهٔ هر جوش در آن چاپ شده (مثلاً دایره = کارگاه، مربع = سایت). مدل فقط شکل را می‌خواند؛
+          Shop یا Field از همین قرارداد پروژه تعیین می‌شود — تا ثبت نشود، رجیستر خوانده‌شده از نقشه محل جوش ندارد.
+        </p>
 
         <h2 style={{ marginTop: 8 }}>اسکلت فلزی</h2>
         <div className="grid2">

@@ -1,7 +1,7 @@
 # Session Handoff
 
 ```yaml
-date: 2026-09-29
+date: 2026-10-03
 branch: claude/vigilant-brown-wnaksu   # draft PR #1
 canonical_context: docs/digital-epc/EPC_AI_MASTER_CONTEXT.md
 ```
@@ -64,6 +64,19 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   checking the parallel fronts; phase 11 (11.1–11.15) plays claims, TQ, FCR,
   as-built and WO-0001 through statement 2. Guide regenerated (88 steps) and
   printed in play order («فاز 3 (ادامه)»).
+
+- 2026-10-03, real drawings: 55 area-25 isometrics + project MTO + the
+  contractor's joint history (data NOT in the repo — public repo). Findings
+  F-18 (printed joint numbers ignored; SW/THD/OLET = 63% of joints, unknown to
+  the geometry engine) and F-19 (register columns mis-mapped, whole-project
+  register not cut to the sheet). New `welds` extraction pass →
+  `lib/register/weld-marks.mjs` (Shop/Field from the project's declared
+  symbols, migration 057; type from printed THD / branch / the sheet's BOM;
+  blanks left for a person) → weld-list form. `npm run weldmap:truth`
+  scores extractions against a register; 7 sheets read before seeing the
+  register: 124/124 joints, Shop/Field 100%, size 99.2%, type 96.1% on 76
+  (48 blank). `tools/drive-weldmap.mjs` drove it in the browser (stub LLM).
+  See `docs/epc-llm/06-real-isometrics.md`.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`

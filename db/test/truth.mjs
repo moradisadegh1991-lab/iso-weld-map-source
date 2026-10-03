@@ -7,7 +7,7 @@
  * number can flatter itself.
  */
 import { test, run, assert, equal } from "./harness.mjs";
-import { parseDelimited, guessMapping, normalizeLoc, normalizeKind, toRegister } from "../../lib/truth/parse.mjs";
+import { parseDelimited, guessMapping, normalizeLoc, normalizeKind, toRegister, scopeRows } from "../../lib/truth/parse.mjs";
 import { compareRegister, toGoldenExpect, weldKey } from "../../lib/truth/compare.mjs";
 import { scoreOne, summarise } from "../../eval/extraction-report.mjs";
 
@@ -91,6 +91,46 @@ test("headers are recognised in both languages", async () => {
     equal(mapping.nps, 3, headers[3]);
     assert(!unmapped.includes("no"), "the weld number must always be found");
   }
+});
+
+// A contractor's joint history: one file for the whole project, the joint
+// NUMBER under "Joint", Shop/Field under "S/F", and a "Hold Type" to the
+// right of "Type". Read by header alone, "Joint" became the joint type.
+const HIST = ["", "Test Package", "ISO Number", "Line", "SHEET", "Revision", "Joint", "Size", "Spool", "Type", "S/F", "Hold Type"];
+const histRows = [
+  ["", "TP-1", "25-1002", "2-X-1", "1/1", "0", "001", "2", "1", "BW", "SHOP", "-"],
+  ["", "TP-1", "25-1002", "2-X-1", "1/1", "0", "003", "0.75", "", "OLET", "FIELD", "Engineering"],
+  ["", "TP-1", "25-1004", "2-X-2", "1/2", "0", "001", "2", "", "BW", "FIELD", "-"],
+  ["", "TP-1", "25-1004", "2-X-2", "2/2", "0", "016", "2", "1", "BW", "SHOP", "-"],
+  ["", "TP-1", "25-1020", "2-X-3", "2/4", "0", "000", "0", "", "SW", "FIELD", ""],
+  ["", "TP-1", "25-1001", "3-X-4", "1/1", "0", "001", "3", "", "BW", "FIELD", ""],
+  ["", "TP-1", "25-1001", "3-X-4", "1/1", "0A", "001", "3", "1", "BW", "SHOP", ""],
+  ["", "TP-1", "125-1002", "2-X-9", "1/1", "0", "001", "2", "", "BW", "FIELD", ""],
+];
+
+test("a joint history: «Joint» is the number when its cells are numbers, «S/F» is the location", async () => {
+  const { mapping } = guessMapping(HIST, undefined, histRows);
+  equal([mapping.no, mapping.loc, mapping.kind, mapping.nps, mapping.spool], [6, 10, 9, 7, 8]);
+  // The old meaning stays where the cells are joint types.
+  const typed = guessMapping(["WELD_NO", "SHOP/FIELD", "JOINT", "NPS"], undefined, [["W-01", "FIELD", "TIE IN", "28"], ["W-02", "Shop", "Butt Weld", "28"]]);
+  equal(typed.mapping.kind, 2, "JOINT holding TIE IN / Butt Weld is still the type");
+});
+
+test("a project-wide register is cut to the drawing's own sheet, by whole drawing number", async () => {
+  const one = scopeRows(HIST, histRows, { drawingNo: "ISO-25-1002", sheet: "1/1" });
+  equal(one.scoped, true);
+  equal(one.rows.map((r) => r[6]), ["001", "003"]);
+  equal(scopeRows(HIST, histRows, { drawingNo: "ISO-125-1002", sheet: "1/1" }).rows.map((r) => r[2]), ["125-1002"],
+    "25-1002 sits inside ISO-125-1002 but is a different drawing: whole tokens only");
+  const sh2 = scopeRows(HIST, histRows, { drawingNo: "ISO-25-1004", sheet: "2/2" });
+  equal(sh2.rows.map((r) => r[6]), ["016"]);
+  const reg = toRegister(scopeRows(HIST, histRows, { drawingNo: "ISO-25-1020", sheet: "2/4" }).rows, guessMapping(HIST, undefined, histRows).mapping);
+  equal(reg, [], "joint 000 is the contractor's «no joints on this sheet», not a weld");
+  const revs = scopeRows(HIST, histRows, { drawingNo: "ISO-25-1001", sheet: "1/1", rev: "0A" });
+  equal(revs.rows.map((r) => r[5]), ["0A"], "two revisions of the sheet: the drawing's own is compared");
+  const unsure = scopeRows(HIST, histRows, { drawingNo: "ISO-25-1001", sheet: "1/1" });
+  assert(unsure.rows.length === 2 && /چند رویژن/.test(unsure.note), "no revision read: both kept, and said");
+  equal(scopeRows(["Weld No", "Location"], [["W-01", "Field"]], { drawingNo: "X" }).scoped, false, "a one-drawing register is used whole");
 });
 
 test("a column it cannot classify is reported, never guessed", async () => {

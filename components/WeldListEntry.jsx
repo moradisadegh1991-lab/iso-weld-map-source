@@ -38,7 +38,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [approval, setApproval] = useState({ phase: "idle" });
 
   const typed = rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
-  const data = useMemo(() => ({ meta: { ...meta, nps: meta.nps === "" ? null : Number(meta.nps) }, weldList: typed }), [meta, typed]);
+  // A list read from the drawing's printed markers keeps what the model read
+  // (weldMarks) beside what was completed by hand — the evidence for each row.
+  const data = useMemo(() => ({ meta: { ...meta, nps: meta.nps === "" ? null : Number(meta.nps) }, weldList: typed,
+    ...(initial?.weldMarks ? { weldMarks: initial.weldMarks } : {}) }), [meta, typed, initial]);
   const model = useMemo(() => (typed.length ? modelFromWeldList(data) : { error: "هنوز جوشی وارد نشده است." }), [data, typed.length]);
 
   const setCell = (i, k, v) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
@@ -49,7 +52,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     const { headers, rows: raw, suspectDelimiter } = parseDelimited(text);
     if (!headers.length) return setRead({ error: `${source}: خالی است.` });
     if (suspectDelimiter) return setRead({ error: `${source}: ستون‌ها از هم جدا نشدند — از Excel کپی کنید یا CSV بدهید.` });
-    const { mapping, unmapped } = guessMapping(headers, LIST_PATTERNS);
+    const { mapping, unmapped } = guessMapping(headers, LIST_PATTERNS, raw);
     if (mapping.no == null) return setRead({ error: `${source}: ستون «شمارهٔ جوش» (Weld No) پیدا نشد. سرستون‌ها: ${headers.join("، ")}` });
     const got = raw.map((r) => Object.fromEntries(COLS.map(([k]) => [k, mapping[k] == null ? "" : String(r[mapping[k]] ?? "").trim()])))
       .filter((r) => r.no)

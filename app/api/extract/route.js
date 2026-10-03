@@ -194,10 +194,67 @@ RULES
    on the plant becomes a subsystem that waits on it forever.
 5. NEVER refuse and NEVER explain. Your entire reply is the JSON object.`;
 
+/**
+ * The joint numbers the designer printed on the sheet, as printed.
+ *
+ * Not built on COMMON: take-outs and dimension arithmetic are noise for a
+ * pass that only transcribes markers. It reports the SHAPE of each frame,
+ * never "shop" or "field" — which shape means which is the project's
+ * declared convention, applied in lib/register/weld-marks.mjs.
+ */
+const WELDS_PROMPT = `You are reading the JOINT (WELD) MARKERS printed on a piping isometric drawing.
+
+You are given the FULL SHEET plus overlapping high-resolution QUADRANT crops of the same
+drawing. Use the quadrants to read small text and the full sheet to follow leader lines.
+The quadrants overlap, so the same marker may appear twice - report it once.
+
+Return ONLY a JSON object. No markdown fences, no preamble, no commentary.
+
+{
+  "marks": [{ "no": string, "shape": "circle"|"square"|"diamond"|"hexagon"|"other",
+              "outline": "solid"|"dashed", "label": string,
+              "nps": string|null, "branch": boolean, "spool": string|null }],
+  "unreadable": [string]
+}
+
+A joint marker is a NUMBER printed inside a frame, with a leader line ending on the pipe
+at a weld point. Report every one on the sheet, in number order.
+
+  "no"      the number exactly as printed (keep leading zeros).
+  "shape"   the shape of the frame as drawn. Report the shape only - do NOT decide
+            whether the joint is shop or field.
+  "outline" "dashed" when the frame is drawn with a dashed line (a joint shown for
+            reference that belongs to another sheet), otherwise "solid".
+  "label"   short text printed immediately beside the frame, e.g. "FFW" or "THD";
+            "" when there is none.
+  "nps"     the nominal size of the pipe at that joint, as printed on that leg
+            (e.g. "2", "3/4", "1 1/2"). At a reducing fitting give the size of the leg
+            the leader ends on. null when no size is printed for that leg.
+  "branch"  true only when the leader ends where a branch fitting (half coupling,
+            sockolet, weldolet, nipolet) is welded onto the run pipe.
+  "spool"   for a joint inside a prefabricated spool, the spool mark printed on that
+            spool (e.g. "SP-1"); null otherwise or when no spool mark is printed.
+
+NOT joint markers - never report these:
+  - small boxes holding a BOM item number next to a fitting (e.g. a box with 4 beside
+    an elbow) - they are smaller than joint frames and have no leader to a weld point
+  - support marks in hexagons or ovals (S-2, SW-1, S9), cut-piece marks (<1>, <2>),
+    flange or gasket tags (F8, F13, G15, B16), spool marks (SP-1), "MATL" boxes, HOLD
+    clouds and revision triangles.
+
+RULES
+1. Skip nothing: a joint left out is a joint nobody inspects. Stacked frames (several
+   numbers in a staircase or a row with one leader) are each a separate joint.
+2. Never invent a number. A frame whose number you cannot read goes in "unreadable"
+   with where it is.
+3. NEVER refuse and NEVER explain. Your entire reply is the JSON object.`;
+
 const PASSES = {
   meta: { prompt: META_PROMPT, maxTokens: 4000 },
   nodes: { prompt: NODES_PROMPT, maxTokens: 4000 },
   repair: { prompt: REPAIR_PROMPT, maxTokens: 5000 },
+  // A sheet carries up to ~70 markers; each is a short object.
+  welds: { prompt: WELDS_PROMPT, maxTokens: 6000 },
   // A list runs to hundreds of rows, so it gets a larger budget than a
   // drawing pass; `truncated` in the response tells the caller when even
   // that was not enough rather than handing back half a plant.

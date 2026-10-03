@@ -8,6 +8,7 @@ import { DEMO } from "../../lib/demo";
 import { TYPE_FA } from "../../lib/standards";
 import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../../lib/extraction/merge.mjs";
+import { weldListFromMarks } from "../../lib/register/weld-marks.mjs";
 import SaveBar from "../../components/SaveBar";
 import TabNav from "../../components/TabNav";
 import TruthBar from "../../components/TruthBar";
@@ -41,6 +42,8 @@ export default function Page() {
   const [view, setView] = useState("iso");
   const [dim, setDim] = useState(null);
   const [strictBom, setStrictBom] = useState(true);
+  // What the rules said about a register read from the printed joint numbers.
+  const [marksInfo, setMarksInfo] = useState(null);
   const [renderMode, setRenderMode] = useState("solid");
   const [colorBy, setColorBy] = useState("spool");
   const [editing, setEditing] = useState("");
@@ -222,10 +225,12 @@ export default function Page() {
     try {
       setNote(`${prefix}${w}×${h} px → شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
 
-      setBusy("خواندن نقشه — دو پاس موازی…");
-      const [ra, rb] = await Promise.allSettled([
+      setBusy("خواندن نقشه — سه پاس موازی…");
+      const [ra, rb, rc] = await Promise.allSettled([
         callPass("meta", images),
         callPass("nodes", images),
+        // The joint numbers printed on the sheet, when the designer printed them.
+        callPass("welds", images),
       ]);
 
       if (ra.status === "rejected" && rb.status === "rejected") {
@@ -240,6 +245,23 @@ export default function Page() {
       let final = merged, rep = { ran: false };
       if (a && b) { rep = await repair(merged, images); final = rep.data; }
       sanitize(final);
+
+      // A sheet whose designer printed every joint: the register is the one
+      // printed, read marker by marker and turned into rows by rule
+      // (lib/register/weld-marks.mjs). It opens in the weld-list form for a
+      // person to complete whatever the drawing did not say.
+      const printed = rc.status === "fulfilled" ? rc.value?.data : null;
+      let marksNote = "";
+      setMarksInfo(null);
+      if (printed?.marks?.some((m) => String(m.outline || "").toLowerCase() !== "dashed")) {
+        const conv = weldListFromMarks({ ...final, weldMarks: printed },
+          { shop: profile.data?.project?.weld_symbol_shop, field: profile.data?.project?.weld_symbol_field,
+            thdLabelled: Boolean(profile.data?.project?.weld_thd_labelled) });
+        final = { ...final, weldMarks: printed, weldList: conv.weldList };
+        setMarksInfo(conv);
+        marksNote = ` · رجیستر از ${conv.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه` +
+          (conv.problems.length ? ` · ${conv.problems.join(" ")}` : "") + (conv.notes.length ? ` · ${conv.notes.join(" · ")}` : "");
+      }
 
       setData(final);
       setEditing(JSON.stringify(final, null, 2));
@@ -261,7 +283,7 @@ export default function Page() {
           ? rep.failed ? ` · پاس اصلاح ناموفق (${rep.why || "?"})`
             : rep.kept ? ` · پاس اصلاح رد شد (${rep.why}) — نسخه اول نگه داشته شد`
               : ` · پاس اصلاح اعمال شد${rep.notes?.length ? `: ${rep.notes.join(" ")}` : ""}`
-          : " · همه چک‌ها پاس"));
+          : " · همه چک‌ها پاس") + marksNote);
       if (long < 2200) {
         setErr(`رزولوشن منبع ${w}×${h} px است. برای خواندن مطمئن BOM و ابعاد ریز، ضلع بلند حداقل ۲۵۰۰ px لازم است — ترجیحاً اسکن ۳۰۰ DPI از PDF اصلی. نتیجه فعلی را حتماً در تب JSON بازبینی کنید.`);
       }
@@ -476,10 +498,27 @@ export default function Page() {
 
       {data && listed && (
         <section className="stage">
+          {data.weldMarks && marksInfo && (
+            <div className="pane" data-weld-marks>
+              <p className="note mono">
+                رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — مدل فقط شماره و شکل قاب را خواند؛
+                محل از نماد اعلام‌شدهٔ پروژه و نوع از BOM همین برگ تعیین شد. جای خالی را تکمیل کنید.
+              </p>
+              {marksInfo.problems.map((x) => <p key={x} className="err sm">{x}</p>)}
+              {marksInfo.notes.map((x) => <p key={x} className="muted sm">{x}</p>)}
+            </div>
+          )}
           <div className="pane">
             <WeldListEntry key={openRun?.run?.id || "new"} session={session} initial={data} run={openRun}
               onSaved={openRunForReview} onClose={() => { setData(null); setOpenRun(null); }} />
           </div>
+          {data.weldMarks && (
+            <details className="pane">
+              <summary>مقایسه با رجیستر پیمانکار (حقیقت مرجع) — همان‌طور که از نقشه خوانده شد</summary>
+              <TruthBar data={data} computed={data.weldList.map((r) => ({
+                no: r.no, loc: r.loc || null, kind: r.kind || null, nps: Number(r.nps) || null }))} />
+            </details>
+          )}
         </section>
       )}
 
