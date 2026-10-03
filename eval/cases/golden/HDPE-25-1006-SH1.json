@@ -1,0 +1,309 @@
+{
+ "id": "HDPE-25-1006-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1006 sheet 1/1 rev 0 — 11 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1006",
+  "sheet": "1/1",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1006-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1006",
+   "sheet": "1/1",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "PIPE S80 PE SMLS API 5L-B PSL1 ASME B36.10",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "REDUCING TEE 3000# SW A105 ASME B16.11",
+    "diam": "1 x 3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 3000# SW A105 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "STRAIGHT NIPPLE S80 TOE SMLS API 5L-B PSL1 (L=100mm) ASME B36.10",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "CAP 3000# NPT A105 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE SOCKET WELD S80 150# RF A105 ASME B16.5 SRF",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF SHEET NON-ASBESTOS 2mm THK KLINGER C-4430 or EQ. ASME B16.21",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF SHEET NON-ASBESTOS 2mm THK KLINGER C-4430 or EQ. ASME B16.21",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "90 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "5/8 x 90",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "100 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "1/2 x 100",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "70 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "1/2 x 70",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PRESS. SAFETY VALVE INLET 150# RF & OUTLET 150# RF",
+    "diam": "2 x 1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE BALL 150# RF A216-WCB BODY W/304SS BALL TEFLON SEAT FB FLOATING LEVER OP. LONG PA. ASME B16.10 API 608",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE S80 PE SMLS API 5L-B PSL1 ASME B36.10",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE GATE 800# SW A105 BODY W/13Cr TRIM HF-BODY SEAT OSY-BB SOLID WEDGE HAND WHEEL OP. MANUF.STD API 602 API 598",
+    "diam": "3/4",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "2",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "3",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "4",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "5",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "6",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "7",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "8",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "9",
+     "shape": "square",
+     "outline": "solid",
+     "label": "THD",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "10",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "11",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 11,
+  "fieldWeldCount": 11,
+  "fieldWelds": [
+   "1",
+   "2",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "10",
+   "11"
+  ],
+  "register": [
+   {
+    "no": "1",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "2",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "3",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "4",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "5",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "6",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "7",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "8",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "9",
+    "loc": "Field",
+    "kind": "THD",
+    "nps": 0.75
+   },
+   {
+    "no": "10",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "11",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   }
+  ]
+ }
+}

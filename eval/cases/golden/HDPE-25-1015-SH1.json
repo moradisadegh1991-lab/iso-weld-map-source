@@ -1,0 +1,109 @@
+{
+ "id": "HDPE-25-1015-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1015 sheet 1/1 rev 0 — 3 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1015",
+  "sheet": "1/1",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1015-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1015",
+   "sheet": "1/1",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "PIPE S80 PE SMLS API 5L-B PSL1 ASME B36.10",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "SWAGED NIPPLE CON. S80 S80 PBE A234-WPB MSS SP-95",
+    "diam": "1.1/2 x 3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE GATE 800# SW A105 BODY W/13Cr TRIM HF-BODY SEAT & DISC SEAT OSY-BB SOLID WEDGE HAND WHEEL OP.",
+    "diam": "3/4",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "2",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "3",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 3,
+  "fieldWeldCount": 3,
+  "fieldWelds": [
+   "1",
+   "2",
+   "3"
+  ],
+  "register": [
+   {
+    "no": "1",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "2",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "3",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   }
+  ]
+ }
+}

@@ -1,0 +1,560 @@
+{
+ "id": "HDPE-25-1011-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1011 sheet 1/1 rev 0 — 24 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1011",
+  "sheet": "1/1",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1011-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1011",
+   "sheet": "1/1",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "PIPE S40 BE ERW(EJ=0.85) API 5L-B PSL1 ASME B36.10",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE S80 PE SMLS API 5L-B PSL1 ASME B36.10",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "REDUCING TEE S40 S40 BW A234-WPBW ERW(EJ=0.85) ASME B16.9",
+    "diam": "3 x 2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "SWAGED NIPPLE CON. S40 S80 BLE/PSE A234-WPB MSS SP-95",
+    "diam": "3 x 1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "HALF COUPLING 3000# SW A105 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 LR S40 BW A234-WPBW ERW(EJ=0.85) ASME B16.9",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "STRAIGHT NIPPLE S80 TOE SMLS API 5L-B PSL1 (L=100mm) ASME B36.10",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "CAP 3000# NPT A105 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE SLIP ON 150# RF A105 ASME B16.5 SRF",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE SOCKET WELD S80 150# RF A105 ASME B16.5 SRF",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF SHEET NON-ASBESTOS 2mm THK KLINGER C-4430 or EQ. ASME B16.21",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF SHEET NON-ASBESTOS 2mm THK KLINGER C-4430 or EQ. ASME B16.21",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "90 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "5/8 x 90",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "70 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "1/2 x 70",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE GATE 150# RF A216-WCB BODY W/13Cr TRIM OSY-BB FLEXIBLE WEDGE HAND WHEEL OP. ASME 16.10 API 600 API 598 SRF",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE GATE 800# SW A105 BODY W/13Cr TRIM HF-BODY SEAT OSY-BB SOLID WEDGE HAND WHEEL OP. MANUF.STD API 602 API 598",
+    "diam": "3/4",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "2",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "3",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "4",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "5",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "6",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "7",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-3"
+    },
+    {
+     "no": "8",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "9",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-3"
+    },
+    {
+     "no": "10",
+     "shape": "square",
+     "outline": "solid",
+     "label": "FFW",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "11",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-4"
+    },
+    {
+     "no": "12",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-5"
+    },
+    {
+     "no": "13",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-5"
+    },
+    {
+     "no": "14",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-5"
+    },
+    {
+     "no": "15",
+     "shape": "square",
+     "outline": "solid",
+     "label": "FFW",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "16",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": true,
+     "spool": null
+    },
+    {
+     "no": "17",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "18",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "19",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "20",
+     "shape": "square",
+     "outline": "solid",
+     "label": "THD",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "21",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-6"
+    },
+    {
+     "no": "22",
+     "shape": "square",
+     "outline": "solid",
+     "label": "FFW",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "23",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-7"
+    },
+    {
+     "no": "24",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 24,
+  "fieldWeldCount": 13,
+  "fieldWelds": [
+   "1",
+   "4",
+   "6",
+   "8",
+   "10",
+   "15",
+   "16",
+   "17",
+   "18",
+   "19",
+   "20",
+   "22",
+   "24"
+  ],
+  "spoolCount": 7,
+  "register": [
+   {
+    "no": "1",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "2",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "3",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "4",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "5",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "6",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "7",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "8",
+    "loc": "Field",
+    "kind": "BW"
+   },
+   {
+    "no": "9",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "10",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "11",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "12",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "13",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "14",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "15",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "16",
+    "loc": "Field"
+   },
+   {
+    "no": "17",
+    "loc": "Field",
+    "kind": "BW"
+   },
+   {
+    "no": "18",
+    "loc": "Field",
+    "kind": "BW"
+   },
+   {
+    "no": "19",
+    "loc": "Field",
+    "kind": "BW"
+   },
+   {
+    "no": "20",
+    "loc": "Field"
+   },
+   {
+    "no": "21",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "22",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "23",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "24",
+    "loc": "Field",
+    "kind": "BW"
+   }
+  ]
+ },
+ "_disputes": [
+  {
+   "no": "8",
+   "field": "nps",
+   "register": 3,
+   "drawing": "leader ends on the 2\" leg"
+  },
+  {
+   "no": "16",
+   "field": "nps",
+   "register": 3,
+   "drawing": "leader ends on the 3/4\" branch fitting"
+  },
+  {
+   "no": "16",
+   "field": "kind",
+   "register": "BW",
+   "drawing": "leader ends where the 3/4\" branch fitting meets the run — an olet weld"
+  },
+  {
+   "no": "17",
+   "field": "nps",
+   "register": 3,
+   "drawing": "3/4\" branch"
+  },
+  {
+   "no": "18",
+   "field": "nps",
+   "register": 3,
+   "drawing": "3/4\" branch"
+  },
+  {
+   "no": "19",
+   "field": "nps",
+   "register": 3,
+   "drawing": "3/4\" branch"
+  },
+  {
+   "no": "20",
+   "field": "nps",
+   "register": 3,
+   "drawing": "3/4\" branch, «THD» printed"
+  },
+  {
+   "no": "20",
+   "field": "kind",
+   "register": "BW",
+   "drawing": "«THD» printed beside the frame"
+  },
+  {
+   "no": "24",
+   "field": "nps",
+   "register": 3,
+   "drawing": "leader ends on the 1 1/2\" leg"
+  }
+ ]
+}

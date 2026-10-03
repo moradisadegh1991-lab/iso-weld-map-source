@@ -1,0 +1,285 @@
+{
+ "id": "HDPE-25-1018-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1018 sheet 1/1 rev 0 — 14 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1018",
+  "sheet": "1/1",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1018-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1018",
+   "sheet": "1/1",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "PIPE S80 PE SMLS API 5L-B PSL1 ASME B36.10",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 3000# SW A105 ASME B16.11",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FULL COUPLING 3000# SW A105 ASME B16.11",
+    "diam": "1.1/2",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "2",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "3",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "4",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "5",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "6",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "7",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "8",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "9",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "10",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "11",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "12",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "13",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "14",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 14,
+  "fieldWeldCount": 14,
+  "fieldWelds": [
+   "1",
+   "2",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "10",
+   "11",
+   "12",
+   "13",
+   "14"
+  ],
+  "register": [
+   {
+    "no": "1",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "2",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "3",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "4",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "5",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "6",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "7",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "8",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "9",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "10",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "11",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "12",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "13",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "14",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   }
+  ]
+ }
+}

@@ -60,12 +60,16 @@ test("a dashed frame belongs to the next sheet and is left out, not counted", as
   const r = weldListFromMarks(SHEET, LEGEND);
   equal(r.weldList.length, 8);
   equal(r.excluded, [{ no: "9", why: "قاب خط‌چین — جوش برگ مجاور" }]);
+  const zero = weldListFromMarks({ ...SHEET, weldMarks: { marks: [mark("0", "square"), mark("1", "square")] } }, LEGEND);
+  equal([zero.weldList.map((w) => w.no), zero.excluded.map((e) => e.no)], [["1"], ["0"]], "a frame printed 0 is a slip, not a joint");
+  assert(zero.problems.some((p) => /شمارهٔ «0»/.test(p)), "and it is named for a person to check");
 });
 
 test("the joint type: printed THD, a branch OLET, else the sheet's BOM at that size — mixed stays blank", async () => {
   const r = weldListFromMarks(SHEET, LEGEND);
   const kind = Object.fromEntries(r.weldList.map((w) => [w.no, w.kind]));
   equal(kind["6"], "THD", "printed beside the frame");
+  equal(weldListFromMarks({ ...SHEET, weldMarks: { marks: [mark("1", "square", { label: "BR" })] } }, LEGEND).weldList[0].kind, "BR", "and so is a branch weld");
   equal(kind["4"], "OLET", "the half coupling's weld to the run");
   equal(kind["2"], "BW", "2\": BE pipe and BW elbows only — the coupling's SW end is its 3/4\" branch, not the run");
   equal(kind["5"], "", "3/4\": socket-weld valve and a threaded cap — the BOM cannot say which, so nobody guesses");

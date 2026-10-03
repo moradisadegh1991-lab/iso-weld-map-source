@@ -77,6 +77,15 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   register: 124/124 joints, Shop/Field 100%, size 99.2%, type 96.1% on 76
   (48 blank). `tools/drive-weldmap.mjs` drove it in the browser (stub LLM).
   See `docs/epc-llm/06-real-isometrics.md`.
+- 2026-10-03, golden (repo now private): all 54 area-25 sheets are eval
+  cases `eval/cases/golden/HDPE-25-*` (803 joints; PDFs + per-sheet BOM in
+  the repo, the raw register/MTO still not). `npm run golden:marks` writes
+  them: input = what is printed (`weldMarks`), expect = contractor register;
+  `_disputes` (25 fields on 19 joints where drawing ≠ register) are left out
+  of expect for the piping engineer — table in 06-real-isometrics.md. New
+  rules: printed «BR» → BR; a frame numbered 0 is excluded and named. A loc
+  dispute drops spoolCount from expect. 54/54 pass; 251 fields left blank
+  for a person. The real `welds` pass still needs an API key to be scored.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`

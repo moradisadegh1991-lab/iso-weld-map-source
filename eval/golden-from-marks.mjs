@@ -40,11 +40,15 @@ export function expectFrom(truth, disputes = []) {
   });
   const field = register.filter((w) => w.loc === "Field").map((w) => w.no);
   const spools = new Set(truth.map((w) => w.spool).filter(Boolean));
+  // A joint whose shop or field is disputed may carry the only mark of a
+  // spool on one side and none on the other: the register's spool count
+  // then settles the dispute by the back door, so it is not expected.
+  const locDisputed = disputes.some((d) => d.field === "loc");
   return {
     weldCount: register.length,
     fieldWeldCount: field.length,
     fieldWelds: field,
-    ...(truth.some((w) => w.loc === "Shop") ? { spoolCount: spools.size } : {}),
+    ...(truth.some((w) => w.loc === "Shop") && !locDisputed ? { spoolCount: spools.size } : {}),
     register,
   };
 }

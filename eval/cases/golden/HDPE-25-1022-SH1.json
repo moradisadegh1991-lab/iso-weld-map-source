@@ -1,0 +1,483 @@
+{
+ "id": "HDPE-25-1022-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1022 sheet 1/4 rev 0 — 23 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1022",
+  "sheet": "1/4",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1022-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1022",
+   "sheet": "1/4",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "GASKET SPIRAL WOUND 300# RF TEFLON FILLER 304SS HOOP & I.R. CS O.R. 4.5mm THK KLINGER MAXIFELEX CRIR OR EQ. ASME B 16.20",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE 40S PE SMLS A312-TP304 ASME B36.19",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE 40S PE SMLS A312-TP304 ASME B36.19",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "REDUCING TEE 3000# SW A182-F304 ASME B16.11",
+    "diam": "1 x 3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 3000# SW A182-F304 ASME B16.11",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "SWAGED NIPPLE CON. 40S 40S PLE/TSE A403-WP304 MSS SP-95",
+    "diam": "3/4 x 1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "STRAIGHT NIPPLE 40S SMLS TOE A312-TP304 (L=100mm) ASME B36.19",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "CAP 3000# NPT A182-F304 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE SOCKET WELD 40S 300# RF A182-F304 ASME B16.5 SRF",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "90 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "5/8 x 90",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE CHECK 800# SW PISTON A182-F304 BODY W/304SS TRIM HF-BODY SEAT HORIZ. LIFT-BB",
+    "diam": "1",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE GATE 800# SW A182-F304 BODY W/304SS TRIM HF-BODY SEAT OSY-BB SOLID WEDGE",
+    "diam": "3/4",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "2",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "3",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "4",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "5",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "6",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "7",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "8",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "9",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "10",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "11",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "12",
+     "shape": "square",
+     "outline": "solid",
+     "label": "THD",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "13",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "14",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "15",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "16",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "17",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "18",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "19",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "20",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "21",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "22",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "23",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1",
+     "branch": false,
+     "spool": null
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 23,
+  "fieldWeldCount": 23,
+  "fieldWelds": [
+   "1",
+   "2",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "10",
+   "11",
+   "12",
+   "13",
+   "14",
+   "15",
+   "16",
+   "17",
+   "18",
+   "19",
+   "20",
+   "21",
+   "22",
+   "23"
+  ],
+  "register": [
+   {
+    "no": "1",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "2",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "3",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "4",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "5",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "6",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "7",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "8",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "9",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "10",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "11",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "12",
+    "loc": "Field",
+    "kind": "THD",
+    "nps": 0.75
+   },
+   {
+    "no": "13",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "14",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "15",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "16",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "17",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "18",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "19",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "20",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "21",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "22",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   },
+   {
+    "no": "23",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1
+   }
+  ]
+ }
+}

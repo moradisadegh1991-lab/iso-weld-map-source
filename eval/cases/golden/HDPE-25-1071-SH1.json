@@ -1,0 +1,245 @@
+{
+ "id": "HDPE-25-1071-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1071 sheet 1/1 rev 0 — 10 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1071",
+  "sheet": "1/1",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1071-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1071",
+   "sheet": "1/1",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "PIPE 10S BE EFW(EJ=1) A312-TP304 ASME B36.19",
+    "diam": "4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 45 LR 10S BW A403-WP304-W EFW(EJ=1) ASME B16.9",
+    "diam": "4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 LR 10S BW A403-WP304-W EFW(EJ=1) ASME B16.9",
+    "diam": "4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE LAP JOINT 150# FF A105 ASME B16.5",
+    "diam": "4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "STUB END SP 10S BW A403-WP304-W EFW(EJ=1) ASME B16.9",
+    "diam": "4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF SHEET NON-ASBESTOS 2mm THK KLINGER C-4430 or EQ. ASME B16.21",
+    "diam": "4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "90 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "5/8 x 90",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE BALL 150# RF A351-CF8 BODY W/304SS BALL TEFLON SEAT FB FLOATING LEVER OP. LONG PA. ASME B16.10 API 608",
+    "diam": "4",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "2",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "3",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "4",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "5",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "6",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "7",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "8",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": "SP-3"
+    },
+    {
+     "no": "9",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": "SP-3"
+    },
+    {
+     "no": "10",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "4",
+     "branch": false,
+     "spool": "SP-3"
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 10,
+  "fieldWeldCount": 3,
+  "fieldWelds": [
+   "2",
+   "3",
+   "7"
+  ],
+  "spoolCount": 3,
+  "register": [
+   {
+    "no": "1",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "2",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "3",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "4",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "5",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "6",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "7",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "8",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "9",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 4
+   },
+   {
+    "no": "10",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 4
+   }
+  ]
+ }
+}

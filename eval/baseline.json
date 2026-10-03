@@ -1,41 +1,41 @@
 {
-  "recordedAt": "2026-10-03T13:51:06.002Z",
+  "recordedAt": "2026-10-03T14:03:17.504Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 36,
+    "cases": 80,
     "draft": 1,
-    "pass": 35,
+    "pass": 79,
     "fail": 0,
     "xfail": 0,
     "xpass": 0,
     "passRate": 100,
     "weldCountExact": {
-      "ok": 34,
-      "of": 34,
+      "ok": 78,
+      "of": 78,
       "pct": 100
     },
     "fieldWeldsExact": {
-      "ok": 12,
-      "of": 12,
+      "ok": 56,
+      "of": 56,
       "pct": 100
     },
     "spoolCountExact": {
-      "ok": 19,
-      "of": 19,
+      "ok": 39,
+      "of": 39,
       "pct": 100
     },
     "registerExact": {
-      "ok": 18,
-      "of": 18,
+      "ok": 62,
+      "of": 62,
       "pct": 100
     },
     "registerFieldAccuracy": 100,
     "registerFields": {
-      "correct": 630,
-      "of": 630,
-      "undecided": 76
+      "correct": 2234,
+      "of": 2234,
+      "undecided": 251
     },
-    "warnings": 9
+    "warnings": 10
   },
   "cases": [
     {
@@ -60,6 +60,20 @@
       "failed": []
     },
     {
+      "id": "HDPE-25-1003-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1003-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1004-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1004-SH1.json",
+      "failed": []
+    },
+    {
       "id": "HDPE-25-1004-SH2",
       "kind": "golden",
       "status": "pass",
@@ -74,10 +88,45 @@
       "failed": []
     },
     {
+      "id": "HDPE-25-1006-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1006-SH1.json",
+      "failed": []
+    },
+    {
       "id": "HDPE-25-1007-SH1",
       "kind": "golden",
       "status": "pass",
       "file": "eval/cases/golden/HDPE-25-1007-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1008-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1008-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1009-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1009-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1010-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1010-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1011-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1011-SH1.json",
       "failed": []
     },
     {
@@ -88,10 +137,122 @@
       "failed": []
     },
     {
+      "id": "HDPE-25-1013-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1013-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1014-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1014-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1015-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1015-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1016-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1016-SH1.json",
+      "failed": []
+    },
+    {
       "id": "HDPE-25-1017-SH1",
       "kind": "golden",
       "status": "pass",
       "file": "eval/cases/golden/HDPE-25-1017-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1017-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1017-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1018-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1018-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1019-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1019-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1020-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1020-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1020-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1020-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1020-SH3",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1020-SH3.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1020-SH4",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1020-SH4.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1021-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1021-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1021-SH3",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1021-SH3.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1021-SH4",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1021-SH4.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1021-SH5",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1021-SH5.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1022-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1022-SH1.json",
       "failed": []
     },
     {
@@ -102,6 +263,97 @@
       "failed": []
     },
     {
+      "id": "HDPE-25-1023-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1023-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1023-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1023-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1024-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1024-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1025-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1025-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1026-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1026-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1026-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1026-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1026-SH3",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1026-SH3.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1027-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1027-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1027-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1027-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1027-SH3",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1027-SH3.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1028-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1028-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1029-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1029-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1030-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1030-SH1.json",
+      "failed": []
+    },
+    {
       "id": "HDPE-25-1031-SH1",
       "kind": "golden",
       "status": "pass",
@@ -109,10 +361,66 @@
       "failed": []
     },
     {
+      "id": "HDPE-25-1032-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1032-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1033-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1033-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1034-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1034-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1035-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1035-SH1.json",
+      "failed": []
+    },
+    {
       "id": "HDPE-25-1036-SH1",
       "kind": "golden",
       "status": "pass",
       "file": "eval/cases/golden/HDPE-25-1036-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1037-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1037-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1037-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1037-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1071-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1071-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1074-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1074-SH1.json",
       "failed": []
     },
     {
