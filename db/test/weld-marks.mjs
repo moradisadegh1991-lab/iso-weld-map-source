@@ -79,10 +79,19 @@ test("declared «THD at every threaded joint»: an unlabelled joint among socket
   equal(weldListFromMarks(SHEET, LEGEND).weldList.find((w) => w.no === "5").kind, "", "not declared, not assumed");
 });
 
+test("a joint whose size has no pipe on this sheet is joined to the next sheet: its type is not this BOM's to say", async () => {
+  const bom = [...BOM, { pt: 7, group: "FITTINGS", description: "REDUCING TEE S40 S80 BW A234-WPB ASME B16.9", diam: "2 x 1" }];
+  const r = weldListFromMarks({ ...SHEET, bom, weldMarks: { marks: [mark("1", "square", { nps: "1" }), mark("2", "circle", { spool: "SP-1" })] } }, LEGEND);
+  equal(r.weldList.map((w) => [w.no, w.kind]), [["1", ""], ["2", "BW"]],
+    "the tee's 1\" branch runs off the sheet — BW on this side says nothing about the pipe it meets");
+});
+
 test("numbers read twice, and numbers missing from the run, are both named", async () => {
   const r = weldListFromMarks({ ...SHEET, weldMarks: { marks: [mark("10", "square"), mark("12", "square"), mark("12", "circle"), mark("15", "square"), mark("14", "square", { outline: "dashed" })] } }, LEGEND);
   assert(r.problems.some((p) => /12 دو بار/.test(p)), "a duplicate");
   assert(r.notes.some((n) => /در میانهٔ ردیف این برگ خوانده نشد: 11، 13/.test(n)), `11 and 13 missing, 14 is the dashed one (${r.notes.join(" | ")})`);
+  const added = weldListFromMarks({ ...SHEET, weldMarks: { marks: [mark("1", "square"), mark("2", "square"), mark("4-1", "square"), mark("3", "square")] } }, LEGEND);
+  assert(!added.notes.some((n) => /در میانهٔ ردیف/.test(n)), `4-1 is a joint added in a revision, not 41 (${added.notes.join(" | ")})`);
 });
 
 test("completed by a person, the list is a register; scored against the contractor's, blanks are not scored", async () => {

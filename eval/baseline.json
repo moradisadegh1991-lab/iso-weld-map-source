@@ -1,38 +1,39 @@
 {
-  "recordedAt": "2026-09-22T12:28:26.374Z",
+  "recordedAt": "2026-10-03T13:51:06.002Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 26,
+    "cases": 36,
     "draft": 1,
-    "pass": 25,
+    "pass": 35,
     "fail": 0,
     "xfail": 0,
     "xpass": 0,
     "passRate": 100,
     "weldCountExact": {
-      "ok": 24,
-      "of": 24,
+      "ok": 34,
+      "of": 34,
       "pct": 100
     },
     "fieldWeldsExact": {
-      "ok": 2,
-      "of": 2,
+      "ok": 12,
+      "of": 12,
       "pct": 100
     },
     "spoolCountExact": {
-      "ok": 14,
-      "of": 14,
+      "ok": 19,
+      "of": 19,
       "pct": 100
     },
     "registerExact": {
-      "ok": 8,
-      "of": 8,
+      "ok": 18,
+      "of": 18,
       "pct": 100
     },
     "registerFieldAccuracy": 100,
     "registerFields": {
-      "correct": 101,
-      "of": 101
+      "correct": 630,
+      "of": 630,
+      "undecided": 76
     },
     "warnings": 9
   },
@@ -42,6 +43,76 @@
       "kind": "golden",
       "status": "draft",
       "file": "eval/cases/golden/28-CWR-10-930065A.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1001-SH1-0A",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1001-SH1-0A.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1002-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1002-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1004-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1004-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1005-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1005-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1007-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1007-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1012-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1012-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1017-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1017-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1022-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1022-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1031-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1031-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1036-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1036-SH1.json",
       "failed": []
     },
     {

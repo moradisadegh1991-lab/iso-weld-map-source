@@ -16,6 +16,7 @@
     "storage": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs tools/storage.mjs",
     "doctor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/doctor.mjs",
     "pdfjs:assets": "node tools/pdfjs-assets.mjs",
+    "golden:marks": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs eval/golden-from-marks.mjs",
     "weldmap:truth": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs eval/weldmap-truth.mjs",
     "extraction:report": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs eval/extraction-report.mjs",
     "golden:add": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs eval/golden-add.mjs",

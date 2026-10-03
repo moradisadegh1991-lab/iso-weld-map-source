@@ -17,6 +17,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildModel } from "../lib/engine.js";
+import { weldListFromMarks } from "../lib/register/weld-marks.mjs";
 import { evaluateCase, aggregate } from "./lib/metrics.mjs";
 import { printResults, printSummary, compareToBaseline, printGate } from "./lib/report.mjs";
 
@@ -48,6 +49,23 @@ async function loadCases() {
   return cases;
 }
 
+/**
+ * A sheet whose designer printed every joint: the register is what the rules
+ * make of the markers (lib/register/weld-marks.mjs) under the project's
+ * declared `legend`. A blank the rules leave for a person is `null` here, and
+ * metrics.mjs counts it as undecided, not as wrong.
+ */
+function modelFromMarks(def) {
+  const conv = weldListFromMarks(def.input, def.legend || {});
+  return {
+    printed: true,
+    register: conv.weldList.map((w) => ({ no: w.no, loc: w.loc || null, kind: w.kind || null,
+      nps: w.nps ? Number(w.nps) : null, spool: w.spool || null, role: w.ref || null })),
+    spoolIds: [...new Set(conv.weldList.map((w) => w.spool).filter(Boolean))],
+    checks: conv.problems.map((p) => ({ label: p, status: "warn" })),
+  };
+}
+
 async function main() {
   let cases = await loadCases();
   const only = value("only");
@@ -60,7 +78,7 @@ async function main() {
   const results = cases.map((def) => {
     let model;
     try {
-      model = buildModel(def.input, def.options || {});
+      model = def.input?.weldMarks ? modelFromMarks(def) : buildModel(def.input, def.options || {});
     } catch (e) {
       model = { error: `threw: ${e.message}` };
     }

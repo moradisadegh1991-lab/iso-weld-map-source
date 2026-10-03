@@ -1,0 +1,108 @@
+{
+ "id": "HDPE-25-1007-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1007 sheet 1/1 rev 0 — 3 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1007",
+  "sheet": "1/1",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1007-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a session (stand-in for the welds pass); BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1007",
+   "sheet": "1/1",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "PIPE S40 BE ERW(EJ=0.85) API 5L-B PSL1 ASME B36.10",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 LR S40 BW A234-WPBW ERW(EJ=0.85) ASME B16.9",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE SLIP ON 150# RF A105 ASME B16.5 SRF",
+    "diam": "2",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "2",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "3",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-2"
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 3,
+  "fieldWeldCount": 1,
+  "fieldWelds": [
+   "2"
+  ],
+  "spoolCount": 2,
+  "register": [
+   {
+    "no": "1",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "2",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "3",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   }
+  ]
+ }
+}

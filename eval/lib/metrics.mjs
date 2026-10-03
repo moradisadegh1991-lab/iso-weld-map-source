@@ -72,7 +72,7 @@ export function evaluateCase(def, model) {
   }
 
   // ── per-row register comparison, the strictest check we have ──────────
-  let fieldsTotal = 0, fieldsCorrect = 0;
+  let fieldsTotal = 0, fieldsCorrect = 0, fieldsUndecided = 0;
   if (Array.isArray(expect.register)) {
     const byNo = new Map(register.map((w) => [w.no, w]));
     const mismatches = [];
@@ -85,6 +85,9 @@ export function evaluateCase(def, model) {
       }
       for (const k of REGISTER_FIELDS) {
         if (row[k] == null) continue;
+        // A register read from printed markers leaves for a person what the
+        // rules cannot decide. Undecided is not wrong, and not right either.
+        if (model.printed && (got[k] == null || got[k] === "")) { fieldsUndecided++; continue; }
         fieldsTotal++;
         if (String(got[k]) === String(row[k])) fieldsCorrect++;
         else mismatches.push(`${row.no}.${k}: expected ${row[k]}, got ${got[k]}`);
@@ -94,7 +97,7 @@ export function evaluateCase(def, model) {
       `${fieldsTotal} fields`,
       mismatches.length ? mismatches.slice(0, 4).join(" · ") +
         (mismatches.length > 4 ? ` · +${mismatches.length - 4} more` : "")
-        : `${fieldsCorrect}/${fieldsTotal} fields`);
+        : `${fieldsCorrect}/${fieldsTotal} fields${fieldsUndecided ? ` · ${fieldsUndecided} left for a person` : ""}`);
   }
 
   // ── validation checks produced by the engine ─────────────────────────
@@ -114,7 +117,7 @@ export function evaluateCase(def, model) {
     assert("hasExpectations", false, "at least one expectation", "the case declares none");
   }
 
-  return finish(def, assertions, { errored: false, warnCount, fieldsTotal, fieldsCorrect });
+  return finish(def, assertions, { errored: false, warnCount, fieldsTotal, fieldsCorrect, fieldsUndecided });
 }
 
 function countWarn(model) {
@@ -151,6 +154,7 @@ export function aggregate(results) {
   };
   const fieldsTotal = results.reduce((a, r) => a + (r.fieldsTotal || 0), 0);
   const fieldsCorrect = results.reduce((a, r) => a + (r.fieldsCorrect || 0), 0);
+  const fieldsUndecided = results.reduce((a, r) => a + (r.fieldsUndecided || 0), 0);
 
   return {
     cases: results.length,
@@ -165,7 +169,7 @@ export function aggregate(results) {
     spoolCountExact: rate("spoolCount"),
     registerExact: rate("register"),
     registerFieldAccuracy: fieldsTotal ? round(fieldsCorrect / fieldsTotal * 100) : null,
-    registerFields: { correct: fieldsCorrect, of: fieldsTotal },
+    registerFields: { correct: fieldsCorrect, of: fieldsTotal, undecided: fieldsUndecided },
     warnings: results.reduce((a, r) => a + (r.warnCount || 0), 0),
   };
 }

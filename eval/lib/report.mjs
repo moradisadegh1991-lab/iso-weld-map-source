@@ -47,7 +47,8 @@ export function printSummary(agg) {
   console.log(`  spool count exact        ${pct(agg.spoolCountExact)}`);
   console.log(`  register row exact       ${pct(agg.registerExact)}`);
   console.log(`  register field accuracy  ${agg.registerFieldAccuracy == null ? `${C.dim}n/a${C.off}`
-    : `${agg.registerFieldAccuracy}% ${C.dim}(${agg.registerFields.correct}/${agg.registerFields.of})${C.off}`}`);
+    : `${agg.registerFieldAccuracy}% ${C.dim}(${agg.registerFields.correct}/${agg.registerFields.of})${C.off}`}` +
+    (agg.registerFields?.undecided ? ` ${C.dim}· ${agg.registerFields.undecided} left for a person${C.off}` : ""));
   console.log(`  engine warnings raised   ${agg.warnings}`);
 }
 

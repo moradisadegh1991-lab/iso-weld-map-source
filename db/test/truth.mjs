@@ -170,6 +170,8 @@ const truth = [
 test("weld numbering styles do not count as a mismatch", async () => {
   equal(weldKey("W-01"), weldKey("W01"));
   equal(weldKey("W-01"), weldKey("1"));
+  equal(weldKey("004-1"), "4-1", "a joint added in a revision keeps its suffix");
+  assert(weldKey("004-1") !== weldKey("041"), "4-1 is not joint 41");
   const r = compareRegister(truth, [
     { no: "W01", loc: "Field", kind: "Tie-in", nps: 28 },
     { no: "2", loc: "Shop", kind: "BW", nps: 28 },

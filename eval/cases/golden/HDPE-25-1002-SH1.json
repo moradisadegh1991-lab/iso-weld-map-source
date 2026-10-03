@@ -1,0 +1,392 @@
+{
+ "id": "HDPE-25-1002-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1002 sheet 1/1 rev 0 — 19 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1002",
+  "sheet": "1/1",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1002-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing by Claude after the contractor register for this sheet had been seen; each value re-checked on the drawing; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1002",
+   "sheet": "1/1",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": 1,
+    "description": "PIPE S40 BE SMLS A333-6 ASME B36.10",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": 2,
+    "description": "PIPE S80 PE SMLS A333-6 ASME B36.10",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": 3,
+    "description": "HALF COUPLING 3000# SW A350-LF2 CL.1 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": 4,
+    "description": "ELBOW 90 LR S40 BW A420-WPL6 ASME B16.9",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": 5,
+    "description": "ELBOW 45 LR S40 BW A420-WPL6 ASME B16.9",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": 6,
+    "description": "STRAIGHT NIPPLE S80 SMLS TOE A333-6 (L=100mm) ASME B36.10",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": 7,
+    "description": "CAP 3000# NPT A350-LF2 CL.1 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": 8,
+    "description": "FLANGE WELDING NECK S40 150# RF A350-LF2 CL.1 ASME B16.5 SRF",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": 10,
+    "description": "VALVE GLOBE 800# SW A350-LF2 CL.1 BODY W/304SS TRIM HF-BODY SEAT & DISC SEAT OSY-BB",
+    "diam": "3/4",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "2",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "3",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": true,
+     "spool": null
+    },
+    {
+     "no": "4",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "5",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "6",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "7",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "8",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "9",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "10",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "11",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "12",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "13",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "14",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-3"
+    },
+    {
+     "no": "15",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "16",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-4"
+    },
+    {
+     "no": "17",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-4"
+    },
+    {
+     "no": "18",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-4"
+    },
+    {
+     "no": "19",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 19,
+  "fieldWeldCount": 9,
+  "fieldWelds": [
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "10",
+   "13",
+   "15",
+   "19"
+  ],
+  "spoolCount": 4,
+  "register": [
+   {
+    "no": "1",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "2",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "3",
+    "loc": "Field",
+    "kind": "OLET",
+    "nps": 0.75
+   },
+   {
+    "no": "4",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "5",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "6",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "7",
+    "loc": "Field",
+    "kind": "THD",
+    "nps": 0.75
+   },
+   {
+    "no": "8",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "9",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "10",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "11",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "12",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "13",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "14",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "15",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "16",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "17",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "18",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "19",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   }
+  ]
+ }
+}
