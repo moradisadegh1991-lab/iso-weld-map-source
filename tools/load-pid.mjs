@@ -51,5 +51,5 @@ const report = await withProject(db, project.id, (tx) =>
 console.log(`PROJECT ${code} — ${K110.name}`);
 console.log(`  sections ${report.sections} · drawings ${report.drawings} (revisions issued ${report.revisions}, not issued ${report.revisionsNotIssued.length})`);
 console.log(`  equipment ${report.equipment.tags} (unclassified ${report.equipment.unclassified.length}, unfiled ${report.equipment.unfiled.length})`);
-console.log(`  lines ${report.lines} · instruments ${report.instruments.imported} (ISA problems ${report.instruments.problems.length})`);
+console.log(`  lines ${report.lines} (held, fluid not in legend: ${report.linesHeld.length}) · instruments ${report.instruments.imported} (ISA problems ${report.instruments.problems.length})`);
 process.exit(0);

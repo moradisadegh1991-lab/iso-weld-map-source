@@ -14,7 +14,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseSheet } from "../lib/pid/ocr-parse.mjs";
-import { FLUIDS, INSULATION, EQUIPMENT_TYPES, equipmentType, legendFluid } from "../lib/pid/legend-k110.mjs";
+import { FLUIDS, INSULATION, EQUIPMENT_TYPES, equipmentType, legendFluid, inchMarkFluid } from "../lib/pid/legend-k110.mjs";
 
 const add = (map, key, make) => { if (!map.has(key)) map.set(key, make()); return map.get(key); };
 
@@ -61,9 +61,11 @@ export function registers(sheets, titles = new Map()) {
   const equipment = new Map(), lines = new Map(), instruments = new Map();
   const problems = [];
 
+  const list = (set) => [...set].sort();
   for (const s of sheets) {
     if (!s.ownerNo) problems.push(`صفحهٔ ${s.page}: شمارهٔ نقشه در جدول عنوان خوانده نشد`);
     for (const p of s.instrumentProblems || []) problems.push(`${where(s)}: ${p}`);
+    for (const p of s.equipmentProblems || []) problems.push(`${where(s)}: ${p}`);
     if (legend(s)) continue;
     for (const e of s.equipment) {
       // a tag whose type letters the legend does not list is not filed as equipment
@@ -83,8 +85,13 @@ export function registers(sheets, titles = new Map()) {
     }
     for (const raw of s.lines) {
       let l = raw;
-      const fixed = !FLUIDS[raw.fluid] && legendFluid(raw.fluid);
-      if (fixed) {
+      const inch = !FLUIDS[raw.fluid] && inchMarkFluid(raw.fluid);
+      const fixed = !inch && !FLUIDS[raw.fluid] && legendFluid(raw.fluid);
+      if (inch) {
+        // the inch mark was misread, so the fraction before it is not trusted either: size unknown
+        l = { ...raw, fluid: inch, size: null, lineNo: inch + raw.lineNo.slice(raw.fluid.length) };
+        problems.push(`${where(s)}: «${raw.printed}» — X پیش از کد سیال علامت اینچ (") است؛ ${l.lineNo} ثبت شد و سایز از این خواندن گرفته نشد`);
+      } else if (fixed) {
         l = { ...raw, fluid: fixed, lineNo: fixed + raw.lineNo.slice(raw.fluid.length) };
         problems.push(`${where(s)}: «${raw.printed}» — کد سیال ${raw.fluid} در لجند نیست؛ تنها کد نزدیک ${fixed} است و ${l.lineNo} ثبت شد (اصلاح خطای خواندن)`);
       }
@@ -102,7 +109,32 @@ export function registers(sheets, titles = new Map()) {
     }
   }
 
-  const list = (set) => [...set].sort();
+  // A code the legend lacks that is the tail of exactly one legend-coded line
+  // with the same number and class (W130003A beside CW130003A, both DA01):
+  // the OCR dropped the first letter of a vertical string. Merged into that
+  // line, which another sheet printed whole.
+  for (const l of [...lines.values()]) {
+    if (FLUIDS[l.fluid]) continue;
+    const tail = l.lineNo.slice(l.fluid.length);
+    const whole = [...lines.values()].filter((o) => o !== l && FLUIDS[o.fluid] && o.fluid.endsWith(l.fluid)
+      && o.lineNo.slice(o.fluid.length) === tail && [...l.classes].every((c) => o.classes.has(c)));
+    if (whole.length !== 1) continue;
+    const [o] = whole;
+    for (const k of ["insulation", "sizes", "sheets", "printed"]) l[k].forEach((v) => o[k].add(v));
+    lines.delete(l.lineNo);
+    problems.push(`خط ${l.lineNo} (${list(l.sheets).join("، ")}): حرف اول جا افتاده — همان ${o.lineNo} است که برگ دیگری کامل چاپ کرده؛ در آن ادغام شد`);
+  }
+
+  // A base printed bare where the set also prints its trains («30C1701»
+  // beside 30-C-1701A/B) is the label with its suffix lost, or the trains
+  // named together — not an asset of its own. Not filed; named.
+  for (const e of [...equipment.values()]) {
+    const trains = [...equipment.keys()].filter((t) => t !== e.tag && t.startsWith(e.tag) && /^[A-Z]$/.test(t.slice(e.tag.length)));
+    if (!trains.length) continue;
+    equipment.delete(e.tag);
+    problems.push(`«${list(e.printed).join("، ")}» (${list(e.sheets).join("، ")}): بدون حرف ردیف چاپ/خوانده شد ولی ${trains.sort().join("، ")} وجود دارند — جدا ثبت نشد`);
+  }
+
   const eq = [...equipment.values()].sort((a, b) => a.tag.localeCompare(b.tag)).map((e) => ({
     tag: e.tag, printed: list(e.printed), sheets: list(e.sheets), listedOn: list(e.listedOn), data: e.data,
     service: e.data.SERVICE || null, type: equipmentType(e.tag), typeName: EQUIPMENT_TYPES[equipmentType(e.tag)],

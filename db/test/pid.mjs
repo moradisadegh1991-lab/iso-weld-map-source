@@ -11,7 +11,7 @@
 import { test, run, assert, equal, scratchDir } from "./harness.mjs";
 import {
   equipmentTags, lineNumbers, inches, sheetRefs, splitLetters, splitNumbers, instrumentsFromBubbles,
-  dedupe, titleBlock, dataBoxes,
+  dedupe, titleBlock, dataBoxes, parseSheet,
 } from "../../lib/pid/ocr-parse.mjs";
 import { equipmentSection, instrumentSection, purposeOf } from "../../lib/pid/load.mjs";
 import { legendFluid, equipmentType } from "../../lib/pid/legend-k110.mjs";
@@ -97,6 +97,23 @@ test("the title block: owner's number, revisions newest first, purpose as printe
   equal([isoDate("21/05/12"), isoDate("31/13/12")], ["2012-05-21", null]);
 });
 
+test("equipment: two readings of one place that disagree file nothing; a bare base beside its trains is not its own tag", async () => {
+  const it = (t, b, c = 0.9) => ({ t, c, b });
+  const s = parseSheet({ page: 171, w: 1191, h: 842, items: [
+    it("30C1701I", [459.5, 440.3, 510.6, 448.6]), it("30C1701F", [459.9, 440.2, 510.6, 448.5], 0.8),
+    it("30 C 1701 A/B", [606.8, 751.3, 653.6, 758.5]), it("30C1701", [702.9, 439.9, 749.0, 448.2]),
+    it("30 S 1401 A/B", [100, 100, 150, 108]), it("30S 1401", [100, 100, 140, 108]),
+    it("30 P 1302 A/B/C", [200, 100, 260, 108]), it("30-P-1302A/B/C", [200, 100, 259, 108]),
+  ] });
+  equal(s.equipment.map((e) => e.tag).sort(), ["30-C-1701", "30-C-1701A", "30-C-1701B",
+    "30-P-1302A", "30-P-1302B", "30-P-1302C", "30-S-1401A", "30-S-1401B"], "a reading that says less of the same label adds nothing; one that agrees is no clash");
+  equal(s.equipmentProblems.length, 1);
+  assert(/30C1701I.*30C1701F/.test(s.equipmentProblems[0]), "the clash is named");
+  const reg = registers([{ ...s, ownerNo: "K110-30-PID-0021-70-11", revisions: [], title: [], dataBoxes: [], lines: [], instruments: [], refs: [] }]);
+  equal(reg.equipment.map((e) => e.tag).filter((t) => /1701/.test(t)), ["30-C-1701A", "30-C-1701B"]);
+  assert(reg.problems.some((p) => /«30C1701».*30-C-1701A/.test(p)), "the bare one is named, not filed");
+});
+
 test("an equipment data box: each label with the value to its right", async () => {
   const [b] = dataBoxes([
     { t: "ITEM N°", c: 1, b: [470, 771, 499, 779] }, { t: "30-F1109", c: 1, b: [528, 772, 554, 779] },
@@ -137,7 +154,7 @@ const reg = registers([
     equipment: [{ tag: "30-E-1129", printed: ["30-E1129"], listed: true }, { tag: "60-P-6101", printed: ["60-P6101"], listed: false },
       { tag: "30-P-1201A", printed: ["30-P-1201A"], listed: false }, { tag: "30-Q-1101", printed: ["30-Q1101"], listed: false }],
     dataBoxes: [{ tag: "30-E-1129", fields: { SERVICE: "TER.TRANSF.LN.EXCH", TYPE: "SHELL&TUBE" } }],
-    lines: lineNumbers('6*BW110901A-JA01-H'),
+    lines: lineNumbers('6*BW110901A-JA01-H 4"W110901A-JA01-H 2"SL110905A-JA01-P 1XN110903A-DA03-NI'),
     instruments: instrumentsFromBubbles([{ lines: [["FT", 1], ["110912", 1]] }, { lines: [["FI", 1], ["161905", 1]] }]).instruments,
   }),
   sheet(16, "01", { revisions: [{ rev: "3", date: "19/02/15", purpose: "TSR.noRMTI-I-93-278" }, { rev: "2", date: "20/05/12", purpose: "AS BUILT" }] }),
@@ -146,7 +163,12 @@ const OPTS = { unit: { code: "30", name: "Ethane Cracking Plant" }, sections: { 
 
 test("a read set becomes a project: sections, drawings with their revisions, equipment, lines, instruments", async () => {
   const report = await withProject(db, P, (tx) => loadPidSet(tx, { projectId: P, userId: me.id }, reg, OPTS));
-  equal([report.sections, report.drawings, report.revisions, report.lines], [2, 2, 3, 1]);
+  equal([report.sections, report.drawings, report.revisions, report.lines], [2, 2, 3, 2]);
+  equal(report.linesHeld, ["SL110905A"], "a fluid code the legend lacks is held, not loaded as a line");
+  assert(!reg.lines.some((l) => l.lineNo === "W110901A") && reg.lines.find((l) => l.lineNo === "BW110901A").sheets.length === 1
+    && reg.problems.some((p) => /W110901A.*جا افتاده.*BW110901A/.test(p)), "a dropped first letter merges into the one line printed whole");
+  const n = reg.lines.find((l) => l.lineNo === "N110903A");
+  assert(n && n.sizes.length === 0 && reg.problems.some((p) => /علامت اینچ/.test(p)), "X before a code is the inch mark; the size beside it is not trusted");
   equal(report.revisionsNotIssued.map((r) => r.printed), ["ISSUED FOR DESIGN"], "a purpose the platform has no name for is not issued as something else");
   assert(reg.problems.some((p) => /30-Q1101/.test(p)) && !reg.equipment.some((e) => e.tag === "30-Q-1101"),
     "Q is not a type letter in the legend: the string is named, not filed as equipment");
@@ -169,8 +191,10 @@ test("a read set becomes a project: sections, drawings with their revisions, equ
     const { rows: [n] } = await db.query("SELECT count(*)::int AS n FROM tag WHERE project_id = $1 AND tag_no LIKE '60-%'", [P]);
     equal(n.n, 0, "another unit's equipment drawn for reference is not this unit's tag");
 
-    const { rows: [line] } = await db.query("SELECT line_no, piping_class, service, insulation FROM line WHERE project_id = $1", [P]);
-    equal(line, { line_no: "BW110901A", piping_class: "JA01", service: "BW — BOILER FEED WATER", insulation: "H" }, "the fluid named by the set's own legend");
+    const { rows: lns } = await db.query("SELECT line_no, piping_class, service, insulation FROM line WHERE project_id = $1 ORDER BY line_no", [P]);
+    equal(lns, [{ line_no: "BW110901A", piping_class: "JA01", service: "BW — BOILER FEED WATER", insulation: "H" },
+      { line_no: "N110903A", piping_class: "DA03", service: "N — NITROGEN", insulation: null }],
+      "the fluid named by the set's own legend; an insulation code it does not list (NI) is left empty");
 
     const { rows: ins } = await db.query(
       `SELECT i.tag_no, i.category, i.eq_tag_id, s.code FROM instrument i LEFT JOIN subsystem s ON s.id = i.subsystem_id
