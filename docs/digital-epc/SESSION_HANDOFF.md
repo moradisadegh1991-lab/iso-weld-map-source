@@ -86,6 +86,18 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   rules: printed «BR» → BR; a frame numbered 0 is excluded and named. A loc
   dispute drops spoolCount from expect. 54/54 pass; 251 fields left blank
   for a person. The real `welds` pass still needs an API key to be scored.
+- 2026-10-09, K110 P&ID (owner: «read the olefin P&ID and bring it in as a
+  project»): `P&ID K1.zip`, 242 AutoCAD sheets with text as strokes. Page
+  OCR (`tools/pid-ocr.py`, RapidOCR) + instrument bubbles from geometry
+  (`tools/pid-bubbles.py`) → `lib/pid/ocr-parse.mjs` → registers by the
+  set's own legend (`lib/pid/legend-k110.mjs`) → `tools/pid-registers.mjs`
+  (`data/k110/registers.json` + Excel) → `npm run pid:load` (project K110).
+  370 equipment, 3103 lines (91 held: fluid not in legend), 5698
+  instruments, 242 drawings, 368 revisions issued, 760 problems for the
+  engineer. Eye-read sheets: instruments 77/77, 41/43, 15/15 with no wrong
+  tag. OCR slips repaired only by stated rules (inch mark as X, dropped
+  first letter, OA = 0A, clashing readings file nothing). Driven in the
+  browser on a fresh database. See `docs/epc-llm/07-pid-k110.md`.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`

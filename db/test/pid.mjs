@@ -82,8 +82,8 @@ test("the title block: owner's number, revisions newest first, purpose as printe
     { t: "2", c: 1, b: [918, 600, 924, 607] }, { t: "17/12/16", c: 1, b: [934, 600, 971, 607] },
     { t: "FOR AS BUILT", c: 1, b: [975, 600, 1020, 607] }, { t: "PROJECT", c: 1, b: [1022, 600, 1050, 607] }, { t: "f.n", c: 1, b: [1072, 600, 1080, 607] },
     { t: "Drawn by:", c: 1, b: [1067, 656, 1095, 664] },
-    { t: "1", c: 1, b: [919, 635, 925, 642] }, { t: "21/05/12", c: 1, b: [935, 635, 968, 642] }, { t: "AS BUILT", c: 1, b: [996, 634, 1031, 643] },
-    { t: "0", c: 1, b: [917, 644, 923, 652] }, { t: "30/01/10", c: 1, b: [935, 643, 974, 652] }, { t: "ISSUED FOR DESIGN", c: 1, b: [974, 643, 1048, 651] },
+    { t: "1A", c: 1, b: [917, 635, 927, 642] }, { t: "21/05/12", c: 1, b: [935, 635, 968, 642] }, { t: "AS BUILT", c: 1, b: [996, 634, 1031, 643] },
+    { t: "OA", c: 1, b: [916, 644, 926, 652] }, { t: "30/01/10", c: 1, b: [935, 643, 974, 652] }, { t: "ISSUED FOR DESIGN", c: 1, b: [974, 643, 1048, 651] },
     { t: "DRAWING TITLE:", c: 1, b: [906, 751, 970, 759] }, { t: "SECTION 10", c: 1, b: [999, 754, 1048, 762] },
     { t: "CRACKINGFURNACES30-F-1109-ECONOMIZERCOIL", c: 1, b: [935, 765, 1112, 771] },
     { t: "CONTRACTOR", c: 1, b: [909, 785, 949, 793] },
@@ -91,8 +91,8 @@ test("the title block: owner's number, revisions newest first, purpose as printe
   ], W, H);
   equal([t.ownerNo, t.issue, t.section], ["K110-30-PID-0021-10-96", "1", "10"]);
   equal(t.revisions, [{ rev: "2", date: "17/12/16", purpose: "FOR AS BUILT PROJECT" },
-    { rev: "1", date: "21/05/12", purpose: "AS BUILT" }, { rev: "0", date: "30/01/10", purpose: "ISSUED FOR DESIGN" }],
-    "a block grown above the title block still read; the purpose in all its words, and no signer's name");
+    { rev: "1A", date: "21/05/12", purpose: "AS BUILT" }, { rev: "0A", date: "30/01/10", purpose: "ISSUED FOR DESIGN" }],
+    "a block grown above the title block still read; a mark with a letter (1A, and OA read for 0A); the purpose in all its words, and no signer's name");
   equal(t.title, ["SECTION 10", "CRACKINGFURNACES30-F-1109-ECONOMIZERCOIL"]);
   equal([isoDate("21/05/12"), isoDate("31/13/12")], ["2012-05-21", null]);
 });
