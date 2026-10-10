@@ -192,6 +192,7 @@ export default function DailyReportsPage() {
             {v.report.status === "open" && <> · در مرحلهٔ <b>{v.report.stage_name}</b></>} · نسخهٔ {v.versionNo}
             {v.record && <> · رکورد: نسخهٔ {v.record.versionNo}، <span className="mono">{v.record.hash.slice(0, 12)}…</span></>}
           </p>
+          <p><a className="btn ghost sm" href={`/daily-reports/print?id=${v.report.id}`}>نمای چاپ</a></p>
           <div className="moneyrow">
             <div><span>نفرات حاضر</span><b>{v.totals.people}</b></div>
             <div><span>مرخصی</span><b>{v.totals.onLeave}</b></div>

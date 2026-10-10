@@ -832,3 +832,56 @@ ol.timeline li.bad::before{background:var(--bad)}
 .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:10px 0}
 tr.sel td{background:var(--cy-soft)}
 .tablewrap{overflow-x:auto;max-width:100%}
+
+/* ── report print: paper is white with black ink, whatever the theme ─── */
+.rp-sheet,.rp-printroot{background:#fff;color:#111;direction:rtl;font-size:9pt;line-height:1.45}
+.rp-sheet{transform-origin:top right;box-shadow:0 2px 14px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.rp-previewwrap{overflow:hidden;margin:8px 0;position:relative}
+.rp-previewwrap .rp-sheet{position:absolute;top:0;right:0}
+.rp-table{border-collapse:collapse}
+.rp-table>thead>tr>td,.rp-table>tfoot>tr>td,.rp-table>tbody>tr>td{padding:0}
+.rp-header{display:grid;grid-template-columns:22% 56% 22%;border-bottom:1.2pt solid #111;box-sizing:border-box;flex:none}
+.rp-hcol{display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.rp-side{align-items:center}
+.rp-logos{width:90%;display:flex;gap:2mm;justify-content:center;align-items:center}
+.rp-logos img{flex:1 1 0;min-width:0;object-fit:contain}
+.rp-center{border-inline:0.6pt solid #111}
+.rp-cell{display:flex;align-items:center;padding:0 2mm;border-bottom:0.4pt solid #999;box-sizing:border-box;position:relative;overflow:hidden}
+.rp-cell:last-child{border-bottom:0}
+.rp-body{padding:3mm 4mm;box-sizing:border-box}
+.rp-body-preview{overflow:hidden;flex:none}
+.rp-footer{border-top:1.2pt solid #111;box-sizing:border-box;display:flex;flex-direction:column;flex:none;overflow:hidden}
+.rp-frow{display:flex;min-height:0}
+.rp-box{border-inline-start:0.6pt solid #111;display:flex;flex-direction:column;box-sizing:border-box;padding:1mm;min-width:0}
+.rp-box:first-child{border-inline-start:0}
+.rp-l{padding:0.3mm 1mm}
+.rp-third{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:1mm;border-top:0.4pt solid #999;margin-top:0.5mm}
+.rp-signer{display:flex;flex-direction:column}
+.rp-sigimg{min-height:8mm;display:flex;align-items:center;justify-content:center}
+.rp-sigimg img{max-height:12mm;max-width:100%}
+.rp-daily h4{font-size:9.5pt;margin:2.5mm 0 1mm}
+.rp-strip{display:flex;flex-wrap:wrap;gap:1mm 5mm;border:0.4pt solid #999;padding:1mm 2mm;margin-bottom:1.5mm}
+.rp-t{width:100%;border-collapse:collapse;font-size:8.5pt}
+.rp-t th,.rp-t td{border:0.4pt solid #888;padding:0.6mm 1.2mm;text-align:right}
+.rp-t th{background:#eee}
+.rp-none{color:#777;text-align:center !important}
+.rp-src{color:#777;font-size:7pt}
+.rp-notes{white-space:pre-wrap}
+.rp-drag{position:absolute;cursor:ns-resize;background:transparent}
+.rp-drag-line{position:relative;height:3mm;margin:-1.5mm 0;z-index:2;flex:none}
+.rp-drag-line::after{content:"";position:absolute;inset:1.2mm 0;border-top:0.6mm dashed #43A0B4}
+.rp-drag-cell{left:0;right:0;bottom:-1mm;height:2mm}
+.rp-drag-cell::after{content:"";position:absolute;inset:0.8mm 30%;border-top:0.5mm dashed #43A0B4}
+@media print{
+  .rp-printroot{margin:0}
+  .page>*:not(.rp-printhost){display:none !important}
+  .rp-printhost{margin:0 !important;padding:0 !important}
+  .page,.shell,.shell>*{padding:0 !important;margin:0 !important;overflow:visible !important;height:auto !important}
+  /* the app scrolls inside a viewport-high body on screen; on paper that
+     clips everything past the first page instead of flowing onto the next */
+  html,body{height:auto !important;overflow:visible !important;background:#fff !important}
+  .page:has(.rp-printhost){display:block !important}
+}
+.rp-table,.rp-table>*>tr>td,.rp-body{background:#fff}
+.rp-sheet h4,.rp-printroot h4,.rp-sheet p,.rp-printroot p{color:#111}
+.rp-t td{background:#fff}

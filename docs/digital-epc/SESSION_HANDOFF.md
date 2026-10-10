@@ -125,7 +125,19 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   and humidity in range); `dailyPrefill` offers the day's timesheets,
   finished or claimed steps and HSE with their source. daily-report 3/3,
   each rule revert-checked. Driven with three accounts through a return and
-  to final approval. Next: phase 4, the print layout.
+  to final approval.
+- 2026-10-10, report workflow phase 4: print layout. Migration 060
+  (`report_print_layout` versions, `project_logo`, both append-only); rules
+  `lib/reports/print.mjs` (paper, heights leaving ≥40 mm body, header cells
+  fitting the header, logos of this project only, footer element order and
+  styles, one row in landscape / perRow in portrait, placeholders);
+  `components/reports/PrintSheet.jsx` (print: table with repeated header and
+  footer; preview: scaled page with draggable dividers); pages
+  `/report-print-setup` and `/daily-reports/print`. print 4/4, each rule
+  revert-checked. Real PDF from the browser: landscape A4, 2 pages, header
+  and signature boxes on both. Fixed: print clipped at one page because the
+  app's body is a viewport-high scroll box. Next: phase 5, import from
+  `daily report.accdb`.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`
