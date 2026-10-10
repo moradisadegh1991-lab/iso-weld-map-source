@@ -280,6 +280,20 @@ test("with no cookie at all, the dev header still works on a laptop", async () =
   equal(authMode, "dev");
 });
 
+test("a server with password login only answers a request without a cookie with 401, not a 500", async () => {
+  // A public server has neither AUTH_MODE=dev nor OIDC. The shell's first call
+  // is /api/auth/me with no cookie; if that threw "not configured" (500) the
+  // page said "service unavailable" instead of showing the login form.
+  const saved = process.env.AUTH_MODE;
+  delete process.env.AUTH_MODE;
+  try {
+    const e = await throws(() => authenticate(req({})));
+    equal([e.status, e.code], [401, "UNAUTHENTICATED"]);
+    const h = await throws(() => authenticate(req({ authorization: "Bearer local|alice" })));
+    equal([h.status, h.code], [401, "UNAUTHENTICATED"], "and the dev header is not honoured without AUTH_MODE=dev");
+  } finally { process.env.AUTH_MODE = saved; }
+});
+
 // ── revocation, spraying, and what an error says ────────────────────────
 
 test("a new password ends every session issued before it", async () => {
