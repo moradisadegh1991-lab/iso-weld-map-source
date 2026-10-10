@@ -108,6 +108,8 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   the stage before; cancel only before any approval. `db/test/reports.mjs`
   11/11, every rule revert-checked. Next: phase 2 (signature image, admin
   pages for stages/groups/members). See `docs/digital-epc/report-workflow.md`.
+  User guide (Persian, role-based, real screenshots): `docs/digital-epc/guide-daily-report.pdf`
+  (self-contained source `guide-daily-report.html`).
   Reviewed `daily report.zip` (Access, 6 projects incl. Kavian furnace 10,
   116k manpower rows mixing people/machines/materials in one column; most
   reports undated in this file; holds a plaintext password and contractor
