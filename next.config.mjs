@@ -13,7 +13,8 @@
  */
 const nextConfig = {
   reactStrictMode: false,
-  serverExternalPackages: ["@electric-sql/pglite", "pg"],
+  // pdfjs-dist too: bundled for the server (document intake) it cannot find its own worker module.
+  serverExternalPackages: ["@electric-sql/pglite", "pg", "pdfjs-dist"],
 
   /**
    * The image optimizer is off. The platform serves no <Image>, but Next

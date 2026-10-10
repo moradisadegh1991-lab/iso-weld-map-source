@@ -1,6 +1,8 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { getStore } from "../../../../lib/storage/index.mjs";
+import { readRevision } from "../../../../lib/db/repos/intake.mjs";
 import { authenticate, errorResponse } from "../../../../lib/server/session.mjs";
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../../lib/authz.mjs";
@@ -51,7 +53,25 @@ export async function POST(request) {
       if (kind === "close-comment" && !can(membership, ACTIONS.SUBMIT_DESIGN)) delete args.designerReply;
       const run = { assign: assignReview, finish: finishReview, comment: raiseComment, "close-comment": closeComment, reply: sendReply }[kind];
       if (!run) return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
-      return Response.json({ result: await run(db, args) });
+      const result = await run(db, args);
+      // An approved revision (code 1 or 2) is read right away; a reading that
+      // fails is recorded on the reading, never on the reply that was sent.
+      let read = null;
+      if (kind === "reply") {
+        const store = await getStore();
+        read = [];
+        for (const c of body.codes || []) {
+          if (![1, 2].includes(Number(c.code))) continue;
+          const { rows: [i] } = await db.query("SELECT revision_id FROM transmittal_item WHERE id = $1", [c.itemId]);
+          // Statements here commit one by one (no surrounding transaction): the reply above
+          // is already recorded, whatever happens to the reading.
+          try {
+            const r = await readRevision(db, { projectId, revisionId: i.revision_id, store, userId: user.id });
+            read.push({ itemId: c.itemId, status: r.run.status, items: r.items.length });
+          } catch (e) { read.push({ itemId: c.itemId, error: e.message }); }
+        }
+      }
+      return Response.json({ result, read });
     });
   } catch (e) { return errorResponse(e); }
 }

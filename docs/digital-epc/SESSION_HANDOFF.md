@@ -118,6 +118,9 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   `npm run furnace:load`. Owner decided 2026-10-10 (lib/controls/f10.mjs): PMS data date = day applied,
   plan is OLF1's (approved), Secondary TLE = E-1110 (approved, linked). Other PMS/plan tag mismatches still open.
   Power BI dropped: KPIs in-platform at `/reports` (lib/db/repos/kpi.mjs, /api/kpi, db/test/kpi.mjs).
+  Document intake phase 1 (063, `/documents/intake`, docs/digital-epc/doc-intake.md): approved incoming
+  revisions read (PDF text layer, Excel registers), numbers by project shapes, proposal new/fill/conflict/same,
+  person applies (conflict/reject need reason), doc_ref provenance. Next: OCR (phase 2), datasheets/SLD/structural, iso.
   Reviewed `daily report.zip` (Access, 6 projects incl. Kavian furnace 10,
   116k manpower rows mixing people/machines/materials in one column; most
   reports undated in this file; holds a plaintext password and contractor
