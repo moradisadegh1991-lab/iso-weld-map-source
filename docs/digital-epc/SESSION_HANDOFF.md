@@ -112,6 +112,14 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   116k manpower rows mixing people/machines/materials in one column; most
   reports undated in this file; holds a plaintext password and contractor
   national IDs) — not imported yet.
+- 2026-10-10, report workflow phase 2: migration 059 `user_signature`
+  (append-only, type sniffed from bytes, ≤1 MB; served only within a project
+  its owner is in) and `report_signature.signature_id` (a signature keeps the
+  image it was given with); `/signature` (draw or upload) and `/report-setup`
+  (types, stages, groups, members, daily-report template) under a new menu
+  section «گزارش‌های مرحله‌ای» with its log. reports 16/16, each rule
+  revert-checked; driven in the browser at 1440 and 390 px, no errors. Next:
+  phase 3, the daily report form.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`

@@ -801,3 +801,22 @@ ol.timeline li.bad::before{background:var(--bad)}
 .sigs{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin:8px 0}
 .sigs>div{border:1px dashed var(--rule);border-radius:8px;padding:6px 10px;font-size:12px}
 .sigs>div.done{border-style:solid;border-color:#2e9e6b}
+
+/* ── signatures and report workflow ─────────────────────────────────────── */
+/* A signature is ink on paper: shown on white in both themes, as it prints. */
+.sigbox{display:block;width:fit-content;max-width:100%;background:#fff;border:1px solid var(--rule);border-radius:6px;padding:8px 14px;min-width:220px}
+.sigbox img{display:block;max-height:90px;max-width:320px}
+.sigpad{display:block;width:100%;max-width:600px;aspect-ratio:3/1;background:#fff;border:1px dashed var(--rule);
+  border-radius:6px;touch-action:none;cursor:crosshair;margin:10px 0}
+.seg{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0}
+.seg label{display:flex;gap:6px;align-items:center;font-size:13px}
+.okmsg{margin:10px 12px;padding:9px 11px;border:1px solid rgba(63,178,127,.45);border-radius:4px;color:var(--ok)}
+.permgrid{display:flex;flex-wrap:wrap;gap:4px 12px}
+.permgrid label{display:flex;gap:4px;align-items:center;font-size:12px}
+.stagebox{border:1px solid var(--rule);border-radius:8px;padding:10px 12px;margin:10px 0}
+.stagebox h3{margin:0 0 6px;font-size:14px}
+.groupbox{border-inline-start:3px solid var(--rule);padding:6px 10px;margin:8px 0}
+.btn.sm{padding:3px 9px;font-size:11px;min-height:0}
+.inlinefold{margin:6px 0}
+.inlinefold>summary{cursor:pointer;font-size:12px;color:var(--cy);padding:4px 0}
+.inlinefold[open]>summary{margin-bottom:6px}

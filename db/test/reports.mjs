@@ -202,4 +202,74 @@ test("the engine alone: arrival, lapsed signatures, and one hash for one content
   equal(wf.canonical({ b: 1, a: [2, { d: 3, c: 4 }] }), wf.canonical({ a: [2, { c: 4, d: 3 }], b: 1 }));
 });
 
+// ── phase 2: the signature image, and changing a workflow ────────────────
+
+const sg = await import("../../lib/db/repos/signatures.mjs");
+const { createLocalStore } = await import("../../lib/storage/content-store.mjs");
+const store = createLocalStore({ root: await scratchDir("reports-store-") });
+const PNG = (n) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, n)]);
+
+test("a signature image is an image: PNG/JPEG/WebP by its bytes, under 1 MB; the same image again is not a new one", async () => {
+  await as(async () => {
+    await throws(() => sg.saveSignature(db, { userId: sup.id, bytes: Buffer.from("<html><script>x</script>"), kind: "scanned", store }), "PNG، JPEG");
+    await throws(() => sg.saveSignature(db, { userId: sup.id, bytes: PNG(1), kind: "stamp", store }), "نوع امضا");
+    await throws(() => sg.saveSignature(db, { userId: sup.id, bytes: Buffer.concat([PNG(1), Buffer.alloc(1024 * 1024)]), kind: "drawn", store }), "مگابایت");
+    const a = await sg.saveSignature(db, { userId: sup.id, bytes: PNG(1), kind: "drawn", store });
+    const again = await sg.saveSignature(db, { userId: sup.id, bytes: PNG(1), kind: "drawn", store });
+    equal([again.id, again.duplicate], [a.id, true]);
+    equal((await sg.currentSignature(db, { userId: sup.id })).content_type, "image/png");
+  });
+});
+
+test("a report signature keeps the image it was given with, after the signer changes theirs", async () => {
+  await as(async () => {
+    const first = await sg.saveSignature(db, { userId: planner.id, bytes: PNG(2), kind: "drawn", store });
+    const r = await rp.createReport(db, { projectId: P, reportTypeId: type.id, reportDate: today, content: content(8), userId: planner.id });
+    await rp.signReport(db, { projectId: P, reportId: r.id, userId: planner.id });
+    const second = await sg.saveSignature(db, { userId: planner.id, bytes: PNG(3), kind: "scanned", store });
+    assert(second.id !== first.id, "a new image is a new row");
+    const v = await rp.reportView(db, { projectId: P, reportId: r.id, userId: planner.id });
+    equal(v.signatureBoxes[0].groups[0].signatures[0].signatureId, first.id);
+    equal((await sg.signatureHistory(db, { userId: planner.id })).length, 2, "the earlier image is kept, not replaced");
+  });
+});
+
+test("a signature image is shown only within a project its owner is a member of", async () => {
+  const other = await projects.createProject(db, { code: "OTH", name: "O", ownerUserId: outsider.id });
+  const img = await withProject(db, other.id, () => sg.saveSignature(db, { userId: outsider.id, bytes: PNG(4), kind: "drawn", store }));
+  await throws(() => as(() => sg.readSignature(db, { projectId: P, signatureId: img.id, store })), "not found");
+  const mine = await as(() => sg.currentSignature(db, { userId: planner.id }));
+  const got = await as(() => sg.readSignature(db, { projectId: P, signatureId: mine.id, store }));
+  equal([got.contentType, got.bytes.length], ["image/png", PNG(3).length]);
+  await throws(() => as(() => db.query("UPDATE user_signature SET kind = 'drawn'")), "permission denied");
+});
+
+test("a workflow in use keeps its shape: no stage removed once a report used the type, no group removed once someone signed for it", async () => {
+  await as(async () => {
+    const w = await rp.workflowOf(db, { projectId: P, reportTypeId: type.id });
+    await throws(() => rp.removeStage(db, { projectId: P, stageId: w[2].id }), "حذف نمی‌شود");
+    await throws(() => rp.removeGroup(db, { projectId: P, groupId: G.plan.id }), "امضا ثبت شده");
+    const t2 = await rp.upsertReportType(db, { projectId: P, code: "WR", name: "گزارش هفتگی" });
+    const s1 = await rp.upsertStage(db, { projectId: P, reportTypeId: t2.id, seq: 1, name: "پیمانکار" });
+    const g = await rp.upsertGroup(db, { projectId: P, stageId: s1.id, seq: 1, name: "برنامه‌ریزی" });
+    await rp.setGroupMember(db, { projectId: P, groupId: g.id, userId: planner.id, permissions: ["view", "create"] });
+    await rp.removeGroup(db, { projectId: P, groupId: g.id });
+    await rp.removeStage(db, { projectId: P, stageId: s1.id });
+    const all = await rp.reportTypes(db, { projectId: P });
+    equal(all.map((t) => [t.code, t.stages.length, t.reports]), [["DR", 3, 4], ["WR", 0, 0]]);
+  });
+});
+
+test("the daily-report template builds the agreed stages once, and leaves a workflow already set up alone", async () => {
+  const fresh = await projects.createProject(db, { code: "TPL", name: "T", ownerUserId: planner.id });
+  await withProject(db, fresh.id, async () => {
+    equal((await rp.applyDailyTemplate(db, { projectId: fresh.id })).created, true);
+    equal((await rp.applyDailyTemplate(db, { projectId: fresh.id })).created, false);
+    const [t] = await rp.reportTypes(db, { projectId: fresh.id });
+    equal(t.stages.map((s) => [s.name, s.groups.map((g) => g.name)]),
+      [["پیمانکار", ["برنامه‌ریزی", "مدیریت کارگاه"]], ["نظارت", ["نظارت مقیم"]], ["کارفرما", ["نمایندهٔ کارفرما"]]]);
+  });
+  await as(async () => equal((await rp.applyDailyTemplate(db, { projectId: P })).created, false, "this project's own DR workflow is kept"));
+});
+
 await run();
