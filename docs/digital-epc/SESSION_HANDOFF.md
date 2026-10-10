@@ -118,8 +118,14 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   image it was given with); `/signature` (draw or upload) and `/report-setup`
   (types, stages, groups, members, daily-report template) under a new menu
   section «گزارش‌های مرحله‌ای» with its log. reports 16/16, each rule
-  revert-checked; driven in the browser at 1440 and 390 px, no errors. Next:
-  phase 3, the daily report form.
+  revert-checked; driven in the browser at 1440 and 390 px, no errors.
+- 2026-10-10, report workflow phase 3: `/daily-reports` + `/api/daily-reports`;
+  content rules `lib/reports/daily.mjs` (people / machines / materials in
+  separate lists, a material needs a unit, whole non-negative heads, temps
+  and humidity in range); `dailyPrefill` offers the day's timesheets,
+  finished or claimed steps and HSE with their source. daily-report 3/3,
+  each rule revert-checked. Driven with three accounts through a return and
+  to final approval. Next: phase 4, the print layout.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`
