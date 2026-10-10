@@ -98,6 +98,20 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   tag. OCR slips repaired only by stated rules (inch mark as X, dropped
   first letter, OA = 0A, clashing readings file nothing). Driven in the
   browser on a fresh database. See `docs/epc-llm/07-pid-k110.md`.
+- 2026-10-10, report workflow phase 1 of 5 (owner's spec for staged reports,
+  daily report first): migration 058 (`report_type`, `report_stage`,
+  `review_group`, `group_member`, `report`, append-only `report_version` /
+  `report_signature` / `report_decision`, `report_recipient`), rules in
+  `lib/reports/workflow.mjs`, repo `lib/db/repos/reports.mjs`, form
+  `report` (DR-R0001), log section `reports`. Signatures attest to a
+  version; approval needs the approver's own signature; a return reopens
+  the stage before; cancel only before any approval. `db/test/reports.mjs`
+  11/11, every rule revert-checked. Next: phase 2 (signature image, admin
+  pages for stages/groups/members). See `docs/digital-epc/report-workflow.md`.
+  Reviewed `daily report.zip` (Access, 6 projects incl. Kavian furnace 10,
+  116k manpower rows mixing people/machines/materials in one column; most
+  reports undated in this file; holds a plaintext password and contractor
+  national IDs) — not imported yet.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`

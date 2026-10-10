@@ -1,0 +1,205 @@
+#!/usr/bin/env node
+/**
+ * Reports with a staged review (lib/reports/workflow.mjs, lib/db/repos/reports.mjs):
+ * a daily report through contractor → supervision → client; signatures that
+ * attest to one version and lapse when it changes; approval that needs the
+ * approver's own signature; a return that reopens the stage before; a
+ * cancellation only before any approval; history that is only added to.
+ */
+import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
+
+process.env.PGLITE_DIR = await scratchDir("reports-db-");
+const { getDb } = await import("../../lib/server/db.mjs");
+const { withProject } = await import("../../lib/db/scope.mjs");
+const projects = await import("../../lib/db/repos/projects.mjs");
+const rp = await import("../../lib/db/repos/reports.mjs");
+const wf = await import("../../lib/reports/workflow.mjs");
+
+const db = await getDb();
+const planner = await projects.ensureUser(db, { subject: "kc|planner" });   // contractor planning: creates, edits, signs
+const siteMgr = await projects.ensureUser(db, { subject: "kc|sitemgr" });   // contractor site manager: edits after signing, approves, cancels
+const sup = await projects.ensureUser(db, { subject: "kc|sup" });           // supervision: signs, approves, returns
+const client = await projects.ensureUser(db, { subject: "kc|client" });     // client: signs, approves, returns
+const reader = await projects.ensureUser(db, { subject: "kc|reader" });     // a project member outside the workflow
+const outsider = await projects.ensureUser(db, { subject: "kc|out" });      // not in the project
+const proj = await projects.createProject(db, { code: "RPT", name: "R", ownerUserId: planner.id });
+const P = proj.id;
+for (const u of [siteMgr, sup, client, reader]) await projects.addMember(db, { projectId: P, userId: u.id, role: "viewer" });
+const today = new Date().toISOString().slice(0, 10);
+const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
+let type, G = {};
+await withProject(db, P, async () => {
+  type = await rp.upsertReportType(db, { projectId: P, code: "DR", name: "گزارش روزانه" });
+  const st1 = await rp.upsertStage(db, { projectId: P, reportTypeId: type.id, seq: 1, name: "پیمانکار" });
+  const st2 = await rp.upsertStage(db, { projectId: P, reportTypeId: type.id, seq: 2, name: "نظارت" });
+  const st3 = await rp.upsertStage(db, { projectId: P, reportTypeId: type.id, seq: 3, name: "کارفرما" });
+  G.plan = await rp.upsertGroup(db, { projectId: P, stageId: st1.id, seq: 1, name: "برنامه‌ریزی" });
+  G.site = await rp.upsertGroup(db, { projectId: P, stageId: st1.id, seq: 2, name: "مدیریت کارگاه" });
+  G.sup = await rp.upsertGroup(db, { projectId: P, stageId: st2.id, seq: 1, name: "نظارت مقیم", title: "دستگاه نظارت" });
+  G.cl = await rp.upsertGroup(db, { projectId: P, stageId: st3.id, seq: 1, name: "کارفرما" });
+  await rp.setGroupMember(db, { projectId: P, groupId: G.plan.id, userId: planner.id, permissions: ["view", "create", "edit", "sign"] });
+  await rp.setGroupMember(db, { projectId: P, groupId: G.site.id, userId: siteMgr.id,
+    permissions: ["view", "edit", "edit_after_sign", "sign", "approve", "delete"] });
+  await rp.setGroupMember(db, { projectId: P, groupId: G.sup.id, userId: sup.id, permissions: ["view", "sign", "approve", "return"] });
+  await rp.setGroupMember(db, { projectId: P, groupId: G.cl.id, userId: client.id, permissions: ["view", "sign", "approve", "return"] });
+});
+const as = (fn) => withProject(db, P, fn);
+const content = (n) => ({ weather: "صاف", manpower: [{ role: "جوشکار", present: n }], work: "فیت‌آپ خط 2\"-P-101" });
+
+test("the workflow is set up from the owner's stages and groups; a member's rights are checked", async () => {
+  await as(async () => {
+    const w = await rp.workflowOf(db, { projectId: P, reportTypeId: type.id });
+    equal(w.map((s) => [s.seq, s.name, s.groups.map((g) => g.name)]),
+      [[1, "پیمانکار", ["برنامه‌ریزی", "مدیریت کارگاه"]], [2, "نظارت", ["نظارت مقیم"]], [3, "کارفرما", ["کارفرما"]]]);
+    await throws(() => rp.setGroupMember(db, { projectId: P, groupId: G.plan.id, userId: reader.id, permissions: ["fly"] }), "ناشناخته");
+    await throws(() => rp.setGroupMember(db, { projectId: P, groupId: G.plan.id, userId: outsider.id, permissions: ["view"] }), "عضو پروژه نیست");
+  });
+});
+
+let r1;
+test("a report is created only by a first-stage member with the right, numbered per type, as version 1", async () => {
+  await as(async () => {
+    await throws(() => rp.createReport(db, { projectId: P, reportTypeId: type.id, reportDate: today, content: content(4), userId: sup.id }), "حق ایجاد");
+    await throws(() => rp.createReport(db, { projectId: P, reportTypeId: type.id, reportDate: "2999-01-01", content: content(4), userId: planner.id }), "هنوز نرسیده");
+    r1 = await rp.createReport(db, { projectId: P, reportTypeId: type.id, reportDate: daysAgo(1), title: "روز ۱", content: content(4), userId: planner.id });
+    equal([r1.report_no, r1.stage_seq, r1.status], ["DR-R0001", 1, "open"]);
+    const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: planner.id });
+    equal([v.versionNo, v.content.manpower[0].present, v.may.edit, v.may.approve], [1, 4, true, false]);
+  });
+});
+
+test("a signature attests to one version: once signed, plain edit stops; an edit after signing makes it lapse", async () => {
+  await as(async () => {
+    await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(5), userId: planner.id });           // v2, nobody signed yet
+    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(5), userId: planner.id }), "تغییری نکرده");
+    await rp.signReport(db, { projectId: P, reportId: r1.id, userId: planner.id });
+    await throws(() => rp.signReport(db, { projectId: P, reportId: r1.id, userId: planner.id }), "امضا کرده‌اید");
+    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: planner.id }), "ویرایش پس از امضا");
+    const e = await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: siteMgr.id });  // v3
+    equal([e.versionNo, e.lapsed], [3, 1]);
+    const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: planner.id });
+    const sig = v.signatureBoxes[0].groups[0].signatures[0];
+    equal([sig.versionNo, sig.current], [2, false], "the planner's signature is shown, on version 2, and no longer counts");
+    assert(v.may.signFor.includes(G.plan.id), "and the planner may sign the new content");
+  });
+});
+
+test("final approval needs the approver's own signature on the current content; it locks the stage and moves on", async () => {
+  await as(async () => {
+    await throws(() => rp.approveStage(db, { projectId: P, reportId: r1.id, userId: planner.id }), "حق تأیید نهایی");
+    await throws(() => rp.approveStage(db, { projectId: P, reportId: r1.id, userId: siteMgr.id }), "بدون امضای خود");
+    await rp.signReport(db, { projectId: P, reportId: r1.id, userId: siteMgr.id });
+    const r = await rp.approveStage(db, { projectId: P, reportId: r1.id, userId: siteMgr.id });
+    equal(r.stage_seq, 2);
+    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(7), userId: siteMgr.id }), "حق ویرایش",
+      "past its stage, the contractor cannot touch it");
+    await throws(() => rp.withdrawSignature(db, { projectId: P, reportId: r1.id, userId: siteMgr.id }), "پس گرفته نمی‌شود",
+      "a signature the stage approved stands");
+  });
+});
+
+test("a signature can be withdrawn while the report is at its stage, and given again", async () => {
+  await as(async () => {
+    await rp.signReport(db, { projectId: P, reportId: r1.id, userId: sup.id });
+    await rp.withdrawSignature(db, { projectId: P, reportId: r1.id, userId: sup.id });
+    await throws(() => rp.approveStage(db, { projectId: P, reportId: r1.id, userId: sup.id }), "بدون امضای خود", "withdrawn means it no longer counts");
+    await rp.signReport(db, { projectId: P, reportId: r1.id, userId: sup.id });
+    const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: sup.id });
+    equal(v.signatureBoxes[1].groups[0].signatures.length, 1);
+  });
+});
+
+test("a return says why, goes back one stage, and that stage reviews again with plain edit rights", async () => {
+  await as(async () => {
+    await throws(() => rp.returnReport(db, { projectId: P, reportId: r1.id, comment: " ", userId: sup.id }), "دلیل برگشت");
+    const r = await rp.returnReport(db, { projectId: P, reportId: r1.id, comment: "تعداد جوشکار با کارکرد نمی‌خواند", userId: sup.id });
+    equal(r.stage_seq, 1);
+    const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: planner.id });
+    equal(v.signatureBoxes[0].groups.flatMap((g) => g.signatures).length, 0, "the stage's earlier signatures were for the review before the return");
+    await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(4), userId: planner.id });          // v4, plain edit again
+    await throws(() => rp.returnReport(db, { projectId: P, reportId: r1.id, comment: "x", userId: siteMgr.id }), "حق برگشت");
+  });
+});
+
+test("the last stage's approval makes its version the record: hash kept, report locked, every version still there", async () => {
+  await as(async () => {
+    await rp.signReport(db, { projectId: P, reportId: r1.id, userId: siteMgr.id });
+    await rp.approveStage(db, { projectId: P, reportId: r1.id, userId: siteMgr.id });
+    await rp.signReport(db, { projectId: P, reportId: r1.id, userId: sup.id });
+    await rp.approveStage(db, { projectId: P, reportId: r1.id, userId: sup.id });
+    await rp.signReport(db, { projectId: P, reportId: r1.id, userId: client.id });
+    const r = await rp.approveStage(db, { projectId: P, reportId: r1.id, comment: "تأیید", userId: client.id });
+    equal([r.status, r.approved_version], ["approved", 4]);
+    const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: client.id });
+    equal(v.record.hash, v.contentHash);
+    equal(v.versions.map((x) => x.version_no), [1, 2, 3, 4]);
+    equal(v.decisions.map((d) => [d.stageSeq, d.action]),
+      [[1, "approved"], [2, "returned"], [1, "approved"], [2, "approved"], [3, "approved"]]);
+    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(9), userId: client.id }), "قفل");
+    await throws(() => rp.returnReport(db, { projectId: P, reportId: r1.id, comment: "دیر", userId: client.id }), "قفل");
+    const old = await rp.reportVersion(db, { projectId: P, reportId: r1.id, versionNo: 2, userId: client.id });
+    equal(old.content.manpower[0].present, 5, "an earlier version is read as it was");
+  });
+});
+
+test("a report is cancelled, with a reason, only at the first stage and only if no stage ever approved it", async () => {
+  await as(async () => {
+    const r2 = await rp.createReport(db, { projectId: P, reportTypeId: type.id, reportDate: today, content: content(3), userId: planner.id });
+    equal(r2.report_no, "DR-R0002");
+    await throws(() => rp.cancelReport(db, { projectId: P, reportId: r2.id, comment: "تکراری", userId: planner.id }), "حق حذف");
+    await throws(() => rp.cancelReport(db, { projectId: P, reportId: r2.id, comment: "", userId: siteMgr.id }), "دلیل حذف");
+    const c = await rp.cancelReport(db, { projectId: P, reportId: r2.id, comment: "تکراری", userId: siteMgr.id });
+    equal(c.status, "cancelled");
+    await throws(() => rp.signReport(db, { projectId: P, reportId: r2.id, userId: planner.id }), "لغو");
+
+    const r3 = await rp.createReport(db, { projectId: P, reportTypeId: type.id, reportDate: today, content: content(2), userId: planner.id });
+    await rp.signReport(db, { projectId: P, reportId: r3.id, userId: siteMgr.id });
+    await rp.approveStage(db, { projectId: P, reportId: r3.id, userId: siteMgr.id });
+    await rp.returnReport(db, { projectId: P, reportId: r3.id, comment: "اصلاح", userId: sup.id });
+    await throws(() => rp.cancelReport(db, { projectId: P, reportId: r3.id, comment: "حذف", userId: siteMgr.id }), "تأیید کرده",
+      "back at the first stage, but supervision has seen it approved: it is corrected, not removed");
+  });
+});
+
+test("only the workflow's members and the people it was sent to may read a report", async () => {
+  await as(async () => {
+    await throws(() => rp.reportView(db, { projectId: P, reportId: r1.id, userId: reader.id }), "دسترسی ندارید");
+    equal((await rp.listReports(db, { projectId: P, reportTypeId: type.id, userId: reader.id })).length, 0);
+    await throws(() => rp.sendReport(db, { projectId: P, reportId: r1.id, userIds: [outsider.id], userId: planner.id }), "عضو پروژه");
+    equal(await rp.sendReport(db, { projectId: P, reportId: r1.id, userIds: [reader.id, client.id], note: "برای اطلاع", userId: planner.id }), 2);
+    const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: reader.id });
+    equal([v.report.report_no, v.may.edit, v.may.signFor.length], ["DR-R0001", false, 0]);
+    equal((await rp.listReports(db, { projectId: P, reportTypeId: type.id, userId: reader.id })).map((r) => r.report_no), ["DR-R0001"]);
+  });
+});
+
+test("history is only added to: a version, a signature and a decision cannot be changed or removed", async () => {
+  for (const sql of ["UPDATE report_version SET content = '{}'::jsonb", "DELETE FROM report_signature",
+    "UPDATE report_decision SET comment = 'x'"]) {
+    await throws(() => as(() => db.query(sql)), "permission denied", sql);
+  }
+  await as(async () => {
+    const log = await import("../../lib/db/repos/log.mjs");
+    const rows = await log.sectionLog(db, { projectId: P, section: "reports" });
+    assert(rows.some((e) => e.action === "withdrawn") && rows.some((e) => e.action === "returned"), "every step is in the section log");
+  });
+});
+
+test("the engine alone: arrival, lapsed signatures, and one hash for one content whatever the key order", async () => {
+  const stages = [{ seq: 1, name: "a", groups: [{ id: "g1", seq: 1, name: "x", members: [{ userId: "u", permissions: ["sign", "approve", "edit"] }] }] }];
+  const base = { status: "open", stageSeq: 1, versionNo: 2, createdT: 10n, stages, decisions: [] };
+  const sig = (t, action, versionNo) => ({ stageSeq: 1, groupId: "g1", userId: "u", action, versionNo, t });
+  equal(wf.signaturesAt({ ...base, signatures: [sig(11n, "sign", 2)] }, 1).map((s) => s.current), [true]);
+  equal(wf.signaturesAt({ ...base, signatures: [sig(11n, "sign", 1)] }, 1).map((s) => s.current), [false]);
+  equal(wf.signaturesAt({ ...base, signatures: [sig(11n, "sign", 2), sig(12n, "withdraw", 2)] }, 1).length, 0);
+  equal(wf.signaturesAt({ ...base, decisions: [{ stageSeq: 2, action: "returned", t: 20n }], signatures: [sig(11n, "sign", 2)] }, 1).length, 0,
+    "a signature from before a return does not count");
+  equal(wf.checkApprove({ ...base, signatures: [sig(11n, "sign", 2)] }, "u").final, true);
+  const returner = [{ ...stages[0], groups: [{ ...stages[0].groups[0], members: [{ userId: "u", permissions: ["return"] }] }] }];
+  assert(/مرحلهٔ اول/.test(wf.checkReturn({ ...base, stages: returner, signatures: [] }, "u", "دلیل").reason),
+    "the first stage has no stage before it to return to");
+  equal(wf.canonical({ b: 1, a: [2, { d: 3, c: 4 }] }), wf.canonical({ a: [2, { c: 4, d: 3 }], b: 1 }));
+});
+
+await run();
