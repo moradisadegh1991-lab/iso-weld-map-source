@@ -6,13 +6,8 @@ import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 
 /**
- * The same numbers Power BI reads, over HTTP.
- *
- * Power BI Report Server talking straight to PostgreSQL is the primary
- * channel and always will be — it is faster, it refreshes on a schedule and
- * it does not go through this application. This endpoint exists for the
- * people who cannot open a database connection from where they are sitting:
- * a site supervisor on a phone, a weekly progress meeting, a script.
+ * Piping figures from the reporting views (the QC page reads them).
+ * Project-wide KPIs are /api/kpi.
  *
  * It reads the reporting views rather than the operational tables, so the
  * definition of "percent welded" cannot drift between the dashboard and the

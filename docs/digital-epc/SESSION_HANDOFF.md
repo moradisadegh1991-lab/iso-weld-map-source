@@ -115,7 +115,9 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   HTTPS, login, header impersonation refused, backup, update.
   Schedule & PMS (062, `/pms`, docs/digital-epc/schedule-pms.md): MS Project XML + PMS workbook,
   re-derived roll-up, certain-only links, plan S-curve over linked weight. Furnace F-110 loaded with
-  `npm run furnace:load`. Open: PMS data date (UNKNOWN), plan↔OLF1 assumption, tag mismatches PMS vs plan.
+  `npm run furnace:load`. Owner decided 2026-10-10 (lib/controls/f10.mjs): PMS data date = day applied,
+  plan is OLF1's (approved), Secondary TLE = E-1110 (approved, linked). Other PMS/plan tag mismatches still open.
+  Power BI dropped: KPIs in-platform at `/reports` (lib/db/repos/kpi.mjs, /api/kpi, db/test/kpi.mjs).
   Reviewed `daily report.zip` (Access, 6 projects incl. Kavian furnace 10,
   116k manpower rows mixing people/machines/materials in one column; most
   reports undated in this file; holds a plaintext password and contractor

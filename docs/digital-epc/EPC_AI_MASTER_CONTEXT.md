@@ -189,7 +189,7 @@ Concept-doc architecture vs built — decisions:
 | MinIO | [FINAL] optional driver `s3` |
 | n8n | [NOT BUILT] [OPEN]; may call `app/api/*` via HTTP; domain logic must stay in the app |
 | Qdrant / pgvector | [NOT BUILT] [OPEN]; RAG only with "no source → no answer" |
-| Power BI / Grafana | Power BI notes in `docs/powerbi/README.md`; reporting views exist (`006_reporting.sql`); Grafana [NOT BUILT] |
+| Reports / KPI | [FINAL 2026-10-10] in the platform itself: `/reports` (`lib/db/repos/kpi.mjs`); Power BI dropped by the owner; reporting views kept as the shared source |
 | monorepo apps/packages/services | [OBSOLETE]; single Next.js app (layout §15) |
 | queue technology | [OPEN]; none used |
 

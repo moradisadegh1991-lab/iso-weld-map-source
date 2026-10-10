@@ -40,6 +40,6 @@ npm run furnace:load -- you@example.com [--code F10] [--data-date YYYY-MM-DD]
 
 **ناسازگاری بین دو سند که موتور تصمیمش را نمی‌گیرد:** تگ تجهیزات در PMS و برنامه یکی نیست (مثلاً Secondary TLE: `E-1120` در PMS و `E-1110` در برنامه؛ Decoke Drum: `D-11110` و `D-110`). تا وقتی تگ درست با لیست تجهیزات تأیید نشده، این آیتم‌ها به شناسنامهٔ تجهیز (spine) وصل نمی‌شوند.
 
-## Power BI
+## KPI
 
-`reporting.fact_schedule_task` (با `finish_slip_days`) و `reporting.fact_pms_node` (وزن‌ها و پیشرفت نوشته‌شده) برای نقش `app_report`.
+پیشرفت PMS، مقایسه با برنامهٔ مبنا، جابه‌جایی پایان و فعالیت‌های عقب در صفحهٔ **گزارش‌ها و KPI** (`/reports`) هم نشان داده می‌شوند.

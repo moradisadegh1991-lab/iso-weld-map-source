@@ -83,19 +83,9 @@ GET  /api/reports/edit-hotspots        کدام فیلد را مهندس‌ها 
 
 ## گزارش‌دهی
 
-اسکیمای `reporting` یک **مدل ستاره** برای Power BI است: شش بعد، سه فکت، و پنج
-view آمادهٔ KPI (پیشرفت خط، عملکرد جوشکار، وضعیت اسپول، شکاف تحویل، دقت
-استخراج).
-
-```
-postgresql://app_report@host/isoweld?options=-c%20app.project_id%3D<PROJECT-UUID>
-```
-
-> هر view با `security_invoker = true` تعریف شده. یک view معمولی در PostgreSQL
-> با دسترسی **مالکش** اجرا می‌شود، یعنی RLS دور زده می‌شود و دادهٔ همهٔ
-> پروژه‌ها به گزارش می‌رود — نشتی که هیچ علامتی ندارد.
-
-راهنمای کامل: [`docs/powerbi/README.md`](docs/powerbi/README.md)
+گزارش‌ها و KPI داخل خود پلتفرم نمایش داده می‌شوند (صفحهٔ **گزارش‌ها و KPI**، `/reports`؛
+`lib/db/repos/kpi.mjs`). Power BI استفاده نمی‌شود. اسکیمای `reporting` (viewها با
+`security_invoker = true`، تا RLS دور زده نشود) منبع مشترک همین شاخص‌هاست.
 
 ## سلب مسئولیت
 
