@@ -110,6 +110,9 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   pages for stages/groups/members). See `docs/digital-epc/report-workflow.md`.
   User guide (Persian, role-based, real screenshots): `docs/digital-epc/guide-daily-report.pdf`
   (self-contained source `guide-daily-report.html`).
+  VPS deploy kit: `deploy/vps/install.sh` + `epc` helper + systemd + Caddy, guide
+  `docs/DEPLOY-VPS.md`. Tested on a blank Ubuntu 24.04 (systemd shimmed): install,
+  HTTPS, login, header impersonation refused, backup, update.
   Reviewed `daily report.zip` (Access, 6 projects incl. Kavian furnace 10,
   116k manpower rows mixing people/machines/materials in one column; most
   reports undated in this file; holds a plaintext password and contractor

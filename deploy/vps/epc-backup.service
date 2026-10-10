@@ -1,0 +1,6 @@
+[Unit]
+Description=EPC platform — nightly verified database backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/epc backup

@@ -32,7 +32,10 @@ try {
   // is a permissions problem or an empty database, so the first account gets
   // a project to stand in.
   let projects = await listProjectsForUser(db, user.id);
-  if (!projects.length) {
+  // Only the FIRST account gets it: a second one is not quietly made admin of
+  // someone else's DEMO project — its projects are given on the users page.
+  const { rows: [demo] } = await db.query("SELECT 1 FROM project WHERE code = 'DEMO'");
+  if (!projects.length && !demo) {
     const p = await createProject(db, { code: "DEMO", name: "پروژهٔ نمونه", ownerUserId: user.id });
     await addMember(db, { projectId: p.id, userId: user.id, role: "admin" });
     projects = await listProjectsForUser(db, user.id);
@@ -41,7 +44,8 @@ try {
   console.log("\nACCOUNT READY");
   console.log("  email    :", email);
   if (!given) console.log("  password :", password, " <- shown once, not stored anywhere else");
-  console.log("  projects :", projects.map((p) => `${p.code} (${p.role})`).join(", "));
+  console.log("  projects :", projects.length ? projects.map((p) => `${p.code} (${p.role})`).join(", ")
+    : "none yet — add this account to a project on the users page");
   console.log();
 } finally {
   await db.close();
