@@ -113,6 +113,9 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   VPS deploy kit: `deploy/vps/install.sh` + `epc` helper + systemd + Caddy, guide
   `docs/DEPLOY-VPS.md`. Tested on a blank Ubuntu 24.04 (systemd shimmed): install,
   HTTPS, login, header impersonation refused, backup, update.
+  Schedule & PMS (062, `/pms`, docs/digital-epc/schedule-pms.md): MS Project XML + PMS workbook,
+  re-derived roll-up, certain-only links, plan S-curve over linked weight. Furnace F-110 loaded with
+  `npm run furnace:load`. Open: PMS data date (UNKNOWN), plan↔OLF1 assumption, tag mismatches PMS vs plan.
   Reviewed `daily report.zip` (Access, 6 projects incl. Kavian furnace 10,
   116k manpower rows mixing people/machines/materials in one column; most
   reports undated in this file; holds a plaintext password and contractor

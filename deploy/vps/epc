@@ -69,6 +69,8 @@ case "$cmd" in
   backups) run npm run db:backup -- list ;;
   update)  offline update ;;
   doctor)  offline run npm run doctor ;;
+  run)     [ -n "${1:-}" ] || { echo "epc run <npm-script> [args…]   e.g. epc run furnace:load you@example.com" >&2; exit 1; }
+           s="$1"; shift; offline run npm run "$s" -- "$@" ;;
   save-token)
            read -rsp "GitHub token (Contents: read): " t; echo >&2
            umask 077; printf '%s' "$t" > "$TOKEN_FILE"; echo "[ ok ] ذخیره شد در $TOKEN_FILE (فقط root)" ;;
@@ -86,6 +88,7 @@ epc backups                 فهرست پشتیبان‌ها
 epc update                  دریافت آخرین نسخه از GitHub، build و migration
 epc save-token              ذخیرهٔ توکن GitHub تا update دوباره نپرسد
 epc doctor                  بررسی پیکربندی
+epc run <script> [args]     اجرای یک اسکریپت بارگذاری (مثلاً furnace:load you@example.com)
 HELP
   ;;
 esac

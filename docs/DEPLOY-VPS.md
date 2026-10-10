@@ -65,6 +65,7 @@ epc backups                 فهرست پشتیبان‌ها (در /var/lib/epc/
 epc save-token              ذخیرهٔ توکن GitHub تا update هر بار نپرسد
 epc update                  آخرین نسخه از GitHub، build، migration
 epc doctor                  بررسی پیکربندی
+epc run <script> [args]     اجرای اسکریپت بارگذاری، مثلاً: epc run furnace:load you@example.com
 ```
 
 دستورهایی که با پایگاه داده کار دارند (admin، demo، backup، update) سرویس را چند ثانیه تا
