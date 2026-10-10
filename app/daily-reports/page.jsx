@@ -24,9 +24,24 @@ const COLS = {
 const TITLES = { manpower: "نیروی انسانی (نفر)", equipment: "ماشین‌آلات (دستگاه)", materials: "مصالح و مصرفی (هر ردیف با واحد خودش)",
   work: "کار انجام‌شده", stoppages: "توقف‌ها و موانع" };
 
-function Rows({ list, rows, setRows, labels, readOnly }) {
+// which catalogue list a column suggests from (lib/reports/catalog.mjs kinds)
+const SUGGEST = { "manpower.role": "dl-person", "manpower.discipline": "dl-disc", "equipment.name": "dl-machine",
+  "materials.name": "dl-material", "materials.unit": "dl-unit", "work.discipline": "dl-disc" };
+const KINDS = { manpower: ["person"], equipment: ["machine", "tool"], materials: ["consumable", "material", "project_material"] };
+
+function Rows({ list, rows, setRows, labels, readOnly, catalog = [] }) {
   const cols = COLS[list];
-  const set = (i, k, v) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v, source: r.source === "manual" || !r.source ? "manual" : r.source } : r)));
+  const set = (i, k, v) => setRows(rows.map((r, j) => {
+    if (j !== i) return r;
+    const next = { ...r, [k]: v, source: r.source === "manual" || !r.source ? "manual" : r.source };
+    // a name the catalogue knows brings its discipline and unit — only into empty fields
+    const known = (k === "role" || k === "name") && catalog.find((c) => (KINDS[list] || []).includes(c.kind) && c.name === v);
+    if (known) {
+      if (list === "manpower" && !next.discipline && known.discipline) next.discipline = known.discipline;
+      if (list === "materials" && !next.unit && known.unit) next.unit = known.unit;
+    }
+    return next;
+  }));
   if (readOnly && !rows.length) return <p className="muted sm">ثبت نشده.</p>;
   return (
     <div className="tablewrap">
@@ -36,7 +51,7 @@ function Rows({ list, rows, setRows, labels, readOnly }) {
           <tr key={i}>
             {cols.map(([k, l, t]) => (
               <td key={k}>{readOnly ? (r[k] ?? "—") : (
-                <input aria-label={`${l} ردیف ${i + 1}`} type={t} dir={t === "number" ? "ltr" : undefined} min={t === "number" ? 0 : undefined}
+                <input aria-label={`${l} ردیف ${i + 1}`} type={t} list={SUGGEST[`${list}.${k}`]} dir={t === "number" ? "ltr" : undefined} min={t === "number" ? 0 : undefined}
                   step={k === "hours" || k === "qty" ? "any" : 1} value={r[k] ?? ""} onChange={(e) => set(i, k, e.target.value)} />
               )}</td>
             ))}
@@ -50,7 +65,7 @@ function Rows({ list, rows, setRows, labels, readOnly }) {
   );
 }
 
-function Editor({ value, setValue, labels, readOnly, onPrefill }) {
+function Editor({ value, setValue, labels, readOnly, onPrefill, catalog = [] }) {
   const v = value;
   const up = (patch) => setValue({ ...v, ...patch });
   return (
@@ -76,7 +91,7 @@ function Editor({ value, setValue, labels, readOnly, onPrefill }) {
       )}
       {Object.keys(COLS).map((list) => (
         <section key={list} className="dsection"><h3>{TITLES[list]}</h3>
-          <Rows list={list} rows={v[list]} setRows={(rows) => up({ [list]: rows })} labels={labels} readOnly={readOnly} /></section>
+          <Rows list={list} rows={v[list]} setRows={(rows) => up({ [list]: rows })} labels={labels} readOnly={readOnly} catalog={catalog} /></section>
       ))}
       <section className="dsection"><h3>HSE روز</h3>
         <div className="grid2">
@@ -89,10 +104,19 @@ function Editor({ value, setValue, labels, readOnly, onPrefill }) {
         </div>
         <p className="muted sm">منبع: {labels.SOURCE[v.hse.source || "manual"]}</p>
       </section>
+      {!readOnly && <Datalists catalog={catalog} />}
       <div className="field"><label htmlFor="d-notes">توضیحات</label>
         <textarea id="d-notes" rows={3} readOnly={readOnly} value={v.notes ?? ""} onChange={(e) => up({ notes: e.target.value })} /></div>
     </>
   );
+}
+
+function Datalists({ catalog }) {
+  const names = (kinds) => [...new Set(catalog.filter((c) => kinds.includes(c.kind)).map((c) => c.name))];
+  const lists = { "dl-person": names(KINDS.manpower), "dl-machine": names(KINDS.equipment), "dl-material": names(KINDS.materials),
+    "dl-disc": [...new Set(catalog.filter((c) => c.kind === "person" && c.discipline).map((c) => c.discipline))],
+    "dl-unit": [...new Set(catalog.filter((c) => c.unit && KINDS.materials.includes(c.kind)).map((c) => c.unit))] };
+  return <>{Object.entries(lists).map(([id, xs]) => <datalist key={id} id={id}>{xs.map((x) => <option key={x} value={x} />)}</datalist>)}</>;
 }
 
 const fromContent = (c) => ({ ...EMPTY, ...c, weather: { ...EMPTY.weather, ...(c?.weather || {}) }, hse: { ...EMPTY.hse, ...(c?.hse || {}) } });
@@ -175,7 +199,7 @@ export default function DailyReportsPage() {
               <input id="n-date" type="date" dir="ltr" max={localToday()} value={date} onChange={(e) => setDate(e.target.value)} /><DayHint date={date} /></div>
             <div className="field"><label htmlFor="n-title">عنوان (اختیاری)</label><input id="n-title" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
           </div>
-          <Editor value={draft} setValue={setDraft} labels={L} onPrefill={() => prefill(draft, setDraft, date)} />
+          <Editor value={draft} setValue={setDraft} labels={L} catalog={data.catalog} onPrefill={() => prefill(draft, setDraft, date)} />
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn" type="button" onClick={() => post({ kind: "create", reportDate: date, title, content: draft },
               async (r) => { setDraft(null); setTitle(""); await open(r.row.id); })}>ثبت گزارش</button>
@@ -203,7 +227,7 @@ export default function DailyReportsPage() {
 
           {edit ? (
             <>
-              <Editor value={edit} setValue={setEdit} labels={L} onPrefill={() => prefill(edit, setEdit, String(v.report.report_date).slice(0, 10))} />
+              <Editor value={edit} setValue={setEdit} labels={L} catalog={data.catalog} onPrefill={() => prefill(edit, setEdit, String(v.report.report_date).slice(0, 10))} />
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn" type="button" onClick={() => post({ kind: "edit", reportId: v.report.id, content: edit }, () => open(v.report.id))}>ذخیرهٔ نسخهٔ تازه</button>
                 <button className="btn ghost" type="button" onClick={() => setEdit(null)}>انصراف</button>

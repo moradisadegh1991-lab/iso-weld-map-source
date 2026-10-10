@@ -136,8 +136,17 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   `/report-print-setup` and `/daily-reports/print`. print 4/4, each rule
   revert-checked. Real PDF from the browser: landscape A4, 2 pages, header
   and signature boxes on both. Fixed: print clipped at one page because the
-  app's body is a viewport-high scroll box. Next: phase 5, import from
-  `daily report.accdb`.
+  app's body is a viewport-high scroll box.
+- 2026-10-10, report workflow phase 5: migration 061 `resource_catalog`;
+  `lib/reports/catalog.mjs` turns Access `manp_list` + `GRP_MANP` into 460
+  items (people without the wrong man-hour unit, one unit spelling, 11
+  duplicates merged, 21 crews inactive, 29 problems named);
+  `data/daily-access/catalog.json`; `/report-catalog` (import button, add,
+  activate) and `npm run daily:catalog -- <code>`; the daily form suggests
+  from it and fills discipline / unit only into empty fields. Not imported:
+  Kavian contracts 600/601 (contractor = owner, no value), contractors (only
+  Kavian itself for project 6000), undated manpower history. catalog 4/4,
+  each rule revert-checked; driven in the browser. All five phases done.
 
 ## Changed Files (main)
 - `db/migrations/053_contracts_finance_hr_log.sql`

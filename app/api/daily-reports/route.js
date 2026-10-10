@@ -8,6 +8,7 @@ import * as rp from "../../../lib/db/repos/reports.mjs";
 import { dailyPrefill } from "../../../lib/db/repos/daily-report.mjs";
 import { checkDaily, dailyTotals, SOURCE, SHIFT, WEATHER } from "../../../lib/reports/daily.mjs";
 import { checkCreate } from "../../../lib/reports/workflow.mjs";
+import { listCatalog } from "../../../lib/db/repos/catalog.mjs";
 
 /**
  * The daily site report (report type DR). Who may do what to a report is
@@ -53,6 +54,7 @@ export async function GET(request) {
         type: { id: type.id, code: type.code, name: type.name, stages: stages.map((s) => ({ seq: s.seq, name: s.name })) },
         reports: await rp.listReports(db, { projectId, reportTypeId: type.id, userId: user.id }),
         may: { create: checkCreate(stages, user.id).ok }, users, labels: { SOURCE, SHIFT, WEATHER },
+        catalog: (await listCatalog(db, { projectId, activeOnly: true })).map((i) => ({ kind: i.kind, name: i.name, discipline: i.discipline, unit: i.unit })),
       });
     });
   } catch (e) { return errorResponse(e); }
