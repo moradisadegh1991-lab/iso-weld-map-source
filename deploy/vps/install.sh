@@ -169,7 +169,13 @@ say "۹. HTTPS با Caddy ($DOMAIN)"
 {
   echo "# Written by deploy/vps/install.sh — re-run it rather than editing by hand."
   if [ -n "${ACME_EMAIL:-}" ]; then echo "{"; echo "	email $ACME_EMAIL"; echo "}"; fi
-  echo "$DOMAIN {"
+  # Second name on a different DNS service: some networks (a Windows PC behind
+  # one ISP's resolver, say) cannot resolve sslip.io while a phone on mobile
+  # data can. Same site, so whichever name resolves is the one to open.
+  names="$DOMAIN"
+  case "$DOMAIN" in *.sslip.io) names="$DOMAIN, ${DOMAIN%.sslip.io}.nip.io";; esac
+  [ -n "${ALIASES:-}" ] && names="$names, ${ALIASES//,/, }"
+  echo "$names {"
   [ "${TLS_MODE:-}" = internal ] && echo "	tls internal"
   echo "	encode gzip"
   echo "	reverse_proxy 127.0.0.1:$PORT"
