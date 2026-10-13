@@ -120,7 +120,13 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   Power BI dropped: KPIs in-platform at `/reports` (lib/db/repos/kpi.mjs, /api/kpi, db/test/kpi.mjs).
   Document intake phase 1 (063, `/documents/intake`, docs/digital-epc/doc-intake.md): approved incoming
   revisions read (PDF text layer, Excel registers), numbers by project shapes, proposal new/fill/conflict/same,
-  person applies (conflict/reject need reason), doc_ref provenance. Next: OCR (phase 2), datasheets/SLD/structural, iso.
+  person applies (conflict/reject need reason), doc_ref provenance.
+  Phase 2 (065): scans → in-process OCR queue (Tesseract via pdftoppm, lib/intake/ocr*.mjs), word confidence kept;
+  every OCR add/change is "to be checked" (reason required, DB CHECK) since Tesseract's confidence did not track
+  correctness on the test scan; confusable-char repair only to a single project shape; "maybe X in register".
+  P&ID legend: line-number format ({size}{fluid}{number}{class}{insulation}, [key], (optional)) + fluid/insulation
+  codes; unknown code reported, never filled. Fixed: PGlite withProject blocks now serialized (lib/db/scope.mjs) —
+  interleaved requests could run under another project/role. Next: instrument bubbles (generic), datasheets/SLD/structural, iso.
   EPC reference (`/reference`, lib/reference/epc.mjs, 064 project_standard, docs/digital-epc/05-epc-reference.md):
   phases/gates, deliverables, certificates, 8 adoptable ITR-B/commissioning checklists, standards + project register
   with editions (missing edition → missing information). Not built yet: PAC/FAC records, ITR-A sheets, CFIHOS export.

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { getStore } from "../../../../lib/storage/index.mjs";
 import { readRevision } from "../../../../lib/db/repos/intake.mjs";
+import { startOcr } from "../../../../lib/intake/ocr-start.mjs";
 import { authenticate, errorResponse } from "../../../../lib/server/session.mjs";
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../../lib/authz.mjs";
@@ -67,7 +68,10 @@ export async function POST(request) {
           // is already recorded, whatever happens to the reading.
           try {
             const r = await readRevision(db, { projectId, revisionId: i.revision_id, store, userId: user.id });
-            read.push({ itemId: c.itemId, status: r.run.status, items: r.items.length });
+            // a scanned sheet goes to the OCR queue when the server has an engine
+            let queued = false;
+            if (r.run.scanned_pages?.length) queued = await startOcr(db, { projectId, revisionId: i.revision_id, userId: user.id }).then(() => true, () => false);
+            read.push({ itemId: c.itemId, status: r.run.status, items: r.items.length, ocrQueued: queued });
           } catch (e) { read.push({ itemId: c.itemId, error: e.message }); }
         }
       }

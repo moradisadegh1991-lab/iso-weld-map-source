@@ -23,7 +23,10 @@ const spine = await import("../../lib/db/repos/spine.mjs");
 const intake = await import("../../lib/db/repos/intake.mjs");
 const { importInstrumentIndex } = await import("../../lib/db/repos/instrumentation.mjs");
 const { createLocalStore } = await import("../../lib/storage/content-store.mjs");
-const { shapeOf, shapeRegex, learnShapes, recognize } = await import("../../lib/intake/patterns.mjs");
+const { shapeOf, shapeRegex, learnShapes, recognize, repair, confusableKey } = await import("../../lib/intake/patterns.mjs");
+const { compileFormat, parseLineNumbers, parseCodeList } = await import("../../lib/intake/legend.mjs");
+const { parseTsv, linesOf, ocrEngine } = await import("../../lib/intake/ocr.mjs");
+const { extract, diff } = await import("../../lib/intake/extract.mjs");
 
 // ── shapes ───────────────────────────────────────────────────────────────
 
@@ -34,6 +37,55 @@ test("a shape keeps separators, turns digits to 9 and letters to A; a register t
   const r = recognize("30-E-1101A and 30-10 / 30-10", [{ kind: "equipment", shape: "99-A-9999A" }, { kind: "subsystem", shape: "99-99" }, { kind: "line", shape: "99-99" }]);
   equal([[...r.found.get("equipment").keys()], r.ambiguous.get("30-10")], [["30-E-1101A"], ["subsystem", "line"]],
     "a shape two kinds share decides nothing");
+});
+
+// ── OCR misreads, the legend, the engine's words ─────────────────────────
+
+test("an OCR misread is repaired only to the project's shapes, and only when one reading fits", async () => {
+  const pats = [{ kind: "equipment", shape: "99-A-9999A" }, { kind: "instrument", shape: "AAA-999999" }];
+  equal(repair("3O-E-11O1A", pats), { value: "30-E-1101A", kinds: ["equipment"] }, "O where the shape has a digit");
+  equal(repair("T1C-140001", pats), { value: "TIC-140001", kinds: ["instrument"] }, "1 where the shape has a letter");
+  equal([repair("30-E-1101A", pats), repair("30-E-110XA", pats), repair("30-E1101A", pats)], [null, null, null],
+    "nothing to swap, a letter no digit is confused with, a separator missing: not repaired");
+  equal(confusableKey("30-E-11O1A") === confusableKey("30-E-1101A"), true);
+});
+
+test("the line-number format: the bracketed part is the number; codes the legend lacks are named, not filled", async () => {
+  const f = compileFormat('{size}"-[{fluid}-{number}]-{class}(-{insulation})');
+  const codes = { fluid: new Map([["MP", "MEDIUM PRESSURE STEAM"]]), insulation: new Map([["H", "HOT"]]) };
+  const r = parseLineNumbers('8"-MP-140001-A1A-H  6" - XX-140005-A1A-N  3/4"-MP-140009-B1A', f, codes);
+  equal(r.map((x) => [x.key, x.size, x.class, x.fluid, x.insulation, x.unknown]), [
+    ["MP-140001", "8", "A1A", "MP", "H", {}],
+    ["XX-140005", "6", "A1A", null, null, { fluid: "XX", insulation: "N" }],
+    ["MP-140009", "3/4", "B1A", "MP", null, {}]]);
+  const whole = compileFormat('[{size}"-{fluid}-{number}-{class}(-{insulation})]');
+  equal(parseLineNumbers('8" - MP-140001-A1A-H', whole).map((x) => x.key), ['8"-MP-140001-A1A-H'], "spacing as printed or OCR'd, one key");
+  for (const [bad, why] of [["{size}-{fluid}-{number}", "[ ]"], ["[{fluid}]-{number}", "{number}"], ["[{fluid}-{nr}]", "nr"]]) {
+    let msg = ""; try { compileFormat(bad); } catch (e) { msg = e.message; }
+    assert(msg.includes(why), `${bad} refused: ${msg}`);
+  }
+  equal(parseCodeList("MP = MEDIUM PRESSURE STEAM\nh\tHOT INSULATION"), [{ code: "MP", meaning: "MEDIUM PRESSURE STEAM" }, { code: "H", meaning: "HOT INSULATION" }]);
+});
+
+test("Tesseract's words carry their confidence; an unsure word makes its number 'to be checked'", async () => {
+  const tsv = ["level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",
+    "5\t1\t1\t1\t1\t1\t300\t300\t300\t30\t96.1\t30-E-1101A",
+    "5\t1\t1\t1\t1\t2\t700\t300\t300\t30\t52.0\t30-E-1107A",
+    "5\t1\t1\t1\t1\t3\t1100\t300\t300\t30\t91.0\t3O-P-1102B",
+    "5\t1\t1\t1\t1\t4\t1500\t300\t300\t30\t93.0\t30-P-11O2C",
+    "5\t1\t2\t1\t1\t1\t300\t600\t30\t30\t-1\t"].join("\n");
+  const words = parseTsv(tsv, { dpi: 300 });
+  equal([words.length, words[0].c, words[0].b], [4, 0.96, [72, 72, 144, 79.2]], "points, 0..1");
+  const page = { n: 1, words, lines: linesOf(words), text: "" };
+  const ex = extract({ pages: [page] }, { patterns: [{ kind: "equipment", shape: "99-A-9999A" }], docNo: "X" });
+  const reg = { equipment: new Map([["30-E-1101A", { id: "a" }], ["30-P-1102B", { id: "b" }], ["30-P-1102C", { id: "c" }]]) };
+  const p = new Map(diff(ex.candidates, reg).map((x) => [x.key, x]));
+  equal([p.get("30-E-1101A").check, p.get("30-E-1107A").check, p.get("30-P-1102B").ocrRead, p.get("30-P-1102B").action],
+    [["خوانده‌شده با OCR"], ["خوانده‌شده با OCR", "اطمینان OCR 52٪"], "3O-P-1102B", "same"],
+    "every OCR number is checked before it changes a register; an unsure word says so; a repaired one says what was printed");
+  const s = diff([{ kind: "equipment", key: "30-P-1102D", attrs: {}, where: [], disagree: {}, ocr: { conf: 0.99 } }],
+    { equipment: new Map([["30-P-11O2D", { id: "x" }]]) })[0];
+  equal(s.suspect, "30-P-11O2D", "a new number one misread away from a register number is named");
 });
 
 // ── a project with registers ─────────────────────────────────────────────
@@ -134,6 +186,54 @@ test("applying: a conflict needs a reason, a rejection too; applied changes reac
   equal(pendingSame[0].n, 0, "what the document only confirmed is recorded as a reference once a person applies from it");
   const again = await inP(() => intake.decide(db, { projectId: P, itemIds: all, decision: "rejected", reason: "x", userId: alice.id }));
   equal(again.done, 0, "a decided item is not decided twice");
+});
+
+test("a scan read by OCR: numbers proposed with their confidence; one to be checked is applied only with a reason", async () => {
+  const { engine } = await ocrEngine();
+  if (!engine) { console.log("  SKIP no OCR engine on this machine (apt install tesseract-ocr poppler-utils)"); return; }
+  const t = await inP(async () => inc.registerIncoming(db, { projectId: P, transmittalNo: "DES-TR-03", fromParty: "Designer", sentOn: "2026-10-06",
+    receivedOn: "2026-10-06", purpose: "IFC", store, userId: alice.id, items: [
+      { docNo: "K110-30-PID-0021-10-11", revision: "4", purpose: "IFC", file: await file("pid-scan-text.pdf", "application/pdf") }] }));
+  await inP(() => inc.sendReply(db, { projectId: P, incomingId: t.transmittal.id, sentOn: "2026-10-07", userId: alice.id,
+    codes: [{ itemId: t.items[0].itemId, code: 1 }] }));
+  const rev = (await db.query("SELECT revision_id FROM transmittal_item WHERE id = $1", [t.items[0].itemId])).rows[0].revision_id;
+  await inP(async () => {
+    await intake.setLineFormat(db, { projectId: P, format: '[{size}"-{fluid}-{number}-{class}(-{insulation})]', example: '8"-MP-140001-A1A-H', userId: alice.id });
+    await intake.addLegendCodes(db, { projectId: P, kind: "fluid", text: "MP = MEDIUM PRESSURE STEAM", userId: alice.id });
+    await intake.addLegendCodes(db, { projectId: P, kind: "insulation", text: "H = HOT INSULATION\nN = NOT INSULATED", userId: alice.id });
+  });
+  const text = await inP(() => intake.readRevision(db, { projectId: P, revisionId: rev, store, userId: alice.id }));
+  equal(text.run.status, "needs-ocr");
+  const q = await inP(() => intake.queueOcr(db, { projectId: P, revisionId: rev, userId: alice.id }));
+  equal([q.method, q.status], ["ocr", "queued"]);
+  const r = await intake.ocrRevision(db, { projectId: P, revisionId: rev, store, userId: alice.id });
+  equal([r.run.method, r.run.status, r.run.ocr_pages, r.run.doc_no_seen], ["ocr", "read", [1], true], r.run.error || "");
+  assert(r.run.engine?.startsWith("tesseract"), r.run.engine);
+  const by = (k, key) => r.items.find((i) => i.kind === k && i.key === key);
+  equal([by("equipment", "30-E-1101A")?.action, by("instrument", "FT-140021")?.action, by("drawing", "K110-30-PID-0021-10-12")?.action],
+    ["same", "same", "same"], "the scan shows what the text layer of Rev.3 showed");
+  assert(by("equipment", "30-E-1101A").confidence > 0.5, "confidence recorded");
+  const line = by("line", '6"-MP-140005-A1A-N');
+  equal(line?.changes.map((c) => [c.field, c.to]), [["piping_class", "A1A"], ["fluid_code", "MP"], ["insulation", "N"]], "the format reads the class; the legend fills fluid and insulation");
+  assert(!r.items.some((i) => i.kind === "line" && /PID/.test(i.key)), "a drawing number is not read as a line number");
+  const [item] = (await inP(() => db.query("SELECT i.id FROM intake_item i WHERE i.run_id = $1 AND i.kind = 'line' AND i.key = $2", [r.run.id, '6"-MP-140005-A1A-N']))).rows;
+  await throws(() => inP(() => intake.decide(db, { projectId: P, itemIds: [item.id], decision: "applied", userId: alice.id })), "بررسی شود");
+  await throws(() => inP(() => db.query("UPDATE intake_item SET decision = 'applied', decided_by = $2, decided_at = now() WHERE id = $1", [item.id, alice.id])),
+    "intake_item_check_needs_reason", "the database holds the rule too");
+  await inP(() => intake.decide(db, { projectId: P, itemIds: [item.id], decision: "applied", reason: "checked against the scan, sheet 1", userId: alice.id }));
+  const [l] = (await inP(() => db.query("SELECT fluid_code, insulation FROM line WHERE project_id = $1 AND line_no = $2", [P, '6"-MP-140005-A1A-N']))).rows;
+  equal([l.fluid_code, l.insulation], ["MP", "N"]);
+});
+
+test("PGlite is one connection: two projects' scoped work interleaving does not see each other", async () => {
+  const other = await projects.createProject(db, { code: "INT2", name: "J", ownerUserId: alice.id });
+  const slow = (pid, tag) => withProject(db, pid, async () => {
+    await spine.upsertTag(db, { projectId: pid, tagNo: tag, discipline: "equipment" });
+    await new Promise((r) => setTimeout(r, 30));
+    return (await db.query("SELECT tag_no FROM tag WHERE tag_no LIKE 'ISO-%' ORDER BY 1")).rows.map((r) => r.tag_no);
+  });
+  const [a, b] = await Promise.all([slow(P, "ISO-A"), slow(other.id, "ISO-B")]);
+  equal([a, b], [["ISO-A"], ["ISO-B"]]);
 });
 
 test("a reading is a record: its items cannot be rewritten, only decided", async () => {
