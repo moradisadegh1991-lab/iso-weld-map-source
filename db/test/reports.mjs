@@ -75,7 +75,8 @@ test("a signature attests to one version: once signed, plain edit stops; an edit
     await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(5), userId: planner.id }), "تغییری نکرده");
     await rp.signReport(db, { projectId: P, reportId: r1.id, userId: planner.id });
     await throws(() => rp.signReport(db, { projectId: P, reportId: r1.id, userId: planner.id }), "امضا کرده‌اید");
-    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: planner.id }), "ویرایش پس از امضا");
+    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: planner.id }), "امضای خود را لغو کنید",
+      "the signer does not edit what they signed: they withdraw first (owner's spec 2026-10-15)");
     const e = await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: siteMgr.id });  // v3
     equal([e.versionNo, e.lapsed], [3, 1]);
     const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: planner.id });
@@ -270,6 +271,53 @@ test("the daily-report template builds the agreed stages once, and leaves a work
       [["پیمانکار", ["برنامه‌ریزی", "مدیریت کارگاه"]], ["نظارت", ["نظارت مقیم"]], ["کارفرما", ["نمایندهٔ کارفرما"]]]);
   });
   await as(async () => equal((await rp.applyDailyTemplate(db, { projectId: P })).created, false, "this project's own DR workflow is kept"));
+});
+
+// ── owner's spec 2026-10-15: one final approver per stage, a deputy, finer content rights ──
+
+test("a stage's named final approver: only they or the deputy approve, after signing; the deputy acts «on behalf of»", async () => {
+  const fresh = await projects.createProject(db, { code: "APV", name: "A", ownerUserId: planner.id });
+  for (const u of [siteMgr, sup, client]) await projects.addMember(db, { projectId: fresh.id, userId: u.id, role: "engineer" });
+  await withProject(db, fresh.id, async () => {
+    const F = fresh.id;
+    const t = await rp.upsertReportType(db, { projectId: F, code: "AP", name: "x" });
+    const s1 = await rp.upsertStage(db, { projectId: F, reportTypeId: t.id, seq: 1, name: "پیمانکار" });
+    const g = await rp.upsertGroup(db, { projectId: F, stageId: s1.id, seq: 1, name: "مدیریت" });
+    await rp.setGroupMember(db, { projectId: F, groupId: g.id, userId: planner.id, permissions: ["view", "create", "add_content", "sign"] });
+    await rp.setGroupMember(db, { projectId: F, groupId: g.id, userId: siteMgr.id, permissions: ["view", "sign"] });
+    await rp.setGroupMember(db, { projectId: F, groupId: g.id, userId: sup.id, permissions: ["view", "sign", "approve"] });
+    await rp.setGroupMember(db, { projectId: F, groupId: g.id, userId: client.id, permissions: ["view"] });
+    await throws(() => rp.setStageApprover(db, { projectId: F, stageId: s1.id, approverId: client.id }), "حق امضا", "the approver must be able to sign");
+    await throws(() => rp.setStageApprover(db, { projectId: F, stageId: s1.id, deputyId: siteMgr.id }), "بدون تأییدکننده");
+    await rp.setStageApprover(db, { projectId: F, stageId: s1.id, approverId: planner.id, deputyId: siteMgr.id });
+    const r = await rp.createReport(db, { projectId: F, reportTypeId: t.id, reportDate: today, content: content(1), userId: planner.id });
+    await rp.signReport(db, { projectId: F, reportId: r.id, userId: sup.id });
+    await throws(() => rp.approveStage(db, { projectId: F, reportId: r.id, userId: sup.id }), "فقط با تأییدکنندهٔ نهایی",
+      "a group's approve right no longer suffices once the stage names its approver");
+    await throws(() => rp.approveStage(db, { projectId: F, reportId: r.id, userId: siteMgr.id }), "بدون امضای خود");
+    await rp.signReport(db, { projectId: F, reportId: r.id, userId: siteMgr.id });
+    const done = await rp.approveStage(db, { projectId: F, reportId: r.id, userId: siteMgr.id });
+    equal(done.status, "approved");
+    const { rows: [d] } = await db.query("SELECT on_behalf_of FROM report_decision WHERE report_id = $1 AND action = 'approved'", [r.id]);
+    equal(d.on_behalf_of, planner.id, "the deputy's approval is recorded for the approver");
+    const v = await rp.reportView(db, { projectId: F, reportId: r.id, userId: planner.id });
+    const sigs = v.signatureBoxes[0].groups[0].signatures;
+    equal([sigs.find((x) => x.userId === siteMgr.id).onBehalfOf != null, sigs.find((x) => x.userId === sup.id).onBehalfOf], [true, null]);
+  });
+});
+
+test("content rights: adding rows, changing rows and removing rows are separate; after a return earlier stages edit again", async () => {
+  const stages = [
+    { seq: 1, groups: [{ id: "g1", seq: 1, members: [{ userId: "adder", permissions: ["view", "add_content"] }, { userId: "editor", permissions: ["view", "edit"] }] }] },
+    { seq: 2, groups: [{ id: "g2", seq: 1, members: [{ userId: "rev", permissions: ["view", "edit", "sign", "return"] }] }] },
+  ];
+  const snap = { status: "open", stageSeq: 1, versionNo: 1, createdT: 1n, stages, signatures: [], decisions: [] };
+  equal([wf.checkEdit(snap, "adder", { added: 1 }).ok, wf.checkEdit(snap, "adder", { changed: 1 }).ok, wf.checkEdit(snap, "editor", { removed: 1 }).ok,
+    wf.checkEdit(snap, "editor", { changed: 1 }).ok], [true, false, false, true]);
+  const back = { ...snap, stageSeq: 1, decisions: [{ stageSeq: 1, action: "approved", versionNo: 1, t: 2n }, { stageSeq: 2, action: "returned", versionNo: 1, t: 3n }] };
+  equal(wf.checkEdit(back, "rev", { changed: 1 }).ok, true, "returned to stage 1: the reviewer of stage 2 may correct it too");
+  const forward = { ...snap, stageSeq: 1, decisions: [] };
+  equal(wf.checkEdit(forward, "rev", { changed: 1 }).ok, false, "without a return, stage 2 does not touch stage 1's report");
 });
 
 await run();

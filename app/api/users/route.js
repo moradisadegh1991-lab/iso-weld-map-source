@@ -23,6 +23,9 @@ export async function GET(request) {
       members: await users.listProjectUsers(db, { projectId }),
       developers: await users.listDevelopers(db),
       roles: ROLES, areas: AREAS, setupHours: users.SETUP_HOURS,
+      contractMembers: await users.contractMembers(db, { projectId }), contractAccess: users.CONTRACT_ACCESS,
+      contracts: (await db.query("SELECT id, contract_no, title FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId])).rows,
+      companies: (await db.query("SELECT id, code, name FROM company ORDER BY code")).rows,
       iAmDeveloper: membership.role === "developer",
     }, { headers: { "Cache-Control": "no-store" } }));
   } catch (e) { return errorResponse(e); }
@@ -43,6 +46,7 @@ export async function POST(request) {
     return await withProject(db, projectId, async () => {
       // Everything but an invitation acts on someone already in THIS project:
       // an admin here reaches no account through a project they do not run.
+      if (kind === "contract-member-remove") { await users.removeContractMember(db, { projectId, id: body.id }); return Response.json({ ok: true }); }
       if (kind !== "invite") {
         const { rows: [m] } = await db.query("SELECT 1 FROM project_member WHERE project_id = $1 AND user_id = $2", [projectId, userId]);
         if (!m && !developer) return Response.json({ error: "not found" }, { status: 404 });
@@ -52,6 +56,10 @@ export async function POST(request) {
       if (kind === "update") return Response.json({ member: await users.updateMember(db, a) });
       if (kind === "remove") return Response.json(await users.removeMember(db, a));
       if (kind === "link") return Response.json({ link: await users.issueSetupLink(db, a) });
+      if (kind === "profile") return Response.json({ user: await users.updateProfile(db, { userId, username: body.username, displayName: body.displayName,
+        jobTitle: body.jobTitle, specialty: body.specialty, phone: body.phone, companyId: body.companyId }) });
+      if (kind === "contract-member") return Response.json({ member: await users.setContractMember(db, { projectId, contractId: body.contractId, userId,
+        position: body.position, access: body.access }) });
       if (kind === "revoke") return Response.json(await users.endSessions(db, a));
       if (kind === "active") return Response.json({ user: await users.setActive(db, { userId, active: body.active, byUser: user.id }) });
       if (kind === "developer") return Response.json({ user: await users.setDeveloper(db, { userId, value: body.value }) });

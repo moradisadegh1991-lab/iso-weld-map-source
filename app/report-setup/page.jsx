@@ -11,6 +11,7 @@ import Fold from "../../components/ui/Fold";
  */
 const PERM_HELP = {
   view: "خواندن گزارش", create: "ساخت گزارش تازه (فقط در مرحلهٔ اول معنا دارد)",
+  add_content: "افزودن ردیف تازه به محتوای گزارش", delete_content: "حذف ردیف از محتوای گزارش",
   edit: "تغییر محتوا تا وقتی کسی در این مرحله امضا نکرده", edit_after_sign: "تغییر محتوا حتی پس از امضا در همین مرحله — امضاها باید دوباره داده شوند",
   delete: "لغو گزارش در مرحلهٔ اول، پیش از هر تأیید", sign: "امضای گزارش برای این گروه",
   return: "برگرداندن به مرحلهٔ قبل با ذکر دلیل", approve: "تأیید نهایی مرحله — پس از امضای خود",
@@ -83,6 +84,7 @@ export default function ReportSetupPage() {
               <h3>مرحلهٔ {st.seq}: {st.name}
                 {type.reports === 0 && <button className="btn ghost sm" type="button" style={{ marginInlineStart: 8 }}
                   onClick={() => post({ kind: "stage-remove", stageId: st.id })}>حذف مرحله</button>}</h3>
+              <StageApprover st={st} users={data.users} post={post} />
               {st.groups.length === 0 && <p className="muted sm">گروهی ندارد — بدون گروه، کسی در این مرحله کاری نمی‌تواند بکند.</p>}
               {st.groups.map((g) => (
                 <div className="groupbox" key={g.id}>
@@ -162,6 +164,31 @@ export default function ReportSetupPage() {
           <p className="muted sm">اولویت گروه‌ها ترتیب نمایش و چاپ کادرهای امضاست. هر تغییر در این صفحه در «لاگ و گردش» این بخش ثبت می‌شود.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Each stage's one final approver and their deputy, and the colour the
+ * stage's changes are shown in. With an approver named, only they or the
+ * deputy approve the stage; the deputy's signature shows «از طرف».
+ */
+function StageApprover({ st, users, post }) {
+  const signers = [...new Map(st.groups.flatMap((g) => g.members.filter((m) => m.permissions.includes("sign")).map((m) => [m.userId, m.name]))).entries()];
+  const [f, setF] = useState({ approverId: st.approverId || "", deputyId: st.deputyId || "", color: st.changeColor || "#c0392b" });
+  return (
+    <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap", marginBottom: 8 }}>
+      <div className="field"><label htmlFor={`ap-${st.id}`}>تأییدکنندهٔ نهایی مرحله</label>
+        <select id={`ap-${st.id}`} value={f.approverId} onChange={(e) => setF({ ...f, approverId: e.target.value })}>
+          <option value="">— هر عضو با حق «تأیید نهایی» —</option>{signers.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></div>
+      <div className="field"><label htmlFor={`dp-${st.id}`}>جانشین</label>
+        <select id={`dp-${st.id}`} value={f.deputyId} disabled={!f.approverId} onChange={(e) => setF({ ...f, deputyId: e.target.value })}>
+          <option value="">—</option>{signers.filter(([id]) => id !== f.approverId).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></div>
+      <button className="btn ghost sm" type="button" onClick={() => post({ kind: "approver", stageId: st.id, approverId: f.approverId || null, deputyId: (f.approverId && f.deputyId) || null })}>ثبت تأییدکننده</button>
+      <div className="field"><label htmlFor={`cl-${st.id}`}>رنگ تغییرات این مرحله</label>
+        <input id={`cl-${st.id}`} type="color" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} /></div>
+      <button className="btn ghost sm" type="button" onClick={() => post({ kind: "stage-color", stageId: st.id, color: f.color })}>ثبت رنگ</button>
+      {signers.length === 0 && <span className="sm muted">تأییدکننده باید عضو یکی از گروه‌های این مرحله با حق امضا باشد.</span>}
     </div>
   );
 }

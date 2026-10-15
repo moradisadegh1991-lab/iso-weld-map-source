@@ -249,7 +249,7 @@ export default function DailyReportsPage() {
                 {g.signatures.length === 0 ? <div className="muted sm">—</div> : g.signatures.map((s) => (
                   <div key={s.userId} className={s.current ? "" : "stale"}>
                     {s.signatureId ? <img src={`/api/signature?projectId=${projectId}&id=${s.signatureId}`} alt={`امضای ${s.name || ""}`} /> : null}
-                    <div className="sm">{s.name || "—"}</div>
+                    <div className="sm">{s.onBehalfOf && <span className="muted">از طرف {s.onBehalfOf} — </span>}{s.name || "—"}</div>
                     <div className="mono sm">{new Date(s.at).toLocaleString("fa-IR")}</div>
                     {!s.current && <div className="sm warn">روی نسخهٔ {s.versionNo} — دیگر حساب نمی‌شود</div>}
                   </div>

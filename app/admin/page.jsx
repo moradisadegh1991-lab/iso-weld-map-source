@@ -70,6 +70,7 @@ export default function AdminPage() {
       </div>
       <div className="ptabs no-print" role="tablist">
         <button role="tab" aria-selected={tab === "users"} onClick={() => setTab("users")}>کاربران</button>
+        <button role="tab" aria-selected={tab === "contracts"} onClick={() => setTab("contracts")}>تخصیص به قرارداد</button>
         <button role="tab" aria-selected={tab === "roles"} onClick={() => setTab("roles")}>نقش‌ها و اختیارات</button>
       </div>
       {msg && <p className="err" role="alert">{msg}</p>}
@@ -77,7 +78,7 @@ export default function AdminPage() {
 
       {tab === "roles" ? <Roles role={role} /> : !may ? (
         <p className="muted">مدیریت کاربران با مدیر پروژه است.</p>
-      ) : err ? <p className="err">{err}</p> : !data ? <p className="muted">در حال بارگذاری…</p> : <>
+      ) : err ? <p className="err">{err}</p> : !data ? <p className="muted">در حال بارگذاری…</p> : tab === "contracts" ? <ContractMembers data={data} post={post} /> : <>
         <div className="kpis">
           <Kpi v={data.members.length} l="عضو پروژه" />
           <Kpi v={data.members.filter((m) => m.status === "active").length} l="فعال" tone="ok" />
@@ -95,14 +96,15 @@ export default function AdminPage() {
           <h2>اعضای پروژه</h2>
           <TableKit name="users">
             <table className="dtable">
-              <thead><tr><th>نام</th><th>ایمیل</th><th>نقش</th><th>حوزه‌های کاری</th><th>طرف بازرسی</th><th>وضعیت</th><th>آخرین ورود</th><th /></tr></thead>
+              <thead><tr><th>نام</th><th>ایمیل / نام کاربری</th><th>نقش</th><th>حوزه‌های کاری</th><th>طرف بازرسی</th><th>وضعیت</th><th>آخرین ورود</th><th /></tr></thead>
               <tbody>{data.members.map((m) => {
                 const [tone, label] = STATUS[m.status];
                 return [
                   <tr key={m.user_id}>
                     <td>{m.display_name || "—"}{m.user_id === user?.id && <span className="muted sm"> (شما)</span>}
+                      {(m.job_title || m.company_code) && <div className="sm muted">{[m.job_title, m.specialty, m.company_code].filter(Boolean).join(" · ")}</div>}
                       {m.is_developer && <span className="role-pill developer" style={{ marginInlineStart: 6 }}>توسعه‌دهنده</span>}</td>
-                    <td className="mono sm">{m.email || "—"}</td>
+                    <td className="mono sm">{m.email || "—"}{m.username && <div className="muted">{m.username}</div>}</td>
                     <td><span className={`role-pill ${m.role}`}>{ROLE_FA[m.role]}</span></td>
                     <td className="sm">{m.areas.length ? m.areas.map((a) => AREAS[a]).join("، ") : <span className="muted">همه</span>}</td>
                     <td className="sm">{m.inspection_party ? PARTY_FA[m.inspection_party] : <span className="muted">—</span>}</td>
@@ -154,12 +156,63 @@ function Invite({ data, onSubmit }) {
   );
 }
 
+function Profile({ m, data, post }) {
+  const [p, setP] = useState({ username: m.username || "", displayName: m.display_name || "", jobTitle: m.job_title || "", specialty: m.specialty || "",
+    phone: m.phone || "", companyId: m.company_id || "" });
+  const F = (k, l, dir) => (
+    <div className="field"><label htmlFor={`pf-${k}-${m.user_id}`}>{l}</label>
+      <input id={`pf-${k}-${m.user_id}`} dir={dir} value={p[k]} onChange={(e) => setP({ ...p, [k]: e.target.value })} /></div>);
+  return (
+    <fieldset style={{ border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 12px", margin: 0 }}>
+      <legend className="sm muted" style={{ padding: "0 6px" }}>مشخصات کاربر</legend>
+      <div className="grid2">
+        {F("displayName", "نام و نام خانوادگی")}{F("username", "نام کاربری (برای ورود، کنار ایمیل)", "ltr")}
+        {F("jobTitle", "عنوان شغلی")}{F("specialty", "حوزهٔ تخصص")}{F("phone", "تلفن", "ltr")}
+        <div className="field"><label htmlFor={`pf-co-${m.user_id}`}>شرکت شاغل</label>
+          <select id={`pf-co-${m.user_id}`} value={p.companyId} onChange={(e) => setP({ ...p, companyId: e.target.value })}>
+            <option value="">—</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}</select></div>
+      </div>
+      <p className="sm muted">امضای تصویری (رسم‌شده یا اسکن‌شده) را خود کاربر در «امضای من» بارگذاری می‌کند{m.has_signature ? " — این کاربر امضا دارد." : " — هنوز امضایی ندارد."}
+        رمز عبور با لینک یک‌بارمصرف تنظیم می‌شود و از دست مدیر نمی‌گذرد.</p>
+      <button className="btn" type="button" onClick={() => post({ kind: "profile", userId: m.user_id, ...p, companyId: p.companyId || null })}>ذخیرهٔ مشخصات</button>
+    </fieldset>
+  );
+}
+
+function ContractMembers({ data, post }) {
+  const [f, setF] = useState({ contractId: "", userId: "", position: "", access: "edit" });
+  return (
+    <div className="card">
+      <h2>تخصیص کاربر به قرارداد</h2>
+      <p className="sm muted">هر کاربر در هر قرارداد یک سمت و یک سطح دسترسی دارد. دسترسی دقیق در گزارش‌ها (ایجاد، افزودن، ویرایش و حذف محتوا، امضا، برگشت، تأیید نهایی) از گروه‌های گردش کار گزارش می‌آید.</p>
+      {data.contracts.length === 0 ? <p className="empty-note">قراردادی تعریف نشده.</p> : (
+        <form className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}
+          onSubmit={(e) => { e.preventDefault(); post({ kind: "contract-member", ...f }); }}>
+          <div className="field"><label htmlFor="cm-c">قرارداد</label><select id="cm-c" required value={f.contractId} onChange={(e) => setF({ ...f, contractId: e.target.value })}>
+            <option value="">—</option>{data.contracts.map((c) => <option key={c.id} value={c.id}>{c.contract_no} — {c.title}</option>)}</select></div>
+          <div className="field"><label htmlFor="cm-u">کاربر</label><select id="cm-u" required value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
+            <option value="">—</option>{data.members.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name || m.email}</option>)}</select></div>
+          <div className="field"><label htmlFor="cm-p">سمت در قرارداد</label><input id="cm-p" required value={f.position} onChange={(e) => setF({ ...f, position: e.target.value })} /></div>
+          <div className="field"><label htmlFor="cm-a">سطح دسترسی</label><select id="cm-a" value={f.access} onChange={(e) => setF({ ...f, access: e.target.value })}>
+            {Object.entries(data.contractAccess).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
+          <button className="btn" type="submit">ثبت</button>
+        </form>)}
+      {data.contractMembers.length === 0 ? <p className="empty-note">هنوز کسی به قراردادی تخصیص داده نشده.</p> : (
+        <table className="dtable"><thead><tr><th>قرارداد</th><th>کاربر</th><th>سمت</th><th>دسترسی</th><th /></tr></thead>
+          <tbody>{data.contractMembers.map((x) => (
+            <tr key={x.id}><td><span className="mono">{x.contract_no}</span> — {x.contract_title}</td><td>{x.display_name || x.email}</td><td>{x.position}</td>
+              <td>{data.contractAccess[x.access]}</td><td><button className="btn ghost sm" type="button" onClick={() => post({ kind: "contract-member-remove", id: x.id })}>حذف</button></td></tr>))}</tbody></table>)}
+    </div>
+  );
+}
+
 function MemberPanel({ m, data, me, post, setLink, onClose }) {
   const [f, setF] = useState({ role: m.role, areas: m.areas, party: m.inspection_party || "" });
   const dev = data.iAmDeveloper;
   const linkLabel = m.has_password ? "لینک بازنشانی رمز" : "لینک تنظیم رمز";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <Profile m={m} data={data} post={post} />
       <div className="grid2">
         <RoleSelect id={`r-${m.user_id}`} value={f.role} on={(role) => setF({ ...f, role })} roles={data.roles} />
         <PartySelect id={`p-${m.user_id}`} value={f.party} on={(party) => setF({ ...f, party })} />

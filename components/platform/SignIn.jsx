@@ -44,8 +44,8 @@ export default function SignIn() {
         <h1>ورود به سامانه</h1>
 
         <div className="field">
-          <label htmlFor="email">ایمیل</label>
-          <input id="email" type="email" autoComplete="username" required
+          <label htmlFor="email">ایمیل یا نام کاربری</label>
+          <input id="email" type="text" autoComplete="username" required
                  value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" />
         </div>
 

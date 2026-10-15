@@ -126,4 +126,30 @@ test("category trees: by discipline and work group; moved by branch, never under
   equal(s.trees.narrative.map((n) => n.name), ["بتن‌ریزی"]);
 });
 
+// ── step 3: users ────────────────────────────────────────────────────────
+
+test("a user's profile: username to sign in with, job title, expertise, company; assigned to a contract with a position and access", async () => {
+  const users = await import("../../lib/db/repos/users.mjs");
+  const cred = await import("../../lib/db/repos/credentials.mjs");
+  const bob = await projects.ensureUser(db, { subject: "local|bob@x.test", email: "bob@x.test", displayName: "Bob" });
+  await projects.addMember(db, { projectId: P, userId: bob.id, role: "engineer" });
+  await cred.setPassword(db, { userId: bob.id, password: "Bob-is-long-enough-2026" });
+  await throws(() => users.updateProfile(db, { userId: bob.id, username: "B" }), "نام کاربری");
+  await throws(() => users.updateProfile(db, { userId: bob.id, username: "bob@x.test" }), "نام کاربری");
+  await throws(() => users.updateProfile(db, { userId: bob.id, username: "alice@x.test" }), "نام کاربری");
+  const u = await users.updateProfile(db, { userId: bob.id, username: "Bob.Site", jobTitle: "سرپرست کارگاه", specialty: "پایپینگ", companyId: epc.id });
+  equal([u.username, u.job_title, u.company_id], ["bob.site", "سرپرست کارگاه", epc.id]);
+  const carol = await projects.ensureUser(db, { subject: "local|carol@x.test", email: "carol@x.test" });
+  await throws(() => users.updateProfile(db, { userId: carol.id, username: "bob.site" }), "گرفته شده");
+  const viaName = await cred.authenticatePassword(db, { email: "BOB.SITE", password: "Bob-is-long-enough-2026" });
+  equal(viaName.id, bob.id, "signs in with the username, any case");
+  await inP(async () => {
+    await throws(() => users.setContractMember(db, { projectId: P, contractId: contract.id, userId: carol.id, position: "x", access: "edit" }), "عضو پروژه نیست");
+    await throws(() => users.setContractMember(db, { projectId: P, contractId: contract.id, userId: bob.id, position: "x", access: "boss" }), "سطح دسترسی");
+    await users.setContractMember(db, { projectId: P, contractId: contract.id, userId: bob.id, position: "سرپرست کارگاه", access: "edit" });
+    const list = await users.contractMembers(db, { projectId: P });
+    equal(list.map((m) => [m.contract_no, m.position, m.access]), [["SC-01", "سرپرست کارگاه", "edit"]]);
+  });
+});
+
 await run();

@@ -33,7 +33,7 @@ export async function GET(request) {
 
 const LABEL = {
   type: (b) => `نوع ${b.code}`, stage: (b) => `مرحلهٔ ${b.seq} «${b.name}»`, group: (b) => `گروه «${b.name}»`,
-  template: () => "الگوی گزارش روزانه", member: () => "عضو گروه", "member-remove": () => "حذف عضو", "stage-remove": () => "حذف مرحله", "group-remove": () => "حذف گروه",
+  template: () => "الگوی گزارش روزانه", approver: () => "تأییدکنندهٔ نهایی و جانشین مرحله", "stage-color": () => "رنگ تغییرات مرحله", member: () => "عضو گروه", "member-remove": () => "حذف عضو", "stage-remove": () => "حذف مرحله", "group-remove": () => "حذف گروه",
 };
 
 export async function POST(request) {
@@ -56,6 +56,8 @@ export async function POST(request) {
         "member-remove": () => rp.removeGroupMember(db, a),
         "stage-remove": () => rp.removeStage(db, a),
         "group-remove": () => rp.removeGroup(db, a),
+        approver: () => rp.setStageApprover(db, a),
+        "stage-color": () => rp.setStageColor(db, a),
       }[kind]();
       // who changed who may sign what is itself on the record
       await logEvent(db, { projectId, section: "reports", entityType: "report_setup", entityId: row?.id || null,
