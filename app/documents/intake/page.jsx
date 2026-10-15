@@ -11,7 +11,9 @@ import Tabs from "../../../components/ui/Tabs";
 const ACTION = { new: ["ok", "تازه"], update: ["", "تکمیل"], conflict: ["bad", "تناقض"], same: ["muted", "بی‌تغییر"] };
 const STATUS = { read: "خوانده شد", "needs-ocr": "اسکن — نیاز به OCR", queued: "در صف OCR…", unsupported: "نوع فایل پشتیبانی نمی‌شود", failed: "خطا در خواندن" };
 const statusOf = (run) => (run.status === "queued" && run.stale ? "OCR متوقف شد (سرور دوباره راه افتاد) — دوباره بخوانید" : STATUS[run.status]);
-const ATTR = { service: "سرویس", class: "کلاس", subsystem: "ساب‌سیستم", system: "سیستم", fluid: "کد سیال", insulation: "کد عایق" };
+const ATTR = { service: "سرویس", class: "کلاس", subsystem: "ساب‌سیستم", system: "سیستم", fluid: "کد سیال", insulation: "کد عایق",
+  from: "از", to: "به", spec: "نوع کابل", length: "طول (m)", type: "نوع سازه", tonnage: "وزن (t)", drawing: "نقشه",
+  pressure: "فشار طراحی (barg)", tmin: "کمینهٔ دمای طراحی (°C)", tmax: "بیشینهٔ دمای طراحی (°C)" };
 const pct = (c) => (c == null ? "" : `${Math.round(Number(c) * 100)}٪`);
 const DECISION = { pending: "منتظر تصمیم", applied: "اعمال شد", rejected: "رد شد" };
 
@@ -114,6 +116,7 @@ function Proposal({ doc, kinds, may, post }) {
       {r.status === "needs-ocr" && <p className="sm">این فایل تصویر اسکن است و لایهٔ متن ندارد؛ چیزی از آن حدس زده نشده است. با «خواندن با OCR» خوانده می‌شود.</p>}
       {r.method === "ocr" && r.status === "read" && <p className="sm">هر شماره‌ای که OCR اضافه یا عوض می‌کند «بررسی شود» است: با نقشه مقایسه کنید و با دلیل اعمال کنید. اطمینان OCR کنار هر ردیف آمده ولی به‌تنهایی درستی را نشان نمی‌دهد.</p>}
       {r.error && <p className="err sm">{r.error}</p>}
+      {r.notes?.length > 0 && <div className="sm err">{r.notes.map((n) => <div key={n}>{n}</div>)}</div>}
       {r.ambiguous?.length > 0 && <p className="sm">شکل این شماره‌ها با دو نوع از قالب‌های پروژه یکی است و تصمیمی گرفته نشد: {r.ambiguous.map((a) => <span key={a.token} className="mono"> {a.token} ({a.kinds.map((k) => kinds[k]).join("/")})</span>)}</p>}
       {r.unknown_format?.length > 0 && <p className="sm">با هیچ قالب پروژه نمی‌خواند (اعمال نمی‌شود — اگر درست است، قالبش را اضافه کنید): {r.unknown_format.map((u) => <span key={u.value + u.where} className="mono"> {u.value}</span>)}</p>}
       <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}>
@@ -137,7 +140,8 @@ function Proposal({ doc, kinds, may, post }) {
                 {c.from != null && <> <s className="muted"><bdi>{c.from}</bdi></s> ←</>} <b><bdi>{c.to}</bdi></b></div>))}
               {Object.keys(i.disagree || {}).length > 0 && <div className="err sm">فایل دو مقدار نوشته: {Object.entries(i.disagree).map(([a, v]) => `${ATTR[a] || a}: ${v.join(" / ")}`).join(" · ")}</div>}
               {Object.keys(i.unknown_codes || {}).length > 0 && <div className="err sm">در لجند پروژه نیست (پر نشد): {Object.entries(i.unknown_codes).map(([a, v]) => `${ATTR[a] || a} ${v.join("/")}`).join(" · ")}</div>}
-              {i.attrs?.size && <div className="muted">سایز چاپ‌شده: {i.attrs.size}″</div>}</td>
+              {i.attrs?.size && <div className="muted">سایز چاپ‌شده: {i.attrs.size}″</div>}
+              {i.notes?.length > 0 && <div className="err sm">{i.notes.map((n) => <div key={n}>{n}</div>)}</div>}</td>
             <td className="sm">{i.confidence != null ? <>{pct(i.confidence)}
               {i.ocr_read && <div>چاپ‌شده: <bdi className="mono">{i.ocr_read}</bdi></div>}
               {i.suspect && <div className="err">شاید <bdi className="mono">{i.suspect}</bdi> در رجیستر</div>}</> : <span className="muted">—</span>}</td>
@@ -160,7 +164,7 @@ function Proposal({ doc, kinds, may, post }) {
 
 function PatternsCard({ data, may, post }) {
   const [f, setF] = useState({ patternKind: "equipment", example: "" });
-  const byKind = useMemo(() => Object.keys(data.kinds).map((k) => [k, data.patterns.filter((p) => p.kind === k)]), [data]);
+  const byKind = useMemo(() => Object.keys(data.patternKinds).map((k) => [k, data.patterns.filter((p) => p.kind === k)]), [data]);
   return (
     <div className="card">
       <h2>قالب شماره‌ها</h2>
@@ -170,7 +174,7 @@ function PatternsCard({ data, may, post }) {
       {may && <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}>
         <button className="btn ghost" type="button" onClick={() => post({ kind: "learn" }, (r) => `${r.added} شکل تازه از رجیسترها یاد گرفته شد.`)}>یادگیری از رجیسترها</button>
         <div className="field"><label htmlFor="pk">نوع</label><select id="pk" value={f.patternKind} onChange={(e) => setF({ ...f, patternKind: e.target.value })}>
-          {Object.entries(data.kinds).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
+          {Object.entries(data.patternKinds).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
         <div className="field"><label htmlFor="pe">نمونهٔ شماره</label><input id="pe" dir="ltr" value={f.example} onChange={(e) => setF({ ...f, example: e.target.value })} placeholder="30-E-1101A" /></div>
         <button className="btn" type="button" onClick={async () => { if (await post({ kind: "pattern", ...f }, (r) => `شکل ${r.pattern.shape} اضافه شد.`)) setF({ ...f, example: "" }); }}>افزودن</button>
       </div>}

@@ -225,6 +225,76 @@ test("a scan read by OCR: numbers proposed with their confidence; one to be chec
   equal([l.fluid_code, l.insulation], ["MP", "N"]);
 });
 
+// ── phase 3: datasheets, cable schedules, structural drawings ────────────
+
+test("a datasheet's design conditions: gauge units converted exactly; bar without g/a, absolute and two values are named, not filled", async () => {
+  const { designConditions, totalWeight, structureTypeOf } = await import("../../lib/intake/datasheet.mjs");
+  const d = (t) => { const r = designConditions(t); return [r.pressure, r.tmin, r.tmax, r.problems.length]; };
+  equal(d("DESIGN PRESSURE (barg) 25\nDESIGN TEMPERATURE -29 / 350 °C"), [25, -29, 350, 0]);
+  equal(d("DESIGN PRESSURE: 2.5 MPa(g) @ 350 °C\nDESIGN TEMP. 650 °F"), [25, null, 343.3, 0], "@ starts the coincident temperature, not a pressure");
+  equal(d("DESIGN PRESSURE 25 bar\nDESIGN TEMPERATURE 120"), [null, null, null, 2], "bar alone, and no temperature unit");
+  equal(d("DESIGN PRESSURE 10 bara"), [null, null, null, 1], "absolute needs the site's atmosphere");
+  equal(d("DESIGN PRESSURE SHELL 25 barg TUBE 40 barg\nMDMT -46 °C\nDESIGN TEMPERATURE 200 C"), [null, -46, 200, 1], "two pressures: not picked");
+  equal([totalWeight("TOTAL WEIGHT: 45 200 KG"), totalWeight("TOTAL STEEL WEIGHT 12.5 T"), structureTypeOf("PIPE RACK PR-01"), structureTypeOf("PIPE RACK AND PLATFORM")],
+    [45.2, 12.5, "pipe_rack", null]);
+});
+
+test("phase 3 in the registers: datasheet → design conditions of its tag; cable schedule → cables; GA → structure", async () => {
+  const cables = () => {
+    const ws = XLSX.utils.aoa_to_sheet([["CABLE SCHEDULE"], ["CABLE NO", "FROM", "TO", "CABLE TYPE", "LENGTH"],
+      ["30-PC-1101", "MCC-30-01", "30-P-1102B", "3Cx16mm2 0.6/1kV XLPE/SWA", "120"], ["30-PC-1102", "MCC-30-01", "30-E-1101A HEATER", "3Cx4mm2 0.6/1kV", "85"]]);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "CS");
+    return { bytes: XLSX.write(wb, { type: "buffer", bookType: "xlsx" }), name: "cs.xlsx", type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+  };
+  await inP(async () => {
+    const [eq] = (await db.query("SELECT id FROM tag WHERE project_id = $1 AND tag_no = '30-E-1101A'", [P])).rows;
+    await dc.upsertMdr(db, { projectId: P, docNo: "K110-30-DS-1101-00-01", title: "Datasheet E-1101A", discipline: "mechanical", tagId: eq.id });
+    await dc.upsertMdr(db, { projectId: P, docNo: "K110-30-DS-9999-00-01", title: "Datasheet, not linked", discipline: "mechanical" });
+    await dc.upsertMdr(db, { projectId: P, docNo: "K110-30-CS-0001-00-01", title: "Cable schedule", discipline: "electrical" });
+    await dc.upsertMdr(db, { projectId: P, docNo: "K110-30-ST-0101-00-01", title: "Pipe rack GA", discipline: "structural" });
+    await intake.addPattern(db, { projectId: P, kind: "structure", example: "PR-3001", userId: alice.id });
+  });
+  const t = await inP(async () => inc.registerIncoming(db, { projectId: P, transmittalNo: "DES-TR-04", fromParty: "Designer", sentOn: "2026-10-08",
+    receivedOn: "2026-10-08", purpose: "IFC", store, userId: alice.id, items: [
+      { docNo: "K110-30-DS-1101-00-01", revision: "1", purpose: "IFC", file: await file("datasheet.pdf", "application/pdf") },
+      { docNo: "K110-30-DS-9999-00-01", revision: "1", purpose: "IFC", file: await file("datasheet.pdf", "application/pdf") },
+      { docNo: "K110-30-CS-0001-00-01", revision: "1", purpose: "IFC", file: cables() },
+      { docNo: "K110-30-ST-0101-00-01", revision: "0", purpose: "IFC", file: await file("structure.pdf", "application/pdf") }] }));
+  await inP(() => inc.sendReply(db, { projectId: P, incomingId: t.transmittal.id, sentOn: "2026-10-09", userId: alice.id,
+    codes: t.items.map((i) => ({ itemId: i.itemId, code: 1 })) }));
+  const revs = await Promise.all(t.items.map(async (i) => (await db.query("SELECT revision_id FROM transmittal_item WHERE id = $1", [i.itemId])).rows[0].revision_id));
+  const [ds, dsLoose, cs, ga] = await Promise.all(revs.map((r) => inP(() => intake.readRevision(db, { projectId: P, revisionId: r, store, userId: alice.id }))));
+
+  const design = ds.items.find((i) => i.kind === "design");
+  equal([design?.key, design?.action, design?.changes.map((c) => [c.field, c.to])],
+    ["30-E-1101A", "update", [["design_pressure_barg", "25"], ["design_temp_min_c", "-29"], ["design_temp_max_c", "350"]]], "2.5 MPa(g) is 25 barg");
+  assert(!ds.items.some((i) => i.kind === "design" && i.key !== "30-E-1101A"), "only the tag the document is registered against");
+  assert(!dsLoose.items.some((i) => i.kind === "design") && dsLoose.run.notes.some((n) => n.includes("وصل نیست")), "a datasheet linked to no tag fills nothing, and says why");
+
+  const c1 = cs.items.find((i) => i.kind === "cable" && i.key === "30-PC-1101");
+  equal([c1?.action, cs.items.filter((i) => i.kind === "cable").length], ["new", 2]);
+  const st = ga.items.find((i) => i.kind === "structure");
+  equal([st?.key, st?.action, st?.attrs.tonnage, st?.attrs.type, st?.attrs.drawing], ["PR-3001", "new", "45.2", "pipe_rack", "K110-30-ST-0101-00-01"]);
+
+  const ids = [design, c1, cs.items.find((i) => i.key === "30-PC-1102"), st].map((x) => x.id ?? null);
+  const board = await inP(() => intake.intakeBoard(db, { projectId: P }));
+  const all = board.docs.flatMap((d) => d.items);
+  const pick = (k, key) => all.find((i) => i.kind === k && i.key === key).id;
+  const r = await inP(() => intake.decide(db, { projectId: P, itemIds: [pick("design", "30-E-1101A"), pick("cable", "30-PC-1101"), pick("cable", "30-PC-1102"), pick("structure", "PR-3001")],
+    decision: "applied", userId: alice.id }));
+  equal(r.errors, []);
+  const q = async (sql) => (await inP(() => db.query(sql, [P]))).rows;
+  const [m] = await q(`SELECT m.design_pressure_barg::float AS p, m.design_temp_min_c::float AS tmin, m.design_temp_max_c::float AS tmax, d.doc_no
+    FROM asset_master m JOIN tag t ON t.id = m.tag_id JOIN mdr_revision r ON r.id = m.design_datasheet_rev_id JOIN mdr_document d ON d.id = r.mdr_id
+    WHERE t.project_id = $1 AND t.tag_no = '30-E-1101A'`);
+  equal([m.p, m.tmin, m.tmax, m.doc_no], [25, -29, 350, "K110-30-DS-1101-00-01"], "the datasheet revision read is the one cited");
+  const cb = await q("SELECT c.cable_no, c.cores, c.size_mm2::float AS mm2, c.voltage_class, c.length_m::float AS len, t.tag_no FROM cable c LEFT JOIN tag t ON t.id = c.to_tag_id WHERE c.project_id = $1 ORDER BY 1");
+  equal(cb.map((c) => [c.cable_no, c.cores, c.mm2, c.voltage_class, c.len, c.tag_no]),
+    [["30-PC-1101", 3, 16, "LV", 120, "30-P-1102B"], ["30-PC-1102", 3, 4, "LV", 85, "30-E-1101A"]], "through the schedule importer: size, rating, tag fed");
+  const [s] = await q("SELECT t.tag_no, s.structure_type, s.tonnage_t::float AS w, s.drawing_ref FROM tag t JOIN structure_spec s ON s.tag_id = t.id WHERE t.project_id = $1");
+  equal([s.tag_no, s.structure_type, s.w, s.drawing_ref], ["PR-3001", "pipe_rack", 45.2, "K110-30-ST-0101-00-01"]);
+});
+
 test("PGlite is one connection: two projects' scoped work interleaving does not see each other", async () => {
   const other = await projects.createProject(db, { code: "INT2", name: "J", ownerUserId: alice.id });
   const slow = (pid, tag) => withProject(db, pid, async () => {

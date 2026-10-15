@@ -26,6 +26,7 @@ test("1 kV is the edge of low voltage", async () => {
   equal(parseRating("600/1000V").voltageClass, "LV");
   equal(parseRating("1.8/3 kV").voltageClass, "MV");
   equal(parseRating("6/10kV").voltageClass, "MV");
+  equal(parseRating("3Cx16mm2 0.6/1kV XLPE/SWA"), { u0Kv: 0.6, uKv: 1, voltageClass: "LV" }, "the size before the rating is not glued onto it");
   equal(parseRating("10/6kV"), null, "U0 above U is a typo, not a cable");
 });
 
