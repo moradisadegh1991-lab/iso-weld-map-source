@@ -152,4 +152,29 @@ test("a user's profile: username to sign in with, job title, expertise, company;
   });
 });
 
+// ── step 4: resources in the contract's tree ─────────────────────────────
+
+test("a contract's resources sit in its resource tree, move between branches, and a branch holding resources stays", async () => {
+  const res = await import("../../lib/db/repos/resources.mjs");
+  await inP(async () => {
+    const civil = await org.addCategory(db, { projectId: P, contractId: contract.id, tree: "resource", name: "سیویل ۲" });
+    const narr = (await org.contractSetup(db, { projectId: P, contractId: contract.id })).trees.narrative[0];
+    await throws(() => res.upsertResource(db, { projectId: P, contractId: contract.id, categoryId: narr.id, kind: "person", name: "x" }), "درخت منابع",
+      "a narrative branch is not a resource branch");
+    await throws(() => res.upsertResource(db, { projectId: P, contractId: contract.id, kind: "material", name: "سیمان" }), "واحد لازم");
+    const welder = await res.upsertResource(db, { projectId: P, contractId: contract.id, categoryId: civil.id, kind: "person", name: "جوشکار",
+      direct: true, forecastQty: 12, actualQty: 10, status: "active" });
+    equal(welder.unit, "نفر", "a person is counted in people");
+    await res.upsertResource(db, { projectId: P, contractId: contract.id, categoryId: civil.id, kind: "material", name: "سیمان", unit: "تن", forecastQty: 40 });
+    await throws(() => res.upsertResource(db, { projectId: P, contractId: contract.id, kind: "person", name: "جوشکار" }), "هست");
+    let t = await res.resourceTree(db, { projectId: P, contractId: contract.id });
+    const branch = t.tree.find((n) => n.id === civil.id);
+    equal([branch.resources.length, branch.totals], [2, { "نفر": 12, "تن": 40 }], "totals by unit, never across units");
+    await throws(() => org.removeCategory(db, { projectId: P, id: civil.id }), "منبع در این دسته");
+    await res.moveResource(db, { projectId: P, id: welder.id, categoryId: null });
+    t = await res.resourceTree(db, { projectId: P, contractId: contract.id });
+    equal([t.loose.map((r) => r.name), t.tree.find((n) => n.id === civil.id).resources.length], [["جوشکار"], 1]);
+  });
+});
+
 await run();
