@@ -885,3 +885,4 @@ tr.sel td{background:var(--cy-soft)}
 .rp-table,.rp-table>*>tr>td,.rp-body{background:#fff}
 .rp-sheet h4,.rp-printroot h4,.rp-sheet p,.rp-printroot p{color:#111}
 .rp-t td{background:#fff}
+.cr-pt th,.cr-pt td{border:1px solid #999;padding:2px 4px;text-align:start}

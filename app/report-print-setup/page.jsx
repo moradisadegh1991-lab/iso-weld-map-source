@@ -22,7 +22,8 @@ const SAMPLE = {
 
 export default function ReportPrintSetup() {
   const { projectId, call } = usePlatform();
-  const { data, error, reload } = useProjectData((id) => `/api/report-print?projectId=${id}&typeCode=DR`, []);
+  const [typeCode, setTypeCode] = useState("DR");
+  const { data, error, reload } = useProjectData((id) => `/api/report-print?projectId=${id}&typeCode=${typeCode}`, [typeCode]);
   const [layout, setLayout] = useState(null);
   const [sample, setSample] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -45,7 +46,10 @@ export default function ReportPrintSetup() {
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
   if (!data.type) return <div className="page"><div className="pagehead"><h1>قالب چاپ</h1></div>
-    <p className="empty-note">نوع «گزارش روزانه» هنوز تعریف نشده است (تنظیم گردش‌کار).</p></div>;
+    <div className="field" style={{ maxWidth: 320 }}><label htmlFor="pt-type">نوع گزارش</label>
+        <select id="pt-type" value={typeCode} onChange={(e) => { setLayout(null); setTypeCode(e.target.value); }}>
+          <option value="DR">گزارش روزانه (DR)</option><option value="CR">گزارش روزانهٔ قرارداد (CR)</option></select></div>
+    <p className="empty-note">این نوع گزارش هنوز تعریف نشده است (تنظیم گردش‌کار).</p></div>;
   if (!layout) return <p className="muted">در حال بارگذاری…</p>;
   const C = data.choices;
   const may = data.may.edit;
@@ -83,6 +87,9 @@ export default function ReportPrintSetup() {
 
   return (
     <div className="page">
+      <div className="field" style={{ maxWidth: 320 }}><label htmlFor="pt-type">نوع گزارش</label>
+        <select id="pt-type" value={typeCode} onChange={(e) => { setLayout(null); setTypeCode(e.target.value); }}>
+          <option value="DR">گزارش روزانه (DR)</option><option value="CR">گزارش روزانهٔ قرارداد (CR)</option></select></div>
       <div className="pagehead"><h1>قالب چاپ — {data.type.name}</h1>
         <span className="sub">{data.version ? `نسخهٔ ${data.version}` : "پیش‌فرض (هنوز ذخیره نشده)"}</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}

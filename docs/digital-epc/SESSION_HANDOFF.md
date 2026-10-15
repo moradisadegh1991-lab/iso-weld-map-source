@@ -126,7 +126,15 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   correctness on the test scan; confusable-char repair only to a single project shape; "maybe X in register".
   P&ID legend: line-number format ({size}{fluid}{number}{class}{insulation}, [key], (optional)) + fluid/insulation
   codes; unknown code reported, never filled. Fixed: PGlite withProject blocks now serialized (lib/db/scope.mjs) —
-  interleaved requests could run under another project/role. Next: instrument bubbles (generic), datasheets/SLD/structural, iso.
+  interleaved requests could run under another project/role.
+  Phase 3 (066): datasheet → design conditions of the document's own tag (exact gauge-unit conversion; bar w/o g/a,
+  absolute, two values → named, not filled), cable schedule xlsx → cables via importer, structural GA → structure.
+  Fixed parseRating gluing "mm2 0.6/1kV". Next: instrument bubbles (generic), isometrics.
+  Owner's org process 2026-10-15 (docs/digital-epc/06-org-process.md): 067 companies/logos, stakeholders, currencies,
+  budgets, amendments, category trees (/organization, /contracts/setup); 068 user profile + username sign-in,
+  contract_member, add/delete-content rights, stage approver+deputy (on_behalf_of), change colour; 069 contract
+  resources tree (/contracts/resources); 070 contract daily report (/contract-reports, lib/reports/contract-daily.mjs:
+  base + per-stage values per row, server refuses a later stage touching base), photos/files, print (CR layout).
   EPC reference (`/reference`, lib/reference/epc.mjs, 064 project_standard, docs/digital-epc/05-epc-reference.md):
   phases/gates, deliverables, certificates, 8 adoptable ITR-B/commissioning checklists, standards + project register
   with editions (missing edition → missing information). Not built yet: PAC/FAC records, ITR-A sheets, CFIHOS export.
