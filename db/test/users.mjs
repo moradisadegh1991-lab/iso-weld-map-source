@@ -110,11 +110,19 @@ test("the link sets the password once, and a newer link retires an older one", a
   await throws(async () => users.peekSetupToken(db, { token: stale.token }), "منقضی", "expired");
 });
 
-test("resetting a password that exists is a developer's; an admin reaches nobody through their project", async () => {
+test("resetting a password that exists: an admin reaches nobody through their project — only an account all of whose projects they run", async () => {
+  // In a project this admin does not run too: the developer's to reset.
+  await projects.addMember(db, { projectId: pB.id, userId: invited.id, role: "qc" });
   await inA(async () => {
     await throws(async () => users.issueSetupLink(db, { userId: invited.id, byUser: admin.id }), "توسعه‌دهنده");
     const r = await users.issueSetupLink(db, { userId: invited.id, byUser: dev.id, byDeveloper: true });
     equal(r.purpose, "reset");
+  });
+  // Only in this admin's project: theirs to answer (the «forgot password» request, owner's review 2026-10-15).
+  await db.query("DELETE FROM project_member WHERE project_id = $1 AND user_id = $2", [pB.id, invited.id]);
+  await inA(async () => {
+    equal((await users.issueSetupLink(db, { userId: invited.id, byUser: admin.id })).purpose, "reset");
+    await throws(async () => users.issueSetupLink(db, { userId: dev.id, byUser: admin.id }), "توسعه‌دهنده", "a developer's account is a developer's to reset");
   });
 });
 

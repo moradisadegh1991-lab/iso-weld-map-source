@@ -69,7 +69,7 @@ test("a report is created only by a first-stage member with the right, numbered 
   });
 });
 
-test("a signature attests to one version: once signed, plain edit stops; an edit after signing makes it lapse", async () => {
+test("a signature attests to one version: once signed, the stage only shows it; withdrawn, it is edited again and the signature lapses", async () => {
   await as(async () => {
     await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(5), userId: planner.id });           // v2, nobody signed yet
     await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(5), userId: planner.id }), "تغییری نکرده");
@@ -77,12 +77,15 @@ test("a signature attests to one version: once signed, plain edit stops; an edit
     await throws(() => rp.signReport(db, { projectId: P, reportId: r1.id, userId: planner.id }), "امضا کرده‌اید");
     await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: planner.id }), "امضای خود را لغو کنید",
       "the signer does not edit what they signed: they withdraw first (owner's spec 2026-10-15)");
+    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: siteMgr.id }), "فقط قابل نمایش",
+      "signed content is read-only for everyone at the stage, even a member holding the retired edit_after_sign (owner's review, item 4)");
+    const shown = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: siteMgr.id });
+    equal(shown.may.edit, false, "and the page shows it without edit controls");
+    await rp.withdrawSignature(db, { projectId: P, reportId: r1.id, userId: planner.id });
     const e = await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: siteMgr.id });  // v3
-    equal([e.versionNo, e.lapsed], [3, 1]);
+    equal(e.versionNo, 3);
     const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: planner.id });
-    const sig = v.signatureBoxes[0].groups[0].signatures[0];
-    equal([sig.versionNo, sig.current], [2, false], "the planner's signature is shown, on version 2, and no longer counts");
-    assert(v.may.signFor.includes(G.plan.id), "and the planner may sign the new content");
+    assert(v.may.signFor.includes(G.plan.id), "the planner may sign the new content");
   });
 });
 

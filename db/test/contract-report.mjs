@@ -24,6 +24,36 @@ test("content: totals derived, local + non-local must make the total, a quantity
   assert(foreign.some((p) => p.includes("از منابع این قرارداد نیست")));
 });
 
+test("resource rows by executive work group: the group is from the contract's tree, one row per resource and group (owner's review, item 8)", async () => {
+  const opts = { resourceIds: new Set(["a", "b"]), workGroupIds: new Set(["g1", "g2"]) };
+  const ok = cd.checkContent({ resources: [row({ workGroupId: "g1", resourceId: "a", day: 2 }), row({ workGroupId: "g2", resourceId: "a", day: 3 })] }, opts);
+  equal(ok.problems, []);
+  const foreign = cd.checkContent({ resources: [row({ workGroupId: "zz", resourceId: "a", day: 1 })] }, opts);
+  assert(foreign.problems.some((p) => p.includes("گروه اجرایی")), foreign.problems.join(" | "));
+  const twice = cd.checkContent({ resources: [row({ workGroupId: "g1", resourceId: "a", day: 1 }), row({ workGroupId: "g1", resourceId: "a", day: 2 })] }, opts);
+  assert(twice.problems.some((p) => p.includes("یک ردیف کافی")), twice.problems.join(" | "));
+  const gone = cd.checkContent({ resources: [row({ workGroupId: "g1", resourceId: "a", day: 1 }), row({ workGroupId: "g1", resourceId: "a", day: 2 }, { 2: { removed: true } })] }, opts);
+  equal(gone.problems, [], "a row removed at a later stage does not count twice");
+});
+
+test("the upper resources part: every resource in its tree order, the report's rows summed per resource, sums per unit at the foot", async () => {
+  const tree = [{ id: "c1", name: "نیرو", children: [{ id: "c2", name: "جوشکاری", children: [], resources: [{ id: "a", name: "جوشکار", kind: "person", unit: "نفر", seq: 1 }] }],
+    resources: [{ id: "b", name: "فیتر", kind: "person", unit: "نفر", seq: 1 }] }];
+  const loose = [{ id: "m", name: "جرثقیل", kind: "machine", unit: "دستگاه", seq: 1 }];
+  const rows = [row({ workGroupId: "g1", resourceId: "a", day: 2, night: 1, leave: 0, sick: 1, local: 3, nonLocal: 1 }),
+    row({ workGroupId: "g2", resourceId: "a", day: 3, local: 2, nonLocal: 1 }),
+    row({ workGroupId: "g1", resourceId: "a", day: 9 }, { 2: { removed: true } }),
+    row({ resourceId: "m", day: 1 })];
+  const b = cd.resourceBoard(rows, tree, loose);
+  equal(b.items.map((x) => (x.type === "branch" ? `[${x.name}]` : x.name)), ["[نیرو]", "فیتر", "[جوشکاری]", "جوشکار", "[بدون دسته]", "جرثقیل"],
+    "branches, then their resources, depth first; resources in no branch last");
+  const a = b.items.find((x) => x.id === "a");
+  equal([a.day, a.night, a.sick, a.total, a.local, a.nonLocal, a.rows, a.category], [5, 1, 1, 7, 5, 2, 2, "نیرو / جوشکاری"],
+    "both work groups' rows summed; the removed one not");
+  equal(b.items.find((x) => x.id === "b").total, 0, "a resource with no row shows, at zero");
+  equal([b.byUnit["نفر"].total, b.byUnit["دستگاه"].total], [7, 1], "people and machines are summed apart");
+});
+
 test("a later stage writes only its own values; the first stage's stay; a row is marked removed, never dropped", async () => {
   const prev = { header: { base: {}, stages: {} }, narrative: [], problems: [], resources: [{ id: "r1", base: { resourceId: "a", day: 5 }, stages: {} }] };
   const mine = structuredClone(prev); mine.resources[0].stages["2"] = { resourceId: "a", day: 4 };
@@ -76,7 +106,7 @@ for (const k of ["site", "sup", "client", "reader"]) await projects.addMember(db
 const inP = (fn) => withProject(db, P, fn);
 const today = new Date().toISOString().slice(0, 10);
 const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-let C, type, R, welder, crane, other, concrete;
+let C, type, R, welder, crane, other, concrete, WG;
 
 await inP(async () => {
   const { rows: [civ] } = await db.query("INSERT INTO contractor (project_id, code, name) VALUES ($1, 'CIV', 'Civil') RETURNING id", [P]);
@@ -85,6 +115,7 @@ await inP(async () => {
   const people = await org.addCategory(db, { projectId: P, contractId: C.id, tree: "resource", name: "نیروی انسانی" });
   concrete = await org.addCategory(db, { projectId: P, contractId: C.id, tree: "narrative", name: "بتن" });
   welder = await res.upsertResource(db, { projectId: P, contractId: C.id, categoryId: people.id, kind: "person", name: "جوشکار", forecastQty: 10 });
+  WG = await org.addCategory(db, { projectId: P, contractId: C.id, tree: "work_group", name: "اکیپ ۱" });
   crane = await res.upsertResource(db, { projectId: P, contractId: C.id, kind: "machine", name: "جرثقیل" });
   other = await res.upsertResource(db, { projectId: P, contractId: other2.id, kind: "person", name: "بنا" });
   type = await cr.ensureType(db, { projectId: P });
@@ -112,7 +143,9 @@ test("a report of a contract: header, rows from the contract's own resources and
   const c = structuredClone(v0.content);
   c.resources.push({ base: { resourceId: other.id, day: 1 } });
   await throws(() => edit(c, U.planner), "از منابع این قرارداد نیست");
-  c.resources = [{ base: { resourceId: welder.id, day: 5, night: 2, leave: 1, sick: 0, local: 5, nonLocal: 3 } }, { base: { resourceId: crane.id, day: 1 } }];
+  c.resources = [{ base: { workGroupId: concrete.id, resourceId: welder.id, day: 1 } }];
+  await throws(() => edit(c, U.planner), "گروه اجرایی", "a narrative branch is not a work group");
+  c.resources = [{ base: { workGroupId: WG.id, resourceId: welder.id, day: 5, night: 2, leave: 1, sick: 0, local: 5, nonLocal: 3 } }, { base: { resourceId: crane.id, day: 1 } }];
   c.narrative = [{ base: { categoryId: concrete.id, title: "بتن‌ریزی فونداسیون", description: "F-101", unit: "m³", qty: 24 } }];
   c.problems = [{ base: { description: "تأخیر بتن", scope: "F-101", cause: "تأمین‌کننده", hours: 2 } }];
   await edit(c, U.planner);
@@ -120,6 +153,7 @@ test("a report of a contract: header, rows from the contract's own resources and
   equal([v.summary.day, v.summary.night, v.summary.total, v.summary.byUnit["نفر"], v.summary.byUnit["دستگاه"]], [5, 2, 8, 8, 1],
     "people are counted apart from machines; each unit on its own");
   equal(v.stages.map((s) => [s.name, s.current, s.approved]), [["پیمانکار", true, false], ["نظارت", false, false], ["کارفرما", false, false]]);
+  equal([v.board.items.find((x) => x.id === welder.id).total, v.workGroupTree.map((n) => n.name)], [8, ["اکیپ ۱"]], "the view carries the board and the work groups");
 });
 
 test("through the stages: a later stage edits its own row, the first stage's number stays, the change shows in the stage's colour", async () => {

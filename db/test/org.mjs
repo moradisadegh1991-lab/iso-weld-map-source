@@ -146,10 +146,110 @@ test("a user's profile: username to sign in with, job title, expertise, company;
   await inP(async () => {
     await throws(() => users.setContractMember(db, { projectId: P, contractId: contract.id, userId: carol.id, position: "x", access: "edit" }), "عضو پروژه نیست");
     await throws(() => users.setContractMember(db, { projectId: P, contractId: contract.id, userId: bob.id, position: "x", access: "boss" }), "سطح دسترسی");
+    await throws(() => users.setContractMember(db, { projectId: P, contractId: contract.id, userId: bob.id, position: "سرپرست کارگاه", access: "edit" }),
+      "در ذی‌نفعان این قرارداد نیست", "only people of the contract's stakeholder companies are assigned to it (owner's review, item 5)");
+    equal(await users.contractAccess(db, { projectId: P, contractId: contract.id, userId: bob.id, role: "engineer" }), null,
+      "unassigned, an engineer does not reach the contract");
+    equal((await users.visibleContracts(db, { projectId: P, userId: bob.id, role: "engineer" })).length, 0);
+    await org.setContractParties(db, { projectId: P, contractId: contract.id, employerId: kavian.id, contractorId: epc.id, userId: alice.id });
     await users.setContractMember(db, { projectId: P, contractId: contract.id, userId: bob.id, position: "سرپرست کارگاه", access: "edit" });
     const list = await users.contractMembers(db, { projectId: P });
     equal(list.map((m) => [m.contract_no, m.position, m.access]), [["SC-01", "سرپرست کارگاه", "edit"]]);
+    equal(await users.contractAccess(db, { projectId: P, contractId: contract.id, userId: bob.id, role: "engineer" }), "edit");
+    equal((await users.visibleContracts(db, { projectId: P, userId: bob.id, role: "engineer" })).map((c) => [c.contract_no, c.access]), [["SC-01", "edit"]],
+      "the top bar lists the contracts a member is assigned to");
+    equal(await users.contractAccess(db, { projectId: P, contractId: contract.id, userId: alice.id, role: "admin" }), "manage", "a project admin manages every contract");
+    await throws(() => users.assertContractAccess(db, { projectId: P, contractId: contract.id, userId: bob.id, role: "engineer", need: "manage" }), "مدیریت قرارداد");
+    await users.setContractMember(db, { projectId: P, contractId: contract.id, userId: bob.id, position: "سرپرست کارگاه", access: "view" });
+    equal(await users.contractAccess(db, { projectId: P, contractId: contract.id, userId: bob.id, role: "engineer" }), "view", "assigning again edits the assignment");
   });
+});
+
+// ── the owner's review (2026-10-15) ──────────────────────────────────────
+
+test("every form edits: company tax code, stakeholders, budgets, amendments, the contract's employer and contractor from the companies", async () => {
+  await inP(async () => {
+    const k = await org.upsertCompany(db, { id: kavian.id, code: "KPC", name: "پتروشیمی کاویان", taxCode: "4111-2222-3333" });
+    equal(k.tax_code, "4111-2222-3333");
+    await throws(() => org.upsertCompany(db, { id: kavian.id, code: "EPC1", name: "x" }), "ثبت شده", "renaming a code onto another company's is refused");
+    const sh = (await org.projectSetup(db, { projectId: P })).stakeholders.find((x) => x.code === "KPC");
+    await org.addProjectStakeholder(db, { projectId: P, id: sh.id, companyId: kavian.id, role: "owner", note: "مالک طرح" });
+    await throws(() => org.addProjectStakeholder(db, { projectId: P, id: sh.id, companyId: epc.id, role: "epc" }), "از قبل ذی‌نفع");
+    const b = (await org.projectSetup(db, { projectId: P })).budgets[0];
+    await org.addProjectBudget(db, { projectId: P, id: b.id, title: "بودجهٔ ارزی (اصلاح)", currency: "USD", amount: 2000 });
+    const after = await org.projectSetup(db, { projectId: P });
+    equal([after.budgets.length, after.stakeholders.find((x) => x.id === sh.id).note], [2, "مالک طرح"], "edits change the row, not add one");
+    const a = (await org.contractSetup(db, { projectId: P, contractId: contract.id })).amendments[0];
+    await org.addAmendment(db, { projectId: P, contractId: contract.id, id: a.id, amendmentNo: "A1", kind: "both", title: "Extension + scope (fixed)",
+      days: 30, lines: [{ currency: "USD", kind: "change", amount: 100 }], userId: alice.id });
+    const s = await org.contractSetup(db, { projectId: P, contractId: contract.id });
+    const usd = s.budget.rows.find((r) => r.currency === "USD");
+    equal([s.amendments.length, s.revised.days, usd.increase, usd.newItems], [1, 30, 100, 0], "a corrected amendment replaces its lines");
+    equal([s.contract.employer_company_id, s.contract.contractor_company_id], [kavian.id, epc.id]);
+    equal(s.stakeholders.filter((x) => ["employer", "contractor"].includes(x.role)).map((x) => [x.role, x.code]).sort(), [["contractor", "EPC1"], ["employer", "KPC"]],
+      "the parties are the contract's stakeholders in those roles");
+    await org.setContractParties(db, { projectId: P, contractId: contract.id, employerId: kavian.id, contractorId: null });
+    const s2 = await org.contractSetup(db, { projectId: P, contractId: contract.id });
+    equal([s2.contract.contractor_company_id, s2.stakeholders.some((x) => x.role === "contractor")], [null, false]);
+    const st = s2.stakeholders.find((x) => x.role === "employer");
+    await org.addContractStakeholder(db, { projectId: P, contractId: contract.id, id: st.id, companyId: epc.id, role: "employer" });
+    equal((await org.contractSetup(db, { projectId: P, contractId: contract.id })).contract.employer_company_id, epc.id, "editing the stakeholder moves the party");
+    await org.setContractParties(db, { projectId: P, contractId: contract.id, employerId: kavian.id, contractorId: epc.id });
+  });
+});
+
+test("a work-group tree per contract; a category's display order is edited", async () => {
+  await inP(async () => {
+    const g1 = await org.addCategory(db, { projectId: P, contractId: contract.id, tree: "work_group", name: "اکیپ جوشکاری ۱" });
+    const g2 = await org.addCategory(db, { projectId: P, contractId: contract.id, tree: "work_group", name: "اکیپ نصب" });
+    await org.renameCategory(db, { projectId: P, id: g2.id, name: "اکیپ نصب", seq: 0 });
+    await throws(() => org.renameCategory(db, { projectId: P, id: g2.id, name: "اکیپ نصب", seq: -1 }), "ترتیب");
+    const s = await org.contractSetup(db, { projectId: P, contractId: contract.id });
+    equal(s.trees.work_group.map((n) => n.name), ["اکیپ نصب", "اکیپ جوشکاری ۱"], "ordered by the display order");
+    assert(g1.tree === "work_group");
+  });
+});
+
+test("passwords: a user changes their own; «forgot» files a request an admin answers with a link, without telling who exists", async () => {
+  const users = await import("../../lib/db/repos/users.mjs");
+  const cred = await import("../../lib/db/repos/credentials.mjs");
+  const dan = await projects.ensureUser(db, { subject: "local|dan@x.test", email: "dan@x.test", displayName: "Dan" });
+  await projects.addMember(db, { projectId: P, userId: dan.id, role: "qc" });
+  const first = await cred.setPassword(db, { userId: dan.id, password: "Dan-first-password-1" });
+  await throws(() => cred.changePassword(db, { userId: dan.id, current: "wrong-password-xx", next: "Dan-second-password-2" }), "رمز فعلی");
+  await throws(() => cred.changePassword(db, { userId: dan.id, current: "Dan-first-password-1", next: "short" }), "۱۰ نویسه");
+  const changed = await cred.changePassword(db, { userId: dan.id, current: "Dan-first-password-1", next: "Dan-second-password-2" });
+  assert(changed.session_version > first.session_version, "the new password ends every other session");
+  equal((await cred.authenticatePassword(db, { email: "dan@x.test", password: "Dan-second-password-2" })).id, dan.id);
+
+  const known = await cred.requestPasswordReset(db, { login: "DAN@x.test", source: "10.0.0.9" });
+  const unknown = await cred.requestPasswordReset(db, { login: "nobody@x.test", source: "10.0.0.9" });
+  equal(known.message, unknown.message, "the answer never says whether the account exists");
+  await cred.requestPasswordReset(db, { login: "dan@x.test", source: "10.0.0.9" });
+  const reqs = await inP(() => users.resetRequests(db, { projectId: P, byUser: alice.id }));
+  equal(reqs.map((r) => [r.email, r.mayIssue]), [["dan@x.test", true]], "one open request per account; the admin of all its projects may answer it");
+  const other = await inP(() => users.resetRequests(db, { projectId: P2, byUser: alice.id }), P2);
+  equal(other.length, 0, "an admin sees requests of their project's members only");
+  for (let i = 0; i < 3; i++) await cred.requestPasswordReset(db, { login: "dan@x.test", source: "10.0.0.7" });
+  await db.query("INSERT INTO password_reset_request (user_id, source) SELECT $1, '10.0.0.7' FROM generate_series(1, 5)", [dan.id]);
+  await throws(() => cred.requestPasswordReset(db, { login: "dan@x.test", source: "10.0.0.7" }), "درخواست زیاد", "throttled per source");
+  await db.query("DELETE FROM password_reset_request WHERE source = '10.0.0.7'");
+
+  // an account also in a project this admin does not run is the developer's to reset
+  const eve = await projects.ensureUser(db, { subject: "kc|eve" });
+  const P3 = (await projects.createProject(db, { code: "ORG3", name: "O3", ownerUserId: eve.id })).id;
+  await projects.addMember(db, { projectId: P3, userId: dan.id, role: "qc" });
+  await cred.requestPasswordReset(db, { login: "dan@x.test", source: "10.0.0.9" });
+  equal((await inP(() => users.resetRequests(db, { projectId: P, byUser: alice.id })))[0].mayIssue, false);
+  await throws(() => inP(() => users.issueSetupLink(db, { userId: dan.id, byUser: alice.id })), "توسعه‌دهنده");
+  await db.query("DELETE FROM project_member WHERE project_id = $1 AND user_id = $2", [P3, dan.id]);
+  const link = await inP(() => users.issueSetupLink(db, { userId: dan.id, byUser: alice.id }));
+  equal(link.purpose, "reset");
+  equal((await inP(() => users.resetRequests(db, { projectId: P, byUser: alice.id }))).length, 0, "the link answers the request");
+  await cred.requestPasswordReset(db, { login: "dan@x.test" });
+  const [r] = await inP(() => users.resetRequests(db, { projectId: P, byUser: alice.id }));
+  await inP(() => users.dismissResetRequest(db, { id: r.id, byUser: alice.id }));
+  await throws(() => inP(() => users.dismissResetRequest(db, { id: r.id, byUser: alice.id })), "not found");
 });
 
 // ── step 4: resources in the contract's tree ─────────────────────────────
@@ -167,6 +267,11 @@ test("a contract's resources sit in its resource tree, move between branches, an
     equal(welder.unit, "نفر", "a person is counted in people");
     await res.upsertResource(db, { projectId: P, contractId: contract.id, categoryId: civil.id, kind: "material", name: "سیمان", unit: "تن", forecastQty: 40 });
     await throws(() => res.upsertResource(db, { projectId: P, contractId: contract.id, kind: "person", name: "جوشکار" }), "هست");
+    const fitter = await res.upsertResource(db, { projectId: P, contractId: contract.id, categoryId: civil.id, kind: "person", name: "فیتر", seq: 0 });
+    await throws(() => res.upsertResource(db, { projectId: P, contractId: contract.id, kind: "person", name: "کمک", seq: "1.5" }), "ترتیب");
+    equal((await res.resourceTree(db, { projectId: P, contractId: contract.id })).tree.find((n) => n.id === civil.id).resources.map((r) => r.name),
+      ["فیتر", "جوشکار", "سیمان"], "resources show in their display order (owner's review, item 6)");
+    await res.removeResource(db, { projectId: P, id: fitter.id });
     let t = await res.resourceTree(db, { projectId: P, contractId: contract.id });
     const branch = t.tree.find((n) => n.id === civil.id);
     equal([branch.resources.length, branch.totals], [2, { "نفر": 12, "تن": 40 }], "totals by unit, never across units");

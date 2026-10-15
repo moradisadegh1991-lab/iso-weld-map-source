@@ -11,7 +11,7 @@ import PrintSheet from "../../../components/reports/PrintSheet";
 const COLS = {
   narrative: [["categoryId", "دسته"], ["title", "عنوان"], ["description", "شرح"], ["unit", "واحد"], ["qty", "مقدار"], ["notes", "توضیحات"]],
   problems: [["description", "شرح مشکل"], ["scope", "محدوده"], ["cause", "عامل"], ["hours", "ساعت"]],
-  resources: [["resourceId", "منبع"], ["day", "روز"], ["night", "شب"], ["leave", "مرخصی"], ["sick", "خرابی/استعلاجی"], ["local", "بومی"], ["nonLocal", "غیربومی"]],
+  resources: [["workGroupId", "گروه اجرایی"], ["resourceId", "منبع"], ["day", "روز"], ["night", "شب"], ["leave", "مرخصی"], ["sick", "خرابی/استعلاجی"], ["local", "بومی"], ["nonLocal", "غیربومی"]],
 };
 const total = (e) => ["day", "night", "leave", "sick"].reduce((s, k) => s + (Number(e?.[k]) || 0), 0);
 
@@ -35,7 +35,9 @@ export default function ContractReportPrint() {
   const cat = (id) => { const walk = (ns, pre = "") => ns.flatMap((n) => [[n.id, pre ? `${pre} › ${n.name}` : n.name], ...walk(n.children, pre ? `${pre} › ${n.name}` : n.name)]);
     return new Map(walk(v.narrativeTree)).get(id) || "—"; };
   const res = (id) => v.resources.find((x) => x.id === id)?.name || "—";
-  const show = (k, val) => (val == null || val === "" ? "—" : k === "categoryId" ? cat(val) : k === "resourceId" ? res(val) : val);
+  const wg = (id) => { const walk = (ns, pre = "") => ns.flatMap((n) => [[n.id, pre ? `${pre} › ${n.name}` : n.name], ...walk(n.children, pre ? `${pre} › ${n.name}` : n.name)]);
+    return new Map(walk(v.workGroupTree || [])).get(id) || "—"; };
+  const show = (k, val) => (val == null || val === "" ? "—" : k === "categoryId" ? cat(val) : k === "resourceId" ? res(val) : k === "workGroupId" ? wg(val) : val);
   const h = { ...(v.content.header?.base || {}) };
   for (const [, x] of Object.entries(v.content.header?.stages || {}).sort(([a], [b]) => a - b)) for (const [k, y] of Object.entries(x)) if (k !== "confirmed" && y != null) h[k] = y;
   return (

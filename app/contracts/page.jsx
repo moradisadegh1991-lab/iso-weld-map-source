@@ -14,7 +14,7 @@ import FormNo from "../../components/ui/FormNo";
  * quantity is measured. A signed contract's terms and items do not change
  * here; that is an amendment.
  */
-const BLANK = { contractNo: "", title: "", kind: "subcontract", contractorId: "", counterparty: "", currency: "", value: "", startOn: "", endOn: "",
+const BLANK = { contractNo: "", title: "", kind: "subcontract", contractorId: "", counterparty: "", employerCompanyId: "", contractorCompanyId: "", currency: "", value: "", startOn: "", endOn: "",
   advancePct: "0", advanceRecoveryPct: "", retentionPct: "10", insurancePct: "5", withholdingPct: "3", vatPct: "9", overrunLimitPct: "25", scope: "" };
 
 export default function ContractsPage() {
@@ -38,7 +38,8 @@ export default function ContractsPage() {
   const signed = data.contracts.filter((x) => x.status === "signed");
 
   function edit(x) {
-    setF({ contractNo: x.no, title: x.title, kind: x.kind, contractorId: x.contractorId || "", counterparty: x.counterparty || "", currency: x.currency,
+    setF({ contractNo: x.no, title: x.title, kind: x.kind, contractorId: x.contractorId || "", counterparty: x.counterparty || "",
+      employerCompanyId: x.employerCompanyId || "", contractorCompanyId: x.contractorCompanyId || "", currency: x.currency,
       value: x.value ?? "", startOn: x.startOn || "", endOn: x.endOn || "", advancePct: String(x.terms.advancePct), advanceRecoveryPct: x.terms.advanceRecoveryPct ?? "",
       retentionPct: String(x.terms.retentionPct), insurancePct: String(x.terms.insurancePct), withholdingPct: String(x.terms.withholdingPct),
       vatPct: String(x.terms.vatPct), overrunLimitPct: String(x.terms.overrunLimitPct), scope: x.scope || "" });
@@ -58,10 +59,10 @@ export default function ContractsPage() {
         {data.contracts.length === 0 ? <p className="empty-note">قراردادی ثبت نشده است.</p> : (
           <TableKit name="contracts">
             <table className="dtable">
-              <thead><tr><th>شماره</th><th>عنوان</th><th>نوع</th><th>طرف قرارداد</th><th>مبلغ</th><th>BOQ</th><th>تأییدشده تا کنون</th><th>وضعیت</th><th /></tr></thead>
+              <thead><tr><th>شماره</th><th>عنوان</th><th>نوع</th><th>کارفرما</th><th>طرف قرارداد</th><th>مبلغ</th><th>BOQ</th><th>تأییدشده تا کنون</th><th>وضعیت</th><th /></tr></thead>
               <tbody>{data.contracts.map((x) => (
                 <tr key={x.id} className={x.id === sel ? "sel" : ""}>
-                  <td className="mono">{x.no}</td><td>{x.title}</td><td className="sm">{data.kinds[x.kind]}</td><td className="sm">{x.contractor}</td>
+                  <td className="mono">{x.no}</td><td>{x.title}</td><td className="sm">{data.kinds[x.kind]}</td><td className="sm">{x.employerCompany || "—"}</td><td className="sm">{x.contractor}</td>
                   <td className="mono sm">{money(x.value, x.currency)}</td><td className="mono sm">{money(x.boq)}</td>
                   <td className="mono sm">{money(x.certified)}</td>
                   <td><span className={`pill ${x.status === "signed" ? "ok" : x.status === "closed" ? "" : "warn"}`}>{x.statusFa}</span></td>
@@ -90,6 +91,11 @@ export default function ContractsPage() {
                     {data.contractors.map((k) => <option key={k.id} value={k.id}>{k.code} — {k.name}</option>)}
                   </select></div>
                 <Field id="ct-party" label="طرف قرارداد (اگر پیمانکار ثبت‌شده نیست)" value={f.counterparty} on={on("counterparty")} />
+                {[["ct-emp", "employerCompanyId", "کارفرما (از شرکت‌های پروژه)"], ["ct-ccmp", "contractorCompanyId", "پیمانکار (از شرکت‌های پروژه)"]].map(([id, k, l]) => (
+                  <div className="field" key={k}><label htmlFor={id}>{l}</label>
+                    <select id={id} value={f[k]} onChange={on(k)}>
+                      <option value="">—</option>{(data.companies || []).map((co) => <option key={co.id} value={co.id}>{co.code} — {co.name}</option>)}
+                    </select></div>))}
                 <Field id="ct-cur" label={`ارز (خالی = ارز پروژه${data.currency ? `: ${data.currency}` : ""})`} value={f.currency} on={on("currency")} ltr />
                 <Field id="ct-value" label="مبلغ قرارداد" type="number" value={f.value} on={on("value")} />
                 <Field id="ct-start" label="شروع" type="date" value={f.startOn} on={on("startOn")} />

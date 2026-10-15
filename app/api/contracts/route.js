@@ -29,9 +29,10 @@ export async function GET(request) {
       const [contracts, design] = await Promise.all([contractsBoard(db, { projectId }), designQuantities(db, { projectId })]);
       const { rows: accounts } = await db.query("SELECT id, code, title FROM control_account WHERE project_id = $1 ORDER BY code", [projectId]);
       const { rows: contractors } = await db.query("SELECT id, code, name FROM contractor WHERE project_id = $1 ORDER BY code", [projectId]);
+      const { rows: companies } = await db.query("SELECT id, code, name FROM company ORDER BY code");
       const { rows: subsystems } = await db.query("SELECT id, code, name FROM subsystem WHERE project_id = $1 ORDER BY code", [projectId]);
       const { rows: [proj] } = await db.query("SELECT contract_currency FROM project WHERE id = $1", [projectId]);
-      return Response.json({ contracts, design, accounts, contractors, subsystems, currency: proj?.contract_currency || null,
+      return Response.json({ contracts, design, accounts, contractors, companies, subsystems, currency: proj?.contract_currency || null,
         metrics: METRIC_FA, methods: METHODS, statuses: STATUS, contractStatuses: CONTRACT_STATUS, kinds: CONTRACT_KIND });
     });
   } catch (e) { return errorResponse(e); }

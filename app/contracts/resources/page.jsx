@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { flatten } from "../../../components/ui/TreeEditor";
 
@@ -10,15 +10,15 @@ import { flatten } from "../../../components/ui/TreeEditor";
  * take it out of every branch.
  */
 const fmt = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("fa-IR", { maximumFractionDigits: 2 }));
-const BLANK = { id: null, resourceKind: "person", categoryId: "", name: "", direct: true, unit: "", forecastQty: "", actualQty: "", status: "active", description: "" };
+const BLANK = { id: null, resourceKind: "person", categoryId: "", name: "", direct: true, unit: "", forecastQty: "", actualQty: "", status: "active", description: "", seq: "" };
 
 export default function ResourcesPage() {
-  const { projectId, call } = usePlatform();
-  const [contractId, setContractId] = useState("");
+  const { projectId, contractId, contract, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/resources?projectId=${id}${contractId ? `&contractId=${contractId}` : ""}`, [contractId]);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const [f, setF] = useState(BLANK);
+  useEffect(() => { setF(BLANK); }, [contractId]);
   const [drag, setDrag] = useState(null);         // { type: "resource"|"category", id }
   const [over, setOver] = useState(null);
   async function post(body, done) {
@@ -48,12 +48,13 @@ export default function ResourcesPage() {
     onDragEnd: () => { setDrag(null); setOver(null); },
   } : {};
   const edit = (r) => setF({ id: r.id, resourceKind: r.kind, categoryId: r.category_id || "", name: r.name, direct: r.direct, unit: r.unit || "",
-    forecastQty: r.forecast_qty ?? "", actualQty: r.actual_qty ?? "", status: r.status, description: r.description || "" });
+    forecastQty: r.forecast_qty ?? "", actualQty: r.actual_qty ?? "", status: r.status, description: r.description || "", seq: String(r.seq ?? "") });
 
   // rows are built by plain functions, not components defined here: a component created
   // on each render would be remounted while dragging, and the browser would end the drag
   const resourceRow = (r, depth) => (
     <tr key={r.id} data-resource={r.id} {...source("resource", r.id)} style={{ cursor: may ? "grab" : undefined, background: drag?.id === r.id ? "var(--hl, #eef6f8)" : undefined }}>
+      <td className="mono sm">{r.seq}</td>
       <td style={{ paddingInlineStart: 12 + depth * 20 }}>{may && <span className="muted" aria-hidden="true">⠿ </span>}{r.name}</td>
       <td className="sm">{data.kinds[r.kind]}</td><td className="sm">{r.direct ? "مستقیم" : "غیرمستقیم"}</td><td className="sm">{r.unit || "—"}</td>
       <td className="mono">{fmt(r.forecast_qty)}</td><td className="mono">{fmt(r.actual_qty)}</td>
@@ -66,7 +67,7 @@ export default function ResourcesPage() {
   const branchRows = (n, depth) => [
     <tr key={n.id} data-category={n.id} {...source("category", n.id)} {...target(n.id, n.id)}
       style={{ background: over === n.id ? "var(--hl, #eef6f8)" : "var(--surf2, #f5f7f9)", outline: over === n.id ? "2px dashed var(--cy, #1b7f99)" : undefined, cursor: may ? "grab" : undefined }}>
-      <td colSpan={may ? 9 : 8} style={{ paddingInlineStart: 8 + depth * 20 }}>
+      <td colSpan={may ? 10 : 9} style={{ paddingInlineStart: 8 + depth * 20 }}>
         <b>{may && <span className="muted" aria-hidden="true">⠿ </span>}▾ {n.name}</b>{n.discipline && <span className="sm muted"> · {n.discipline}</span>}
         <span className="sm muted"> — {n.allResources.length} منبع{Object.entries(n.totals).filter(([, v]) => v).map(([u, v]) => ` · ${fmt(v)} ${u}`).join("")}</span>
       </td>
@@ -81,9 +82,8 @@ export default function ResourcesPage() {
         <span className="sub">نوع، رشته/گروه، نام، مستقیم یا غیرمستقیم، واحد، مقدار پیش‌بینی و واقعی، وضعیت — در درخت دسته‌های منابع؛ با کشیدن و رها کردن جابه‌جا می‌شوند</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg" role="status">{ok}</p>}
-      <div className="field" style={{ maxWidth: 420 }}><label htmlFor="rs-c">قرارداد</label>
-        <select id="rs-c" value={contractId} onChange={(e) => { setContractId(e.target.value); setF(BLANK); }}>
-          <option value="">— انتخاب قرارداد —</option>{data.contracts.map((c) => <option key={c.id} value={c.id}>{c.contract_no} — {c.title}</option>)}</select></div>
+      {contract ? <p className="sm"><b>قرارداد {contract.contract_no}</b> — {contract.title}</p>
+        : <p className="empty-note">قرارداد را از فهرست بالای صفحه انتخاب کنید.</p>}
       {T && <>
         {may && (
           <div className="card">
@@ -104,6 +104,8 @@ export default function ResourcesPage() {
                 <div className="field"><label htmlFor="rs-a">مقدار واقعی مورد نیاز</label><input id="rs-a" dir="ltr" inputMode="decimal" value={f.actualQty} onChange={(e) => setF({ ...f, actualQty: e.target.value })} /></div>
                 <div className="field"><label htmlFor="rs-s">وضعیت</label><select id="rs-s" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
                   {Object.entries(data.statuses).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
+                <div className="field"><label htmlFor="rs-seq">ترتیب نمایش</label><input id="rs-seq" dir="ltr" inputMode="numeric" value={f.seq}
+                  onChange={(e) => setF({ ...f, seq: e.target.value })} placeholder="خالی: آخر فهرست" /></div>
                 <div className="field"><label htmlFor="rs-ds">توضیحات</label><input id="rs-ds" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
               </div>
               <button className="btn" type="submit">{f.id ? "ذخیره" : "افزودن منبع"}</button>
@@ -117,10 +119,10 @@ export default function ResourcesPage() {
             style={{ padding: 6, marginBottom: 6, borderRadius: 6, border: `1px dashed ${over === "root" ? "var(--cy, #1b7f99)" : "var(--line, #ccd)"}` }}>
             منبع یا شاخه را روی یک شاخه رها کنید تا زیر آن برود؛ اینجا رها کنید تا از همهٔ شاخه‌ها بیرون بیاید (منبع) یا به بالاترین سطح برود (شاخه).</div>}
           <div className="tablewrap"><table className="dtable">
-            <thead><tr><th>نام منبع</th><th>نوع</th><th>مستقیم</th><th>واحد</th><th>پیش‌بینی</th><th>واقعی مورد نیاز</th><th>وضعیت</th><th>توضیحات</th>{may && <th />}</tr></thead>
+            <thead><tr><th title="ترتیب نمایش">ترتیب</th><th>نام منبع</th><th>نوع</th><th>مستقیم</th><th>واحد</th><th>پیش‌بینی</th><th>واقعی مورد نیاز</th><th>وضعیت</th><th>توضیحات</th>{may && <th />}</tr></thead>
             <tbody>
               {T.tree.flatMap((n) => branchRows(n, 0))}
-              {T.loose.length > 0 && <tr><td colSpan={may ? 9 : 8}><b>بدون دسته</b></td></tr>}
+              {T.loose.length > 0 && <tr><td colSpan={may ? 10 : 9}><b>بدون دسته</b></td></tr>}
               {T.loose.map((r) => resourceRow(r, 1))}
             </tbody></table></div>
           {T.resources.length === 0 && <p className="empty-note">هنوز منبعی ثبت نشده.</p>}

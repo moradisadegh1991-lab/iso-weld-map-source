@@ -15,9 +15,11 @@ import { flatten } from "../../components/ui/TreeEditor";
 const FIELDS = {
   narrative: [["categoryId", "دسته", "cat"], ["title", "عنوان", "text"], ["description", "شرح", "text"], ["unit", "واحد", "text"], ["qty", "مقدار", "num"], ["notes", "توضیحات", "text"]],
   problems: [["description", "شرح مشکل", "text"], ["scope", "محدوده", "text"], ["cause", "عامل مشکل", "text"], ["hours", "میزان ساعت", "num"]],
-  resources: [["resourceId", "منبع", "res"], ["day", "روز", "num"], ["night", "شب", "num"], ["leave", "مرخصی", "num"], ["sick", "خرابی / استعلاجی", "num"],
-    ["local", "بومی", "num"], ["nonLocal", "غیربومی", "num"]],
+  // the lower part of the resources section (owner's review, item 8): the work group, the resource, the counts and their totals
+  resources: [["workGroupId", "گروه اجرایی", "wg"], ["resourceId", "نام منبع", "res"], ["day", "روز", "num"], ["night", "شب", "num"], ["leave", "مرخصی", "num"],
+    ["sick", "خرابی / استعلاجی", "num"], ["_total", "جمع کل", "calc"], ["local", "بومی", "num"], ["nonLocal", "غیربومی", "num"], ["_lnl", "جمع بومی / غیربومی", "calc"]],
 };
+const calc = (k, e) => (k === "_total" ? rowTotal(e) : (Number(e?.local) || 0) + (Number(e?.nonLocal) || 0));
 const HEADER = [["startTime", "ساعت شروع", "time"], ["endTime", "ساعت پایان", "time"], ["dayStatus", "وضعیت فعالیت روز", "day"], ["tempMin", "حداقل دما °C", "num"],
   ["tempMax", "حداکثر دما °C", "num"], ["weather", "وضعیت آب‌وهوا", "weather"], ["humidity", "رطوبت ٪", "num"]];
 const fmt = (v) => (v == null || v === "" ? "—" : typeof v === "number" ? v.toLocaleString("fa-IR") : v);
@@ -25,8 +27,7 @@ const newId = () => `r${Math.random().toString(36).slice(2, 10)}`;
 const rowTotal = (e) => ["day", "night", "leave", "sick"].reduce((s, k) => s + (Number(e?.[k]) || 0), 0);
 
 export default function ContractReportsPage() {
-  const { projectId, call } = usePlatform();
-  const [contractId, setContractId] = useState("");
+  const { projectId, contractId, contract, call } = usePlatform();
   const [openId, setOpenId] = useState(null);
   const { data, error, reload } = useProjectData((id) => `/api/contract-reports?projectId=${id}${contractId ? `&contractId=${contractId}` : ""}`, [contractId]);
   const [msg, setMsg] = useState(null);
@@ -46,9 +47,8 @@ export default function ContractReportsPage() {
       {!openId && msg && <p className="err" role="alert">{msg}</p>}
       {!openId && ok && <p className="okmsg" role="status">{ok}</p>}
       {!openId && <>
-        <div className="field" style={{ maxWidth: 420 }}><label htmlFor="cr-c">قرارداد</label>
-          <select id="cr-c" value={contractId} onChange={(e) => setContractId(e.target.value)}>
-            <option value="">— انتخاب قرارداد —</option>{data.contracts.map((c) => <option key={c.id} value={c.id}>{c.contract_no} — {c.title}</option>)}</select></div>
+        {contract ? <p className="sm"><b>قرارداد {contract.contract_no}</b> — {contract.title}</p>
+          : <p className="empty-note">قرارداد را از فهرست بالای صفحه انتخاب کنید.</p>}
         {!data.typeReady && (
           <div className="card"><h2>گردش کار</h2>
             <p className="sm">گردش کار گزارش روزانهٔ قرارداد هنوز ساخته نشده است. با «ساخت» مراحل پیمانکار ← نظارت ← کارفرما ساخته می‌شود؛ اعضای گروه‌ها، تأییدکنندهٔ نهایی و جانشین هر مرحله و رنگ تغییرات آن در «تنظیم گردش‌کار» تعیین می‌شوند.</p>
@@ -155,12 +155,14 @@ function ReportView({ projectId, id, call, labels, users, close }) {
           ["files", `پیوست‌ها (${v.files.filter((f) => f.kind === "file" && !f.removed_at).length})`], ["actions", "امضا، تأیید و ارسال"], ["history", "تاریخچه"]].map(([k, t]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>))}
       </div>
-      {["narrative", "problems", "resources"].includes(tab) && (
+      {!editable && v.report.status === "open" && v.may.editWhy && /امضا/.test(v.may.editWhy) && (
+        <p className="sm" role="status" style={{ padding: 8, borderRadius: 6, background: "var(--surf2, #f5f7f9)" }}>🔒 {v.may.editWhy}</p>)}
+      {["narrative", "problems"].includes(tab) && (
         <div className="card">
           <h2>{labels.sections[tab]}</h2>
-          {tab === "resources" && <ResourceSummary v={v} projectId={projectId} call={call} labels={labels} />}
           <Section kind={tab} v={v} labels={labels} editable={editable} first={first} ops={ops} />
         </div>)}
+      {tab === "resources" && <Resources v={v} projectId={projectId} call={call} labels={labels} editable={editable} first={first} ops={ops} />}
       {(tab === "photos" || tab === "files") && <Files kind={tab === "photos" ? "photo" : "file"} v={v} projectId={projectId} editable={editable} post={post} setMsg={setMsg} reload={load} />}
       {tab === "actions" && <Actions v={v} users={users} post={post} />}
       {tab === "history" && <History v={v} />}
@@ -214,27 +216,32 @@ function HeaderBox({ v, labels, editable, save, first }) {
   );
 }
 
-function Cell({ f, value, v }) {
+function Cell({ f, value, v, row }) {
   const [k, , t] = f;
+  if (t === "calc") return <b className="mono">{fmt(calc(k, row))}</b>;
   if (t === "cat") return <>{flatten(v.narrativeTree).find((x) => x.id === value)?.path || "—"}</>;
+  if (t === "wg") return <>{flatten(v.workGroupTree || []).find((x) => x.id === value)?.path || "—"}</>;
   if (t === "res") { const r = v.resources.find((x) => x.id === value); return <>{r ? r.name : "—"}</>; }
   return <>{fmt(value)}</>;
 }
 
 function RowForm({ kind, v, initial, onSave, onCancel, label }) {
-  const [f, setF] = useState(() => Object.fromEntries(FIELDS[kind].map(([k]) => [k, initial?.[k] ?? ""])));
+  const [f, setF] = useState(() => Object.fromEntries(FIELDS[kind].filter(([, , t]) => t !== "calc").map(([k]) => [k, initial?.[k] ?? ""])));
   return (
     <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", padding: 6, background: "var(--surf2, #f5f7f9)", borderRadius: 6 }}
       onSubmit={async (e) => { e.preventDefault(); if (await onSave(f)) onCancel?.(); }}>
-      {FIELDS[kind].map(([k, l, t]) => (
+      {FIELDS[kind].map(([k, l, t]) => t === "calc" ? (
+        <div className="field" key={k} style={{ minWidth: 80 }}><span className="sm muted">{l}</span><b className="mono">{fmt(calc(k, f))}</b></div>
+      ) : (
         <div className="field" key={k} style={{ minWidth: t === "num" ? 80 : 140 }}><label htmlFor={`rf-${kind}-${k}`}>{l}</label>
-          {t === "cat" ? <select id={`rf-${kind}-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
+          {t === "wg" ? <select id={`rf-${kind}-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
+            <option value="">—</option>{flatten(v.workGroupTree || []).map((x) => <option key={x.id} value={x.id}>{x.path}</option>)}</select>
+          : t === "cat" ? <select id={`rf-${kind}-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
             <option value="">—</option>{flatten(v.narrativeTree).map((x) => <option key={x.id} value={x.id}>{x.path}</option>)}</select>
           : t === "res" ? <select id={`rf-${kind}-${k}`} required value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
             <option value="">—</option>{v.resources.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.unit})</option>)}</select>
           : <input id={`rf-${kind}-${k}`} dir={t === "num" ? "ltr" : undefined} inputMode={t === "num" ? "decimal" : undefined} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />}
         </div>))}
-      {kind === "resources" && <span className="sm muted">کل نفرات: <b>{rowTotal(f)}</b></span>}
       <button className="btn sm" type="submit">{label}</button>
       {onCancel && <button className="btn ghost sm" type="button" onClick={onCancel}>انصراف</button>}
     </form>
@@ -242,16 +249,19 @@ function RowForm({ kind, v, initial, onSave, onCancel, label }) {
 }
 
 /** One section: each row as first written, the stages' changes under it (latest first, in their colour), and the row's buttons. */
-function Section({ kind, v, labels, editable, first, ops }) {
+function Section({ kind, v, labels, editable, first, ops, filter = null }) {
   const [editing, setEditing] = useState(null);
   const cols = FIELDS[kind];
+  // the lower resources part shows the rows of the resource picked above (all, when none is)
+  const shown = v.lines[kind].map((line, i) => ({ line, i })).filter(({ line }) => !filter || line.effective.resourceId === filter);
+  const sumOf = (field) => shown.filter(({ line }) => !line.effective.removed).reduce((s, { line }) => s + (field.startsWith("_") ? calc(field, line.effective) : Number(line.effective[field]) || 0), 0);
   const stageName = v.report.stage_name;
   const S = String(v.report.stage_seq);
   return (
     <div className="tablewrap">
       <table className="dtable">
-        <thead><tr><th>ردیف</th><th>مرحله</th>{cols.map(([k, l]) => <th key={k}>{l}</th>)}{kind === "resources" && <th>کل نفرات</th>}<th /></tr></thead>
-        <tbody>{v.lines[kind].map((line, i) => {
+        <thead><tr><th>ردیف</th><th>مرحله</th>{cols.map(([k, l]) => <th key={k}>{l}</th>)}<th /></tr></thead>
+        <tbody>{shown.map(({ line, i }) => {
           const raw = v.content[kind].find((r) => r.id === line.id);
           const mineNow = raw?.stages?.[S];
           const baseVals = line.base || {};
@@ -260,8 +270,7 @@ function Section({ kind, v, labels, editable, first, ops }) {
               <td className="mono">{i + 1}</td>
               <td className="sm">{line.base ? v.stages.find((s) => s.seq === v.firstSeq)?.name : <span className="muted">افزودهٔ {v.stages.find((s) => s.seq === raw.addedAt)?.name}</span>}
                 {line.confirmedBy.length > 0 && <div className="sm" style={{ color: "var(--ok)" }}>✓ {line.confirmedBy.join("، ")}</div>}</td>
-              {cols.map((f) => <td key={f[0]}>{line.base ? <Cell f={f} value={baseVals[f[0]]} v={v} /> : "—"}</td>)}
-              {kind === "resources" && <td className="mono">{line.base ? rowTotal(baseVals) : "—"}</td>}
+              {cols.map((f) => <td key={f[0]}>{line.base ? <Cell f={f} value={baseVals[f[0]]} v={v} row={baseVals} /> : "—"}</td>)}
               <td style={{ whiteSpace: "nowrap" }}>{editable && !line.effective.removed && <>
                 {!first && !mineNow?.confirmed && <button className="btn ghost sm" type="button" onClick={() => ops.confirm(kind, line.id)}>تأیید</button>}
                 <button className="btn ghost sm" type="button" onClick={() => setEditing(editing === line.id ? null : line.id)}>ویرایش</button>
@@ -270,20 +279,67 @@ function Section({ kind, v, labels, editable, first, ops }) {
             ...line.lines.map((l) => (
               <tr key={`${line.id}-${l.seq}`} style={{ color: l.color || "var(--bad)", textDecoration: l.removed ? "line-through" : undefined }}>
                 <td /><td className="sm"><b>{l.stage}</b>{l.removed && " — حذف‌شده"}</td>
-                {cols.map((f) => <td key={f[0]}><Cell f={f} value={l.values[f[0]]} v={v} /></td>)}
-                {kind === "resources" && <td className="mono">{rowTotal(l.values)}</td>}<td />
+                {cols.map((f) => <td key={f[0]}><Cell f={f} value={l.values[f[0]]} v={v} row={l.values} /></td>)}<td />
               </tr>)),
-            editing === line.id && <tr key={`${line.id}-edit`}><td colSpan={cols.length + 3 + (kind === "resources" ? 1 : 0)}>
+            editing === line.id && <tr key={`${line.id}-edit`}><td colSpan={cols.length + 3}>
               <RowForm kind={kind} v={v} initial={first ? baseVals : { ...line.effective }} label={first ? "ذخیره" : `ثبت مقدار مرحلهٔ «${stageName}»`}
                 onSave={(f) => ops.update(kind, line.id, f)} onCancel={() => setEditing(null)} /></td></tr>,
           ];
         })}</tbody>
+        {kind === "resources" && shown.length > 0 && (
+          <tfoot><tr><td colSpan={2}><b>جمع کل ردیف‌ها</b></td>
+            {cols.map(([k, , t]) => <td key={k} className="mono">{t === "num" || t === "calc" ? <b>{fmt(sumOf(k))}</b> : ""}</td>)}<td /></tr></tfoot>)}
       </table>
-      {v.lines[kind].length === 0 && <p className="empty-note">ردیفی ثبت نشده.</p>}
+      {shown.length === 0 && <p className="empty-note">ردیفی ثبت نشده.</p>}
       {editable && <div style={{ marginTop: 8 }}><b className="sm">ردیف تازه{first ? "" : ` (مرحلهٔ ${stageName})`}</b>
-        <RowForm key={v.versionNo} kind={kind} v={v} label="افزودن" onSave={(f) => ops.add(kind, f)} /></div>}
+        <RowForm key={`${v.versionNo}-${filter || ""}`} kind={kind} v={v} label="افزودن" initial={filter ? { resourceId: filter } : null} onSave={(f) => ops.add(kind, f)} /></div>}
       {kind === "resources" && v.resources.length === 0 && <p className="sm muted">این قرارداد هنوز منبعی ندارد (قراردادها ◄ منابع قرارداد).</p>}
     </div>
+  );
+}
+
+/**
+ * The resources section in two parts (owner's review, item 8). Above: every
+ * resource of the contract in its resource tree, with this report's rows
+ * summed, and the sums per unit at the foot. Below: the rows of the resource
+ * picked above — one per executive work group — where rows are added and
+ * changed, with their totals worked out and summed at the foot.
+ */
+function Resources({ v, projectId, call, labels, editable, first, ops }) {
+  const [pick, setPick] = useState(null);
+  const B = v.board;
+  const picked = B.items.find((x) => x.type === "resource" && x.id === pick) || null;
+  const num = (x) => <td className="mono">{x ? fmt(x) : <span className="muted">۰</span>}</td>;
+  return (
+    <>
+      <div className="card">
+        <h2>منابع — خلاصه بر اساس درخت منابع</h2>
+        <ResourceSummary v={v} projectId={projectId} call={call} labels={labels} />
+        <p className="sm muted">روی یک منبع بزنید تا ردیف‌های آن (به تفکیک گروه اجرایی) در بخش پایین نمایش داده شود؛ افزودن و تغییر منابع در بخش پایین است.</p>
+        <div className="tablewrap"><table className="dtable">
+          <thead><tr><th>دسته منبع</th><th>نام منبع</th><th>نوع منبع</th><th>واحد</th><th>روز</th><th>شب</th><th>مرخصی</th><th>خرابی / استعلاجی</th><th>جمع کل</th><th>بومی</th><th>غیربومی</th></tr></thead>
+          <tbody>{B.items.map((x) => x.type === "branch" ? (
+            <tr key={`b-${x.id}`} style={{ background: "var(--surf2, #f5f7f9)" }}><td colSpan={11} style={{ paddingInlineStart: 8 + x.depth * 18 }}><b>▾ {x.name}</b></td></tr>
+          ) : (
+            <tr key={x.id} data-board-resource={x.id} onClick={() => setPick(pick === x.id ? null : x.id)}
+              style={{ cursor: "pointer", background: pick === x.id ? "var(--hl, #eef6f8)" : undefined, outline: pick === x.id ? "2px solid var(--cy, #1b7f99)" : undefined }}>
+              <td className="sm muted" style={{ paddingInlineStart: 8 + x.depth * 18 }}>{x.category}</td><td>{x.name}{x.rows > 1 && <span className="sm muted"> ({x.rows} ردیف)</span>}</td>
+              <td className="sm">{labels.kinds[x.kind] || x.kind}</td><td className="sm">{x.unit}</td>
+              {num(x.day)}{num(x.night)}{num(x.leave)}{num(x.sick)}<td className="mono"><b>{fmt(x.total)}</b></td>{num(x.local)}{num(x.nonLocal)}
+            </tr>))}</tbody>
+          <tfoot>{Object.entries(B.byUnit).map(([u, t]) => (
+            <tr key={u}><td colSpan={3}><b>جمع کل — {u}</b></td><td className="sm">{u}</td>
+              {["day", "night", "leave", "sick", "total", "local", "nonLocal"].map((k) => <td key={k} className="mono"><b>{fmt(t[k])}</b></td>)}</tr>))}</tfoot>
+        </table></div>
+        {v.resources.length === 0 && <p className="sm muted">این قرارداد هنوز منبعی ندارد (قراردادها ◄ منابع قرارداد).</p>}
+      </div>
+      <div className="card">
+        <h2>{picked ? <>ردیف‌های «{picked.name}» به تفکیک گروه اجرایی</> : "همهٔ ردیف‌های منابع به تفکیک گروه اجرایی"}
+          {picked && <button className="btn ghost sm" type="button" onClick={() => setPick(null)} style={{ marginInlineStart: 8 }}>نمایش همه</button>}</h2>
+        {(v.workGroupTree || []).length === 0 && <p className="sm muted">درخت گروه‌های اجرایی این قرارداد خالی است (تعریف قرارداد ◄ دسته‌ها ◄ گروه‌های اجرایی کار).</p>}
+        <Section kind="resources" v={v} labels={labels} editable={editable} first={first} ops={ops} filter={pick} />
+      </div>
+    </>
   );
 }
 

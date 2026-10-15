@@ -86,6 +86,8 @@ export default function AdminPage() {
           <Kpi v={data.members.filter((m) => ["inactive", "locked"].includes(m.status)).length} l="غیرفعال یا قفل" tone="bad" />
         </div>
 
+        {data.resetRequests?.length > 0 && <ResetRequests data={data} post={post} setLink={setLink} />}
+
         <Fold title="دعوت کاربر جدید" hint="حساب ساخته می‌شود و یک لینک یک‌بارمصرف برای تنظیم رمز می‌گیرید">
           <Invite data={data} onSubmit={(f) => post({ kind: "invite", ...f }, (r) => {
             if (r.link) setLink({ who: f.email, ...r.link });
@@ -136,6 +138,30 @@ export default function AdminPage() {
   );
 }
 
+/**
+ * "Forgot my password" requests from the sign-in page. Nothing is mailed:
+ * the admin makes a one-time link here and gives it to the person directly
+ * (phone, messenger), after making sure it is them who asked.
+ */
+function ResetRequests({ data, post, setLink }) {
+  return (
+    <div className="card" style={{ borderColor: "var(--warn)" }}>
+      <h2>درخواست‌های بازیابی رمز ({data.resetRequests.length})</h2>
+      <p className="sm muted">از صفحهٔ ورود («رمز را فراموش کرده‌ام») ثبت شده‌اند. پس از اطمینان از اینکه خود شخص درخواست داده، لینک یک‌بارمصرف بسازید و مستقیم به او بدهید.
+        لینک {data.setupHours} ساعت اعتبار دارد و با تنظیم رمز تازه، همهٔ نشست‌های قبلی آن حساب بسته می‌شود.</p>
+      <table className="dtable"><thead><tr><th>کاربر</th><th>ایمیل / نام کاربری</th><th>زمان درخواست</th><th /></tr></thead>
+        <tbody>{data.resetRequests.map((r) => (
+          <tr key={r.id}><td>{r.display_name || "—"}</td><td className="mono sm" dir="ltr">{r.email}{r.username && ` · ${r.username}`}</td>
+            <td className="sm">{new Date(r.requested_at).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" })}</td>
+            <td>{r.mayIssue
+              ? <button className="btn" type="button" onClick={() => post({ kind: "link", userId: r.user_id }, (x) => setLink({ who: r.email, ...x.link }))}>ساخت لینک بازنشانی رمز</button>
+              : <span className="sm muted">این کاربر در پروژهٔ دیگری هم هست؛ بازنشانی با توسعه‌دهنده است.</span>}
+              <button className="btn ghost sm" type="button" onClick={() => confirm("این درخواست بدون ساخت لینک بسته شود؟") && post({ kind: "reset-dismiss", id: r.id })}>رد درخواست</button></td></tr>))}
+        </tbody></table>
+    </div>
+  );
+}
+
 function Invite({ data, onSubmit }) {
   const blank = { email: "", displayName: "", role: "qc", areas: [], party: "" };
   const [f, setF] = useState(blank);
@@ -173,35 +199,45 @@ function Profile({ m, data, post }) {
             <option value="">—</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}</select></div>
       </div>
       <p className="sm muted">امضای تصویری (رسم‌شده یا اسکن‌شده) را خود کاربر در «امضای من» بارگذاری می‌کند{m.has_signature ? " — این کاربر امضا دارد." : " — هنوز امضایی ندارد."}
-        رمز عبور با لینک یک‌بارمصرف تنظیم می‌شود و از دست مدیر نمی‌گذرد.</p>
+        رمز عبور با لینک یک‌بارمصرف تنظیم می‌شود و از دست مدیر نمی‌گذرد؛ کاربر رمز خود را از منوی کاربر ◄ «تغییر رمز عبور» عوض می‌کند.</p>
       <button className="btn" type="button" onClick={() => post({ kind: "profile", userId: m.user_id, ...p, companyId: p.companyId || null })}>ذخیرهٔ مشخصات</button>
     </fieldset>
   );
 }
 
 function ContractMembers({ data, post }) {
-  const [f, setF] = useState({ contractId: "", userId: "", position: "", access: "edit" });
+  const BLANK = { contractId: "", userId: "", position: "", access: "edit" };
+  const [f, setF] = useState(BLANK);
+  const contract = data.contracts.find((c) => c.id === f.contractId);
+  // Only people of the contract's stakeholder companies are assigned to it.
+  const eligible = contract ? data.members.filter((m) => m.company_id && (contract.companies || []).includes(m.company_id)) : [];
   return (
     <div className="card">
       <h2>تخصیص کاربر به قرارداد</h2>
-      <p className="sm muted">هر کاربر در هر قرارداد یک سمت و یک سطح دسترسی دارد. دسترسی دقیق در گزارش‌ها (ایجاد، افزودن، ویرایش و حذف محتوا، امضا، برگشت، تأیید نهایی) از گروه‌های گردش کار گزارش می‌آید.</p>
+      <p className="sm muted">فقط کاربرانی که «شرکت شاغل» آن‌ها در ذی‌نفعان قرارداد است (تعریف قرارداد ◄ ذی‌نفعان) به قرارداد تخصیص داده می‌شوند و فقط همان قراردادها را در بالای صفحه می‌بینند.
+        هر کاربر در هر قرارداد یک سمت و یک سطح دسترسی دارد: «مشاهده» فقط می‌بیند و امضا می‌کند، «ثبت و ویرایش» گزارش و محتوا ثبت می‌کند، «مدیریت قرارداد» تعریف و منابع قرارداد را هم تغییر می‌دهد. دسترسی دقیق در گزارش‌ها (ایجاد، افزودن، ویرایش و حذف محتوا، امضا، برگشت، تأیید نهایی) از گروه‌های گردش کار گزارش می‌آید.</p>
       {data.contracts.length === 0 ? <p className="empty-note">قراردادی تعریف نشده.</p> : (
         <form className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}
-          onSubmit={(e) => { e.preventDefault(); post({ kind: "contract-member", ...f }); }}>
-          <div className="field"><label htmlFor="cm-c">قرارداد</label><select id="cm-c" required value={f.contractId} onChange={(e) => setF({ ...f, contractId: e.target.value })}>
+          onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "contract-member", ...f })) setF(BLANK); }}>
+          <div className="field"><label htmlFor="cm-c">قرارداد</label><select id="cm-c" required value={f.contractId} onChange={(e) => setF({ ...f, contractId: e.target.value, userId: "" })}>
             <option value="">—</option>{data.contracts.map((c) => <option key={c.id} value={c.id}>{c.contract_no} — {c.title}</option>)}</select></div>
           <div className="field"><label htmlFor="cm-u">کاربر</label><select id="cm-u" required value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
-            <option value="">—</option>{data.members.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name || m.email}</option>)}</select></div>
+            <option value="">{contract && !eligible.length ? "— کاربری از شرکت‌های ذی‌نفع نیست —" : "—"}</option>
+            {eligible.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name || m.email}{m.company_code ? ` (${m.company_code})` : ""}</option>)}</select></div>
           <div className="field"><label htmlFor="cm-p">سمت در قرارداد</label><input id="cm-p" required value={f.position} onChange={(e) => setF({ ...f, position: e.target.value })} /></div>
           <div className="field"><label htmlFor="cm-a">سطح دسترسی</label><select id="cm-a" value={f.access} onChange={(e) => setF({ ...f, access: e.target.value })}>
             {Object.entries(data.contractAccess).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
           <button className="btn" type="submit">ثبت</button>
+          {f.contractId && f.userId && data.contractMembers.some((x) => x.contract_id === f.contractId && x.user_id === f.userId) &&
+            <span className="sm muted">این کاربر در این قرارداد هست؛ ثبت، سمت و دسترسی او را ویرایش می‌کند.</span>}
         </form>)}
       {data.contractMembers.length === 0 ? <p className="empty-note">هنوز کسی به قراردادی تخصیص داده نشده.</p> : (
         <table className="dtable"><thead><tr><th>قرارداد</th><th>کاربر</th><th>سمت</th><th>دسترسی</th><th /></tr></thead>
           <tbody>{data.contractMembers.map((x) => (
             <tr key={x.id}><td><span className="mono">{x.contract_no}</span> — {x.contract_title}</td><td>{x.display_name || x.email}</td><td>{x.position}</td>
-              <td>{data.contractAccess[x.access]}</td><td><button className="btn ghost sm" type="button" onClick={() => post({ kind: "contract-member-remove", id: x.id })}>حذف</button></td></tr>))}</tbody></table>)}
+              <td>{data.contractAccess[x.access]}</td><td>
+                <button className="btn ghost sm" type="button" onClick={() => setF({ contractId: x.contract_id, userId: x.user_id, position: x.position, access: x.access })}>ویرایش</button>
+                <button className="btn ghost sm" type="button" onClick={() => post({ kind: "contract-member-remove", id: x.id })}>حذف</button></td></tr>))}</tbody></table>)}
     </div>
   );
 }
@@ -220,7 +256,7 @@ function MemberPanel({ m, data, me, post, setLink, onClose }) {
       <AreaPicker value={f.areas} on={(areas) => setF({ ...f, areas })} disabled={f.role === "admin"} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button className="btn" onClick={() => post({ kind: "update", userId: m.user_id, ...f, party: f.party || null }, onClose)}>ذخیرهٔ تغییرات</button>
-        {(!m.has_password || dev) && m.is_active && (
+        {m.is_active && (
           <button className="btn ghost" onClick={() => post({ kind: "link", userId: m.user_id }, (r) => setLink({ who: m.email, ...r.link }))}>{linkLabel}</button>
         )}
         {m.has_password && <button className="btn ghost" title="همهٔ نشست‌های این حساب باطل می‌شود"

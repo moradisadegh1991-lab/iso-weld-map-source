@@ -10,11 +10,24 @@ import * as cr from "../../../lib/db/repos/contract-reports.mjs";
 import { checkCreate } from "../../../lib/reports/workflow.mjs";
 import { DAY_STATUS, WEATHER, SECTIONS } from "../../../lib/reports/contract-daily.mjs";
 import { KIND } from "../../../lib/reports/catalog.mjs";
+import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
+
+/** The contract a report (or a report's file) belongs to, for the access check. */
+async function contractOfReport(db, projectId, { reportId = null, fileId = null }) {
+  const { rows: [r] } = fileId
+    ? await db.query("SELECT r.contract_id FROM report_file f JOIN report r ON r.id = f.report_id WHERE f.id = $1 AND f.project_id = $2", [fileId, projectId])
+    : await db.query("SELECT contract_id FROM report WHERE id = $1 AND project_id = $2", [reportId, projectId]);
+  if (!r?.contract_id) throw Object.assign(new Error("not found"), { status: 404 });
+  return r.contract_id;
+}
 
 /**
- * The contract's daily report (lib/db/repos/contract-reports.mjs). Who may do
- * what is the report workflow's to say (lib/reports/workflow.mjs); this route
- * asks only that the caller is on the project.
+ * The contract's daily report (lib/db/repos/contract-reports.mjs). The caller
+ * reaches a contract's reports only through their access to the contract
+ * (a project contracts role, or an assignment to it): «مشاهده» reads, signs
+ * and decides as the workflow allows; writing content needs «ثبت و ویرایش».
+ * Within that, who may do what is the report workflow's to say
+ * (lib/reports/workflow.mjs).
  *
  *   GET ?projectId                          contracts, report types
  *   GET ?projectId&contractId               the contract's reports, whether the caller may start one
@@ -36,7 +49,10 @@ export async function GET(request) {
     const file = q("file");
     if (file) {
       if (!/^[0-9a-f-]{36}$/i.test(file)) return Response.json({ error: "not found" }, { status: 404 });
-      const f = await withProject(db, projectId, async () => cr.readReportFile(db, { projectId, fileId: file, userId: user.id, store: await getStore() }));
+      const f = await withProject(db, projectId, async () => {
+        await assertContractAccess(db, { projectId, contractId: await contractOfReport(db, projectId, { fileId: file }), userId: user.id, role: membership.role });
+        return cr.readReportFile(db, { projectId, fileId: file, userId: user.id, store: await getStore() });
+      });
       const image = /^image\//.test(f.contentType);
       return new Response(f.bytes, { headers: { "Content-Type": image ? f.contentType : "application/octet-stream", "Content-Length": String(f.bytes.length),
         "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox",
@@ -45,8 +61,14 @@ export async function GET(request) {
     return await withProject(db, projectId, async () => {
       const labels = { dayStatus: DAY_STATUS, weather: WEATHER, sections: Object.fromEntries(Object.entries(SECTIONS).map(([k, v]) => [k, v.title])), kinds: KIND };
       const id = q("id");
-      if (id) return Response.json({ ...(await cr.contractReportView(db, { projectId, reportId: id, userId: user.id })), labels });
+      if (id) {
+        const access = await assertContractAccess(db, { projectId, contractId: await contractOfReport(db, projectId, { reportId: id }), userId: user.id, role: membership.role });
+        const view = await cr.contractReportView(db, { projectId, reportId: id, userId: user.id });
+        if (access === "view") view.may = { ...view.may, edit: false, upload: false, editWhy: "دسترسی شما در این قرارداد «مشاهده» است." };
+        return Response.json({ ...view, labels });
+      }
       const contractId = q("contractId");
+      const access = contractId ? await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role }) : null;
       if (q("summary") && contractId) {
         return Response.json(await cr.resourceSummaryRange(db, { projectId, contractId, from: q("from"), to: q("to"), kind: q("kind"), categoryId: q("categoryId"), name: q("name") }));
       }
@@ -58,7 +80,7 @@ export async function GET(request) {
           WHERE m.project_id = $1 AND u.is_active ORDER BY 2`, [projectId]);
       return Response.json({ contracts, typeReady: !!type && stages.length > 0, users, labels,
         reports: contractId ? await cr.listContractReports(db, { projectId, contractId, userId: user.id }) : [],
-        may: { create: type ? checkCreate(stages, user.id).ok : false, setup: membership.role === "admin" || membership.role === "developer" } });
+        may: { create: type && access && access !== "view" ? checkCreate(stages, user.id).ok : false, setup: membership.role === "admin" || membership.role === "developer" } });
     });
   } catch (e) { return errorResponse(e); }
 }
@@ -83,6 +105,12 @@ export async function POST(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
     const store = kind === "upload" ? await getStore() : null;
     return await withProject(db, projectId, async () => {
+      if (kind !== "setup-type") {
+        const contractId = kind === "create" ? body.contractId
+          : await contractOfReport(db, projectId, kind === "file-remove" ? { fileId: body.fileId } : { reportId: body.reportId });
+        const writes = ["create", "edit", "upload", "file-remove"].includes(kind);
+        await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: writes ? "edit" : "view" });
+      }
       const a = { projectId, userId: user.id, reportId: body.reportId };
       const run = {
         "setup-type": async () => { if (!["admin", "developer"].includes(membership.role)) throw Object.assign(new Error("تنظیم گردش کار با مدیر پروژه است."), { status: 403 }); return cr.ensureType(db, { projectId }); },

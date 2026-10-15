@@ -127,11 +127,7 @@ function Frame({ p, pathname, children }) {
       <header className="topbar">
         <button className="hamb" aria-label="منو" onClick={() => setDrawer(!drawer)}>☰</button>
         <span className="brand"><span className="logo">EPC</span><span className="t">EPC&nbsp;PLATFORM</span></span>
-        {p.projects.length > 0 ? (
-          <select value={p.projectId} onChange={(e) => p.setProjectId(e.target.value)} aria-label="پروژه">
-            {p.projects.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}
-          </select>
-        ) : <span className="crumb">هیچ پروژه‌ای به شما تخصیص نیافته است</span>}
+        {p.projects.length > 0 ? <ContractPicker p={p} /> : <span className="crumb">هیچ پروژه‌ای به شما تخصیص نیافته است</span>}
         {section && <span className="crumb">{groupOf ? `${groupOf.group} ›` : ""} {section.tabs.length > 1 ? `${section.title} ›` : ""} <b style={{ color: "var(--ink)", fontWeight: 500 }}>{here.title}</b></span>}
         <span className="grow" />
         <button className="iconbtn" onClick={toggleTheme} title={theme === "light" ? "تم تیره" : "تم روشن"} aria-label="تغییر تم">
@@ -153,6 +149,7 @@ function Frame({ p, pathname, children }) {
               </div>
               <button role="menuitem" onClick={toggleTheme}>{theme === "light" ? "☾ تم تیره" : "☀ تم روشن"}</button>
               {can(membership, "project:members") && <Link role="menuitem" href="/admin">⚿ کاربران و دسترسی</Link>}
+              <Link role="menuitem" href="/account">🔑 تغییر رمز عبور</Link>
               <button role="menuitem" onClick={() => p.signOut()}>⏻ خروج</button>
               <button role="menuitem" className="danger" title="همهٔ نشست‌های این حساب (گوشی، رایانهٔ دیگر) باطل می‌شوند"
                       onClick={() => { if (confirm("از همهٔ دستگاه‌ها خارج شوید؟")) p.signOut({ everywhere: true }); }}>⏻ خروج از همه‌جا</button>
@@ -209,6 +206,33 @@ function Frame({ p, pathname, children }) {
         {children}
       </main>
     </div>
+  );
+}
+
+/**
+ * The top bar's pick: a contract, grouped under its project — the contracts
+ * this person sees (all of a project's for its managers; otherwise those
+ * they are assigned to). Picking a contract opens its project too; «کل پروژه»
+ * is the project with no contract picked, for the project-wide sections.
+ */
+const CONTRACT_ACCESS_FA = { view: "مشاهده", edit: "ثبت و ویرایش", manage: "مدیریت" };
+function ContractPicker({ p }) {
+  const value = p.contractId ? `c:${p.contractId}` : `p:${p.projectId}`;
+  const pick = (v) => {
+    const [kind, id] = v.split(":");
+    if (kind === "p") return p.setContract(id, "");
+    const proj = p.projects.find((x) => (x.contracts || []).some((c) => c.id === id));
+    if (proj) p.setContract(proj.id, id);
+  };
+  return (
+    <select value={value} onChange={(e) => pick(e.target.value)} aria-label="قرارداد" title="قرارداد (و پروژهٔ آن)" style={{ maxWidth: 360 }}>
+      {p.projects.map((x) => (
+        <optgroup key={x.id} label={`${x.code} — ${x.name}`}>
+          <option value={`p:${x.id}`}>{x.code} — کل پروژه</option>
+          {(x.contracts || []).map((c) => (
+            <option key={c.id} value={`c:${c.id}`}>قرارداد {c.contract_no} — {c.title}{c.access && c.access !== "manage" ? ` (${CONTRACT_ACCESS_FA[c.access]})` : ""}</option>))}
+        </optgroup>))}
+    </select>
   );
 }
 
