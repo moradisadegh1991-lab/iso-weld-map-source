@@ -152,7 +152,7 @@ function ReportView({ projectId, id, call, labels, users, close }) {
         <HeaderBox v={v} labels={labels} editable={editable} save={ops.header} first={first} />
       </div>
       <div className="ptabs no-print" role="tablist">
-        {[["narrative", "شرح کار (Narrative)"], ["problems", "مشکلات"], ["resources", "منابع"], ["photos", `عکس‌ها (${v.files.filter((f) => f.kind === "photo" && !f.removed_at).length})`],
+        {[["narrative", "شرح کار (Narrative)"], ["problems", "مشکلات"], ["resources", "منابع"], ["activities", `فعالیت‌های انجام‌شده (${(v.lines.activities || []).length})`], ["photos", `عکس‌ها (${v.files.filter((f) => f.kind === "photo" && !f.removed_at).length})`],
           ["files", `پیوست‌ها (${v.files.filter((f) => f.kind === "file" && !f.removed_at).length})`], ["actions", "امضا، تأیید و ارسال"], ["history", "تاریخچه"]].map(([k, t]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>))}
       </div>
@@ -162,6 +162,20 @@ function ReportView({ projectId, id, call, labels, users, close }) {
         <div className="card">
           <h2>{labels.sections[tab]}</h2>
           <Section kind={tab} v={v} labels={labels} editable={editable} first={first} ops={ops} />
+        </div>)}
+      {tab === "activities" && (
+        <div className="card">
+          <h2>فعالیت‌های انجام‌شده</h2>
+          <p className="sm muted">کار انجام‌شده روی فعالیت‌های WBS قرارداد؛ از صفحهٔ <a href="/eps/progress">ثبت کار روزانه</a> اضافه، ویرایش یا حذف می‌شود و همین گردش کار را دارد.</p>
+          {(v.lines.activities || []).length === 0 ? <p className="empty-note">ردیفی نیست.</p> : (
+            <table className="dtable"><thead><tr><th>#</th><th>فعالیت</th><th>ناحیه / پیمانکار</th><th>Mark</th><th>مقدار</th><th>واحد</th><th>توضیح</th><th>تغییر مرحله‌ها</th></tr></thead>
+              <tbody>{v.lines.activities.map((l, i) => {
+                const e = l.effective || {}, a = v.activityInfo?.[e.activityId] || {};
+                return (
+                  <tr key={l.id} style={{ textDecoration: e.removed ? "line-through" : undefined }}><td>{i + 1}</td><td><span className="mono" dir="ltr">{a.code || "—"}</span> {a.name || ""}</td>
+                    <td>{v.companies?.find((c) => c.id === e.areaId)?.name || "—"}</td><td>{e.mark || "—"}</td><td className="mono">{e.qty ?? "—"}</td><td>{a.unit || "—"}</td><td className="sm">{e.notes || ""}</td>
+                    <td className="sm">{l.lines.map((x) => <div key={x.seq} style={{ color: x.color || undefined }}>{x.stage}: {x.removed ? "حذف" : x.values.qty}</div>)}</td></tr>);
+              })}</tbody></table>)}
         </div>)}
       {tab === "resources" && <Resources v={v} projectId={projectId} call={call} labels={labels} editable={editable} first={first} ops={ops} />}
       {(tab === "photos" || tab === "files") && <Files kind={tab === "photos" ? "photo" : "file"} v={v} projectId={projectId} editable={editable} post={post} setMsg={setMsg} reload={load} />}

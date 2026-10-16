@@ -7,6 +7,7 @@ import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import * as eps from "../../../lib/db/repos/eps.mjs";
 import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
 import { BUDGET_MODES, SEPARATORS } from "../../../lib/eps/wbs.mjs";
+import { PMS_TYPES } from "../../../lib/db/repos/eps.mjs";
 
 /**
  * EPS, PMS versions, WBS and activity templates (lib/db/repos/eps.mjs).
@@ -18,11 +19,11 @@ import { BUDGET_MODES, SEPARATORS } from "../../../lib/eps/wbs.mjs";
  *   GET ?projectId&versionId               a version's WBS with every derived figure, and the templates
  *   GET ?projectId&versionId&suggest=1[&parentId]   the code a new node would get
  *   GET ?projectId&templates=1             the activity templates
- *   POST {kind: pms | version | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
+ *   POST {kind: pms | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
  *         attach | activity | activity-remove | template | template-move | template-copy | template-remove |
- *         template-activity | template-activity-remove}
+ *         template-activity | template-activity-remove | template-sync}
  */
-const LABELS = { budgetModes: BUDGET_MODES, separators: SEPARATORS };
+const LABELS = { budgetModes: BUDGET_MODES, separators: SEPARATORS, pmsTypes: PMS_TYPES };
 const notFound = () => Object.assign(new Error("not found"), { status: 404 });
 
 /** The contract a request's record belongs to, read from the record itself (the repository checks the rest belongs with it). */
@@ -37,6 +38,7 @@ async function contractOf(db, projectId, b) {
   switch (b.kind) {
     case "pms": return b.id ? q(PMS, b.id) : b.contractId || null;
     case "version": return b.id ? q(VERSION, b.id) : q(PMS, b.pmsId);
+    case "version-master": return q(VERSION, b.id);
     case "eps-move": case "eps-remove": return b.epsKind === "version" ? q(VERSION, b.id) : q(PMS, b.id);
     case "settings": case "node": case "node-move": case "node-copy": case "node-remove": return q(VERSION, b.versionId);
     case "attach": case "activity": return q(NODE, b.nodeId);
@@ -96,6 +98,7 @@ export async function POST(request) {
       const run = {
         pms: () => eps.savePms(db, a),
         version: () => eps.saveVersion(db, a),
+        "version-master": () => eps.setMaster(db, a),
         "eps-move": () => eps.moveEps(db, { ...a, kind: b.epsKind }),
         "eps-remove": () => eps.removeEps(db, { ...a, kind: b.epsKind }),
         settings: () => eps.saveSettings(db, a),
@@ -112,6 +115,7 @@ export async function POST(request) {
         "template-remove": () => eps.removeTemplate(db, a),
         "template-activity": () => eps.saveTemplateActivity(db, a),
         "template-activity-remove": () => eps.removeTemplateActivity(db, a),
+        "template-sync": () => eps.syncTemplate(db, a),
       }[kind];
       if (!run) return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
       return Response.json({ ok: true, row: (await run()) ?? null });
