@@ -24,15 +24,24 @@ github.com ◄ Settings ◄ Developer settings ◄ **Fine-grained tokens** ◄ G
 
 ```bash
 read -rsp "GitHub token: " T; echo
-git clone --depth 1 -b claude/vigilant-brown-wnaksu \
+git clone --depth 1 -b master \
   "https://x-access-token:$T@github.com/moradisadegh1991-lab/iso-weld-map-source.git" /opt/epc/app
 git -C /opt/epc/app remote set-url origin https://github.com/moradisadegh1991-lab/iso-weld-map-source.git
 cd /opt/epc/app
 ADMIN_EMAIL=you@example.com ADMIN_NAME='نام شما' DEMO=1 bash deploy/vps/install.sh
 ```
 
-خط سوم توکن را از تنظیمات git پاک می‌کند. شاخهٔ `claude/vigilant-brown-wnaksu` تا وقتی PR
-ادغام نشده لازم است؛ بعد از ادغام `-b main`.
+خط سوم توکن را از تنظیمات git پاک می‌کند. سرور شاخهٔ `master` را دنبال می‌کند؛ `epc update`
+همیشه آخرین نسخهٔ همان شاخه‌ای را می‌گیرد که سرور رویش است.
+
+**سروری که پیش از ادغام PR #1 از شاخهٔ `claude/vigilant-brown-wnaksu` نصب شده** یک بار باید
+به `master` برگردد (بدون اینترنت؛ فقط نام شاخهٔ محلی عوض می‌شود). بعد از آن `epc update` کافی است:
+
+```bash
+sudo epc backup
+sudo runuser -u epc -- git -C /opt/epc/app checkout -B master
+sudo epc update
+```
 
 نصب ۵ تا ۱۵ دقیقه طول می‌کشد (بیشترش `npm ci` و `build`). در پایان:
 

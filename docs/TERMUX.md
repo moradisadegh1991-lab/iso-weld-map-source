@@ -7,12 +7,14 @@
 pkg install -y git
 git clone https://github.com/moradisadegh1991-lab/iso-weld-map-source.git
 cd iso-weld-map-source
-git checkout claude/vigilant-brown-wnaksu   # تا merge نشده
 bash tools/termux-setup.sh
 npm run dev
 ```
 
 بعد در مرورگر گوشی: **http://localhost:3000**
+
+اگر پیش‌تر روی شاخهٔ `claude/vigilant-brown-wnaksu` بودید، یک بار برگردید:
+`git fetch origin master && git checkout -B master origin/master`
 
 اسکریپت idempotent است؛ اگر وسط کار شکست خورد، دوباره اجرایش کنید.
 
