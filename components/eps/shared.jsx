@@ -25,6 +25,7 @@ export const COLUMNS = [
   { key: "budgetA", title: "بودجهٔ واقعی", width: 110, mono: true, get: (r) => fmt(r.item.budgetActual) },
   { key: "float", title: "Free float", width: 70, mono: true, get: (r) => (r.kind === "act" ? fmt(r.item.freeFloat) : "") },
   { key: "tpl", title: "کد الگو", width: 90, mono: true, get: (r) => r.item.template_code || "" },
+  { key: "src", title: "منبع پیشرفت", width: 120, get: (r) => (r.kind !== "act" ? "" : r.item.scope ? `${r.item.scope_removed ? "✗ " : "⛓ "}${{ equipment: "تجهیزات", piping: "پایپینگ", electrical: "برق", instrumentation: "ابزار دقیق", civil: "سیویل", structural: "سازه" }[r.item.scope.discipline] || "پلتفرم"}` : "گزارش روزانه") },
   { key: "manual", title: "پیشرفت دستی", width: 80, mono: true, get: (r) => (r.kind === "act" ? fmt(r.item.progress) : "") },
 ];
 

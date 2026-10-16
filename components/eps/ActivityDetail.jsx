@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { ScopeTab } from "./ScopePanel";
 
 /**
  * The detail sub-forms under the activity view, for the selected activity
@@ -19,12 +20,13 @@ import Link from "next/link";
  *   codes      its activity codes
  *   overall    its lines in the delay claim, against the master plan
  *   docs       the photos and files of the reports its work is in
+ *   scope      its link to the platform's records (components/eps/ScopePanel.jsx)
  */
 export const fmt = (v, d = 2) => (v == null || v === "" ? "—" : Number(v).toLocaleString("fa-IR", { maximumFractionDigits: d }));
 export const day = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString("fa-IR") : "—");
 export const TABS = {
   detail: "Activity Detail", workfront: "Work Front", groups: "Planning Group", relations: "Relationship", progress: "Progress",
-  roles: "Role", reports: "Daily Report", codes: "Activity Code", overall: "Activity Overall Detail", docs: "Document",
+  roles: "Role", reports: "Daily Report", codes: "Activity Code", overall: "Activity Overall Detail", docs: "Document", scope: "Scope (پلتفرم)",
 };
 export function statusOf(a) {
   if ((a.pct != null && a.pct >= 100) || a.actual_end) return "تمام‌شده";
@@ -33,7 +35,7 @@ export function statusOf(a) {
 }
 const KV = ({ k, v }) => <div className="kv"><span>{k}</span><b>{v}</b></div>;
 
-export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false }) {
+export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null }) {
   const a = d.activity;
   switch (tab) {
     case "detail": return <Detail a={a} may={may && !readOnly} post={post} />;
@@ -46,6 +48,7 @@ export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [
     case "codes": return <Codes d={d} may={may && !readOnly} post={post} codes={codes} />;
     case "overall": return <Overall d={d} may={may && !readOnly} post={post} />;
     case "docs": return <Docs d={d} projectId={projectId} />;
+    case "scope": return <ScopeTab d={d} may={may && !readOnly} post={post} L={(labels || d.labels).scope} />;
     default: return null;
   }
 }
@@ -68,7 +71,7 @@ function Detail({ a, may, post }) {
           <KV k="مدت باقیمانده تا پایان" v={fmt(a.remainDays)} /></fieldset>
         <fieldset><legend>Actual (واقعی)</legend>
           <KV k="شروع" v={day(a.actual_start)} /><KV k="مدت (روز)" v={fmt(a.actualDays)} /><KV k="پایان" v={day(a.actual_end)} />
-          <KV k="وضعیت" v={statusOf(a)} /><KV k="پیشرفت از گزارش‌ها" v={a.pct == null ? "نامعلوم (حجم واقعی ثبت نشده)" : `${fmt(a.pct)}٪`} />
+          <KV k="وضعیت" v={statusOf(a)} /><KV k={a.scopeLinked ? "پیشرفت از داده‌های پلتفرم" : "پیشرفت از گزارش‌ها"} v={a.pct == null ? "نامعلوم (حجم واقعی ثبت نشده)" : `${fmt(a.pct)}٪`} />
           <KV k="پیشرفت دستی" v={a.progress == null ? "—" : `${fmt(a.progress)}٪`} /></fieldset>
         <fieldset><legend>Budget (بودجه)</legend>
           <KV k="بودجهٔ برنامه‌ای (W.F × گره)" v={fmt(a.budgetPlan)} /><KV k="بودجهٔ واقعی" v={fmt(a.budgetActual)} />

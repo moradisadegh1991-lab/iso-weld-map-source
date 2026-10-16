@@ -5,6 +5,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
 import ActivityDetail, { TABS, fmt, day } from "../../../components/eps/ActivityDetail";
 import { COLUMNS, useVersion } from "../../../components/eps/shared";
+import { NodeScope } from "../../../components/eps/ScopePanel";
 
 /**
  * The activity view of a version, after Primavera P6: the WBS and its
@@ -16,7 +17,7 @@ import { COLUMNS, useVersion } from "../../../components/eps/shared";
  */
 const read = (k, d) => { try { return JSON.parse(window.localStorage.getItem(k) || "null") ?? d; } catch { return d; } };
 const write = (k, v) => { try { window.localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
-const PAGE_TABS = ["detail", "workfront", "groups", "relations", "progress", "roles", "reports", "codes", "overall"];
+const PAGE_TABS = ["detail", "scope", "workfront", "groups", "relations", "progress", "roles", "reports", "codes", "overall"];
 
 export default function ActivitiesPage() {
   const { projectId, contractId, call } = usePlatform();
@@ -31,8 +32,13 @@ export default function ActivitiesPage() {
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const { height, grip } = useSplit("p6-activities", 430);
-  useEffect(() => { setTabs(read("p6-activities:tabs", PAGE_TABS)); }, []);
-  useEffect(() => { write("p6-activities:tabs", tabs); if (!tabs.includes(tab) && tabs.length) setTab(tabs[0]); }, [tabs]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // a sub-form added since the choice was saved shows until it is unticked
+    const known = read("p6-activities:known", PAGE_TABS.filter((k) => k !== "scope"));
+    const saved = read("p6-activities:tabs", PAGE_TABS);
+    setTabs(PAGE_TABS.filter((k) => saved.includes(k) || !known.includes(k)));
+  }, []);
+  useEffect(() => { write("p6-activities:tabs", tabs); write("p6-activities:known", PAGE_TABS); if (!tabs.includes(tab) && tabs.length) setTab(tabs[0]); }, [tabs]); // eslint-disable-line react-hooks/exhaustive-deps
   async function post(url, body, done) {
     setMsg(null); setOk(null);
     try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) }); reload(); detail.reload(); if (done) setOk(done(r)); return r; }
@@ -51,7 +57,7 @@ export default function ActivitiesPage() {
 
   const head = (
     <div className="pagehead"><h1>فعالیت‌ها (نمای P6)</h1>
-      <span className="sub">{picker} <Link href="/eps">EPS و PMS</Link> · <Link href="/eps/wbs">WBS</Link> · <Link href="/eps/codes">کدهای فعالیت</Link> · <Link href="/eps/progress">ثبت کار روزانه</Link></span></div>);
+      <span className="sub">{picker} <Link href="/eps">EPS و PMS</Link> · <Link href="/eps/wbs">WBS</Link> · <Link href="/eps/codes">کدهای فعالیت</Link> · <Link href="/eps/scope">محدودهٔ پلتفرم</Link> · <Link href="/eps/progress">ثبت کار روزانه</Link></span></div>);
   if (!contractId) return <div className="page"><div className="pagehead"><h1>فعالیت‌ها (نمای P6)</h1></div><p className="empty-note">قرارداد را از فهرست بالای صفحه انتخاب کنید.</p></div>;
   if (error) return <div className="page">{head}<p className="err">{error}</p></div>;
   if (!versionId) return <div className="page">{head}<p className="empty-note">اول در «EPS و PMS» یک PMS و نسخه بسازید.</p></div>;
@@ -70,9 +76,13 @@ export default function ActivitiesPage() {
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg" role="status">{ok}</p>}
+      {data.autoApplied?.length > 0 && <div className="card" data-auto-applied><b>تغییرات تازهٔ پلتفرم در PMS اعمال شد</b><ul className="sm">{data.autoApplied.map((x) => (
+        <li key={x.ruleId}>{x.error ? <span className="err">{x.error}</span> : `+${x.added} قلم تازه، −${x.removed} قلم حذف‌شده${x.made ? `، ${x.made} فعالیت ساخته شد` : ""}${x.dropped ? `، ${x.dropped} فعالیت حذف شد` : ""}${x.kept ? `، ${x.kept} فعالیت با W.F صفر نگه داشته شد` : ""}`}</li>))}</ul></div>}
+      {data.scope?.some((x) => !x.rule.auto_apply && (x.pending.any || x.firstApply)) && <p className="sm" style={{ color: "var(--warn)" }}>
+        {data.scope.filter((x) => !x.rule.auto_apply && (x.pending.any || x.firstApply)).length} پیوند پلتفرم تغییر اعمال‌نشده دارد (زبانهٔ Scope یا <Link href="/eps/scope">محدودهٔ پلتفرم</Link>).</p>}
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>ناسازگاری‌ها</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
       <div style={{ height }}>
-        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "name", "wf", "wv", "unit", "volActual", "done", "pct", "start", "finish", "dur"]}
+        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "name", "wf", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur"]}
           storeKey="p6-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} />
       </div>
       {grip}
@@ -88,8 +98,9 @@ export default function ActivitiesPage() {
         </div>
         {!sel && <p className="empty-note">یک فعالیت را در جدول یا گانت انتخاب کنید.</p>}
         {node && <NodeSummary n={node} />}
+        {node && <NodeScope node={node} state={data.scope?.find((x) => x.rule.node_id === node.id)} may={may} post={post} L={data.labels.scope} choices={data.scopeChoices} />}
         {sel?.kind === "act" && (detail.error ? <p className="err">{detail.error}</p> : !detail.data ? <p className="muted">در حال بارگذاری…</p>
-          : <ActivityDetail d={detail.data} tab={tab} may={may} post={post} acts={acts} codes={data.codes} resources={data.resources} companies={data.companies} projectId={projectId} />)}
+          : <ActivityDetail d={detail.data} tab={tab} may={may} post={post} acts={acts} labels={data.labels} codes={data.codes} resources={data.resources} companies={data.companies} projectId={projectId} />)}
       </div>
       {modal === "attach" && target && <Attach node={target} templates={data.templates} post={post} close={() => setModal(null)} />}
       {modal === "manual" && target && <Manual node={target} post={post} close={() => setModal(null)} />}

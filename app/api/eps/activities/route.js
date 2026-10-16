@@ -5,6 +5,8 @@ import { authenticate, errorResponse } from "../../../../lib/server/session.mjs"
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 import * as act from "../../../../lib/db/repos/eps-activities.mjs";
+import * as scope from "../../../../lib/db/repos/eps-scope.mjs";
+import { DISCIPLINES, MEASURES, MODES } from "../../../../lib/eps/scope.mjs";
 import { assertContractAccess } from "../../../../lib/db/repos/users.mjs";
 import { REL_TYPES, BUDGET_UNITS, ROLE_STATUS, QTY_MODES } from "../../../../lib/eps/activities.mjs";
 
@@ -22,10 +24,13 @@ import { REL_TYPES, BUDGET_UNITS, ROLE_STATUS, QTY_MODES } from "../../../../lib
  *   GET ?projectId&contractId&day=YYYY-MM-DD the contract's daily reports of that day, and whether the caller may write to each
  *   GET ?projectId&versionId&days=d1,d2      the chosen days as columns
  *   GET ?projectId&versionId&lines=1         the version's progress lines (activity-code summary)
+ *   GET ?projectId&versionId&unplanned=1     the platform's items no scope rule of the version takes in
+ *   (reading a version with «ثبت و ویرایش» first applies the scope rules that apply themselves — the
+ *    drawings, P&IDs and registers added or withdrawn since reach the PMS here)
  *   POST {kind: relation | relation-remove | code | code-remove | code-assign | role | role-remove |
- *         delay | delay-remove | progress-add | progress-edit}
+ *         delay | delay-remove | progress-add | progress-edit | scope-rule | scope-rule-remove | scope-apply}
  */
-const LABELS = { relTypes: REL_TYPES, budgetUnits: BUDGET_UNITS, roleStatus: ROLE_STATUS, qtyModes: QTY_MODES };
+const LABELS = { relTypes: REL_TYPES, budgetUnits: BUDGET_UNITS, roleStatus: ROLE_STATUS, qtyModes: QTY_MODES, scope: { disciplines: DISCIPLINES, measures: MEASURES, modes: MODES } };
 const notFound = () => Object.assign(new Error("not found"), { status: 404 });
 
 const VERSION = "SELECT p.contract_id FROM eps_version v JOIN eps_pms p ON p.id = v.pms_id WHERE v.id = $1 AND v.project_id = $2";
@@ -38,6 +43,8 @@ const ROLE = `SELECT p.contract_id FROM activity_role r JOIN wbs_activity a ON a
                JOIN eps_version v ON v.id = n.version_id JOIN eps_pms p ON p.id = v.pms_id WHERE r.id = $1 AND r.project_id = $2`;
 const DELAY = ROLE.replace("activity_role", "activity_delay");
 const REPORT = "SELECT contract_id FROM report WHERE id = $1 AND project_id = $2";
+const NODE = `SELECT p.contract_id FROM wbs_node n JOIN eps_version v ON v.id = n.version_id JOIN eps_pms p ON p.id = v.pms_id WHERE n.id = $1 AND n.project_id = $2`;
+const RULE = `SELECT p.contract_id FROM scope_rule r JOIN eps_version v ON v.id = r.version_id JOIN eps_pms p ON p.id = v.pms_id WHERE r.id = $1 AND r.project_id = $2`;
 
 /** The contract a request's record belongs to, read from the record itself. */
 async function contractOf(db, projectId, b) {
@@ -51,6 +58,9 @@ async function contractOf(db, projectId, b) {
     case "role-remove": return q(ROLE, b.id);
     case "delay-remove": return q(DELAY, b.id);
     case "progress-add": case "progress-edit": return q(REPORT, b.reportId);
+    case "scope-rule": return b.id ? q(RULE, b.id) : b.nodeId ? q(NODE, b.nodeId) : q(ACTIVITY, b.activityId);
+    case "scope-rule-remove": return q(RULE, b.id);
+    case "scope-apply": return q(RULE, b.ruleId);
     default: return null;
   }
 }
@@ -78,11 +88,13 @@ export async function GET(request) {
       if (versionId) {
         const a = await access(await one(VERSION, versionId));
         if (q("lines")) return Response.json({ lines: await act.versionLines(db, { projectId, versionId }) });
+        if (q("unplanned")) return Response.json({ unplanned: await scope.unplanned(db, { projectId, versionId }), labels: LABELS });
+        const autoApplied = a !== "view" ? (await scope.autoApply(db, { projectId, versionId, userId: user.id })).filter((x) => x.error || x.added || x.removed || x.changed || x.made || x.dropped) : [];
         if (q("days") !== null || url.searchParams.has("days")) {
           const days = String(q("days") || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 62);
           return Response.json({ ...(await act.daysView(db, { projectId, versionId, days })), labels: LABELS, may: { edit: a !== "view" } });
         }
-        return Response.json({ ...(await act.activityView(db, { projectId, versionId })), labels: LABELS, may: { edit: a !== "view" } });
+        return Response.json({ ...(await act.activityView(db, { projectId, versionId })), autoApplied, labels: LABELS, may: { edit: a !== "view" } });
       }
       if (contractId) {
         const a = await access(contractId);
@@ -119,6 +131,9 @@ export async function POST(request) {
         "delay-remove": () => act.removeDelay(db, a),
         "progress-add": () => act.addProgress(db, a),
         "progress-edit": () => act.editProgress(db, a),
+        "scope-rule": () => scope.saveRule(db, a),
+        "scope-rule-remove": () => scope.removeRule(db, a),
+        "scope-apply": () => scope.applyRule(db, a),
       }[kind];
       if (!run) return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
       return Response.json({ ok: true, row: (await run()) ?? null });
