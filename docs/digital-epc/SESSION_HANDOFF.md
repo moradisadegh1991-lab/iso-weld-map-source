@@ -2,7 +2,7 @@
 
 ```yaml
 date: 2026-10-03
-branch: claude/vigilant-brown-wnaksu   # draft PR #1
+branch: master   # PR #1 merged 2026-10-16; this handoff predates the merge
 canonical_context: docs/digital-epc/EPC_AI_MASTER_CONTEXT.md
 ```
 

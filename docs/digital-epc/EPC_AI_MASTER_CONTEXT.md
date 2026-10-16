@@ -4,7 +4,7 @@
 status: CANONICAL
 as_of: 2026-09-28
 repo: moradisadegh1991-lab/iso-weld-map-source
-branch: claude/vigilant-brown-wnaksu      # draft PR #1, not merged
+branch: master      # PR #1 (claude/vigilant-brown-wnaksu) merged 2026-10-16
 head_at_writing: 404c4ed
 language: Persian UI (RTL) / English identifiers; answer the owner in Persian
 supersedes: EPC_AI_MASTER_CONTEXT_1.md (owner-supplied concept doc) — where the two
