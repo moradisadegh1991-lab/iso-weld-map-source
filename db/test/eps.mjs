@@ -160,9 +160,9 @@ test("attaching: a template's activities onto a node — codes from the WBS code
     equal(n.activities.map((a) => [a.code, a.template_code, a.wf]), [["PM01.C.02.01.01", "T-CON01", 30], ["PM01.C.02.01.02", "T-CON02", 30], ["PM01.C.02.01.05", "T-CON05", 40]]);
     const [first] = n.activities;
     equal([first.wv, first.budgetPlan, first.volumePlan, first.unit, first.plan_start, first.planDays], [Math.round(0.3 * n.wv * 10000) / 10000, Math.round(0.3 * n.budgetPlan * 100) / 100, 50, "m3", "2026-02-01", 28]);
-    // a manual activity on another node: code next free, progress typed
+    // a manual activity on another node: code next free — past its child node PM01.C.02.01 too — progress typed
     const m = await eps.saveActivity(db, { projectId: P, nodeId: B.id, name: "نصب", wf: 20, progress: 35 });
-    equal([m.code, Number(m.progress)], ["PM01.C.02.01", 35].map((x, i) => (i === 0 ? "PM01.C.02.01" : x)));
+    equal([m.code, Number(m.progress)], ["PM01.C.02.02", 35], "PM01.C.02.01 is the child node's code");
   });
 });
 

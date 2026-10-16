@@ -278,6 +278,20 @@ test("the days as columns: activities with work on the chosen days, one column a
   });
 });
 
+test("a node's child nodes and its activities share one numbering: no code is both a WBS node and an activity", async () => {
+  await inP(async () => {
+    const own = flat(await view()).filter((a) => a.node_id === N.id).map((a) => a.code);
+    const kid = await eps.saveNode(db, { projectId: P, versionId: V1.id, parentId: N.id, name: "زیرگره" });
+    equal(own.includes(kid.code), false, `${kid.code} is not one of ${own.join(", ")}`);
+    const lowest = (await import("../../lib/eps/wbs.mjs")).activityCode(N.code, 1);
+    const kid1 = own.includes(lowest) ? null : await eps.saveNode(db, { projectId: P, versionId: V1.id, parentId: N.id, code: lowest, name: "زیرگره ۱" });
+    const hand = await eps.saveActivity(db, { projectId: P, nodeId: N.id, name: "دستی", wf: 0 });
+    equal([hand.code === kid.code, hand.code === kid1?.code], [false, false], `the activity took ${hand.code}`);
+    await eps.removeActivity(db, { projectId: P, id: hand.id });
+    for (const k of [kid1, kid].filter(Boolean)) await eps.removeNode(db, { projectId: P, versionId: V1.id, id: k.id });
+  });
+});
+
 test("through the routes: contract access decides; a member without it reads and writes nothing", async () => {
   const route = await import("../../app/api/eps/activities/route.js");
   const users = await import("../../lib/db/repos/users.mjs");

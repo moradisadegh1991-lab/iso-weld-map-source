@@ -138,7 +138,7 @@ function Frame({ p, pathname, children }) {
           <button onClick={() => setMenu(!menu)} aria-haspopup="menu" aria-expanded={menu}>
             <span className="avatar">{initials}</span>
             <span className="t" style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-            {p.role && <span className={`role-pill ${p.role}`}>{ROLE_FA[p.role] || p.role}</span>}
+            {p.role && <span className={`role-pill role-${p.role}`}>{ROLE_FA[p.role] || p.role}</span>}
             <span aria-hidden style={{ fontSize: 9, color: "var(--dim)" }}>▾</span>
           </button>
           {menu && (

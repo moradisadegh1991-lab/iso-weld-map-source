@@ -182,7 +182,7 @@ function Trees({ data, C, may, post }) {
     <div className="card">
       <h2>دسته‌های منابع، شرح کار و گروه‌های اجرایی</h2>
       <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}>
-        <div className="field"><label htmlFor="tr-t">درخت</label><select id="tr-t" value={tree} onChange={(e) => setTree(e.target.value)}>
+        <div className="field"><label htmlFor="tr-t">درخت</label><select id="tr-t" value={tree} onChange={(e) => { setTree(e.target.value); setF({ ...f, parentId: "" }); /* a branch of one tree is no parent in another */ }}>
           {Object.entries(data.labels.trees).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
       </div>
       {may && (

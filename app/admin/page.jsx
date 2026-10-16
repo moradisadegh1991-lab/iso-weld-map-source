@@ -107,7 +107,7 @@ export default function AdminPage() {
                       {(m.job_title || m.company_code) && <div className="sm muted">{[m.job_title, m.specialty, m.company_code].filter(Boolean).join(" · ")}</div>}
                       {m.is_developer && <span className="role-pill developer" style={{ marginInlineStart: 6 }}>توسعه‌دهنده</span>}</td>
                     <td className="mono sm">{m.email || "—"}{m.username && <div className="muted">{m.username}</div>}</td>
-                    <td><span className={`role-pill ${m.role}`}>{ROLE_FA[m.role]}</span></td>
+                    <td><span className={`role-pill role-${m.role}`}>{ROLE_FA[m.role]}</span></td>
                     <td className="sm">{m.areas.length ? m.areas.map((a) => AREAS[a]).join("، ") : <span className="muted">همه</span>}
                       {m.tiles?.length > 0 && m.role !== "admin" && <div><span className="pill warn">{m.tiles.length} تایل</span></div>}</td>
                     <td className="sm">{m.inspection_party ? PARTY_FA[m.inspection_party] : <span className="muted">—</span>}</td>

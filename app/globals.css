@@ -668,8 +668,8 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .usermenu .menu button:hover, .usermenu .menu a:hover{background:var(--hover)}
 .usermenu .menu .danger{color:var(--bad)}
 .role-pill{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--rule);color:var(--dim)}
-.role-pill.developer{color:var(--fld);border-color:var(--fld)}
-.role-pill.admin{color:var(--cy);border-color:var(--cy)}
+.role-pill.developer,.role-pill.role-developer{color:var(--fld);border-color:var(--fld)}
+.role-pill.role-admin{color:var(--cy);border-color:var(--cy)}
 
 /* ═══ collapsible form cards ═══ */
 .fold{background:var(--surf);border:1px solid var(--rule);border-radius:8px}

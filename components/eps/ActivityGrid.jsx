@@ -145,7 +145,8 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
 
   const cell = (r, c) => {
     const v = c.get(r);
-    if (c.hits && typeof v === "string") return <Hl text={v} q={q} />;
+    // <bdi>: a name like "20-E-201 — CW cooler" keeps its own direction inside the RTL table
+    if (c.hits && typeof v === "string") return c.key === "name" ? <bdi><Hl text={v} q={q} /></bdi> : <Hl text={v} q={q} />;
     return v;
   };
   const tint = (c) => (c ? `${c}22` : undefined);

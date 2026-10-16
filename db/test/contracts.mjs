@@ -262,4 +262,17 @@ test("the log is append-only for the application", async () => {
   });
 });
 
+test("a subcontract whose contractor is picked from the companies takes the project's contractor from it — found by code, or registered once", async () => {
+  await withProject(db, P, async () => {
+    const { rows: [co] } = await db.query("INSERT INTO company (code, name) VALUES ('EPCX', 'پیمانکار شرکت‌ها') RETURNING id");
+    const a = await ctr.upsertContract(db, { projectId: P, contractNo: "SC-CO1", title: "x", kind: "subcontract", contractorCompanyId: co.id, currency: "USD" });
+    const b = await ctr.upsertContract(db, { projectId: P, contractNo: "SC-CO2", title: "y", kind: "subcontract", contractorCompanyId: co.id, currency: "USD" });
+    const { rows } = await db.query("SELECT id, code, name FROM contractor WHERE project_id = $1 AND code = 'EPCX'", [P]);
+    equal([rows.length, rows[0].name, a.contractor_id === rows[0].id, b.contractor_id === rows[0].id], [1, "پیمانکار شرکت‌ها", true, true]);
+    const { rows: [c] } = await db.query("INSERT INTO company (code, name) VALUES ('C-CIV', 'Civil Co (company)') RETURNING id");
+    const d = await ctr.upsertContract(db, { projectId: P, contractNo: "SC-CO3", title: "z", kind: "subcontract", contractorCompanyId: c.id, currency: "USD" });
+    equal(d.contractor_id, civ.id, "a contractor already registered under the company's code is the one");
+  });
+});
+
 await run();
