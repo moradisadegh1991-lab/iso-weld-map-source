@@ -1,0 +1,1721 @@
+/**
+ * The DM-water pump scenario, done the way the guide tells a person to do
+ * it: in the browser, through the forms it names, as the person it names.
+ *
+ *   npm run scenario:dm -- you@… --creds /tmp/creds.json     (a fresh project at 0.1)
+ *   DRIVE_EMAIL=you@… DRIVE_PASSWORD=… SCENARIO_CREDS=/tmp/creds.json node tools/drive-scenario-dm-ui.mjs
+ *
+ * Signed-in browsers for each person of the scenario: you (the EPC's
+ * project engineer), the contractor's QC inspector, the client's
+ * representative, the designer — and, for phase 10, the contracts, finance
+ * and HR officers. Every step
+ * fills the fields docs/digital-epc/03-scenario-dm-pump.md names, and
+ * checks what the guide says should appear — refusals included.
+ * `SCENARIO_UNTIL=2.10` stops after that step; `SCENARIO_FROM=5` starts at
+ * phase 5 of a project the CLI already played to the end of phase 4.
+ */
+import { chromium } from "playwright";
+import { readFile } from "node:fs/promises";
+import { ISO_7001, VENDORS } from "../lib/scenario/dm-pump.mjs";
+
+const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+const BASE = process.env.BASE_URL || "http://localhost:3000";
+const SHOT = process.env.SHOT_DIR || "/tmp/shots";
+const UNTIL = process.env.SCENARIO_UNTIL || null;
+// Start at a later phase: `npm run scenario:dm -- … --upto 4.5` plays the
+// earlier steps into the database, and SCENARIO_FROM=5 drives from phase 5.
+const FROM = Number(process.env.SCENARIO_FROM || 0);
+const skipPhase = (n) => n < FROM;
+const { DRIVE_EMAIL: EMAIL, DRIVE_PASSWORD: PASSWORD, SCENARIO_CREDS } = process.env;
+if (!EMAIL || !PASSWORD || !SCENARIO_CREDS) { console.error("set DRIVE_EMAIL, DRIVE_PASSWORD and SCENARIO_CREDS"); process.exit(1); }
+const creds = JSON.parse(await readFile(SCENARIO_CREDS, "utf8"));
+const t0 = new Date(`${creds.start}T00:00:00Z`).getTime();
+const d = (n) => new Date(t0 + n * 86400000).toISOString().slice(0, 10);
+const dt = (n, h) => new Date(t0 + n * 86400000 + h * 3600000).toISOString().slice(0, 16);
+
+const b = await chromium.launch({ executablePath: CHROME });
+const problems = [];
+const flat = (s) => String(s).replace(/\s+/g, " ").trim();
+const check = (ok, what) => { console.log(`  ${ok ? "ok  " : "FAIL"} ${what}`); if (!ok) problems.push("check: " + what); };
+
+async function signIn(email, password) {
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => problems.push(`[${email}] pageerror: ${e.message}`));
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.fill("#email", email); await page.fill("#password", password);
+  await page.click("button[type=submit]"); await page.waitForSelector(".shell");
+  const sel = page.locator(".topbar select").first();
+  const v = await sel.locator("option").evaluateAll((os, code) => os.find((o) => o.textContent.includes(`${code} —`))?.value, creds.project);
+  if (!v) throw new Error(`${email} cannot see project ${creds.project}`);
+  await sel.selectOption(v); await page.waitForTimeout(800);
+  return page;
+}
+const pm = await signIn(EMAIL, PASSWORD);
+const qc = await signIn(creds.people.qc.email, creds.people.qc.password);
+const client = await signIn(creds.people.client.email, creds.people.client.password);
+const designer = await signIn(creds.people.designer.email, creds.people.designer.password);
+
+const settle = (p) => p.waitForTimeout(900);
+async function open(p, path, tab = null) {
+  await p.goto(BASE + path, { waitUntil: "networkidle" }); await settle(p);
+  // A page with one part has no tab bar; then the part is simply there.
+  const t = tab && p.locator(".ptabs [role=tab]", { hasText: tab }).first();
+  if (t && await t.count()) { await t.click(); await settle(p); }
+}
+const card = (p, h) => p.locator(".card", { has: p.locator("h2", { hasText: h }) }).first();
+/** The platform's own words after an action: the page's error line, or nothing. */
+const errorOf = async (p) => flat(await p.locator(".page p.err:not(.sm)").first().innerText({ timeout: 1500 }).catch(() => ""));
+async function fold(scope, title) {
+  const btn = scope.locator(".fold-btn, .fold-head", { hasText: title }).first();
+  if ((await btn.getAttribute("aria-expanded")) !== "true") await btn.click();
+  await scope.page().waitForTimeout(300);
+}
+let step = "";
+
+/** The project id a signed-in page is working in (the top bar's selection). */
+const projectIdOf = (p) => p.locator(".topbar select").first().inputValue();
+/** Pre-commissioning › subsystem 70-01's panel, opened. */
+async function precomPanel(p) {
+  const c = card(p, "ساب‌سیستم‌ها");
+  const row = c.locator("tr", { hasText: "70-01" }).first();
+  const btn = row.getByRole("button", { name: "جزئیات" });
+  if (await btn.count()) { await btn.click(); await settle(p); }
+  return row.locator("xpath=following-sibling::tr[1]");
+}
+/** One checklist attempt: «ثبت» on its row, then the form under it. */
+async function attempt(p, panel, code, result, on, witness, note) {
+  const row = panel.locator("tr", { hasText: code }).first();
+  await row.getByRole("button", { name: "ثبت", exact: true }).click(); await settle(p);
+  const f = row.locator("xpath=following-sibling::tr[1]");
+  await f.locator("select[id^=r-]").selectOption(result); await f.locator("input[id^=d-]").fill(on);
+  await f.locator("input[id^=w-]").fill(witness); await f.locator("input[id^=n-]").fill(note);
+  await f.getByRole("button", { name: "ثبت", exact: true }).click(); await settle(p);
+  const e = await errorOf(p); if (e) problems.push(`${step} ${code} ${result}: ${e}`);
+}
+
+/** Quality › a punch item's panel: its action on the given day. */
+async function punchAct(p, desc, button, note, on) {
+  const c = card(p, "Punch list");
+  const row = c.locator("tr", { hasText: desc }).first();
+  await row.getByRole("button", { name: "اقدام" }).click(); await settle(p);
+  const panel = row.locator("xpath=following-sibling::tr[1]");
+  if (note) await panel.locator("input[id^=pn-]").fill(note);
+  await panel.locator("input[id^=pd-]").fill(on);
+  await panel.getByRole("button", { name: button }).click(); await settle(p);
+  const e = await errorOf(p); if (e) problems.push(`${step} ${button}: ${e}`);
+}
+
+async function pressureTest(p, scope, on, barg, hold, gauge, witness) {
+  await scope.locator("input[id^=td-]").fill(on); await scope.locator("input[id^=ta-]").fill(barg);
+  await scope.locator("input[id^=th-]").fill(hold); await scope.locator("input[id^=tg-]").fill(gauge);
+  const leaks = scope.locator("select[id^=tl-]");
+  const no = await leaks.locator("option").evaluateAll((os) => os.find((o) => /ندارد|بدون|خیر/.test(o.textContent))?.value);
+  if (no !== undefined) await leaks.selectOption(no);
+  await scope.locator("input[id^=tw-]").fill(witness);
+  await scope.getByRole("button", { name: "ثبت تست" }).click(); await settle(p);
+  const e = await errorOf(p); if (e) problems.push(`${step} test: ${e}`);
+}
+
+/** Piping execution › a spool's chain, opened under its row. */
+async function spoolSteps(p, sp) {
+  const row = p.locator("tr", { has: p.locator("td", { hasText: new RegExp(`^${sp}$`) }) }).first();
+  const alt = p.locator("tr", { hasText: sp }).first();
+  const r = (await row.count()) ? row : alt;
+  const btn = r.getByRole("button", { name: "مراحل" });
+  if (await btn.count()) { await btn.click(); await settle(p); }
+  return r.locator("xpath=following-sibling::tr[1]");
+}
+async function closeSpool(p, sp) {
+  const r = p.locator("tr", { hasText: sp }).first();
+  const btn = r.getByRole("button", { name: "بستن" });
+  if (await btn.count()) { await btn.click(); await settle(p); }
+}
+/** Welding & NDT: tick exactly these weld numbers. */
+async function pickWelds(p, nos) {
+  const c = card(p, "ثبت جوشکاری و NDT");
+  for (const box of await c.locator("tbody input[type=checkbox]").all()) {
+    const label = await box.getAttribute("aria-label");
+    const want = nos.some((n) => label.startsWith(`انتخاب ${n} `));
+    if ((await box.isChecked()) !== want) await box.click();
+  }
+}
+async function weldThem(p, stamp, on, process, position) {
+  const c = card(p, "ثبت جوشکاری و NDT");
+  await fold(c, "ثبت جوشکاری");
+  const v = await p.locator("#wa-welder option").evaluateAll((os, s) => os.find((o) => o.textContent.startsWith(s))?.value, stamp);
+  await p.selectOption("#wa-welder", v); await p.fill("#wa-on", on); await p.selectOption("#wa-proc", process); await p.fill("#wa-pos", position);
+  await c.getByRole("button", { name: /^ثبت جوشکاری برای/ }).click(); await p.waitForTimeout(2500);
+  for (const t of await c.locator("li .err").allInnerTexts()) problems.push(`${step} welding: ${flat(t)}`);
+}
+async function ndtThem(p, method, result, report, on) {
+  const c = card(p, "ثبت جوشکاری و NDT");
+  await fold(c, "ثبت نتیجهٔ NDT");
+  await p.selectOption("#nd-m", method); await p.selectOption("#nd-r", result); await p.fill("#nd-no", report); await p.fill("#nd-on", on);
+  await c.getByRole("button", { name: /^ثبت NDT برای/ }).click(); await p.waitForTimeout(2500);
+  for (const t of await c.locator("li .err").allInnerTexts()) problems.push(`${step} NDT: ${flat(t)}`);
+}
+
+/** A one-page PDF that pdf.js opens — enough to stand for a drawing file. */
+function tinyPdf(text) {
+  const objs = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    null,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  const stream = `BT /F1 24 Tf 72 500 Td (${text}) Tj ET`;
+  objs[3] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  let out = "%PDF-1.4\n";
+  const offs = [];
+  objs.forEach((o, k) => { offs.push(out.length); out += `${k + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("");
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+
+/** Equipment › a tag's chain, opened under its row. */
+async function tagSteps(tag) {
+  const c = card(pm, "تگ‌ها");
+  const row = c.locator("tr", { has: pm.locator("td.mono a", { hasText: new RegExp(`^${tag}$`) }) }).first();
+  const btn = row.getByRole("button", { name: "مراحل" });
+  if (await btn.count()) { await btn.click(); await settle(pm); }
+  return row.locator("xpath=following-sibling::tr[1]");
+}
+async function closeTagSteps(tag) {
+  const row = card(pm, "تگ‌ها").locator("tr", { has: pm.locator("td.mono a", { hasText: new RegExp(`^${tag}$`) }) }).first();
+  const btn = row.getByRole("button", { name: "بستن" });
+  if (await btn.count()) { await btn.click(); await settle(pm); }
+}
+
+/** Civil › a foundation's detail (its chain steps and pours), opened. */
+async function foundation(no) {
+  const c = card(pm, "فونداسیون‌ها");
+  const row = c.locator("tr", { hasText: no }).first();
+  const btn = row.getByRole("button", { name: "جزئیات" });
+  if (await btn.count()) { await btn.click(); await settle(pm); }
+  return row.locator("xpath=following-sibling::tr[1]");
+}
+/** A chain step's «ثبت انجام», on the day set in the page's «تاریخ انجام کار». */
+async function tickStep(p, scope, title, on, ref = null) {
+  await p.fill("#work-date", on);
+  const stepCard = scope.locator(".card", { has: p.locator("b", { hasText: title }) }).first();
+  if (ref) await stepCard.getByLabel(/^مرجع /).fill(ref);
+  await stepCard.getByRole("button", { name: "ثبت انجام" }).click(); await settle(p);
+  const e = await errorOf(p); if (e) problems.push(`${step} «${title}»: ${e}`);
+  const t = flat(await scope.locator(".card", { has: p.locator("b", { hasText: title }) }).first().innerText().catch(() => ""));
+  if (!t.includes(fa(on))) problems.push(`${step} «${title}»: recorded, but not on ${on} («${t.slice(0, 80)}»)`);
+}
+
+/** Procurement › MR: the MR's detail panel, opened. */
+async function mrDetail(no) {
+  const c = card(pm, "درخواست‌های خرید (MR)");
+  const panel = c.locator(".card", { has: pm.locator("h3", { hasText: `${no} —` }) });
+  if (!(await panel.count())) { await c.locator("tr", { hasText: no }).getByRole("button", { name: "جزئیات" }).click(); await settle(pm); }
+  return panel.first();
+}
+async function vendor(code) {
+  const v = VENDORS[code];
+  await open(pm, "/procurement", "فروشندگان");
+  const c = card(pm, "فروشندگان");
+  await fold(c, "فروشندهٔ جدید");
+  for (const [id, val] of [["vn-code", code], ["vn-name", v.name], ["vn-scope", v.scope], ["vn-contact", v.contactName], ["vn-email", v.email],
+    ["vn-phone", v.phone], ["vn-country", v.country], ["vn-city", v.city], ["vn-address", v.address]]) await pm.fill(`#${id}`, val);
+  await c.getByRole("button", { name: "ثبت فروشنده" }).click(); await settle(pm);
+  const e = await errorOf(pm); if (e) problems.push(`${step} vendor ${code}: ${e}`);
+  check(new RegExp(`${code}.*${v.email.replace(/\./g, "\\.")}`).test(flat(await c.innerText())), `${code} in the vendor register with its email`);
+}
+async function award(mrNo, vendorCode, poNo, on) {
+  const m = await mrDetail(mrNo);
+  await fold(m, "واگذاری و صدور PO");
+  const f = m.locator(".card-formslot");
+  const v = await f.locator("select[id^=a-b-] option").evaluateAll((os, c) => os.find((o) => o.textContent.startsWith(c))?.value, vendorCode);
+  await f.locator("select[id^=a-b-]").selectOption(v);
+  await f.locator("input[id^=a-p-]").fill(poNo); await f.locator("input[id^=a-d-]").fill(on);
+  await f.getByRole("button", { name: "واگذاری و صدور PO", exact: true }).click(); await settle(pm);
+}
+/** Procurement › orders: a PO's card with its detail open. */
+async function poDetail(no, p = pm) {
+  const c = card(p, no);
+  const btn = c.getByRole("button", { name: "جزئیات" });
+  if (await btn.count()) { await btn.first().click(); await settle(p); }
+  return c;
+}
+async function fat(p, poNo, what, on, irn, inspector) {
+  const c = await poDetail(poNo, p);
+  await c.locator("tr", { hasText: what }).getByRole("button", { name: "FAT" }).click(); await settle(p);
+  await c.locator("input[id^=fd-]").fill(on); await c.locator("select[id^=fr-]").selectOption("pass");
+  await c.locator("input[id^=fi-]").fill(irn); await c.locator("input[id^=fn-]").fill(inspector);
+  await c.getByRole("button", { name: "ثبت FAT" }).click(); await settle(p);
+}
+const fa = (iso) => new Date(iso).toLocaleDateString("fa-IR");
+
+/** Documents › incoming: one designer transmittal, a file per row. */
+/** The designer portal: a transmittal sent with a file per row. */
+async function incoming(no, from, sent, recv, purpose, rows) {
+  await open(designer, "/documents/designer", "ترانسمیتال‌های ارسالی");
+  const c = card(designer, "ترانسمیتال‌های ارسالی");
+  await fold(c, "ارسال ترانسمیتال");
+  await designer.fill("#in-no", no); await designer.fill("#in-from", from);
+  await designer.fill("#in-sent", sent); await designer.fill("#in-recv", recv); await designer.fill("#in-purpose", purpose);
+  for (const [k, [doc, rev, purp]] of rows.entries()) {
+    if (k > 0) await c.getByRole("button", { name: "ردیف دیگر" }).click();
+    await designer.getByLabel(`مدرک ${k + 1}`, { exact: true }).fill(doc);
+    await designer.getByLabel(`رویژن ${k + 1}`, { exact: true }).fill(rev);
+    await designer.getByLabel(`هدف ${k + 1}`, { exact: true }).selectOption(purp);
+    await designer.getByLabel(`فایل ${k + 1}`, { exact: true }).setInputFiles({ name: `${doc}_Rev${rev}.pdf`, mimeType: "application/pdf",
+      buffer: Buffer.from(`%PDF-1.4\n% ${doc} Rev.${rev}\n%%EOF\n`) });
+  }
+  await c.getByRole("button", { name: "ثبت ترانسمیتال", exact: true }).click(); await settle(designer);
+  const e = await errorOf(designer); if (e) problems.push(`${step} ${no}: ${e}`);
+  await open(pm, "/documents", "ترانسمیتال‌های ورودی");
+}
+const trBlock = (no) => card(pm, "ترانسمیتال‌های ورودی از طراح").locator(`xpath=./div[p/b[normalize-space()="${no}"]]`);
+/** Open a row's review panel («بررسی») and return it. */
+async function review(block, doc, rev) {
+  const panel = block.locator(".card", { has: pm.locator("h3", { hasText: `${doc} Rev.${rev}` }) });
+  if (!(await panel.count())) { await block.locator("tr", { hasText: doc }).getByRole("button", { name: "بررسی" }).click(); await settle(pm); }
+  return panel.first();
+}
+async function finishAll(panel) {
+  for (let n = 0; n < 5; n++) {
+    const b2 = panel.getByRole("button", { name: "پایان بررسی" });
+    if (!(await b2.count())) return;
+    await b2.first().click(); await settle(pm);
+  }
+}
+/** «پاسخ به …» — a Fold, so its form opens at the head of the card, not beside the transmittal. */
+async function reply(trNo, codes, replyNo, on) {
+  const c = card(pm, "ترانسمیتال‌های ورودی از طراح");
+  await fold(c, `پاسخ به ${trNo}`);
+  const f = c.locator(".card-formslot");
+  for (const [doc, code] of Object.entries(codes)) await f.getByLabel(`کد ${doc}`).selectOption(code);
+  await f.locator("input[id^=rp-no-]").fill(replyNo);
+  await f.locator("input[id^=rp-on-]").fill(on);
+  await f.getByRole("button", { name: "ثبت پاسخ" }).click(); await settle(pm);
+}
+const at = (id, title) => { step = id; console.log(`\n${id}  ${title}`); };
+const stop = (id) => UNTIL && id === UNTIL;
+
+try {
+  if (!skipPhase(0)) {
+    // ── 0 ────────────────────────────────────────────────────────────────
+    at("0.2", "project specification");
+    await open(pm, "/project");
+    const spec = {
+      contract_currency: "EUR", grade_elevation_mm: "100000", min_cover_mm: "800", concrete_curing_days: "7",
+      lv_system_voltage_v: "400", calibration_tolerance_pct: "0.25", coating_max_rh_pct: "85",
+      hse_o2_min_pct: "19.5", hse_o2_max_pct: "23.5", hse_lel_max_pct: "10", hse_h2s_max_ppm: "10", hse_co_max_ppm: "25",
+      hse_gas_test_validity_min: "120", hse_permit_max_hours: "12", hse_scaffold_inspection_days: "7",
+      hse_crane_inspection_days: "30", hse_risk_max_residual: "8", ncr_escalation_days: "14", doc_review_days: "10",
+      vdrl_resubmit_days: "14", cmms_plant_code: "DMW", floc_template: "{plant}-{unit}-{tag}", criticality_levels: "A,B,C",
+    };
+    for (const [k, v] of Object.entries(spec)) await pm.fill(`#${k}`, v);
+    await pm.getByRole("button", { name: "ذخیره", exact: true }).first().click(); await settle(pm);
+    check(/ذخیره شد/.test(flat(await pm.locator("main").innerText())), "the specification is saved");
+    await open(pm, "/inspection", "ITP");
+    await pm.fill("#n-h", "24");
+    await pm.locator("#n-h").locator("xpath=../..").getByRole("button", { name: "ذخیره" }).click(); await settle(pm);
+    check(/24 h/.test(flat(await pm.locator(".kpis").innerText())), "inspection notice: 24 h");
+
+    at("0.3", "equipment list");
+    // One tag by the hand form, the other by a list file: both ways the guide offers.
+    await open(pm, "/equipment", "ثبت دستی تجهیز");
+    await pm.fill("#eq-no", "P-7001"); await pm.fill("#eq-desc", "DM Water Transfer Pump"); await pm.fill("#eq-type", "Centrifugal");
+    await pm.fill("#eq-sub", "70-01");
+    await pm.getByRole("button", { name: "ثبت تگ" }).click(); await settle(pm);
+    const e03 = flat(await card(pm, "ثبت دستی تجهیز").innerText());
+    check(/P-7001 ثبت شد · دوّار \(از شرح\) · 70-01/.test(e03), `P-7001 by hand: rotating, read from its description («${e03.slice(-90)}»)`);
+    await open(pm, "/equipment", "ورود لیست تجهیزات");
+    const csv = "Tag No,Description,Type,Subsystem,Unit\nD-7002,DM Water Drum,Horizontal,70-01,70\n";
+    await pm.locator("input[type=file]").first().setInputFiles({ name: "dmw-equipment.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+    await settle(pm);
+    await card(pm, "ورود لیست تجهیزات").getByRole("button", { name: "ثبت در پروژه" }).click(); await settle(pm);
+    await open(pm, "/equipment", "تگ‌ها");
+    const eq = flat(await pm.locator("main").innerText());
+    check(/P-7001/.test(eq) && /D-7002/.test(eq), `both tags registered («${eq.slice(0, 120)}»)`);
+    if (stop("0.3")) throw new Error("stop");
+  }
+
+  if (!skipPhase(1)) {
+    // ── 1 ────────────────────────────────────────────────────────────────
+    at("1.1", "MDR");
+    await open(pm, "/documents");
+    const mdr = card(pm, "رجیستر مدارک (MDR)");
+    for (const [no, title, disc, type, tag, appr] of [
+      ["DMW-PID-7001", "P&ID — DM water transfer to drum", "process", "P&ID", null, true],
+      ["DMW-DS-P-7001", "Datasheet — DM water transfer pump P-7001", "mechanical", "DS", "P-7001", true],
+      ["DMW-DS-D-7002", "Datasheet — DM water drum D-7002", "mechanical", "DS", "D-7002", true],
+      ["DMW-ISO-7001", "Isometric — 70-DMW-7001 pump discharge to drum", "piping", "ISO", null, false],
+    ]) {
+      await fold(mdr, "مدرک جدید در رجیستر");
+      await pm.fill("#md-no", no); await pm.fill("#md-t", title); await pm.fill("#md-d", disc); await pm.fill("#md-y", type);
+      await pm.selectOption("#md-s", { label: "70-01" });
+      if (tag) await pm.selectOption("#md-g", { label: tag });
+      await pm.fill("#md-p", d(30));
+      if (appr) await mdr.getByLabel(/تأیید کارفرما پیش از IFC لازم است/).check();
+      await mdr.getByRole("button", { name: "ثبت در رجیستر" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`1.1 ${no}: ${e}`);
+    }
+    const reg = flat(await mdr.innerText());
+    check(["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002", "DMW-ISO-7001"].every((n) => reg.includes(n)), "four register rows");
+    check(/DMW-DS-P-7001.*P-7001/.test(reg), "the pump datasheet names its tag");
+    if (stop("1.1")) throw new Error("stop");
+
+    at("1.2", "the designer sends DES-TR-7001 (IFR) from its portal");
+    await designer.goto(BASE + "/documents", { waitUntil: "networkidle" }); await designer.waitForURL(/\/documents\/designer/, { timeout: 8000 }).catch(() => {});
+    check(/\/documents\/designer$/.test(new URL(designer.url()).pathname), `a designer sent to «/documents» lands on its portal (${new URL(designer.url()).pathname})`);
+    const dnav = flat(await designer.locator(".sidenav").innerText());
+    check(/پرتال طراح|مدارک/.test(dnav) && !/پایپینگ|HSE|خرید و انبار|کیفیت/.test(dnav), `the designer's menu is its portal only («${dnav.slice(0, 80)}»)`);
+    const dapi = await designer.evaluate(async (pid) => Promise.all(["/api/doc-control/incoming", "/api/procurement", "/api/doc-control"]
+      .map(async (u) => (await fetch(`${u}?projectId=${pid}`)).status)), await projectIdOf(designer));
+    check(dapi.every((st) => st === 403), `the review queue, procurement and the register are refused to the designer (${dapi.join(", ")})`);
+    const capi = await client.evaluate(async (pid) => (await fetch(`/api/doc-control/designer?projectId=${pid}`)).status, await projectIdOf(client));
+    check(capi === 403, `the portal is refused to a reviewer (${capi})`);
+    await open(client, "/documents");
+    check(!(await client.locator(".section-tabs a", { hasText: "پرتال طراح" }).count()), "a reviewer has no «پرتال طراح» tab");
+    await incoming("DES-TR-7001", "Designer", d(1), d(2), "برای بررسی",
+      ["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002"].map((no) => [no, "A", "IFR"]));
+    const tr1 = trBlock("DES-TR-7001");
+    const tr1Text = flat(await tr1.innerText());
+    check((tr1Text.match(/Rev\.A · IFR/g) || []).length === 3, "three rows, Rev.A · IFR");
+    check(tr1Text.includes(fa(d(12))), `reply due = received + 10 days (${fa(d(12))})`);
+    if (stop("1.2")) throw new Error("stop");
+
+    at("1.3", "distribution and a comment on the pump datasheet");
+    const pumpItem = await review(tr1, "DMW-DS-P-7001", "A");
+    await pumpItem.locator("input[id^=as-]").fill("mechanical, electrical");
+    await pumpItem.getByRole("button", { name: "توزیع" }).click(); await settle(pm);
+    await pumpItem.locator("select[id^=cd-]").selectOption("mechanical");
+    await pumpItem.locator("input[id^=cr-]").fill("Sec. 4");
+    await pumpItem.locator("textarea[id^=ct-]").fill("NPSHr at rated flow missing; state it on the curve");
+    await pumpItem.getByRole("button", { name: "ثبت کامنت" }).click(); await settle(pm);
+    await finishAll(pumpItem);
+    for (const no of ["DMW-PID-7001", "DMW-DS-D-7002"]) {
+      const item = await review(tr1, no, "A");
+      await item.locator("input[id^=as-]").fill("process");
+      await item.getByRole("button", { name: "توزیع" }).click(); await settle(pm);
+      await finishAll(item);
+    }
+    const e13 = await errorOf(pm); if (e13) problems.push(`1.3: ${e13}`);
+    check(/(\d+) کامنت باز/.exec(flat(await pm.locator(".pagehead").innerText()))?.[1] === "1", "one open comment");
+    if (stop("1.3")) throw new Error("stop");
+
+    at("1.4", "negative: code 1 on a document with an open comment");
+    await reply("DES-TR-7001", { "DMW-DS-P-7001": "1" }, "EPC-RT-7001", d(8));
+    const e14 = await errorOf(pm);
+    check(/کامنت باز/.test(e14), `refused: «${e14.slice(0, 120)}»`);
+
+    at("1.5", "reply EPC-RT-7001");
+    await reply("DES-TR-7001", { "DMW-PID-7001": "1", "DMW-DS-D-7002": "1", "DMW-DS-P-7001": "2" }, "EPC-RT-7001", d(8));
+    const e15 = await errorOf(pm); if (e15) problems.push(`1.5: ${e15}`);
+    const tr1After = flat(await trBlock("DES-TR-7001").innerText());
+    check((tr1After.match(/EPC-RT-7001/g) || []).length === 3, "all three rows answered by EPC-RT-7001");
+    check(/1 کامنت باز/.test(flat(await pm.locator(".pagehead").innerText())), "the pump datasheet's comment is still open");
+    if (stop("1.5")) throw new Error("stop");
+
+    at("1.6", "the designer answers the returned comment and sends Rev.0 for construction");
+    await open(designer, "/documents/designer", "کامنت‌های برگشتی");
+    const dc = card(designer, "کامنت‌های برگشتی");
+    const dcText = flat(await dc.innerText());
+    check(/NPSHr at rated flow missing/.test(dcText) && /EPC-RT-7001/.test(dcText), "the NPSHr comment reached the designer with EPC-RT-7001");
+    await dc.getByLabel(/^پاسخ DMW-DS-P-7001/).fill("NPSHr 2.1 m added to curve, Rev.0");
+    await dc.getByRole("button", { name: "ثبت پاسخ" }).click(); await settle(designer);
+    const e16r = await errorOf(designer); if (e16r) problems.push(`1.6 reply: ${e16r}`);
+    check(/پاسخ داده شد — منتظر بستن/.test(flat(await card(designer, "کامنت‌های برگشتی").innerText())), "answered, waiting for the reviewer to close it");
+    await incoming("DES-TR-7002", "Designer", d(14), d(15), "برای ساخت",
+      ["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002", "DMW-ISO-7001"].map((no) => [no, "0", "IFC"]));
+    if (stop("1.6")) throw new Error("stop");
+
+    at("1.7", "the reviewer closes on the designer's reply and codes Rev.0 for construction");
+    const tr2 = trBlock("DES-TR-7002");
+    const pump0 = await review(tr2, "DMW-DS-P-7001", "0");
+    check(/NPSHr 2\.1 m added to curve/.test(flat(await pump0.innerText())) && !(await pump0.getByLabel("پاسخ طراح").count()),
+      "the reviewer reads the designer's reply and has no box to type one");
+    await pump0.getByRole("button", { name: "بستن کامنت" }).click(); await settle(pm);
+    const e16a = await errorOf(pm); if (e16a) problems.push(`1.7 close comment: ${e16a}`);
+    check(/بسته در Rev\.0/.test(flat(await review(tr2, "DMW-DS-P-7001", "0").then((c) => c.innerText()))), "the NPSHr comment is closed on Rev.0");
+    await reply("DES-TR-7002", Object.fromEntries(["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002", "DMW-ISO-7001"].map((n) => [n, "1"])), "EPC-RT-7002", d(18));
+    const e16 = await errorOf(pm); if (e16) problems.push(`1.7: ${e16}`);
+    await open(pm, "/documents", "رجیستر");
+    const regRows = await card(pm, "رجیستر مدارک (MDR)").locator("tbody tr").allInnerTexts();
+    for (const no of ["DMW-PID-7001", "DMW-DS-P-7001", "DMW-DS-D-7002", "DMW-ISO-7001"]) {
+      const row = flat(regRows.find((r) => r.includes(no)) || "");
+      check(/Rev\.0 · IFC.*Rev\.0/.test(row), `${no}: construction revision Rev.0 («${row.slice(0, 90)}»)`);
+    }
+    await open(designer, "/documents/designer", "کامنت‌های برگشتی");
+    check(/بسته در Rev\.0/.test(flat(await card(designer, "کامنت‌های برگشتی").innerText())), "the designer sees its comment closed on Rev.0");
+    if (stop("1.7")) throw new Error("stop");
+  }
+
+  if (!skipPhase(2)) {
+    // ── 2 ────────────────────────────────────────────────────────────────
+    at("2.1", "MR-7001 for the pump, issued for enquiry");
+    await open(pm, "/procurement", "درخواست خرید و مناقصه");
+    const mrs = card(pm, "درخواست‌های خرید (MR)");
+    await fold(mrs, "درخواست خرید جدید");
+    await pm.fill("#mr-no", "MR-7001"); await pm.fill("#mr-title", "DM water transfer pump"); await pm.fill("#mr-disc", "mechanical");
+    await mrs.getByRole("button", { name: "ثبت پیش‌نویس" }).click(); await settle(pm);
+    const mr = await mrDetail("MR-7001");
+    await mr.locator("select[id^=ml-w-]").selectOption({ label: "تگ P-7001" });
+    await mr.locator("input[id^=ml-q-]").fill("1"); await mr.locator("input[id^=ml-n-]").fill(d(70));
+    await mr.getByLabel(/بازرسی کارخانه \(FAT\) لازم است/).check();
+    await mr.getByRole("button", { name: "افزودن ردیف" }).click(); await settle(pm);
+    await mr.locator("input[id^=mi-]").fill("برای استعلام");
+    await mr.getByRole("button", { name: /^صدور Rev 0/ }).click(); await settle(pm);
+    const e21 = await errorOf(pm); if (e21) problems.push(`2.1: ${e21}`);
+    const mrText = flat(await mr.innerText());
+    check(/P-7001.*لازم/.test(mrText) && /Rev 0/.test(mrText), "MR-7001 Rev 0 issued, its P-7001 line needs FAT");
+
+    at("2.2", "two bids, both technically acceptable");
+    await open(pm, "/procurement");
+    for (const code of Object.keys(VENDORS)) await vendor(code);
+    await open(pm, "/procurement", "درخواست خرید و مناقصه");
+    const mr2 = await mrDetail("MR-7001");
+    for (const [code, price, weeks] of [["V-PMP-A", 38000, 10], ["V-PMP-B", 41500, 8]]) {
+      await fold(mr2, "ثبت پیشنهاد");
+      const f = mr2.locator(".card-formslot");
+      await f.locator("select[id^=b-v-]").selectOption({ label: `${code} — ${code === "V-PMP-A" ? "Pump Maker A" : "Pump Maker B"}` });
+      await f.locator("input[id^=b-r-]").fill(`${code}-Q1`); await f.locator("input[id^=b-d-]").fill(d(20));
+      await f.locator("input[id^=b-u-]").fill(d(500)); await f.locator("input[id^=b-c-]").fill("EUR");
+      await f.locator("input[id^=b-p-]").fill(String(price)); await f.locator("input[id^=b-w-]").fill(String(weeks));
+      await f.getByRole("button", { name: "ثبت پیشنهاد", exact: true }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`2.2 ${code}: ${e}`);
+      await mr2.locator("tr", { hasText: `${code}-Q1` }).getByRole("button", { name: "قابل‌قبول" }).click(); await settle(pm);
+    }
+    const bids = flat(await mr2.innerText());
+    check(/V-PMP-A V-PMP-A-Q1.*کمترین/.test(bids) && (bids.match(/قابل‌قبول/g) || []).length >= 2, "both acceptable; V-PMP-A is the lowest");
+    if (stop("2.2")) throw new Error("stop");
+
+    at("2.3", "negative: award to the dearer bid with no reason");
+    await award("MR-7001", "V-PMP-B", "PO-7001", d(25));
+    const e23 = await errorOf(pm);
+    check(/کمترین قیمت نیست/.test(e23), `refused: «${e23.slice(0, 120)}»`);
+
+    at("2.4", "award to the lowest, PO-7001");
+    await award("MR-7001", "V-PMP-A", "PO-7001", d(25));
+    const e24 = await errorOf(pm); if (e24) problems.push(`2.4: ${e24}`);
+    await open(pm, "/procurement");
+    const po1 = await poDetail("PO-7001");
+    check(/P-7001.*لازم/.test(flat(await po1.innerText())), "PO-7001 has the P-7001 line, FAT required (from the MR)");
+
+    at("2.5", "vendor documents before FAT");
+    for (const [code, title] of [["VD-01", "General arrangement drawing"], ["VD-02", "Performance curve & FAT procedure"]]) {
+      const f = po1.locator("form", { has: pm.locator("b", { hasText: "مدرک فروشنده (VDRL)" }) });
+      await f.locator("input[id^=dk-]").fill(code); await f.locator("input[id^=dt-]").fill(title); await f.locator("input[id^=dd-]").fill(d(40));
+      await f.getByLabel("پیش از FAT لازم است").check();
+      await f.getByRole("button", { name: "افزودن مدرک" }).click(); await settle(pm);
+      const row = po1.locator("tr", { hasText: code });
+      await row.locator("input[id^=dr-]").fill("A"); await row.locator("input[id^=ds-]").fill(d(35));
+      await row.getByRole("button", { name: "ارسال شد" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`2.5 ${code}: ${e}`);
+    }
+    const vd = flat(await po1.innerText());
+    check((vd.match(/در بررسی/g) || []).length === 2 && vd.includes(fa(d(35))), "both under review, submitted on day 35");
+
+    at("2.6", "negative: FAT before the vendor documents are accepted (QC)");
+    await open(qc, "/procurement");
+    await fat(qc, "PO-7001", "P-7001", d(45), "IRN-7001", "TPI inspector");
+    const e26 = await errorOf(qc);
+    check(/مدارک پیش از FAT تأیید نشده/.test(e26), `refused: «${e26.slice(0, 120)}»`);
+
+    at("2.7", "vendor documents code 1, then FAT passed");
+    await open(pm, "/procurement");
+    const po1b = await poDetail("PO-7001");
+    for (const code of ["VD-01", "VD-02"]) {
+      const row = po1b.locator("tr", { hasText: code });
+      await row.locator("select[id^=dc-]").selectOption("1"); await row.locator("input[id^=do-]").fill(d(40));
+      await row.getByRole("button", { name: "برگشت" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`2.7 ${code}: ${e}`);
+    }
+    await open(qc, "/procurement");
+    await fat(qc, "PO-7001", "P-7001", d(45), "IRN-7001", "TPI inspector");
+    const e27 = await errorOf(qc); if (e27) problems.push(`2.7 FAT: ${e27}`);
+    check(/IRN-7001/.test(flat(await card(qc, "PO-7001").innerText())), "P-7001: FAT passed · IRN-7001");
+
+    at("2.8", "shipment SH-7001 and arrival");
+    await open(pm, "/procurement");
+    const po1c = await poDetail("PO-7001");
+    const shf = po1c.locator("form", { has: pm.locator("b", { hasText: "محمولهٔ جدید" }) });
+    await shf.locator("input[id^=sn-]").fill("SH-7001"); await shf.locator("input[id^=sd-]").fill(d(50)); await shf.locator("input[id^=se-]").fill(d(58));
+    await shf.getByLabel(/^ردیف 1 — P-7001/).fill("1");
+    await shf.getByRole("button", { name: "ثبت محموله" }).click(); await settle(pm);
+    const e28 = await errorOf(pm); if (e28) problems.push(`2.8: ${e28}`);
+    await po1c.getByLabel("تاریخ ورود SH-7001").fill(d(58));
+    await po1c.getByRole("button", { name: "ورود به سایت" }).click(); await settle(pm);
+    const e28b = await errorOf(pm); if (e28b) problems.push(`2.8 arrival: ${e28b}`);
+    const po1d = flat(await po1c.innerText());
+    check(/P-7001.*رسید سایت/.test(po1d) && po1d.includes(`SH-7001 ${fa(d(50))} ${fa(d(58))} ${fa(d(58))}`), "PO-7001: P-7001 «رسید سایت», SH-7001 arrived on day 58");
+    check(!/P-7001/.test(flat(await card(pm, "فهرست پیگیری").innerText())), "P-7001 has left the open expediting list");
+    if (stop("2.8")) throw new Error("stop");
+
+    at("2.9", "line pipe: item, direct PO, receipt against it");
+    await open(pm, "/warehouse");
+    const lots = card(pm, "موجودی به تفکیک لات");
+    await fold(lots, "کالای جدید");
+    await pm.fill("#it-code", "PIPE-3-S40-A106B"); await pm.fill("#it-desc", 'Pipe 3" SCH40 SMLS A106 Gr.B');
+    await pm.selectOption("#it-cat", "pipe"); await pm.fill("#it-uom", "m"); await pm.fill("#it-spec", "ASTM A106 Gr.B");
+    await lots.getByRole("button", { name: "ثبت کالا" }).click(); await settle(pm);
+    const e29a = await errorOf(pm); if (e29a) problems.push(`2.9 item: ${e29a}`);
+    await open(pm, "/procurement");
+    await fold(pm.locator("main"), "سفارش خرید (PO) جدید");
+    await pm.fill("#po-no", "PO-7002"); await pm.selectOption("#po-v", { label: "V-PIPE — Pipe Stockist" });
+    await pm.fill("#po-t", "Line pipe 3in"); await pm.fill("#po-c", "EUR"); await pm.fill("#po-d", d(30));
+    await pm.getByRole("button", { name: "ثبت PO" }).click(); await settle(pm);
+    const po2 = await poDetail("PO-7002");
+    const lf = po2.locator("form", { has: pm.locator("b", { hasText: "ردیف جدید" }) });
+    await lf.locator("select[id^=li-]").selectOption({ label: "PIPE-3-S40-A106B (m)" });
+    await lf.locator("input[id^=lq-]").fill("36"); await lf.locator("input[id^=lp-]").fill(d(55)); await lf.locator("input[id^=ln-]").fill(d(60));
+    await lf.getByRole("button", { name: "افزودن ردیف" }).click(); await settle(pm);
+    const e29b = await errorOf(pm); if (e29b) problems.push(`2.9 PO line: ${e29b}`);
+    await po2.locator("tr", { hasText: "PIPE-3-S40-A106B" }).getByRole("button", { name: "رسید" }).click(); await settle(pm);
+    for (const [pre, v] of [["rn", "MRR-7001"], ["rd", d(55)], ["rq", "36"], ["rh", "H-70011"], ["rm", "MTC-70011"], ["rl", "Laydown A"]]) await po2.locator(`input[id^=${pre}-]`).fill(v);
+    await po2.getByRole("button", { name: "رسید به انبار" }).click(); await settle(pm);
+    const e29c = await errorOf(pm); if (e29c) problems.push(`2.9 receipt: ${e29c}`);
+    await open(pm, "/warehouse");
+    const lotRow = flat(await card(pm, "موجودی به تفکیک لات").locator("tr", { hasText: "MRR-7001" }).first().innerText().catch(() => ""));
+    check(/MRR-7001/.test(lotRow), `warehouse lot MRR-7001 («${lotRow.slice(0, 120)}»)`);
+
+    at("2.10", "MIR and MTC review (QC)");
+    await open(qc, "/warehouse");
+    const qlots = card(qc, "موجودی به تفکیک لات");
+    await qlots.locator("tr", { hasText: "MRR-7001" }).getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+    const quar = flat(await qlots.innerText());
+    check(/قابل حواله نیست/.test(quar), "before MIR: not issuable");
+    await qlots.locator("input[id^=ia-]").fill("36"); await qlots.locator("input[id^=ir-]").fill("0");
+    await qlots.locator("input[id^=im-]").fill("MIR-7001"); await qlots.locator("input[id^=id-]").fill(d(56));
+    await qlots.getByRole("button", { name: "ثبت MIR" }).click(); await settle(qc);
+    const e210 = await errorOf(qc); if (e210) problems.push(`2.10 MIR: ${e210}`);
+    await qlots.getByRole("button", { name: "پذیرش" }).click(); await settle(qc);
+    const e210b = await errorOf(qc); if (e210b) problems.push(`2.10 MTC: ${e210b}`);
+    check(!/قابل حواله نیست/.test(flat(await qlots.innerText())), "after MIR and MTC: issuable");
+    if (stop("2.10")) throw new Error("stop");
+  }
+
+  if (!skipPhase(3)) {
+    // ── 3 ────────────────────────────────────────────────────────────────
+    at("3.1", "foundations");
+    await open(pm, "/civil");
+    const fdns = card(pm, "فونداسیون‌ها");
+    for (const [no, tag, vol, ab] of [["FDN-P-7001", "P-7001", "6", "VND-P7001-AB"], ["FDN-D-7002", "D-7002", "10", ""]]) {
+      await fold(fdns, "ثبت فونداسیون جدید");
+      await pm.fill("#f-no", no);
+      const v = await pm.locator("#f-carries option").evaluateAll((os, t) => os.find((o) => o.textContent.startsWith(`${t} —`))?.value, tag);
+      await pm.selectOption("#f-carries", v);
+      await pm.fill("#f-cls", "C30"); await pm.fill("#f-fc", "30"); await pm.fill("#f-vol", vol); await pm.fill("#f-ab", ab);
+      await fdns.getByRole("button", { name: "ثبت فونداسیون", exact: true }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`3.1 ${no}: ${e}`);
+    }
+    for (const no of ["FDN-P-7001", "FDN-D-7002"]) {
+      const row = flat(await fdns.locator("tr", { hasText: no }).first().innerText());
+      check(/70-01/.test(row) && /خاک‌برداری/.test(row), `${no}: filed under 70-01, next is excavation («${row.slice(0, 100)}»)`);
+    }
+
+    at("3.2", "work before the pour, each on its own day");
+    for (const no of ["FDN-P-7001", "FDN-D-7002"]) {
+      const det = await foundation(no);
+      for (const [title, day] of [["خاک‌برداری", 52], ["بتن مگر", 53], ["آرماتوربندی", 55], ["انکر بولت", 56], ["بازرسی پیش از بتن‌ریزی", 58]]) {
+        await tickStep(pm, det, title, d(day));
+      }
+      await fdns.locator("tr", { hasText: no }).getByRole("button", { name: "بستن" }).click(); await settle(pm);
+    }
+    const f1 = flat(await fdns.locator("tr", { hasText: "FDN-P-7001" }).first().innerText());
+    check(/بتن‌ریزی/.test(f1), `next is the pour («${f1.slice(0, 100)}»)`);
+
+    at("3.3", "negative: tick the pour by hand");
+    const det33 = await foundation("FDN-P-7001");
+    const pourCard = det33.locator(".card", { has: pm.locator("b", { hasText: /^بتن‌ریزی$/ }) });
+    check((await pourCard.getByRole("button", { name: "ثبت انجام" }).count()) === 0,
+      "the pour step has no «ثبت انجام» button — it is read from the pour card (the guide's refusal is the API's; the page does not offer it)");
+    await fdns.locator("tr", { hasText: "FDN-P-7001" }).getByRole("button", { name: "بستن" }).click(); await settle(pm);
+
+    at("3.4", "pours and cylinder breaks (QC)");
+    await open(qc, "/civil");
+    // Day N of the guide is typed as N: the project's start date is day 0.
+    await qc.fill("#work-day", "60");
+    check(await qc.inputValue("#work-date") === d(60), `«روز پروژه» 60 sets «تاریخ انجام کار» to ${d(60)}`);
+    await qc.fill("#work-day", "999");
+    const late = flat(await qc.locator(".workdate").innerText());
+    check(/روز 999 هنوز نرسیده/.test(late) && await qc.inputValue("#work-date") === d(60),
+      `a day still to come is said so, and the date is left alone («${late.slice(0, 90)}»)`);
+    await qc.getByRole("button", { name: "امروز" }).click();
+    const qf = card(qc, "فونداسیون‌ها");
+    for (const [no, pourNo, vol, breaks] of [["FDN-P-7001", "PC-P-7001", "6", [[7, "22.0 23.0"], [28, "36.5 37.5"]]],
+      ["FDN-D-7002", "PC-D-7002", "10", [[28, "35.0 36.0"]]]]) {
+      await qf.locator("tr", { hasText: no }).getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+      await qc.fill("#p-no", pourNo); await qc.fill("#p-on", d(200));
+      const ahead = flat(await qc.locator("#p-on").locator("xpath=..").innerText());
+      check(/هنوز نرسیده/.test(ahead), `a pour date still to come is flagged under the field («${ahead.slice(-60)}»)`);
+      await qc.fill("#p-on", d(60)); await qc.fill("#p-vol", vol);
+      await qc.fill("#p-cls", "C30"); await qc.fill("#p-fc", "30");
+      const con = await qc.locator("#p-con option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("C-CIV"))?.value);
+      if (con) await qc.selectOption("#p-con", con); else problems.push("3.4: contractor C-CIV not offered on the pour form");
+      await qc.getByRole("button", { name: "ثبت بتن‌ریزی" }).click(); await settle(qc);
+      const e = await errorOf(qc); if (e) problems.push(`3.4 ${pourNo}: ${e}`);
+      for (const [age, res] of breaks) {
+        await qc.fill("#s-no", "S1"); await qc.selectOption("#s-type", "cyl150"); await qc.fill("#s-age", String(age));
+        // The test date is not typed: it is the pour date plus the age.
+        const on = await qc.inputValue("#s-on");
+        const hint = flat(await qc.locator("#s-on").locator("xpath=..").innerText());
+        check(on === d(60 + age) && hint.includes(`روز ${60 + age} پروژه`),
+          `${pourNo} ${age}d: test date offered as pour + ${age} = ${on} («${hint.slice(-40)}»)`);
+        await qc.fill("#s-res", res); await qc.fill("#s-lab", `LAB-${pourNo}-${age}`);
+        await qc.getByRole("button", { name: "ثبت نتایج" }).click(); await settle(qc);
+        const e2 = await errorOf(qc); if (e2) problems.push(`3.4 ${pourNo} ${age}d: ${e2}`);
+      }
+      await qf.locator("tr", { hasText: no }).getByRole("button", { name: "بستن" }).click(); await settle(qc);
+    }
+    for (const no of ["FDN-P-7001", "FDN-D-7002"]) {
+      check(/پذیرفته/.test(flat(await qf.locator("tr", { hasText: no }).first().innerText())), `${no}: strength accepted (ACI 318)`);
+    }
+    // A 28-day break dated the day after the pour: the platform must refuse it.
+    await qf.locator("tr", { hasText: "FDN-D-7002" }).getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+    await qc.fill("#s-no", "S2"); await qc.fill("#s-age", "28"); await qc.fill("#s-res", "40 41"); await qc.fill("#s-on", d(61));
+    await qc.getByRole("button", { name: "ثبت نتایج" }).click(); await settle(qc);
+    const e34 = await errorOf(qc);
+    check(/زودتر از/.test(e34), `a 28-day break on day 61 is refused («${e34.slice(0, 100)}»)`);
+    await qf.locator("tr", { hasText: "FDN-D-7002" }).getByRole("button", { name: "بستن" }).click(); await settle(qc);
+
+    // ── 5, first half: the spool shop works while civil cures and backfills ─
+    at("5.1", "piping class A1DM");
+    await open(pm, "/piping/overview", "کلاس‌های لوله");
+    const pcs = card(pm, "کلاس‌های لوله");
+    await fold(pcs, "کلاس لولهٔ جدید یا ویرایش");
+    await pm.fill("#pc-code", "A1DM"); await pm.fill("#pc-desc", "DM water, CS, 150#"); await pm.selectOption("#pc-svc", "category_d");
+    await pm.fill("#pc-mat", "A106 Gr.B"); await pm.fill("#pc-ca", "1.5"); await pm.fill("#pc-t", "60"); await pm.fill("#pc-p", "16");
+    await pcs.getByRole("button", { name: "ثبت کلاس" }).click(); await settle(pm);
+    const e51 = flat(await pcs.locator("p.err").first().innerText({ timeout: 1000 }).catch(() => "")); if (e51) problems.push(`5.1: ${e51}`);
+    check(/A1DM.*Category D.*16/.test(flat(await pcs.innerText())), "A1DM: Category D, 16 barg");
+
+    at("5.2", "isometric DMW-ISO-7001, keyed by hand and saved with its file");
+    await pm.goto(BASE + "/piping", { waitUntil: "networkidle" }); await settle(pm);
+    await pm.getByRole("button", { name: /نقشه دوبعدی/ }).click();
+    await pm.locator(".drop input[type=file][accept*=pdf]").setInputFiles({ name: "DMW-ISO-7001_Rev0.pdf", mimeType: "application/pdf", buffer: tinyPdf("DMW-ISO-7001 Rev.0") });
+    await pm.waitForTimeout(3000);
+    await pm.getByRole("button", { name: "ورود دستی (JSON) برای همین نقشه" }).click(); await settle(pm);
+    await pm.locator(".pane textarea").fill(JSON.stringify(ISO_7001, null, 2));
+    await pm.getByRole("button", { name: "اعمال محلی" }).click(); await settle(pm);
+    await pm.locator(".tabnav button", { hasText: "سرجوش" }).click(); await settle(pm);
+    const wreg = flat(await pm.locator(".pane").first().innerText());
+    check(/6 جوش · 2 اسپول/.test(wreg), `the engine makes 6 welds on 2 spools («${wreg.slice(0, 80)}»)`);
+    await pm.getByRole("button", { name: "ذخیره در سامانه" }).click();
+    await pm.waitForFunction(() => /جوش ثبت شد|\.err/.test(document.querySelector(".savebar")?.innerText || "")
+      || !!document.querySelector(".savebar p.err"), null, { timeout: 60000 }).catch(() => {});
+    const saved = flat(await pm.locator(".savebar").innerText());
+    check(/6 جوش ثبت شد/.test(saved), `saved («${saved.slice(0, 100)}»)`);
+    await pm.getByRole("button", { name: "تأیید رجیستر (مهندس)" }).click();
+    await pm.waitForFunction(() => /تأیید شد|err/.test(document.querySelector(".savebar")?.innerText || ""), null, { timeout: 30000 }).catch(() => {});
+    const appr = flat(await pm.locator(".savebar").innerText());
+    check(/تأیید شد|قفل است/.test(appr), `approved («${appr.slice(0, 100)}»)`);
+    await open(pm, "/subsystems");
+    const unfiled = pm.locator(".card", { has: pm.locator("h2", { hasText: "خطوطی که زیر هیچ ساب‌سیستمی نیستند" }) });
+    check(!(await unfiled.count()) || !/70-DMW-7001/.test(await unfiled.innerText()), "70-DMW-7001 is not among the unfiled lines — it went under 70-01");
+    await open(pm, "/equipment", "تگ‌ها");
+    const p52 = flat(await (await tagSteps("P-7001")).innerText());
+    check(/⚙ اتصال پایپینگ/.test(p52), `P-7001's piping connection is now read from its line («${p52.slice(0, 60)}»)`);
+    await closeTagSteps("P-7001");
+    if (stop("5.2")) throw new Error("stop");
+
+    at("5.2a", "the work front: the spool shop and the civil crew at the same time");
+    await open(pm, "/workfront");
+    const par = flat(await pm.locator("[data-parallel]").innerText());
+    check(/هم‌زمان/.test(par) && /کارگاه پایپینگ/.test(par) && /سیویل و سازه/.test(par), `two fronts open together («${par.slice(0, 160)}»)`);
+    const wrow = async (n) => flat(await pm.locator(`[data-workfront] tr[data-item^="${n}"]`).first().innerText().catch(() => ""));
+    check(/صدور به کارگاه/.test(await wrow("SP-02")) && /امروز/.test(await wrow("SP-02")), `SP-02 to the shop today («${(await wrow("SP-02")).slice(0, 100)}»)`);
+    await pm.getByRole("tab", { name: /کل کار باقی‌مانده/ }).click(); await settle(pm);
+    check(/ELL90-3-S40/.test(await wrow("SP-01")) && /مواد نامعلوم/.test(await wrow("SP-01")), `SP-01: its elbow is not in the catalogue («${(await wrow("SP-01")).slice(0, 120)}»)`);
+    check(/منتظر پیش‌نیاز/.test(await wrow("P-7001")) && /فونداسیون/.test(await wrow("P-7001")), `P-7001 waits for its foundation («${(await wrow("P-7001")).slice(0, 120)}»)`);
+
+    at("5.3", "welder W-701 and his WPQ (QC)");
+    await open(qc, "/piping/welding", "جوشکاران");
+    const wcard = card(qc, "جوشکاران");
+    await fold(wcard, "جوشکار جدید");
+    await qc.fill("#wl-stamp", "W-701"); await qc.fill("#wl-name", "جوشکار سناریو"); await qc.fill("#wl-emp", "C-MEC");
+    await wcard.getByRole("button", { name: "ثبت جوشکار" }).click(); await settle(qc);
+    await fold(wcard, "صلاحیت جوشکار (WPQ)");
+    const wv = await qc.locator("#wq-w option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("W-701"))?.value);
+    await qc.selectOption("#wq-w", wv); await qc.fill("#wq-p", "GTAW"); await qc.fill("#wq-pos", "6G");
+    await qc.fill("#wq-od", "88.9"); await qc.fill("#wq-t", "5.49");
+    await wcard.getByRole("button", { name: "ثبت صلاحیت" }).click(); await settle(qc);
+    const e53 = await errorOf(qc); if (e53) problems.push(`5.3: ${e53}`);
+    check(/W-701.*جوشکار سناریو.*C-MEC.*1/.test(flat(await wcard.innerText())), "W-701 with one live qualification");
+
+    at("5.4", "pipe issued, spools released and fitted, shop welds welded and RT'd");
+    await open(qc, "/warehouse");
+    const wl = card(qc, "موجودی به تفکیک لات");
+    await wl.locator("tr", { hasText: "MRR-7001" }).getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+    await wl.locator("select[id^=mk-]").selectOption("issue"); await wl.locator("input[id^=mq-]").fill("12");
+    const spv = await wl.locator("select[id^=ms-] option").evaluateAll((os) => os.find((o) => o.textContent.includes("SP-01"))?.value);
+    if (spv) await wl.locator("select[id^=ms-]").selectOption(spv); else problems.push("5.4: spool SP-01 not offered on the issue form");
+    await wl.locator("input[id^=mn-]").fill("MIV-7001"); await wl.locator("input[id^=mo-]").fill(d(61));
+    await wl.getByRole("button", { name: "ثبت", exact: true }).click(); await settle(qc);
+    const e54a = await errorOf(qc); if (e54a) problems.push(`5.4 issue: ${e54a}`);
+    await open(qc, "/piping/execution", "مراحل اجرا");
+    for (const [sp, fu] of [["SP-01", "FU-7001"], ["SP-02", null]]) {
+      const det = await spoolSteps(qc, sp);
+      await tickStep(qc, det, "صدور", d(62));
+      if (fu) await tickStep(qc, det, "فیت‌آپ", d(64), fu);
+      else check(/فیت‌آپ و بازرسی آن ندارد/.test(flat(await det.innerText())), `${sp} has no shop welds: fit-up «ندارد»`);
+      await closeSpool(qc, sp);
+    }
+    await open(qc, "/piping/welding");
+    const wj = card(qc, "ثبت جوشکاری و NDT");
+    await qc.fill("#wj-q", "70-DMW-7001"); await wj.getByRole("button", { name: "جستجو" }).click(); await settle(qc);
+    await pickWelds(qc, ["W-02", "W-03", "W-04"]);
+    await weldThem(qc, "W-701", d(66), "GTAW", "V");
+    await pickWelds(qc, ["W-02", "W-03", "W-04"]);
+    await ndtThem(qc, "RT", "accept", "RT-7001", d(68));
+    const wjt = flat(await wj.innerText());
+    check((wjt.match(/پذیرفته/g) || []).length >= 3, "three shop welds: RT accepted");
+    await open(qc, "/piping/execution", "مراحل اجرا");
+    const sp1 = flat(await (await spoolSteps(qc, "SP-01")).innerText());
+    check(/⚙ جوشکاری کارگاهی[^⚙]*انجام شد/.test(sp1) && /⚙ NDT جوش‌های کارگاهی انجام شد/.test(sp1), `SP-01: shop welding and shop NDT read done («${sp1.slice(0, 160)}»)`);
+    await closeSpool(qc, "SP-01");
+    if (stop("5.4")) throw new Error("stop");
+
+    at("3.5", "backfill and hand-over to mechanical");
+    await open(pm, "/civil");
+    for (const no of ["FDN-P-7001", "FDN-D-7002"]) {
+      const det = await foundation(no);
+      await tickStep(pm, det, "خاک‌ریزی", d(70));
+      await tickStep(pm, det, "تحویل به مکانیک", d(89));
+      await fdns.locator("tr", { hasText: no }).getByRole("button", { name: "بستن" }).click(); await settle(pm);
+      check(/تحویل‌شده/.test(flat(await fdns.locator("tr", { hasText: no }).first().innerText())), `${no}: handed over`);
+    }
+    if (stop("3.5")) throw new Error("stop");
+  }
+
+  if (!skipPhase(4)) {
+    // ── 4 ────────────────────────────────────────────────────────────────
+    at("4.1", "rotating-equipment ITP with a client hold point on alignment");
+    await open(pm, "/inspection", "ITP");
+    const itps = card(pm, "ITPها");
+    await fold(itps, "ITP یا رویژن جدید");
+    await pm.fill("#n-no", "ITP-ROT-70"); await pm.fill("#n-rev", "0"); await pm.fill("#n-t", "Rotating equipment installation");
+    await pm.selectOption("#n-s", { label: "تجهیز دوّار" }).catch(async () => {
+      const opts = await pm.locator("#n-s option").allInnerTexts(); problems.push(`4.1: no «تجهیز دوّار» scope (${opts.join(" | ")})`); });
+    await itps.getByRole("button", { name: "ITP یا رویژن جدید", exact: true }).click(); await settle(pm);
+    const e41a = await errorOf(pm); if (e41a) problems.push(`4.1 ITP: ${e41a}`);
+    await pm.fill("#a-seq", "10"); await pm.fill("#a-title", "Cold alignment check");
+    await pm.selectOption("#a-step", { label: "الایمنت سرد" });
+    await pm.fill("#a-ref", "API 686 ch.7"); await pm.fill("#a-cr", "≤0.05 mm TIR"); await pm.fill("#a-rec", "ALN-form");
+    await pm.selectOption("#a-company", "H");
+    await pm.getByRole("button", { name: "افزودن ردیف" }).click(); await settle(pm);
+    const e41b = await errorOf(pm); if (e41b) problems.push(`4.1 activity: ${e41b}`);
+    await pm.getByRole("button", { name: "تأیید و اجرا" }).click(); await settle(pm);
+    const e41c = await errorOf(pm);
+    check(/تهیه|تأیید/.test(e41c), `the preparer cannot approve («${e41c.slice(0, 100)}»)`);
+    await open(client, "/inspection", "ITP");
+    await card(client, "ITPها").locator("tr", { hasText: "ITP-ROT-70" }).click(); await settle(client);
+    await client.getByRole("button", { name: "تأیید و اجرا" }).click(); await settle(client);
+    const e41d = await errorOf(client); if (e41d) problems.push(`4.1 client approval: ${e41d}`);
+    check(/در حال اجرا/.test(flat(await card(client, "ITPها").locator("tr", { hasText: "ITP-ROT-70" }).innerText())), "ITP-ROT-70 is in force");
+
+    at("4.2", "set and grout the pump and the drum");
+    await open(pm, "/equipment", "تگ‌ها");
+    for (const t of ["P-7001", "D-7002"]) {
+      const st = await tagSteps(t);
+      await tickStep(pm, st, "استقرار", d(90), `SET-${t}`);
+      await tickStep(pm, st, "گروت‌ریزی", d(92), `GRT-${t}`);
+      await closeTagSteps(t);
+    }
+
+    at("4.3", "negative: alignment before the hold point is released");
+    const p43 = await tagSteps("P-7001");
+    const align = flat(await p43.locator(".card", { has: pm.locator("b", { hasText: "الایمنت سرد" }) }).innerText());
+    check(/نقطهٔ توقف ITP-ROT-70 ردیف 10/.test(align) && !/ثبت انجام/.test(align),
+      `alignment shows the hold (ITP-ROT-70 row 10) and no button («${align.slice(0, 120)}»)`);
+    await closeTagSteps("P-7001");
+
+    at("4.4", "IR by QC, accepted by the client");
+    await open(qc, "/inspection", "درخواست‌های بازرسی");
+    const tomorrow = new Date(Date.now() + 86400000); tomorrow.setHours(9, 0, 0, 0);
+    const local = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    await fold(qc.locator("main"), "درخواست بازرسی جدید");
+    await qc.selectOption("#r-scope", { label: "تجهیز دوّار" });
+    await settle(qc);
+    const act = await qc.locator("#r-act option").evaluateAll((os) => os.find((o) => o.textContent.includes("ITP-ROT-70 · 10"))?.value);
+    await qc.selectOption("#r-act", act);
+    const item = await qc.locator("#r-item option").evaluateAll((os) => os.find((o) => o.textContent.includes("P-7001"))?.value);
+    await qc.selectOption("#r-item", item);
+    await qc.fill("#r-at", local); await qc.fill("#r-loc", "Unit 70, pump bay");
+    await qc.getByRole("button", { name: "ثبت درخواست" }).click(); await settle(qc);
+    const e44 = await errorOf(qc); if (e44) problems.push(`4.4 IR: ${e44}`);
+    await open(client, "/inspection", "درخواست‌های بازرسی");
+    const board = card(client, "درخواست‌های بازرسی");
+    await board.locator("tr", { hasText: "P-7001" }).getByRole("button", { name: "اقدام" }).click(); await settle(client);
+    const irCard = board;
+    await irCard.locator("select[id^=o-]").selectOption("accepted");
+    await irCard.locator("input[id^=n-]").fill("Client mech. inspector");
+    await irCard.getByRole("button", { name: "ثبت و امضا" }).click(); await settle(client);
+    const e44b = await errorOf(client); if (e44b) problems.push(`4.4 result: ${e44b}`);
+    check(/آزاد/.test(flat(await client.locator("main").innerText())), "the IR is released");
+
+    at("4.5", "cold alignment");
+    await open(pm, "/equipment", "تگ‌ها");
+    const p45 = await tagSteps("P-7001");
+    await tickStep(pm, p45, "الایمنت سرد", d(96), "ALN-7001");
+    const pumpSteps = flat(await p45.innerText());
+    check(/اتصال پایپینگ.*منتظر/.test(pumpSteps) || /اتصال پایپینگ.*آمادهٔ شروع/.test(pumpSteps), `piping connection waits for the line («${pumpSteps.slice(0, 200)}»)`);
+    await closeTagSteps("P-7001");
+    if (stop("4.5")) throw new Error("stop");
+  }
+
+  if (!skipPhase(5)) {
+    // ── 5 ────────────────────────────────────────────────────────────────
+
+    at("5.5", "hot-work permit: requested by the contractor, issued by the EPC after a gas test");
+    await open(qc, "/hse", "مجوز کار");
+    const ptw = card(qc, "مجوز کار (PTW)");
+    await fold(ptw, "درخواست مجوز کار");
+    await qc.fill("#pt-no", "HW-7001"); await qc.selectOption("#pt-type", "hot"); await qc.fill("#pt-area", "Unit 70 pipe rack");
+    await qc.fill("#pt-desc", "Field welds W-01, W-05, W-06 on 70-DMW-7001");
+    const cm = await qc.locator("#pt-c option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("C-MEC"))?.value);
+    if (cm) await qc.selectOption("#pt-c", cm);
+    await qc.fill("#pt-req", "C-MEC foreman");
+    await ptw.getByRole("button", { name: "ثبت درخواست" }).click(); await settle(qc);
+    const e55a = await errorOf(qc); if (e55a) problems.push(`5.5 request: ${e55a}`);
+    await open(pm, "/hse", "مجوز کار");
+    const prow = () => card(pm, "مجوز کار (PTW)").locator("tr", { hasText: "HW-7001" }).first();
+    await prow().getByRole("button", { name: "صدور" }).click(); await settle(pm);
+    const e55b = await errorOf(pm);
+    check(/گاز/.test(e55b), `issuing before a gas test is refused («${e55b.slice(0, 120)}»)`);
+    await open(qc, "/hse", "مجوز کار");
+    const qrow = card(qc, "مجوز کار (PTW)").locator("tr", { hasText: "HW-7001" }).first();
+    await qrow.getByRole("button", { name: "تست گاز" }).click(); await settle(qc);
+    const gas = card(qc, "مجوز کار (PTW)");
+    for (const [pre, v] of [["g-o", "20.9"], ["g-l", "0"], ["g-h", "0"], ["g-c", "0"], ["g-n", "Gas tester"], ["g-i", "GD-701"]]) await gas.locator(`input[id^=${pre}-]`).fill(v);
+    await gas.getByRole("button", { name: "ثبت تست گاز" }).click(); await settle(qc);
+    const e55c = await errorOf(qc); if (e55c) problems.push(`5.5 gas: ${e55c}`);
+    await open(pm, "/hse", "مجوز کار");
+    await prow().getByRole("button", { name: "صدور" }).click(); await settle(pm);
+    const e55d = await errorOf(pm); if (e55d) problems.push(`5.5 issue: ${e55d}`);
+    check(/فعال/.test(flat(await prow().innerText())), "HW-7001 is active");
+
+    at("5.6", "erection, field welds, supports (QC); permit closed");
+    await open(qc, "/piping/execution", "مراحل اجرا");
+    for (const sp of ["SP-01", "SP-02"]) { const det = await spoolSteps(qc, sp); await tickStep(qc, det, "نصب در محل", d(92)); await closeSpool(qc, sp); }
+    await open(qc, "/piping/welding");
+    const wj6 = card(qc, "ثبت جوشکاری و NDT");
+    await qc.fill("#wj-q", "70-DMW-7001"); await wj6.getByRole("button", { name: "جستجو" }).click(); await settle(qc);
+    await pickWelds(qc, ["W-01", "W-05", "W-06"]);
+    await weldThem(qc, "W-701", d(93), "GTAW", "V");
+    await pickWelds(qc, ["W-01", "W-05", "W-06"]);
+    await ndtThem(qc, "RT", "accept", "RT-7002", d(94));
+    await open(qc, "/piping/execution", "ساپورت‌ها");
+    const sup = card(qc, "ساپورت‌ها");
+    for (const [no, kind, sp] of [["G-7001", "guide", "SP-01"], ["SH-7002", "shoe", "SP-02"]]) {
+      await fold(sup, "ساپورت جدید");
+      await qc.fill("#s-no", no); await qc.selectOption("#s-kind", kind);
+      const sv = await qc.locator("#s-spool option").evaluateAll((os, x) => os.find((o) => o.textContent.endsWith(`/ ${x}`))?.value, sp);
+      await qc.selectOption("#s-spool", sv); await qc.fill("#s-ref", "STD-PS-02");
+      await sup.getByRole("button", { name: "افزودن ساپورت" }).click(); await settle(qc);
+      const e = await errorOf(qc); if (e) problems.push(`5.6 support ${no}: ${e}`);
+    }
+    for (const [no, step2, day] of [["G-7001", "نصب شد", 94], ["SH-7002", "نصب شد", 94], ["G-7001", "بازرسی شد", 95], ["SH-7002", "بازرسی شد", 95]]) {
+      await qc.fill("#work-date", d(day));
+      await sup.locator("tr", { hasText: no }).getByRole("button", { name: step2 }).click(); await settle(qc);
+      const e = await errorOf(qc); if (e) problems.push(`5.6 ${no} ${step2}: ${e}`);
+    }
+    const supText = flat(await sup.innerText());
+    check(/G-7001.*70-DMW-7001.*SP-01/.test(supText) && /SH-7002.*70-DMW-7001.*SP-02/.test(supText), "both supports on 70-DMW-7001, on their spools");
+    await open(qc, "/piping/execution", "مراحل اجرا");
+    for (const [sp, no] of [["SP-01", "G-7001"], ["SP-02", "SH-7002"]]) { const det = await spoolSteps(qc, sp); await tickStep(qc, det, "نصب ساپورت دائم", d(95), no); await closeSpool(qc, sp); }
+    const sp2 = flat(await (await spoolSteps(qc, "SP-02")).innerText());
+    check(/جوش و NDT سایت انجام شد/.test(sp2) && /تست فشار[^]*آمادهٔ شروع/.test(sp2), `SP-02: field welds done, pressure test next («${sp2.slice(0, 200)}»)`);
+    await closeSpool(qc, "SP-02");
+    await open(qc, "/hse", "مجوز کار");
+    await card(qc, "مجوز کار (PTW)").locator("tr", { hasText: "HW-7001" }).first().getByRole("button", { name: "بستن" }).click(); await settle(qc);
+    const e56 = await errorOf(qc); if (e56) problems.push(`5.6 close permit: ${e56}`);
+
+    at("5.7", "test pack TP-70-01");
+    await open(pm, "/completions", "پکیج‌های تست فشار");
+    const packs = card(pm, "پکیج‌های تست فشار");
+    await fold(packs, "پکیج تست جدید");
+    await pm.fill("#pk-no", "TP-70-01"); await pm.selectOption("#pk-s", { label: "70-01" }); await pm.selectOption("#pk-m", "hydrostatic");
+    await pm.fill("#pk-rr", "1.0"); await pm.fill("#pk-d", "DM water pump discharge to drum");
+    await packs.getByRole("button", { name: "ثبت پکیج" }).click(); await settle(pm);
+    const e57 = await errorOf(pm); if (e57) problems.push(`5.7 pack: ${e57}`);
+    await packs.locator("tr", { hasText: "TP-70-01" }).getByRole("button", { name: "جزئیات" }).click(); await settle(pm);
+    const lv = await packs.locator("select[id^=pl-] option").evaluateAll((os) => os.find((o) => o.textContent === "70-DMW-7001")?.value);
+    await packs.locator("select[id^=pl-]").selectOption(lv);
+    await packs.getByRole("button", { name: "افزودن", exact: true }).click(); await settle(pm);
+    const e57b = await errorOf(pm); if (e57b) problems.push(`5.7 line: ${e57b}`);
+    check(/= 24 barg/.test(flat(await packs.innerText())), "required test pressure 1.5 × 16 × 1.0 = 24 barg");
+
+    at("5.8", "negative: a test below the required pressure (QC)");
+    await open(qc, "/completions", "پکیج‌های تست فشار");
+    const qp = card(qc, "پکیج‌های تست فشار");
+    await qp.locator("tr", { hasText: "TP-70-01" }).getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+    await pressureTest(qc, qp, d(97), "20", "30", "PG-CAL-701", "");
+    const t58 = flat(await qp.innerText());
+    check(/رد/.test(t58) && /24/.test(t58), "20 barg is judged a fail against 24");
+    check(!(await qp.locator("tr", { hasText: "PG-CAL-701" }).getByRole("button", { name: "پذیرش" }).count()), "a failed test offers no «پذیرش»");
+
+    at("5.9", "hydrotest passed; the recorder cannot accept it, the client does");
+    await pressureTest(qc, qp, d(98), "24.5", "30", "PG-CAL-701", "Client");
+    const passRow = qp.locator("tr", { hasText: "24.5" }).first();
+    await passRow.getByRole("button", { name: "پذیرش" }).click(); await settle(qc);
+    const e59 = await errorOf(qc);
+    check(/ثبت‌کنندهٔ تست/.test(e59), `the recorder's acceptance is refused («${e59.slice(0, 100)}»)`);
+    await open(client, "/completions", "پکیج‌های تست فشار");
+    const cp = card(client, "پکیج‌های تست فشار");
+    await cp.locator("tr", { hasText: "TP-70-01" }).getByRole("button", { name: "جزئیات" }).click(); await settle(client);
+    const cBtn = cp.locator("tr", { hasText: "24.5" }).first().getByRole("button", { name: "پذیرش" });
+    if (await cBtn.count()) { await cBtn.click(); await settle(client); } else problems.push("5.9: the client has no «پذیرش» on the passed test");
+    const e59b = await errorOf(client); if (e59b) problems.push(`5.9 client: ${e59b}`);
+    await open(qc, "/piping/execution", "مراحل اجرا");
+    for (const sp of ["SP-01", "SP-02"]) {
+      const t = flat(await (await spoolSteps(qc, sp)).innerText());
+      check(/⚙ تست فشار[^⚙]*انجام شد/.test(t), `${sp}: the pressure test reads done from the accepted pack`);
+      await closeSpool(qc, sp);
+    }
+    if (stop("5.9")) throw new Error("stop");
+  }
+  if (!skipPhase(6)) {
+    // ── 6 ────────────────────────────────────────────────────────────────
+    at("6.1", "paint system, assigned to both spools, prep, two coats, final (QC)");
+    await open(pm, "/coating", "سیستم‌های رنگ");
+    const sysCard = card(pm, "سیستم‌های رنگ");
+    await fold(sysCard, "سیستم رنگ جدید");
+    await pm.fill("#cs-code", "CS-DM-01"); await pm.fill("#cs-title", "Epoxy primer / epoxy finish, C3");
+    await pm.selectOption("#cs-prep", "Sa 2½"); await pm.fill("#cs-pmin", "40"); await pm.fill("#cs-pmax", "75"); await pm.fill("#cs-max", "350");
+    await pm.fill("#cs-coats", "Epoxy zinc phosphate primer: 75\nEpoxy finish: 125");
+    await sysCard.getByRole("button", { name: "ثبت سیستم" }).click(); await settle(pm);
+    const e61a = await errorOf(pm); if (e61a) problems.push(`6.1 system: ${e61a}`);
+    await open(pm, "/coating", "آیتم‌ها");
+    const items = card(pm, "آیتم‌ها");
+    await fold(items, "تخصیص سیستم رنگ و عایق");
+    await pm.fill("#as-area", "3");
+    for (const sp of ["SP-01", "SP-02"]) await items.locator("label", { hasText: `70-DMW-7001 / ${sp}` }).locator("input").check();
+    await items.getByRole("button", { name: /^تخصیص به 2 آیتم/ }).click(); await settle(pm);
+    const e61b = await errorOf(pm); if (e61b) problems.push(`6.1 assign: ${e61b}`);
+    await open(qc, "/coating", "آیتم‌ها");
+    const qi = card(qc, "آیتم‌ها");
+    for (const sp of ["SP-01", "SP-02"]) {
+      const row = qi.locator("tr", { hasText: sp }).first();
+      await row.getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+      await qc.fill("#work-date", d(100));
+      await qc.selectOption("#pp-grade", "Sa 2½"); await qc.fill("#pp-prof", "55 60 58");
+      await qc.getByRole("button", { name: "ثبت آماده‌سازی" }).click(); await settle(qc);
+      for (const [no, day, dft] of [["1", 100, "80 87 94 81 88 95 82 89 96 83"], ["2", 101, "205 212 219 206 213 220 207 214 221 208"]]) {
+        await qc.fill("#work-date", d(day));
+        await qc.selectOption("#ct-no", no); await qc.fill("#ct-air", "30"); await qc.fill("#ct-rh", "55"); await qc.fill("#ct-steel", "33");
+        await qc.fill("#ct-dft", dft);
+        await qc.getByRole("button", { name: "ثبت لایه" }).click(); await settle(qc);
+        const e = await errorOf(qc); if (e) problems.push(`6.1 ${sp} coat ${no}: ${e}`);
+      }
+      const det = row.locator("xpath=following-sibling::tr[1]");
+      await tickStep(qc, det, "بازرسی نهایی رنگ", d(102));
+      await tickStep(qc, det, "تحویل رنگ و عایق", d(102));
+      await row.getByRole("button", { name: "بستن" }).click(); await settle(qc);
+    }
+    await open(qc, "/piping/execution", "مراحل اجرا");
+    const sp61 = flat(await (await spoolSteps(qc, "SP-01")).innerText());
+    check(/⚙ رنگ و عایق[^⚙]*انجام شد/.test(sp61), `SP-01: paint and insulation read done from coating («${sp61.slice(-160)}»)`);
+    await closeSpool(qc, "SP-01");
+
+    at("6.2", "cable list: the pump motor cable");
+    await open(pm, "/electrical", "کابل‌ها");
+    const cab = card(pm, "کابل‌ها");
+    await fold(cab, "ورود لیست کابل");
+    await pm.fill("#imp", "Cable No,From,To,Cable Type,Voltage,Length (m)\nCBL-P-7001,MCC-70,P-7001,3Cx16 XLPE/SWA/PVC,0.6/1kV,60");
+    await cab.getByRole("button", { name: "ورود", exact: true }).click(); await settle(pm);
+    const e62 = await errorOf(pm); if (e62) problems.push(`6.2: ${e62}`);
+    check(/CBL-P-7001.*P-7001/.test(flat(await cab.innerText())), "CBL-P-7001 to P-7001");
+
+    at("6.3", "cable pulled and terminated; a failed IR, then a pass (QC)");
+    await open(qc, "/electrical", "کابل‌ها");
+    const qcab = card(qc, "کابل‌ها");
+    const crow = qcab.locator("tr", { hasText: "CBL-P-7001" }).first();
+    await crow.getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+    const cdet = crow.locator("xpath=following-sibling::tr[1]");
+    await tickStep(qc, cdet, "مسیر آماده", d(94));
+    await tickStep(qc, cdet, "کابل‌کشی", d(95));
+    await tickStep(qc, cdet, "گلند و ترمینیشن", d(97));
+    for (const [readings, day] of [["300 0.4 280", 98], [">2000 >2000 >2000", 99]]) {
+      await qc.fill("#ir-v", "500"); await qc.fill("#ir-r", readings); await qc.fill("#ir-on", d(day));
+      await qc.fill("#ir-inst", "MIT-525 / CAL-701"); await qc.fill("#ir-by", "C-EI tester");
+      await qc.getByRole("button", { name: "ثبت تست" }).click(); await settle(qc);
+      const e = await errorOf(qc); if (e) problems.push(`6.3 IR ${day}: ${e}`);
+      if (day === 98) check(/رد/.test(flat(await cdet.innerText())), "the first IR is a fail, with the core named");
+    }
+    await tickStep(qc, cdet, "پیوستگی و توالی فاز", d(99));
+    await tickStep(qc, cdet, "آماده برای برق‌دار شدن", d(100));
+    check(/تست مقاومت عایق \(IR\)[^]*انجام شد/.test(flat(await cdet.innerText())), "after the second IR the IR step is done");
+
+    at("6.4", "instrument index: FT-7001 and LT-7002");
+    await open(pm, "/instrumentation", "ابزارها");
+    const ins = card(pm, "ابزارها");
+    await fold(ins, "ورود لیست ابزار");
+    await pm.fill("#iimp", "Tag No,Service,Type,Range,Equipment,Tolerance\nFT-7001,DM water pump discharge flow,Magnetic flowmeter,0-40 m3/h,P-7001,\nLT-7002,DM water drum level,Guided wave radar,0-100 %,D-7002,");
+    await ins.getByRole("button", { name: "ورود", exact: true }).click(); await settle(pm);
+    const e64 = await errorOf(pm); if (e64) problems.push(`6.4: ${e64}`);
+    const insText = flat(await ins.innerText());
+    check(/FT-7001/.test(insText) && /LT-7002/.test(insText), "two instruments registered");
+
+    at("6.5", "calibration, installation, hook-up, wiring, loop checks (QC)");
+    await open(qc, "/instrumentation", "ابزارها");
+    const qins = card(qc, "ابزارها");
+    for (const [tag, pts] of [["FT-7001", "0:4.00 10:8.00 20:12.01 30:16.00 40:20.00"], ["LT-7002", "0:4.00 25:8.01 50:12.00 75:16.00 100:20.00"]]) {
+      const r = qins.locator("tr", { hasText: tag }).first();
+      await r.getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+      const det = r.locator("xpath=following-sibling::tr[1]");
+      await qc.fill("#work-date", d(85));
+      await qc.fill("#cal-p", pts); await qc.fill("#cal-ref", "Fluke 754 / CAL-702");
+      await qc.getByRole("button", { name: "ثبت کالیبراسیون" }).click(); await settle(qc);
+      const e = await errorOf(qc); if (e) problems.push(`6.5 ${tag} cal: ${e}`);
+      await tickStep(qc, det, "نصب در محل", d(95));
+      await tickStep(qc, det, "هوک‌آپ", d(96));
+      await tickStep(qc, det, "سیم‌بندی", d(97));
+      await r.getByRole("button", { name: "بستن" }).click(); await settle(qc);
+    }
+    await open(qc, "/instrumentation", "لوپ‌ها");
+    const loopsCard = card(qc, "لوپ‌ها");
+    await qc.fill("#work-date", d(103));
+    for (const [k, row] of (await loopsCard.locator("tbody tr").all()).entries()) {
+      const loopNo = flat(await row.locator("td").first().innerText());
+      await row.getByLabel(`شمارهٔ فرم ${loopNo}`).fill(`LC-700${k + 1}`);
+      await row.getByLabel(`شاهد ${loopNo}`).fill("Client");
+      await row.getByRole("button", { name: "امضای لوپ چک" }).click(); await settle(qc);
+      const e = await errorOf(qc); if (e) problems.push(`6.5 loop ${loopNo}: ${e}`);
+    }
+    check(((flat(await loopsCard.innerText())).match(/لوپ‌چک‌شده/g) || []).length === 2, "both loops checked");
+    await open(qc, "/instrumentation", "ابزارها");
+    for (const tag of ["FT-7001", "LT-7002"]) {
+      const r = card(qc, "ابزارها").locator("tr", { hasText: tag }).first();
+      await r.getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+      await tickStep(qc, r.locator("xpath=following-sibling::tr[1]"), "آماده برای راه‌اندازی", d(104));
+      await r.getByRole("button", { name: "بستن" }).click(); await settle(qc);
+    }
+    if (stop("6.5")) throw new Error("stop");
+  }
+  if (!skipPhase(7)) {
+    // ── 7 ────────────────────────────────────────────────────────────────
+    at("7.1", "pipe strain check, final alignment, both machines ready");
+    await open(pm, "/equipment", "تگ‌ها");
+    const p71 = await tagSteps("P-7001");
+    const p71t = flat(await p71.innerText());
+    check(/⚙ اتصال پایپینگ انجام شد/.test(p71t) && /⚙ ترمینیشن برق انجام شد/.test(p71t) && /⚙ نصب و تست ابزار دقیق انجام شد/.test(p71t),
+      `P-7001: piping, electrical and instrument read done («${p71t.slice(0, 220)}»)`);
+    await tickStep(pm, p71, "کنترل تنش لوله", d(104), "STR-7001");
+    await tickStep(pm, p71, "آمادگی راه‌اندازی", d(105));
+    await closeTagSteps("P-7001");
+    const d71 = await tagSteps("D-7002");
+    await tickStep(pm, d71, "اتصال پایپینگ", d(99), "70-DMW-7001");
+    await tickStep(pm, d71, "ترمینیشن برق", d(99), "ERT-D-7002");
+    await tickStep(pm, d71, "آمادگی راه‌اندازی", d(105));
+    await closeTagSteps("D-7002");
+
+    at("7.2", "MC walk-down punches (QC)");
+    await open(qc, "/quality", "Punch");
+    const pl = card(qc, "Punch list");
+    for (const [tag, cat, desc] of [["P-7001", "A", "Coupling guard not installed"], ["D-7002", "B", "Drum nameplate photo missing in dossier"], [null, "C", "Touch-up paint at shoe SH-7002"]]) {
+      await fold(pl, "ثبت Punch جدید");
+      await qc.selectOption("#pf-s", { label: "70-01" });
+      if (tag) await qc.selectOption("#pf-t", { label: tag });
+      await qc.selectOption("#pf-c", cat);
+      const ck = await qc.locator("#pf-k option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("C-MEC"))?.value);
+      if (ck) await qc.selectOption("#pf-k", ck);
+      await qc.fill("#pf-d", desc); await qc.fill("#pf-r", d(106)); await qc.fill("#pf-u", d(110));
+      await pl.getByRole("button", { name: "ثبت", exact: true }).click(); await settle(qc);
+      const e = await errorOf(qc); if (e) problems.push(`7.2 ${cat}: ${e}`);
+    }
+    check((flat(await pl.innerText()).match(/Coupling guard|nameplate|Touch-up/g) || []).length === 3, "three punch items");
+
+    at("7.3", "negative: MC with a punch A open");
+    await open(pm, "/completions", "ساب‌سیستم‌ها");
+    const mcRow = () => card(pm, "ساب‌سیستم‌ها").locator("tr", { hasText: "70-01" }).first();
+    const mc73 = flat(await mcRow().innerText());
+    check(await mcRow().getByRole("button", { name: "امضای MC" }).isDisabled() && /Punch A/.test(mc73) && /Coupling guard/.test(mc73),
+      `«امضای MC» is disabled and the open column names the punch A («${mc73.slice(0, 160)}»)`);
+
+    at("7.4", "punch A cleared (EPC) and verified (QC)");
+    await open(pm, "/quality", "Punch");
+    await punchAct(pm, "Coupling guard not installed", "رفع شد", "Guard fitted, photo attached", d(107));
+    await open(qc, "/quality", "Punch");
+    await punchAct(qc, "Coupling guard not installed", "تأیید و بستن", "", d(107));
+    await open(pm, "/completions", "ساب‌سیستم‌ها");
+    check(/چیزی باز نیست/.test(flat(await mcRow().innerText())), "70-01: nothing open");
+
+    at("7.5", "MC signed; the signer cannot accept; the client does");
+    await mcRow().getByRole("button", { name: "امضای MC" }).click(); await settle(pm);
+    const e75 = await errorOf(pm); if (e75) problems.push(`7.5 sign: ${e75}`);
+    await mcRow().getByRole("button", { name: "پذیرش کارفرما" }).click(); await settle(pm);
+    const e75b = await errorOf(pm);
+    check(!!e75b, `the signer's acceptance is refused («${e75b.slice(0, 100)}»)`);
+    await open(client, "/completions", "ساب‌سیستم‌ها");
+    const cRow = card(client, "ساب‌سیستم‌ها").locator("tr", { hasText: "70-01" }).first();
+    await cRow.getByRole("button", { name: "پذیرش کارفرما" }).click(); await settle(client);
+    const e75c = await errorOf(client); if (e75c) problems.push(`7.5 accept: ${e75c}`);
+    check(/پذیرفته/.test(flat(await cRow.innerText())), "70-01: MC accepted by the client");
+    if (stop("7.5")) throw new Error("stop");
+  }
+  if (!skipPhase(8)) {
+    // ── 8 ────────────────────────────────────────────────────────────────
+    at("8.1", "pre-commissioning checklists and commissioning procedures");
+    await open(pm, "/precom", "چک‌لیست‌ها و روال‌ها");
+    const tpl = card(pm, "چک‌لیست‌ها و روال‌های راه‌اندازی پروژه");
+    for (const [code, title, applies, phase, criteria] of [
+      ["B-PIP-01", "Line flushing with DM water & reinstatement", "line", "precom", "Clear water at outlet, no debris on temporary strainer"],
+      ["B-ROT-01", "Motor solo run & rotation check", "rotating", "precom", "Rotation per arrow; vibration < 2.8 mm/s"],
+      ["C-ROT-01", "Pump run test on DM water, 4 h", "rotating", "commissioning", "Flow ≥ 30 m³/h at rated head; bearing temp < 80 °C"],
+      ["C-SUB-01", "Drum level control in automatic", "subsystem", "commissioning", "LT-7002 holds 50 % ± 5 % for 30 min"],
+    ]) {
+      await fold(tpl, "چک‌لیست جدید");
+      await pm.fill("#t-code", code); await pm.fill("#t-title", title);
+      await pm.selectOption("#t-ph", phase); await pm.selectOption("#t-app", applies); await pm.fill("#t-cr", criteria);
+      await tpl.getByRole("button", { name: "ذخیرهٔ چک‌لیست" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`8.1 ${code}: ${e}`);
+    }
+    const tplText = flat(await tpl.innerText());
+    check(["B-PIP-01", "B-ROT-01", "C-ROT-01", "C-SUB-01"].every((c) => tplText.includes(c)), "four templates registered");
+
+    at("8.2", "negative: a commissioning procedure before RFC (QC)");
+    await open(qc, "/precom", "ساب‌سیستم‌ها");
+    const qpanel = await precomPanel(qc);
+    const c82 = qpanel.locator("tr", { hasText: "C-ROT-01" }).first();
+    check(!(await c82.getByRole("button", { name: "ثبت" }).count()) && /پس از پذیرش RFC ثبت می‌شود/.test(flat(await qpanel.innerText())),
+      "commissioning rows have no «ثبت» and say «پس از پذیرش RFC ثبت می‌شود»");
+
+    at("8.3", "flushing; a failed then a passed motor solo run; client accepts (QC, client)");
+    await attempt(qc, qpanel, "B-PIP-01", "pass", d(109), "Client", "");
+    await attempt(qc, qpanel, "B-ROT-01", "fail", d(109), "Client", "Reverse rotation — phases swapped at MCC");
+    await attempt(qc, qpanel, "B-ROT-01", "pass", d(110), "Client", "");
+    check(/2 بار/.test(flat(await qpanel.locator("tr", { hasText: "B-ROT-01" }).first().innerText())), "B-ROT-01 keeps both attempts");
+    await open(client, "/precom", "ساب‌سیستم‌ها");
+    const cpanel = await precomPanel(client);
+    for (const code of ["B-PIP-01", "B-ROT-01"]) {
+      await cpanel.locator("tr", { hasText: code }).first().getByRole("button", { name: "پذیرش" }).click(); await settle(client);
+      const e = await errorOf(client); if (e) problems.push(`8.3 accept ${code}: ${e}`);
+    }
+
+    at("8.4", "RFC signed (EPC), accepted (client)");
+    await open(pm, "/precom", "ساب‌سیستم‌ها");
+    const ppanel = await precomPanel(pm);
+    await ppanel.getByRole("button", { name: "امضای RFC" }).click(); await settle(pm);
+    const e84 = await errorOf(pm); if (e84) problems.push(`8.4 sign: ${e84}`);
+    await open(client, "/precom", "ساب‌سیستم‌ها");
+    await (await precomPanel(client)).getByRole("button", { name: "پذیرش RFC (کارفرما)" }).click(); await settle(client);
+    const e84b = await errorOf(client); if (e84b) problems.push(`8.4 accept: ${e84b}`);
+
+    at("8.5", "pump run test and drum level control (QC); client accepts");
+    await open(qc, "/precom", "ساب‌سیستم‌ها");
+    const qp5 = await precomPanel(qc);
+    await attempt(qc, qp5, "C-ROT-01", "pass", d(114), "Client", "Flow 32 m³/h, bearing 61 °C");
+    await attempt(qc, qp5, "C-SUB-01", "pass", d(115), "Client", "");
+    await open(client, "/precom", "ساب‌سیستم‌ها");
+    const cp5 = await precomPanel(client);
+    for (const code of ["C-ROT-01", "C-SUB-01"]) {
+      await cp5.locator("tr", { hasText: code }).first().getByRole("button", { name: "پذیرش" }).click(); await settle(client);
+      const e = await errorOf(client); if (e) problems.push(`8.5 accept ${code}: ${e}`);
+    }
+
+    at("8.6", "negative: RFSU with punch B open — the refusal names it");
+    await open(pm, "/precom", "ساب‌سیستم‌ها");
+    const pp6 = flat(await (await precomPanel(pm)).innerText());
+    check(/RFSU — باز: Punch A\/B باز \(1\): [^،]*Drum nameplate photo missing in dossier/.test(pp6), `RFSU is held by the named punch B («${(pp6.match(/RFSU — باز:.*$/) || [""])[0].slice(0, 140)}»)`);
+
+    at("8.7", "punch B closed; RFSU signed and accepted");
+    await open(pm, "/quality", "Punch");
+    await punchAct(pm, "Drum nameplate photo missing", "رفع شد", "Photo added to dossier", d(116));
+    await open(qc, "/quality", "Punch");
+    await punchAct(qc, "Drum nameplate photo missing", "تأیید و بستن", "", d(116));
+    await open(pm, "/precom", "ساب‌سیستم‌ها");
+    await (await precomPanel(pm)).getByRole("button", { name: "امضای RFSU" }).click(); await settle(pm);
+    const e87 = await errorOf(pm); if (e87) problems.push(`8.7 sign: ${e87}`);
+    await open(client, "/precom", "ساب‌سیستم‌ها");
+    await (await precomPanel(client)).getByRole("button", { name: "پذیرش RFSU (کارفرما)" }).click(); await settle(client);
+    const e87b = await errorOf(client); if (e87b) problems.push(`8.7 accept: ${e87b}`);
+    check(/RFSU — امضا:.*پذیرش:/.test(flat(await (await precomPanel(client)).innerText())), "70-01: RFSU signed and accepted");
+    if (stop("8.7")) throw new Error("stop");
+  }
+  if (!skipPhase(9)) {
+    // ── 9 ────────────────────────────────────────────────────────────────
+    at("9.0", "vendor O&M manual (IOM) for the pump");
+    await open(pm, "/procurement");
+    const po9 = await poDetail("PO-7001");
+    const vf = po9.locator("form", { has: pm.locator("b", { hasText: "مدرک فروشنده (VDRL)" }) });
+    await vf.locator("input[id^=dk-]").fill("IOM"); await vf.locator("input[id^=dt-]").fill("Operation and maintenance manual"); await vf.locator("input[id^=dd-]").fill(d(110));
+    await vf.getByRole("button", { name: "افزودن مدرک" }).click(); await settle(pm);
+    const iom = () => po9.locator("tr", { has: pm.locator("td", { hasText: /^IOM$/ }) }).first();
+    await iom().locator("input[id^=dr-]").fill("0"); await iom().locator("input[id^=ds-]").fill(d(105));
+    await iom().getByRole("button", { name: "ارسال شد" }).click(); await settle(pm);
+    await iom().locator("select[id^=dc-]").selectOption("1"); await iom().locator("input[id^=do-]").fill(d(108));
+    await iom().getByRole("button", { name: "برگشت" }).click(); await settle(pm);
+    const e90 = await errorOf(pm); if (e90) problems.push(`9.0: ${e90}`);
+    check(/پذیرفته/.test(flat(await iom().innerText())), "IOM accepted (code 1)");
+
+    at("9.1", "asset master: the pump from its datasheet, the drum as far as known");
+    await open(pm, "/handover", "شناسنامهٔ تجهیزات");
+    const am = card(pm, "شناسنامهٔ نگهداری تجهیزات");
+    const amRow = (tag) => am.locator("tr", { has: pm.locator("td a", { hasText: new RegExp(`^${tag}$`) }) }).first();
+    await amRow("P-7001").getByRole("button", { name: "ویرایش" }).click(); await settle(pm);
+    const pf = amRow("P-7001").locator("xpath=following-sibling::tr[1]");
+    await pf.locator("select[id^=ic-]").selectOption("PU"); await pf.locator("select[id^=cr-]").selectOption("A");
+    await pf.locator("input[id^=cb-]").fill("CA-DMW-01 (boiler feed make-up, single pump)");
+    await pf.locator("input[id^=mf-]").fill("Pump Maker A"); await pf.locator("input[id^=md-]").fill("ISO 2858 end-suction 50-32-200");
+    await pf.locator("input[id^=sn-]").fill("PMA-24-7001"); await pf.locator("input[id^=yb-]").fill("2026");
+    const dsv = await pf.locator("select[id^=ds-] option").evaluateAll((os) => os.find((o) => /DMW-DS-P-7001/.test(o.textContent) && /0/.test(o.textContent))?.value);
+    if (dsv) await pf.locator("select[id^=ds-]").selectOption(dsv); else problems.push("9.1: the pump datasheet DMW-DS-P-7001 Rev.0 is not offered");
+    await pf.locator("input[id^=dp-]").fill("16"); await pf.locator("input[id^=tmin-]").fill("5"); await pf.locator("input[id^=tmax-]").fill("60");
+    await pf.getByRole("button", { name: "ذخیره", exact: true }).click(); await settle(pm);
+    const e91 = await errorOf(pm); if (e91) problems.push(`9.1 P-7001: ${e91}`);
+    for (const [label, dcs, hist, uom] of [["Discharge flow", "70FT7001.PV", "DMW:70FT7001.PV", "m3/h"], ["Run status", "P7001_RUN.STS", "", ""]]) {
+      await pf.locator("input[id^=pl-]").fill(label); await pf.locator("input[id^=pd-]").fill(dcs);
+      await pf.locator("input[id^=ph-]").fill(hist); await pf.locator("input[id^=pu-]").fill(uom);
+      await pf.getByRole("button", { name: "افزودن" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`9.1 DCS ${label}: ${e}`);
+    }
+    await amRow("P-7001").getByRole("button", { name: "بستن" }).click(); await settle(pm);
+    await amRow("D-7002").getByRole("button", { name: "ویرایش" }).click(); await settle(pm);
+    const df = amRow("D-7002").locator("xpath=following-sibling::tr[1]");
+    await df.locator("select[id^=ic-]").selectOption("VE"); await df.locator("select[id^=cr-]").selectOption("B");
+    await df.locator("input[id^=cb-]").fill("CA-DMW-01"); await df.locator("input[id^=mf-]").fill("Local fabricator");
+    await df.getByRole("button", { name: "ذخیره", exact: true }).click(); await settle(pm);
+    const e91b = await errorOf(pm); if (e91b) problems.push(`9.1 D-7002: ${e91b}`);
+    await amRow("D-7002").getByRole("button", { name: "بستن" }).click(); await settle(pm);
+    const pRow = flat(await amRow("P-7001").innerText());
+    check(/16 barg/.test(pRow) && /DCS\/Historian: 2/.test(pRow) && /DMW-70-P-7001/.test(pRow), `P-7001: design conditions, 2 DCS points, FLOC DMW-70-P-7001 («${pRow.slice(0, 160)}»)`);
+
+    at("9.2", "PM plan (drafted by EPC, approved by the client) and a spare part");
+    await open(pm, "/handover", "برنامهٔ PM");
+    await fold(pm.locator("main"), "تسک نگهداری جدید");
+    const pmTag = await pm.locator("#pm-tag option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("P-7001"))?.value);
+    await pm.selectOption("#pm-tag", pmTag);
+    await pm.fill("#pm-code", "PM-01"); await pm.fill("#pm-title", "Bearing lubrication"); await pm.selectOption("#pm-strategy", "time_based");
+    await pm.fill("#pm-iv", "3"); await pm.selectOption("#pm-unit", "month"); await pm.selectOption("#pm-craft", "mechanical");
+    await pm.fill("#pm-dur", "1"); await pm.selectOption("#pm-src", "oem"); await pm.fill("#pm-ref", "IOM PMA §6.2");
+    await pm.getByRole("button", { name: "ذخیره به‌عنوان پیش‌نویس" }).click(); await settle(pm);
+    const e92 = await errorOf(pm); if (e92) problems.push(`9.2 PM draft: ${e92}`);
+    check(!(await card(pm, "برنامهٔ نگهداری (PM)").locator("tr", { hasText: "PM-01" }).first().getByRole("button", { name: "تأیید" }).count()),
+      "the preparer is offered no «تأیید»");
+    await open(client, "/handover", "برنامهٔ PM");
+    await card(client, "برنامهٔ نگهداری (PM)").locator("tr", { hasText: "PM-01" }).first().getByRole("button", { name: "تأیید" }).click(); await settle(client);
+    const e92b = await errorOf(client); if (e92b) problems.push(`9.2 PM approve: ${e92b}`);
+    await open(pm, "/handover", "قطعات یدکی");
+    const spc = card(pm, "قطعات یدکی (SPIR)");
+    await fold(pm.locator("main"), "ثبت قطعهٔ یدکی");
+    const spTag = await pm.locator("#sp-tag option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("P-7001"))?.value);
+    await pm.selectOption("#sp-tag", spTag); await pm.fill("#sp-no", "MS-50-PMA"); await pm.fill("#sp-mf", "Pump Maker A");
+    await pm.fill("#sp-desc", "Mechanical seal cartridge"); await pm.selectOption("#sp-cat", "commissioning"); await pm.fill("#sp-uom", "EA");
+    await pm.fill("#sp-inst", "1"); await pm.fill("#sp-rec", "1"); await pm.fill("#sp-app", "1"); await pm.fill("#sp-ref", "SPIR-P-7001");
+    await pm.locator("form", { has: pm.locator("#sp-no") }).getByRole("button", { name: "ذخیره", exact: true }).click(); await settle(pm);
+    const e92c = await errorOf(pm); if (e92c) problems.push(`9.2 spare: ${e92c}`);
+    check(/MS-50-PMA/.test(flat(await spc.innerText())), "the seal is on the pump's SPIR");
+
+    at("9.3", "CMMS export");
+    await open(pm, "/handover", "شناسنامهٔ تجهیزات");
+    const csv = await pm.evaluate(async () => (await fetch([...document.querySelectorAll("a")].find((a) => a.textContent.includes("خروجی CSV (همه)"))?.href || "")).text()).catch(() => "");
+    const pLine = csv.split("\n").find((l) => l.includes("P-7001")) || "", dLine = csv.split("\n").find((l) => l.includes("D-7002")) || "";
+    check(/DMW-70-P-7001/.test(pLine) && /"yes"/.test(pLine), `P-7001: DMW-70-P-7001, ready = yes («${pLine.slice(0, 120)}»)`);
+    check(/"no"/.test(dLine), `D-7002: ready = no, and says why («${dLine.slice(0, 160)}»)`);
+
+    at("9.4", "performance guarantee PG-01 and test PT-7001");
+    await open(pm, "/precom", "تضمین‌های عملکرد");
+    const gc = card(pm, "تضمین‌های عملکرد");
+    await fold(gc, "تضمین جدید");
+    await pm.fill("#gu-code", "PG-01"); await pm.fill("#gu-par", "DM water transfer capacity at rated head");
+    const u70 = await pm.locator("#gu-unit option").evaluateAll((os) => os.find((o) => /70/.test(o.textContent))?.value);
+    if (u70) await pm.selectOption("#gu-unit", u70);
+    await pm.selectOption("#gu-dir", "min"); await pm.fill("#gu-val", "30"); await pm.fill("#gu-uom", "m3/h"); await pm.fill("#gu-dur", "4");
+    await pm.fill("#gu-basis", "PO-7001 Annex B §2");
+    await gc.getByRole("button", { name: "ذخیرهٔ تضمین" }).click(); await settle(pm);
+    const e94 = await errorOf(pm); if (e94) problems.push(`9.4 guarantee: ${e94}`);
+    await open(pm, "/precom", "آزمون عملکرد");
+    const tc = card(pm, "آزمون عملکرد (Performance Test)");
+    await fold(tc, "ثبت آزمون");
+    await pm.fill("#pt-no2", "PT-7001");
+    const tu = await pm.locator("#pt-unit option").evaluateAll((os) => os.find((o) => /واحد 70/.test(o.textContent))?.value);
+    if (tu) await pm.selectOption("#pt-unit", tu);
+    await pm.fill("#pt-from2", `${d(120)}T08:00`); await pm.fill("#pt-to2", `${d(120)}T14:00`); await pm.fill("#pt-note", "After RFSU");
+    await tc.getByRole("button", { name: "ثبت آزمون", exact: true }).click(); await settle(pm);
+    const e94b = await errorOf(pm); if (e94b) problems.push(`9.4 test: ${e94b}`);
+    const tcard = tc.locator(".card", { hasText: "PT-7001" }).first();
+    await tcard.locator("input[id^=pr-m-]").fill("32"); await tcard.locator("input[id^=pr-x-]").fill("Magflow FT-7001 average");
+    await tcard.getByRole("button", { name: "ثبت نتیجه" }).click(); await settle(pm);
+    await tcard.getByRole("button", { name: "امضای آزمون" }).click(); await settle(pm);
+    const e94c = await errorOf(pm); if (e94c) problems.push(`9.4 sign: ${e94c}`);
+    await open(client, "/precom", "آزمون عملکرد");
+    const ctc = card(client, "آزمون عملکرد (Performance Test)").locator(".card", { hasText: "PT-7001" }).first();
+    await ctc.getByRole("button", { name: "پذیرش (کارفرما)" }).click(); await settle(client);
+    const e94d = await errorOf(client); if (e94d) problems.push(`9.4 accept: ${e94d}`);
+    const pt = flat(await ctc.innerText());
+    check(/پذیرفته/.test(pt) && /PG-01.*32.*برآورده/.test(pt), `PT-7001 accepted; PG-01 met at 32 («${pt.slice(0, 160)}»)`);
+  }
+  if (!skipPhase(10)) {
+    // ── 10 ───────────────────────────────────────────────────────────────
+    const cu = await signIn(creds.people.contracts.email, creds.people.contracts.password);
+    const fu = await signIn(creds.people.finance.email, creds.people.finance.password);
+    const hu = await signIn(creds.people.hr.email, creds.people.hr.password);
+
+    at("10.1", "WBS elements for the mechanical subcontractor");
+    await open(pm, "/controls");
+    const acc = card(pm, "حساب‌های کنترلی");
+    for (const [code, title, bac] of [["WBS-70-PIP", "پایپینگ واحد 70", "20000"], ["WBS-70-EQP", "نصب تجهیزات واحد 70", "5000"]]) {
+      await fold(acc, "حساب کنترلی جدید");
+      await pm.fill("#ac-code", code); await pm.fill("#ac-title", title);
+      const mec = await pm.locator("#ac-c option").evaluateAll((os) => os.find((o) => o.textContent === "C-MEC")?.value);
+      await pm.selectOption("#ac-c", mec); await pm.fill("#ac-bac", bac); await pm.selectOption("#ac-m", "manual");
+      await acc.getByRole("button", { name: "ثبت حساب" }).click(); await settle(pm);
+      const e = await errorOf(pm); if (e) problems.push(`10.1 ${code}: ${e}`);
+    }
+    const accText = flat(await acc.innerText());
+    check(/WBS-70-PIP/.test(accText) && /WBS-70-EQP/.test(accText), "two WBS elements on the controls page");
+
+    at("10.2", "subcontract SC-70-MEC with its payment items, sent for review");
+    await open(cu, "/contracts");
+    await fold(cu.locator("main"), "قرارداد جدید");
+    await cu.fill("#ct-no", "SC-70-MEC"); await cu.fill("#ct-title", "عملیات مکانیکال و پایپینگ واحد 70");
+    await cu.selectOption("#ct-kind", "subcontract");
+    const mecC = await cu.locator("#ct-con option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("C-MEC"))?.value);
+    await cu.selectOption("#ct-con", mecC); await cu.fill("#ct-value", "60000");
+    for (const [id, v] of [["#ct-adv", "10"], ["#ct-advrec", "20"], ["#ct-ret", "10"], ["#ct-ins", "5"], ["#ct-wht", "3"], ["#ct-vat", "9"]]) await cu.fill(id, v);
+    await cu.getByRole("button", { name: "ثبت قرارداد" }).click(); await settle(cu);
+    const e102 = await errorOf(cu); if (e102) problems.push(`10.2 contract: ${e102}`);
+    const crow = () => cu.locator("tr", { hasText: "SC-70-MEC" }).first();
+    check(/پیش‌نویس/.test(flat(await crow().innerText())) && /EUR/.test(flat(await crow().innerText())), "SC-70-MEC is a draft, in the project's EUR");
+    await crow().getByRole("button", { name: "جزئیات" }).click(); await settle(cu);
+    const lines = [
+      { no: "01", desc: "جوش سایت", method: "platform", metric: "piping_inchdia_field", qty: "20", rate: "40", wbs: "WBS-70-PIP" },
+      { no: "02", desc: "جوش کارگاهی", method: "platform", metric: "piping_inchdia_shop", qty: "40", rate: "25", wbs: "WBS-70-PIP" },
+      { no: "03", desc: "استقرار و تراز تجهیز", method: "platform", metric: "equipment_set", qty: "2", rate: "1500", wbs: "WBS-70-EQP" },
+      { no: "04", desc: "ساخت و نصب ساپورت لوله", method: "measured", unit: "عدد", qty: "4", rate: "180", wbs: "WBS-70-PIP" },
+    ];
+    for (const l of lines) {
+      if (!(await cu.locator("#ln-no").count())) await fold(cu.locator("main"), "ردیف پرداخت جدید");
+      await cu.fill("#ln-no", l.no); await cu.fill("#ln-desc", l.desc); await cu.selectOption("#ln-method", l.method);
+      if (l.metric) {
+        await cu.selectOption("#ln-metric", l.metric);
+        const sub = await cu.locator("#ln-sub option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("70-01"))?.value);
+        if (sub) await cu.selectOption("#ln-sub", sub); else problems.push("10.2: subsystem 70-01 is not offered for a platform item");
+      }
+      if (l.unit) await cu.fill("#ln-unit", l.unit);
+      await cu.fill("#ln-qty", l.qty); await cu.fill("#ln-rate", l.rate);
+      const w = await cu.locator("#ln-wbs option").evaluateAll((os, c) => os.find((o) => o.textContent.startsWith(c))?.value, l.wbs);
+      await cu.selectOption("#ln-wbs", w);
+      await cu.getByRole("button", { name: "ثبت ردیف" }).click(); await settle(cu);
+      const e = await errorOf(cu); if (e) problems.push(`10.2 item ${l.no}: ${e}`);
+    }
+    const boq = flat(await cu.locator(".card", { hasText: "ردیف‌های پرداخت" }).last().innerText());
+    check(["جوش سایت", "جوش کارگاهی", "استقرار و تراز تجهیز", "ساخت و نصب ساپورت لوله"].every((t) => boq.includes(t)) && /inch-dia/.test(boq),
+      "four items on the WBS; the platform items in their metric's unit");
+    await cu.getByRole("button", { name: "ارسال برای بررسی" }).click(); await settle(cu);
+    check(/در بررسی/.test(flat(await crow().innerText())), "SC-70-MEC is in review");
+
+    at("10.3", "negative: the sender signs the contract");
+    await cu.getByRole("button", { name: "امضای قرارداد" }).click(); await settle(cu);
+    const e103 = await errorOf(cu);
+    check(/فرستاده/.test(e103), `refused («${e103.slice(0, 90)}»)`);
+
+    at("10.4", "the project manager signs; finance pays the advance");
+    await open(pm, "/contracts");
+    await pm.locator("tr", { hasText: "SC-70-MEC" }).first().getByRole("button", { name: "جزئیات" }).click(); await settle(pm);
+    await pm.getByRole("button", { name: "امضای قرارداد" }).click(); await settle(pm);
+    const e104 = await errorOf(pm); if (e104) problems.push(`10.4 sign: ${e104}`);
+    check(/امضاشده/.test(flat(await pm.locator("tr", { hasText: "SC-70-MEC" }).first().innerText())), "SC-70-MEC signed");
+    await open(fu, "/finance", "به تفکیک قرارداد");
+    async function advance(amount, ref, day) {
+      await fold(fu.locator("main"), "پیش‌پرداخت یا آزادسازی حسن انجام کار");
+      const cid = await fu.locator("#op-c option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+      await fu.selectOption("#op-c", cid); await fu.selectOption("#op-k", "advance");
+      await fu.fill("#op-a", amount); await fu.fill("#op-d", d(day)); await fu.fill("#op-r", ref);
+      await fu.locator("form", { has: fu.locator("#op-a") }).getByRole("button", { name: "ثبت", exact: true }).click(); await settle(fu);
+      return errorOf(fu);
+    }
+    const eAdv = await advance("6000", "TR-70-ADV", 50); if (eAdv) problems.push(`10.4 advance: ${eAdv}`);
+    const eAdv2 = await advance("100", "TR-70-ADV2", 51);
+    check(/پیش‌پرداخت از/.test(eAdv2), `a second advance beyond 10% is refused («${eAdv2.slice(0, 90)}»)`);
+
+    at("10.5", "statement 1 to day 125: measured by the platform and the sheet");
+    await open(qc, "/contracts/statements");
+    const cSel = await qc.locator("#ps-contract option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+    if (cSel) { await qc.selectOption("#ps-contract", cSel); await settle(qc); }
+    await qc.fill("#ps-to", d(125));
+    await qc.getByRole("button", { name: /صورت وضعیت جدید/ }).click(); await settle(qc);
+    const e105 = await errorOf(qc); if (e105) problems.push(`10.5 create: ${e105}`);
+    const st = qc.locator(".card", { hasText: "صورت وضعیت 1 — SC-70-MEC" }).first();
+    const rowQty = async (t) => flat(await st.locator("tr", { hasText: t }).first().innerText());
+    check(/\b9\b/.test(await rowQty("جوش سایت")) && /3 مورد/.test(flat(await st.innerText())), `field welds: 9 inch-dia from 3 welds («${(await rowQty("جوش سایت")).slice(0, 110)}»)`);
+    check(/\b9\b/.test(await rowQty("جوش کارگاهی")), `shop welds: 9 inch-dia («${(await rowQty("جوش کارگاهی")).slice(0, 110)}»)`);
+    check(/\b2\b/.test(await rowQty("استقرار و تراز تجهیز")), "equipment set: 2");
+    check(await st.getByRole("button", { name: "ارسال برای تأیید" }).isDisabled(), "submission waits for the measurement sheet");
+    await qc.getByLabel("مقدار تجمعی ردیف 04").fill("2"); await qc.getByLabel("صورت‌جلسهٔ ردیف 04").fill("MS-70-01");
+    await st.locator("tr", { hasText: "ساخت و نصب ساپورت لوله" }).getByRole("button", { name: "ثبت" }).click(); await settle(qc);
+    const net = flat(await st.locator("[data-net]").innerText());
+    check(net.startsWith("2,800.95"), `net = 3945 − 789 − 394.5 − 197.25 − 118.35 + 355.05 = 2,800.95 («${net}»)`);
+    await st.getByRole("button", { name: "ارسال برای تأیید" }).click(); await settle(qc);
+    check(/ارسال‌شده/.test(flat(await st.locator("[data-status]").innerText())), "submitted");
+
+    at("10.6", "technical verification with a comment");
+    await open(pm, "/contracts/statements");
+    const pSel = await pm.locator("#ps-contract option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+    if (pSel) { await pm.selectOption("#ps-contract", pSel); await settle(pm); }
+    await pm.locator("tr", { hasText: "ارسال‌شده" }).first().getByRole("button", { name: "باز کردن" }).click(); await settle(pm);
+    await pm.getByLabel(/کامنت روی صورت وضعیت 1/).fill("جوش‌ها با گزارش RT-7001/RT-7002 و ساپورت‌ها با MS-70-01 تطبیق داده شد.");
+    await pm.getByRole("button", { name: "ثبت کامنت" }).click(); await settle(pm);
+    await pm.getByRole("button", { name: "تأیید فنی" }).click(); await settle(pm);
+    const e106 = await errorOf(pm); if (e106) problems.push(`10.6 verify: ${e106}`);
+    check(/تأیید فنی/.test(flat(await pm.locator("[data-status]").first().innerText())), "verified");
+
+    at("10.7", "negative: the verifier is offered no final approval");
+    check((await pm.getByRole("button", { name: /تأیید نهایی/ }).count()) === 0, "no «تأیید نهایی» for the one who verified");
+
+    at("10.8", "final approval — actual cost on the WBS");
+    await open(cu, "/contracts/statements");
+    const cSel2 = await cu.locator("#ps-contract option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+    if (cSel2) { await cu.selectOption("#ps-contract", cSel2); await settle(cu); }
+    await cu.locator("tr", { hasText: "تأیید فنی" }).first().getByRole("button", { name: "باز کردن" }).click(); await settle(cu);
+    await cu.getByRole("button", { name: /تأیید نهایی/ }).click(); await settle(cu);
+    const e108 = await errorOf(cu); if (e108) problems.push(`10.8 approve: ${e108}`);
+    check(/تأییدشده — منتظر پرداخت/.test(flat(await cu.locator("[data-status]").first().innerText())), "approved, awaiting payment");
+    await open(pm, "/controls");
+    const pipRow = flat(await card(pm, "حساب‌های کنترلی").locator("tr", { hasText: "WBS-70-PIP" }).first().innerText());
+    const eqpRow = flat(await card(pm, "حساب‌های کنترلی").locator("tr", { hasText: "WBS-70-EQP" }).first().innerText());
+    check(/\b945\b/.test(pipRow) && /3\.0k/.test(eqpRow), `AC: WBS-70-PIP 945, WBS-70-EQP 3.0k («${pipRow.slice(0, 100)}» · «${eqpRow.slice(0, 100)}»)`);
+
+    at("10.9", "finance pays the net");
+    await open(fu, "/finance");
+    const q = fu.locator(".card", { hasText: "منتظر پرداخت" }).first();
+    check(/SC-70-MEC/.test(flat(await q.innerText())), "the approved statement is in finance's queue");
+    async function pay(amount) {
+      await fold(q, "ثبت پرداخت");
+      await q.getByLabel(/^مبلغ .*صورت وضعیت 1 SC-70-MEC/).fill(amount);
+      await q.locator("input[type=date]").first().fill(d(130));
+      await q.getByLabel(/^سند .*صورت وضعیت 1 SC-70-MEC/).fill("TR-70-001");
+      await q.getByRole("button", { name: "ثبت پرداخت" }).last().click(); await settle(fu);
+      return errorOf(fu);
+    }
+    const eOver = await pay("3000");
+    check(/خالص قابل پرداخت/.test(eOver), `more than the net is refused («${eOver.slice(0, 90)}»)`);
+    const ePay = await pay("2800.95"); if (ePay) problems.push(`10.9 pay: ${ePay}`);
+    await fu.locator("[role=tab]", { hasText: "به تفکیک WBS" }).first().click().catch(() => {}); await settle(fu);
+    const wr = flat(await fu.locator("tr", { hasText: "WBS-70-PIP" }).first().innerText());
+    check(/945/.test(wr), `finance by WBS: WBS-70-PIP actual 945 («${wr.slice(0, 100)}»)`);
+
+    at("10.10", "HR: the contractor's welder and a day's hours on the WBS");
+    await open(hu, "/hr");
+    await fold(hu.locator("main"), "ثبت فرد");
+    await hu.fill("#hr-id", "7001001"); await hu.fill("#hr-name", "جوشکار سناریو"); await hu.selectOption("#hr-emp", "contractor");
+    const hc = await hu.locator("#hr-con option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("C-MEC"))?.value);
+    await hu.selectOption("#hr-con", hc); await hu.fill("#hr-pos", "جوشکار"); await hu.fill("#hr-trade", "Welder"); await hu.fill("#hr-mob", d(60));
+    await hu.locator("form", { has: hu.locator("#hr-id") }).getByRole("button", { name: "ثبت فرد" }).click(); await settle(hu);
+    const e1010 = await errorOf(hu); if (e1010) problems.push(`10.10 person: ${e1010}`);
+    check(/جوشکار سناریو/.test(flat(await hu.locator("table").first().innerText())), "the welder is on the register");
+    await hu.locator("[role=tab]", { hasText: "کارکرد روزانه" }).first().click(); await settle(hu);
+    const pid = await hu.locator("#ts-p option").evaluateAll((os) => os.find((o) => o.textContent.includes("جوشکار سناریو"))?.value);
+    await hu.selectOption("#ts-p", pid); await hu.fill("#ts-d", d(55)); await hu.fill("#ts-h", "8"); await hu.fill("#ts-o", "0");
+    await hu.getByRole("button", { name: "ثبت کارکرد" }).click(); await settle(hu);
+    const eEarly = await errorOf(hu);
+    check(/نیامده/.test(eEarly), `a day before mobilisation is refused («${eEarly.slice(0, 90)}»)`);
+    await hu.fill("#ts-d", d(93)); await hu.fill("#ts-h", "10"); await hu.fill("#ts-o", "2");
+    const w = await hu.locator("#ts-w option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("WBS-70-PIP"))?.value);
+    await hu.selectOption("#ts-w", w);
+    await hu.getByRole("button", { name: "ثبت کارکرد" }).click(); await settle(hu);
+    const eTs = await errorOf(hu); if (eTs) problems.push(`10.10 timesheet: ${eTs}`);
+    check(/جوشکار سناریو/.test(flat(await hu.locator(".card", { hasText: "کارکرد روزانه" }).last().innerText())), "12 hours on WBS-70-PIP recorded");
+
+    at("10.11", "the log: every step, who signed, and the comment");
+    await open(pm, "/log/contracts");
+    await pm.getByLabel("جستجو در لاگ").fill("SC-70-MEC"); await settle(pm);
+    const lg = flat(await pm.locator(".loglist").innerText());
+    for (const a of ["ایجاد", "ارسال", "امضا", "کامنت", "تأیید فنی", "پرداخت"]) check(lg.includes(a), `contracts log has «${a}»`);
+    const who = flat(await pm.locator(".card", { hasText: "چه کسانی" }).innerText());
+    check(["امور قراردادها (سناریو)", "مالی (سناریو)", "بازرس QC (سناریو)"].every((n) => who.includes(n)), `the people of the log («${who.slice(0, 160)}»)`);
+    for (const p of [cu, fu, hu]) await p.context().close();
+  }
+  if (!skipPhase(11)) {
+    // ── 11 ───────────────────────────────────────────────────────────────
+    const cu = await signIn(creds.people.contracts.email, creds.people.contracts.password);
+
+    at("11.1", "employer approval of contractor work switched on; the pump-area lighting cable");
+    await open(pm, "/work-approval");
+    const onBox = pm.getByLabel(/تأیید کارفرما لازم دارد/);
+    if (!(await onBox.isChecked())) { await onBox.click(); await settle(pm); }
+    check(await pm.getByLabel(/تأیید کارفرما لازم دارد/).isChecked(), "approval is on");
+    await open(pm, "/electrical", "کابل‌ها");
+    const cab = card(pm, "کابل‌ها");
+    await fold(cab, "ورود لیست کابل");
+    await pm.fill("#imp", "Cable No,From,To,Cable Type,Voltage,Length (m)\nCBL-L-7001,LDB-70,LP-70-01,3Cx2.5 XLPE/SWA/PVC,0.6/1kV,40");
+    await cab.getByRole("button", { name: "ورود", exact: true }).click(); await settle(pm);
+    const e111 = await errorOf(pm); if (e111) problems.push(`11.1: ${e111}`);
+    check(/CBL-L-7001/.test(flat(await cab.innerText())), "CBL-L-7001 on the cable schedule");
+
+    at("11.2", "the contractor claims route and pulling (QC)");
+    async function lightCable() {
+      await open(qc, "/electrical", "کابل‌ها");
+      const row = card(qc, "کابل‌ها").locator("tr", { hasText: "CBL-L-7001" }).first();
+      await row.getByRole("button", { name: "جزئیات" }).click(); await settle(qc);
+      return row.locator("xpath=following-sibling::tr[1]");
+    }
+    let ldet = await lightCable();
+    await tickStep(qc, ldet, "مسیر آماده", d(131));
+    await tickStep(qc, ldet, "کابل‌کشی", d(132));
+    const lt = flat(await ldet.innerText());
+    check((lt.match(/منتظر تأیید کارفرما · اعلام/g) || []).length === 2, `both steps wait for the employer («${lt.slice(0, 160)}»)`);
+    check(/گلند و ترمینیشن دو سر پیش‌نیاز منتظر تأیید کارفرما — قابل اعلام/.test(lt), "the next step may be declared while the approval catches up");
+    await open(qc, "/work-approval");
+    const qpend = card(qc, "منتظر تأیید کارفرما");
+    check((await qpend.locator("tr[data-claim^='CBL-L-7001']").count()) === 2, "two claims on the handover page");
+    check((await qpend.getByRole("button", { name: "تأیید", exact: true }).count()) === 0, "the contractor's QC has no approve button");
+
+    at("11.3", "the employer approves the route and rejects the pulling with a reason");
+    await open(client, "/work-approval");
+    const cp = card(client, "منتظر تأیید کارفرما");
+    await cp.locator("tr[data-claim^='CBL-L-7001']", { hasText: "مسیر" }).getByRole("button", { name: "تأیید", exact: true }).click(); await settle(client);
+    const e113 = await errorOf(client); if (e113) problems.push(`11.3 approve: ${e113}`);
+    await card(client, "منتظر تأیید کارفرما").locator("tr[data-claim^='CBL-L-7001']", { hasText: "کابل‌کشی" }).locator("input[type=checkbox]").click();
+    await client.getByLabel("دلیل رد").fill("Cleats missing at LP-70-01");
+    await client.getByRole("button", { name: "رد", exact: true }).click(); await settle(client);
+    const e113r = await errorOf(client); if (e113r) problems.push(`11.3 reject: ${e113r}`);
+    ldet = await lightCable();
+    const lt3 = flat(await ldet.innerText());
+    check(/رد کارفرما: Cleats missing at LP-70-01/.test(lt3), `pulling stays open with the reason («${lt3.slice(0, 200)}»)`);
+    check(/مسیر آماده[^]*انجام شد/.test(lt3), "the route is done");
+
+    at("11.4", "re-claimed after the fix; the employer approves");
+    await tickStep(qc, ldet, "کابل‌کشی", d(134));
+    await open(client, "/work-approval");
+    await card(client, "منتظر تأیید کارفرما").locator("tr[data-claim^='CBL-L-7001']").getByRole("button", { name: "تأیید", exact: true }).click(); await settle(client);
+    check(/موردی منتظر تأیید نیست/.test(flat(await card(client, "منتظر تأیید کارفرما").innerText())), "nothing waits");
+    ldet = await lightCable();
+    check(!/منتظر تأیید کارفرما|رد کارفرما/.test(flat(await ldet.innerText())), "the cable's steps are final");
+
+    at("11.5", "TQ: a drain at the low point (QC)");
+    await open(qc, "/changes");
+    const tqc = card(qc, "پرسش‌های فنی (TQ)");
+    await fold(tqc, "TQ جدید");
+    check(/خودکار: TQ-0001/.test(await qc.locator("#tq-no").getAttribute("placeholder")), "the number will be TQ-0001");
+    await qc.fill("#tq-s", "Drain at low point"); await qc.fill("#tq-q", "Line 70-DMW-7001 sags at grid B; add a drain?");
+    const isoOpt = await qc.locator("#tq-d option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("DMW-ISO-7001"))?.value);
+    await qc.selectOption("#tq-d", isoOpt);
+    const lnOpt = await qc.locator("#tq-l option").evaluateAll((os) => os.find((o) => o.textContent.includes("7001"))?.value);
+    if (lnOpt) await qc.selectOption("#tq-l", lnOpt);
+    await qc.fill("#tq-on", d(136)); await qc.fill("#tq-due", d(141));
+    await tqc.getByRole("button", { name: "ثبت TQ" }).click(); await settle(qc);
+    const e115 = await errorOf(qc); if (e115) problems.push(`11.5: ${e115}`);
+    check(/منتظر پاسخ طراح/.test(flat(await qc.locator("tr[data-tq='TQ-0001']").innerText())), "TQ-0001 waits for the designer");
+
+    at("11.6", "the designer answers in its portal");
+    await open(designer, "/documents/designer", "پرسش‌های فنی (TQ)");
+    await designer.getByLabel("پاسخ TQ-0001").fill("Add 3/4\" drain with valve at grid B; route in field");
+    await designer.getByRole("button", { name: "ارسال پاسخ" }).click(); await settle(designer);
+    const dq = flat(await designer.locator("tr[data-tq='TQ-0001']").innerText());
+    check(/پاسخ داده شد/.test(dq), `answered («${dq.slice(0, 120)}»)`);
+
+    at("11.7", "the engineer closes it: change required");
+    await open(pm, "/changes");
+    await pm.locator("tr[data-tq='TQ-0001']").getByRole("button", { name: "بستن: تغییر لازم است" }).click(); await settle(pm);
+    const e117 = await errorOf(pm); if (e117) problems.push(`11.7: ${e117}`);
+    check(/تغییر لازم است/.test(flat(await pm.locator("tr[data-tq='TQ-0001']").innerText())), "closed, change required");
+
+    at("11.8", "site change FCR-0001: drain routed in the field (QC)");
+    await open(qc, "/changes", "تغییرات سایت");
+    const fcc = card(qc, "تغییرات سایت");
+    await fold(fcc, "ثبت تغییر سایت");
+    await qc.selectOption("#fc-k", "site_run"); await qc.fill("#fc-t", "Drain D-01 routed in field");
+    const tqOpt = await qc.locator("#fc-q option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("TQ-0001"))?.value);
+    check(!!tqOpt, "TQ-0001 is offered as the basis"); if (tqOpt) await qc.selectOption("#fc-q", tqOpt);
+    await qc.fill("#fc-d", "3/4\" drain + valve at grid B");
+    await qc.selectOption("#fc-m", await qc.locator("#fc-m option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("DMW-ISO-7001"))?.value));
+    if (lnOpt) await qc.selectOption("#fc-l", lnOpt);
+    await qc.fill("#fc-on", d(139));
+    await fcc.getByRole("button", { name: "ثبت تغییر", exact: true }).click(); await settle(qc);
+    const e118 = await errorOf(qc); if (e118) problems.push(`11.8: ${e118}`);
+    const fr = () => qc.locator("tr[data-fcr='FCR-0001']");
+    check(/منتظر تأیید/.test(flat(await fr().innerText())), "FCR-0001 waits for approval");
+    check((await fr().getByRole("button", { name: "تأیید" }).count()) === 0, "QC has no approve button");
+
+    at("11.9", "the engineer approves; the designer declares the as-built revision");
+    await open(pm, "/changes", "تغییرات سایت");
+    await pm.locator("tr[data-fcr='FCR-0001']").getByRole("button", { name: "تأیید", exact: true }).click(); await settle(pm);
+    const e119 = await errorOf(pm); if (e119) problems.push(`11.9 approve: ${e119}`);
+    await open(designer, "/documents/designer", "As-built تغییرات سایت");
+    await designer.getByLabel("رویژن As-built FCR-0001").fill("1");
+    await designer.getByRole("button", { name: "اعلام As-built" }).click(); await settle(designer);
+    check(/Rev\.1/.test(flat(await designer.locator("tr[data-fcr='FCR-0001']").innerText())), "as-built Rev.1 declared");
+
+    at("11.10", "negative: closing before the revision is in the register");
+    await open(pm, "/changes", "تغییرات سایت");
+    await pm.locator("tr[data-fcr='FCR-0001']").getByRole("button", { name: /بستن/ }).click(); await settle(pm);
+    const e1110 = await errorOf(pm);
+    check(/هنوز در رجیستر مدارک نیست/.test(e1110), `refused («${e1110.slice(0, 100)}»)`);
+
+    at("11.11", "the designer sends Rev.1 as-built; the change closes");
+    await incoming("DES-TR-7003", "Designer", d(141), d(142), "چون‌ساخت", [["DMW-ISO-7001", "1", "AB"]]);
+    await open(pm, "/changes", "تغییرات سایت");
+    await pm.locator("tr[data-fcr='FCR-0001']").getByRole("button", { name: /بستن/ }).click(); await settle(pm);
+    const e1111 = await errorOf(pm); if (e1111) problems.push(`11.11 close: ${e1111}`);
+    check(/بسته/.test(flat(await pm.locator("tr[data-fcr='FCR-0001']").innerText())), "FCR-0001 closed");
+
+    at("11.12", "work order WO-0001 prepared by QC, issued by contracts");
+    await open(qc, "/changes", "دستور کار");
+    const woc = card(qc, "دستور کار");
+    await fold(woc, "دستور کار جدید");
+    check(/خودکار: WO-0001/.test(await qc.locator("#wo-no").getAttribute("placeholder")), "the number will be WO-0001");
+    await qc.selectOption("#wo-c", await qc.locator("#wo-c option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("SC-70-MEC"))?.value));
+    await qc.fill("#wo-t", "Field drain D-01"); await qc.selectOption("#wo-o", "site_change");
+    await qc.selectOption("#wo-s", await qc.locator("#wo-s option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("FCR-0001"))?.value));
+    await qc.fill("#wo-d", "Fabricate and install 3/4\" drain with valve");
+    await qc.selectOption("#wo-w", await qc.locator("#wo-w option").evaluateAll((os) => os.find((o) => o.textContent.startsWith("WBS-70-PIP"))?.value));
+    await qc.fill("#wo-u", "EA"); await qc.fill("#wo-qty", "1"); await qc.fill("#wo-r", "350");
+    await woc.getByRole("button", { name: "ثبت پیش‌نویس" }).click(); await settle(qc);
+    const e1112 = await errorOf(qc); if (e1112) problems.push(`11.12 create: ${e1112}`);
+    check((await qc.locator("tr[data-wo='WO-0001']").getByRole("button", { name: "ابلاغ به پیمانکار" }).count()) === 0, "the preparer is offered no «ابلاغ»");
+    await open(cu, "/changes", "دستور کار");
+    await cu.fill("#wo-when", d(143));
+    await cu.locator("tr[data-wo='WO-0001']").getByRole("button", { name: "ابلاغ به پیمانکار" }).click(); await settle(cu);
+    const e1112i = await errorOf(cu); if (e1112i) problems.push(`11.12 issue: ${e1112i}`);
+    check(/ابلاغ/.test(flat(await cu.locator("tr[data-wo='WO-0001']").innerText())), "WO-0001 issued");
+    await open(cu, "/contracts");
+    await cu.locator("tr", { hasText: "SC-70-MEC" }).first().getByRole("button", { name: "جزئیات" }).click(); await settle(cu);
+    check(/WO-0001/.test(flat(await cu.locator(".card", { hasText: "ردیف‌های پرداخت" }).last().innerText())), "the contract has item WO-0001");
+
+    at("11.13", "WO done; statement 2 measures it");
+    await open(qc, "/changes", "دستور کار");
+    await qc.fill("#wo-when", d(146));
+    await qc.locator("tr[data-wo='WO-0001']").getByRole("button", { name: "انجام شد" }).click(); await settle(qc);
+    const e1113 = await errorOf(qc); if (e1113) problems.push(`11.13 complete: ${e1113}`);
+    await open(qc, "/contracts/statements");
+    const s2 = await qc.locator("#ps-contract option").evaluateAll((os) => os.find((o) => o.textContent.includes("SC-70-MEC"))?.value);
+    if (s2) { await qc.selectOption("#ps-contract", s2); await settle(qc); }
+    await qc.fill("#ps-to", d(148));
+    await qc.getByRole("button", { name: /صورت وضعیت جدید/ }).click(); await settle(qc);
+    const e1113s = await errorOf(qc); if (e1113s) problems.push(`11.13 create: ${e1113s}`);
+    const st2 = qc.locator(".card", { hasText: "صورت وضعیت 2 — SC-70-MEC" }).first();
+    await qc.getByLabel("مقدار تجمعی ردیف WO-0001").fill("1"); await qc.getByLabel("صورت‌جلسهٔ ردیف WO-0001").fill("MS-70-02");
+    await st2.locator("tr", { hasText: "WO-0001" }).getByRole("button", { name: "ثبت" }).click(); await settle(qc);
+    const net2 = flat(await st2.locator("[data-net]").innerText());
+    check(net2.startsWith("248.5"), `net = 350 − 70 − 35 − 17.5 − 10.5 + 31.5 = 248.5 («${net2}»)`);
+    await st2.getByRole("button", { name: "ارسال برای تأیید" }).click(); await settle(qc);
+    check(/ارسال‌شده/.test(flat(await st2.locator("[data-status]").innerText())), "submitted");
+
+    at("11.14", "verified and approved: the work order's cost on the WBS");
+    for (const [p, from, btn] of [[pm, "ارسال‌شده", "تأیید فنی"], [cu, "تأیید فنی", /تأیید نهایی/]]) {
+      await open(p, "/contracts/statements");
+      const o = await p.locator("#ps-contract option").evaluateAll((os) => os.find((x) => x.textContent.includes("SC-70-MEC"))?.value);
+      if (o) { await p.selectOption("#ps-contract", o); await settle(p); }
+      await p.locator("tr", { hasText: from }).first().getByRole("button", { name: "باز کردن" }).click(); await settle(p);
+      await p.getByRole("button", { name: btn }).click(); await settle(p);
+      const e = await errorOf(p); if (e) problems.push(`11.14 ${from}: ${e}`);
+    }
+    await open(pm, "/controls");
+    const pip2 = flat(await card(pm, "حساب‌های کنترلی").locator("tr", { hasText: "WBS-70-PIP" }).first().innerText());
+    check(/1[,.]?295|1\.3k/.test(pip2), `AC WBS-70-PIP 945 + 350 («${pip2.slice(0, 100)}»)`);
+
+    at("11.15", "the log of changes and handover");
+    await open(pm, "/log/workplan");
+    const lg11 = flat(await pm.locator(".loglist").innerText());
+    for (const n of ["TQ-0001", "FCR-0001", "WO-0001", "CBL-L-7001"]) check(lg11.includes(n), `the log has ${n}`);
+    const who11 = flat(await pm.locator(".card", { hasText: "چه کسانی" }).innerText());
+    check(["طراح (سناریو)", "امور قراردادها (سناریو)", "بازرس QC (سناریو)"].every((n) => who11.includes(n)), `the people («${who11.slice(0, 160)}»)`);
+    await cu.context().close();
+  }
+} catch (e) {
+  if (e.message !== "stop") { problems.push(`${step}: ${e.message.split("\n")[0]}`); for (const [who, p] of [["pm", pm], ["qc", qc], ["client", client]]) await p.screenshot({ path: `${SHOT}/scenario-ui-${step}-${who}.png`, fullPage: true }).catch(() => {}); }
+}
+console.log("\nproblems:", problems.length ? problems : "none");
+await b.close();
+process.exit(problems.length ? 1 : 0);

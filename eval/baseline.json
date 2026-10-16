@@ -1,0 +1,602 @@
+{
+  "recordedAt": "2026-10-03T14:03:17.504Z",
+  "engine": "lib/engine.js",
+  "summary": {
+    "cases": 80,
+    "draft": 1,
+    "pass": 79,
+    "fail": 0,
+    "xfail": 0,
+    "xpass": 0,
+    "passRate": 100,
+    "weldCountExact": {
+      "ok": 78,
+      "of": 78,
+      "pct": 100
+    },
+    "fieldWeldsExact": {
+      "ok": 56,
+      "of": 56,
+      "pct": 100
+    },
+    "spoolCountExact": {
+      "ok": 39,
+      "of": 39,
+      "pct": 100
+    },
+    "registerExact": {
+      "ok": 62,
+      "of": 62,
+      "pct": 100
+    },
+    "registerFieldAccuracy": 100,
+    "registerFields": {
+      "correct": 2234,
+      "of": 2234,
+      "undecided": 251
+    },
+    "warnings": 10
+  },
+  "cases": [
+    {
+      "id": "28-CWR-10-930065A",
+      "kind": "golden",
+      "status": "draft",
+      "file": "eval/cases/golden/28-CWR-10-930065A.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1001-SH1-0A",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1001-SH1-0A.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1002-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1002-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1003-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1003-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1004-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1004-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1004-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1004-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1005-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1005-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1006-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1006-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1007-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1007-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1008-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1008-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1009-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1009-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1010-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1010-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1011-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1011-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1012-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1012-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1013-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1013-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1014-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1014-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1015-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1015-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1016-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1016-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1017-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1017-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1017-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1017-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1018-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1018-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1019-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1019-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1020-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1020-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1020-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1020-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1020-SH3",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1020-SH3.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1020-SH4",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1020-SH4.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1021-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1021-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1021-SH3",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1021-SH3.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1021-SH4",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1021-SH4.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1021-SH5",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1021-SH5.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1022-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1022-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1022-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1022-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1023-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1023-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1023-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1023-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1024-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1024-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1025-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1025-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1026-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1026-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1026-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1026-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1026-SH3",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1026-SH3.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1027-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1027-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1027-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1027-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1027-SH3",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1027-SH3.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1028-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1028-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1029-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1029-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1030-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1030-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1031-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1031-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1032-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1032-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1033-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1033-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1034-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1034-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1035-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1035-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1036-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1036-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1037-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1037-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1037-SH2",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1037-SH2.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1071-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1071-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "HDPE-25-1074-SH1",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/HDPE-25-1074-SH1.json",
+      "failed": []
+    },
+    {
+      "id": "SW-265022A",
+      "kind": "golden",
+      "status": "pass",
+      "file": "eval/cases/golden/SW-265022A.json",
+      "failed": []
+    },
+    {
+      "id": "R01-tie-in-pair",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R01-tie-in-pair.json",
+      "failed": []
+    },
+    {
+      "id": "R02-elbow90-with-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R02-elbow90-with-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R03-elbow90-no-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R03-elbow90-no-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R04-elbow45-with-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R04-elbow45-with-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R05-tee-with-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R05-tee-with-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R06-tee-no-pup",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R06-tee-no-pup.json",
+      "failed": []
+    },
+    {
+      "id": "R07-reducer",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R07-reducer.json",
+      "failed": []
+    },
+    {
+      "id": "R08-flange-wn",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R08-flange-wn.json",
+      "failed": []
+    },
+    {
+      "id": "R09-valve-bw",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R09-valve-bw.json",
+      "failed": []
+    },
+    {
+      "id": "R10-valve-flanged",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R10-valve-flanged.json",
+      "failed": []
+    },
+    {
+      "id": "R11-girth-long-run",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R11-girth-long-run.json",
+      "failed": []
+    },
+    {
+      "id": "R12-spool-transport-cut",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R12-spool-transport-cut.json",
+      "failed": []
+    },
+    {
+      "id": "R13-bom-gate-drops-fitting",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R13-bom-gate-drops-fitting.json",
+      "failed": []
+    },
+    {
+      "id": "R14-bom-gate-disabled",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R14-bom-gate-disabled.json",
+      "failed": []
+    },
+    {
+      "id": "R15-too-few-nodes",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R15-too-few-nodes.json",
+      "failed": []
+    },
+    {
+      "id": "R16-valve-bw-no-dimension",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R16-valve-bw-no-dimension.json",
+      "failed": []
+    },
+    {
+      "id": "R17-reducer-body-length",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R17-reducer-body-length.json",
+      "failed": []
+    },
+    {
+      "id": "R18-reducer-measured",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R18-reducer-measured.json",
+      "failed": []
+    },
+    {
+      "id": "R19-flange-hub-missing",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R19-flange-hub-missing.json",
+      "failed": []
+    },
+    {
+      "id": "R20-flange-hub-measured",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R20-flange-hub-measured.json",
+      "failed": []
+    },
+    {
+      "id": "R21-spool-over-transport-limit",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R21-spool-over-transport-limit.json",
+      "failed": []
+    },
+    {
+      "id": "R22-cut-length-check",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R22-cut-length-check.json",
+      "failed": []
+    },
+    {
+      "id": "R23-cut-length-mismatch",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R23-cut-length-mismatch.json",
+      "failed": []
+    },
+    {
+      "id": "R24-incomplete-geometry-invalidates-length",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R24-incomplete-geometry-invalidates-length.json",
+      "failed": []
+    }
+  ]
+}

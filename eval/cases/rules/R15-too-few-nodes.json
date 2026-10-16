@@ -1,0 +1,12 @@
+{
+  "id": "R15-too-few-nodes",
+  "title": "A single node cannot describe a line -> the engine refuses",
+  "rule": "حداقل دو گره لازم است (دو سر خط)",
+  "options": {},
+  "input": {
+    "meta": { "nps": 12, "pupLength": 0 },
+    "nodes": [{ "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 }],
+    "edges": []
+  },
+  "expect": { "error": "حداقل دو گره" }
+}

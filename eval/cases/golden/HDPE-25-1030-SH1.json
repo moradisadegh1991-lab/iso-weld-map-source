@@ -1,0 +1,202 @@
+{
+ "id": "HDPE-25-1030-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1030 sheet 1/1 rev 0 — 8 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1030",
+  "sheet": "1/1",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1030-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1030",
+   "sheet": "1/1",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "PIPE S40 BE ERW(EJ=0.85) API 5L-B PSL1 ASME B36.10",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 LR S40 BW A234-WPBW ERW(EJ=0.85) ASME B16.9",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE WELDING NECK S40 150# RF A105 ASME B16.5 SRF",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF GRAPHITE W/SS REINFORCEMENT 2.0mm THK KLINGER PSM/AS or EQ. ASME B16.21",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "90 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "5/8 x 90",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE BALL 150# RF A216-WCB BODY W/304SS BALL TEFLON SEAT FB FLOATING LEVER OP. LONG PA. ASME B16.10 API 608",
+    "diam": "2",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "2",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "3",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "4",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "5",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "6",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "7",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "8",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-3"
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 8,
+  "fieldWeldCount": 2,
+  "fieldWelds": [
+   "1",
+   "5"
+  ],
+  "spoolCount": 3,
+  "register": [
+   {
+    "no": "1",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "2",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "3",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "4",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "5",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "6",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "7",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "8",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   }
+  ]
+ }
+}

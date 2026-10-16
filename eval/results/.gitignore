@@ -1,0 +1,2 @@
+# Run outputs are artefacts, not source. The baseline is the tracked reference.
+*.json

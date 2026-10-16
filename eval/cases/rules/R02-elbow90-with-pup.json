@@ -1,0 +1,24 @@
+{
+  "id": "R02-elbow90-with-pup",
+  "title": "90° elbow with pup pieces -> 4 welds at the fitting",
+  "rule": "زانو با pup piece → ۴ جوش",
+  "options": { "spoolMaxLen": 30000, "maxPipeLength": 30000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 150 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "elbow90", "ref": "", "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 4000, "EL": 14000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 12 }
+    ]
+  },
+  "expect": {
+    "weldCount": 6,
+    "fieldWeldCount": 2,
+    "spoolCount": 1,
+    "girthWelds": 0
+  }
+}

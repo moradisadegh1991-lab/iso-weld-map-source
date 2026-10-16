@@ -1,0 +1,15 @@
+{
+  "id": "R20-flange-hub-measured",
+  "title": "A dimensioned flange places its weld at the end of the hub",
+  "rule": "با faceToFace، جوش فلنج در فاصلهٔ نیم‌طول از گره می‌نشیند و هشداری نمی‌ماند",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "flange-wn", "ref": "", "faceToFace": 180, "E": 0, "N": 4000, "EL": 10000 }
+    ],
+    "edges": [{ "from": "N1", "to": "N2", "nps": 12 }]
+  },
+  "expect": { "weldCount": 2, "fieldWeldCount": 1, "maxWarnings": 0 }
+}

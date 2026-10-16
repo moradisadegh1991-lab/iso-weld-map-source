@@ -1,0 +1,27 @@
+{
+  "id": "R24-incomplete-geometry-invalidates-length",
+  "title": "A length check computed from incomplete geometry must not report a pass",
+  "rule": "اگر MTO قطعه‌ای را بشمارد که هندسه ندارد، هر مقایسه‌ای که سمت محاسبه‌اش طول لوله است بی‌اعتبار می‌شود — چون طول آن قطعه داخل لوله مانده",
+  "note": "Straight from the first live extraction, 28\"-CWR-10-930074A. The model read the weld-neck flange into the MTO but never placed it as a node. The hub was therefore never subtracted, so the computed pipe stayed 3.34 m against a stated 3.30 m — 0.04 m apart and inside tolerance, reported 'ok'. With the flange present the computed pipe is 3.21 m and the same check reads 0.09 m. The WRONG model produced the cleaner number, and one warning about the missing flange sat next to three passes that outvoted it. CL Length is measured node to node and genuinely does not move, so it must stay 'ok' — this case pins that distinction, not a blanket flag.",
+  "options": { "spoolMaxLen": 12000, "maxPipeLength": 12000, "strictBom": true },
+  "input": {
+    "meta": { "drawingNo": "28\"-CWR-10-930074A-DA01-UCW", "rev": "A0", "sheet": "1 OF 1",
+              "nps": 28, "schedule": "SCH 10", "clLengthM": 3.3, "pipingClass": "1B" },
+    "bom": [
+      { "pt": 1, "group": "PIPE", "description": "Pipe, API 5L GR.B 100% RT, LSAW, BE, SCH 10, ASME B36.10M", "diam": 28, "qty": 3.3 },
+      { "pt": 2, "group": "FLANGES", "description": "Flange, ASTM A105N, Weld Neck, RF, SCH 10, 150#, ASME B16.47B", "diam": 28, "qty": 1 }
+    ],
+    "nodes": [
+      { "id": "T1", "type": "tie-in", "ref": "28\"-CWR-10-930073A-DA01-N", "E": 776391, "N": 1467586, "EL": 295398 },
+      { "id": "T2", "type": "tie-in", "ref": "60\"-CWR-10-930002A-DA01-UCW", "E": 776391, "N": 1467586, "EL": 292062 }
+    ],
+    "edges": []
+  },
+  "expect": {
+    "weldCount": 2,
+    "fieldWeldCount": 2,
+    "spoolCount": 1,
+    "warningLabels": ["تعداد فلنج", "لوله 28\" در برابر MTO"],
+    "maxWarnings": 2
+  }
+}

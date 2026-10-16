@@ -1,0 +1,9 @@
+[Unit]
+Description=EPC platform — nightly backup at 02:40 Tehran time
+
+[Timer]
+OnCalendar=*-*-* 02:40:00 Asia/Tehran
+Persistent=true
+
+[Install]
+WantedBy=timers.target

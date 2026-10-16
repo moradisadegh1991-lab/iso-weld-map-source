@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# The one command for running the EPC platform on its server.
+# Installed to /usr/local/bin/epc by deploy/vps/install.sh. Run it as root.
+#
+# PGlite is one process: while the service runs, nothing else may open the
+# database. So every command that touches it stops the service first and
+# starts it again afterwards — even when the command fails.
+set -euo pipefail
+APP_DIR=/opt/epc/app
+ENV_FILE=/etc/epc/epc.env
+TOKEN_FILE=/etc/epc/github-token
+REPO_URL=https://github.com/moradisadegh1991-lab/iso-weld-map-source.git
+
+[ "$(id -u)" = 0 ] || { echo "با root اجرا کنید: sudo epc $*" >&2; exit 1; }
+
+# Run a command in the app directory as user epc, with the server's settings.
+run() {
+  runuser -u epc -- bash -c 'set -a; . "$0"; set +a; cd "$1"; shift; exec "$@"' "$ENV_FILE" "$APP_DIR" "$@"
+}
+wait_up() {
+  for _ in $(seq 1 60); do
+    curl -fs -o /dev/null --max-time 5 http://127.0.0.1:3000/ && return 0
+    sleep 2
+  done
+  return 1
+}
+# Stop the service for the length of the given command, then bring it back.
+offline() {
+  local was=no; systemctl is-active --quiet epc && was=yes
+  [ $was = yes ] && systemctl stop epc
+  local rc=0; "$@" || rc=$?
+  if [ $was = yes ]; then systemctl start epc; wait_up || echo "[ !! ] سرویس دوباره بالا نیامد: journalctl -u epc -n 80" >&2; fi
+  return $rc
+}
+build() {
+  local reg=(); [ -n "${NPM_REGISTRY:-}" ] && reg=(--registry "$NPM_REGISTRY")
+  run npm ci --no-audit --no-fund --loglevel=error "${reg[@]}"
+  run npm run build
+}
+# git as user epc; the token travels in the environment, never in argv or .git/config.
+git_epc() {
+  local token=""
+  [ -f "$TOKEN_FILE" ] && token=$(cat "$TOKEN_FILE")
+  if [ -z "$token" ]; then read -rsp "GitHub token (Contents: read): " token; echo >&2; fi
+  local auth; auth=$(printf 'x-access-token:%s' "$token" | base64 -w0)
+  runuser -u epc -- env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" git -C "$APP_DIR" "$@"
+}
+update() {
+  local branch; branch=$(runuser -u epc -- git -C "$APP_DIR" rev-parse --abbrev-ref HEAD)
+  git_epc fetch --depth 1 origin "$branch"
+  runuser -u epc -- git -C "$APP_DIR" reset --hard FETCH_HEAD
+  build
+  run npm run db:migrate
+}
+backup() { run npm run db:backup -- --keep "${KEEP:-14}"; }
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  status)  systemctl --no-pager status epc caddy | sed -n '1,4p;/Active/p'
+           grep '^APP_URL=' "$ENV_FILE" | sed 's/^APP_URL=/   /' ;;
+  logs)    journalctl -u epc -f -n 100 ;;
+  restart) systemctl restart epc; wait_up && echo "[ ok ] بالا است" ;;
+  admin)   [ -n "${1:-}" ] || { echo "epc admin <email> ['نام']" >&2; exit 1; }
+           offline run npm run auth:admin -- "$1" "" "${2:-}" ;;
+  demo)    [ -n "${1:-}" ] || { echo "epc demo <email-of-an-admin>" >&2; exit 1; }
+           offline run npm run demo:seed -- "$1" ;;
+  backup)  offline backup ;;
+  backups) run npm run db:backup -- list ;;
+  update)  offline update ;;
+  doctor)  offline run npm run doctor ;;
+  run)     [ -n "${1:-}" ] || { echo "epc run <npm-script> [args…]   e.g. epc run furnace:load you@example.com" >&2; exit 1; }
+           s="$1"; shift; offline run npm run "$s" -- "$@" ;;
+  save-token)
+           read -rsp "GitHub token (Contents: read): " t; echo >&2
+           umask 077; printf '%s' "$t" > "$TOKEN_FILE"; echo "[ ok ] ذخیره شد در $TOKEN_FILE (فقط root)" ;;
+  _run)    run "$@" ;;
+  _build)  build ;;
+  _wait)   wait_up ;;
+  *) cat >&2 <<'HELP'
+epc status                  وضعیت سرویس و نشانی
+epc logs                    گزارش زندهٔ برنامه (Ctrl+C برای خروج)
+epc restart                 راه‌اندازی دوباره
+epc admin <email> ['نام']    ساخت حساب مدیر و پروژهٔ DEMO؛ رمز یک‌بار چاپ می‌شود
+epc demo <email>            پر کردن پروژهٔ DEMO آن مدیر با دادهٔ نمونه
+epc backup                  پشتیبان وارسی‌شده (هر شب ۰۲:۴۰ خودکار هم گرفته می‌شود)
+epc backups                 فهرست پشتیبان‌ها
+epc update                  دریافت آخرین نسخه از GitHub، build و migration
+epc save-token              ذخیرهٔ توکن GitHub تا update دوباره نپرسد
+epc doctor                  بررسی پیکربندی
+epc run <script> [args]     اجرای یک اسکریپت بارگذاری (مثلاً furnace:load you@example.com)
+HELP
+  ;;
+esac

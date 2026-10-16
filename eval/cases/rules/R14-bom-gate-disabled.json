@@ -1,0 +1,22 @@
+{
+  "id": "R14-bom-gate-disabled",
+  "title": "Same geometry with strictBom off -> the fitting survives",
+  "rule": "با strictBom: false دروازهٔ MTO غیرفعال می‌شود (برای نقشه‌های چندبرگی)",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000, "strictBom": false },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "bom": [
+      { "pt": 1, "group": "PIPE", "description": "Welded Pipe, API 5L Gr.B, SCH 40", "diam": 12, "qty": 7.09 }
+    ],
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "elbow90", "ref": "", "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 4000, "EL": 14000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 12 }
+    ]
+  },
+  "expect": { "weldCount": 4, "fieldWeldCount": 2, "spoolCount": 1 }
+}

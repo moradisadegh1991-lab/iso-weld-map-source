@@ -1,0 +1,4178 @@
+{
+ "source": "daily report.accdb · manp_list",
+ "items": [
+  {
+   "kind": "person",
+   "name": "سوپروایزر سیویل و معماری",
+   "nameEn": "Supervisor Civil & Building",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10069",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن سیویل",
+   "nameEn": "Foreman",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10070",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "آرماتور بند",
+   "nameEn": "Bar Bender",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10071",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "بولت من و کارگر فنی سیویل",
+   "nameEn": "Bolt Man/Skilled Labor",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10072",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "قالب بند /نجار",
+   "nameEn": "Form Worker / Carpenter",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10073",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک قالب بند /نجار",
+   "nameEn": "Form Worker /Bar Bender Helper",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10074",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "بتن ریز و گروت ریز",
+   "nameEn": "Concrete Worker/Grout Worker",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10075",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "نصاب انکربولت",
+   "nameEn": "Bolt Anchor Installer",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10077",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک آرماتوربند",
+   "nameEn": "Bar Bender Helper",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10078",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "بنا",
+   "nameEn": "Brick Layer / Mason",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10081",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کاشی کار",
+   "nameEn": "Tiler",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10082",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پلاسترکار",
+   "nameEn": "Painter / Plasterer",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10083",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "استاد کار ماهر",
+   "nameEn": "Skilled Master",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10085",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار پلیت",
+   "nameEn": "Iron Worker",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10086",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مباشر",
+   "nameEn": "intendant",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10087",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سایر",
+   "nameEn": "Others",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10088",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "متصدی کمپکتور",
+   "nameEn": "compressor Operator",
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10090",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گروه پیمانکاری امانی",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10092",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه داوودی (ایستگاه)",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10093",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه منصوری (فنس)",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10094",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه امامی (ایستگاه)",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10095",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه سلجوقی (ایستگاه)",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10096",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه ظفری",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10097",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه جعفری (ایستگاه)",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10098",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "میرچراغی (سیویل)",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10099",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پیمانکاری عبیات",
+   "nameEn": null,
+   "discipline": "سیویل و ساختمان",
+   "unit": null,
+   "sourceRef": "manp_list:10100",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزور استراکچر",
+   "nameEn": "Supervisor",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10204",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین استراکچر",
+   "nameEn": "Technician S.Structure",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10205",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن استراکچر",
+   "nameEn": "Foreman",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10206",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "نصاب استراکچر",
+   "nameEn": "Assembler",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10207",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوراخکار بتن",
+   "nameEn": null,
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10208",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار استراکچر",
+   "nameEn": "Welder",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10209",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمکی استراکچر",
+   "nameEn": "Assembler Helper",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10210",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوراخکار",
+   "nameEn": "Steel / Iron Worker",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10211",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "آهنگر",
+   "nameEn": "Steel / Iron Worker",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10212",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پوشش کار",
+   "nameEn": "Insulation",
+   "discipline": "استراکچر",
+   "unit": null,
+   "sourceRef": "manp_list:10213",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزور پایپینگ",
+   "nameEn": "Supervisor",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10302",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن تست",
+   "nameEn": "Test Man",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10303",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تست من",
+   "nameEn": "Test Man",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10304",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن",
+   "nameEn": "Foreman",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10305",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فیتر درجه 1",
+   "nameEn": "Pipe Fitter-1",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10306",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فیتر درجه2",
+   "nameEn": "Pipe Fitter-2",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10307",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک فیتر",
+   "nameEn": "Fitter Helper",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10308",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پانچ زن",
+   "nameEn": "Cutter / Bender / Grinder",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10310",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکزن",
+   "nameEn": "Tack Welder",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10311",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار برق آرگون",
+   "nameEn": "Pipe Welder ( TIG + ARC )",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10312",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار برق(لوله)",
+   "nameEn": "Pipe Welder (ARC )",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10313",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سنگ زن",
+   "nameEn": "Cutter / Bender / Grinder",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10320",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمکی طول خط",
+   "nameEn": "pipe line helper",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10321",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "بند زن",
+   "nameEn": "Bender Man",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10322",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار فول آرگون",
+   "nameEn": "Pipe Welder ( TIG )",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10324",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک جوشکار",
+   "nameEn": "Welder Helper",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10325",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر جوش",
+   "nameEn": "Welding - Supervisor",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10326",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "برشکار",
+   "nameEn": "Bevel Machine Operator",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10327",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک اسپول من",
+   "nameEn": "Spoolman",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10328",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک برشکار",
+   "nameEn": "Bevel Machine Operator helper",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10329",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن ساپورت",
+   "nameEn": "Foreman",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10332",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار ساپورت",
+   "nameEn": "Pipe Support Welder",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10333",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مونتاژکار درجه 1",
+   "nameEn": "Assembler",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10334",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مونتاژکار درجه 2",
+   "nameEn": "Pipe Support Helper",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10335",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "دریل کار",
+   "nameEn": "Cutter / Bender / Grinder",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10336",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گروه آزادی فر",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10341",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "فورمن رینستایت",
+   "nameEn": "Test Man",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10342",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "رینستایت کار",
+   "nameEn": "Test Man",
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10343",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گروه پایپ جکینگ (یگانه)",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10344",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه پایپ جکینگ (حزباوی)",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10345",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه پاپی (ایستگاه)",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10346",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه خانعلی پور (HDD)",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10347",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه الداغی (HDD)",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10348",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "حدیده کار",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10349",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گروه قاسمی (جوشکار)",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10350",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه خانی (تست)",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10351",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه فتحی",
+   "nameEn": null,
+   "discipline": "لوله کشی",
+   "unit": null,
+   "sourceRef": "manp_list:10352",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "فورمن HVAC",
+   "nameEn": null,
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10401",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر/کارشناس تجهیزات",
+   "nameEn": "Supervisor",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10402",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن نصب و تجهیزات",
+   "nameEn": "Foreman",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10403",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "میل رایت",
+   "nameEn": "Millwright / Equipment Erector",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10404",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "نصاب تجهیزات",
+   "nameEn": "Assembler",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10405",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پدگذار/قالب بند",
+   "nameEn": "Formworker",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10406",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فیتر تجهیزات",
+   "nameEn": "Mechanical Fitter",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10407",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مونتاژکار مخزن",
+   "nameEn": "Assembler Tank",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10408",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار تجهیزات",
+   "nameEn": "Plate Welder",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10409",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کالیبراسیون",
+   "nameEn": "Alignment & Calibrator",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10410",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار مخزن",
+   "nameEn": "Tank Welder",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10411",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "برشکار مخزن",
+   "nameEn": "Cutter",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10412",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "استاد کار رول ورق",
+   "nameEn": "Bender / Grinder",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10413",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک نصاب تجهیزات",
+   "nameEn": "Helper",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10414",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گروت ریز",
+   "nameEn": null,
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10415",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "نسوز کار تجهیزات",
+   "nameEn": "Refractory",
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10416",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن HP",
+   "nameEn": null,
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10417",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "نصاب HP",
+   "nameEn": null,
+   "discipline": "تجهیزات و مخازن",
+   "unit": null,
+   "sourceRef": "manp_list:10418",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن رنگ",
+   "nameEn": "Forman",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10501",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "عایق کار تجهیزات",
+   "nameEn": "Insulator - Equipment",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10502",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سندبلاست کار",
+   "nameEn": "Sand Blaster",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10503",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مهندس رنگ وعایق",
+   "nameEn": "Insulation & Paint - Engineers",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10504",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین رنگ وعایق",
+   "nameEn": "Insulation & Paint - Technicians",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10505",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "عایق کار مخازن",
+   "nameEn": "Insulator - Vessel",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10508",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "شوت بلاست کار",
+   "nameEn": "Shot Blaster",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10509",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "رنگ کار",
+   "nameEn": "Painter",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10510",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "عایق کار لوله",
+   "nameEn": "Insulator - Pipe",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10511",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پوشش کار سرد",
+   "nameEn": "Insulation & Paint - Engineers",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10513",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راپینگ کار",
+   "nameEn": "Insulator/Wrapper - Pipe",
+   "discipline": "رنگ و عایق",
+   "unit": null,
+   "sourceRef": "manp_list:10514",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر برق",
+   "nameEn": "Supervisor",
+   "discipline": "برق و ابزار دقیق",
+   "unit": null,
+   "sourceRef": "manp_list:10601",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن برق و ابزار دقیق",
+   "nameEn": "Foreman",
+   "discipline": "برق و ابزار دقیق",
+   "unit": null,
+   "sourceRef": "manp_list:10602",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مونتاژکار برق و ابزار دقیق",
+   "nameEn": "Assembler",
+   "discipline": "برق و ابزار دقیق",
+   "unit": null,
+   "sourceRef": "manp_list:10603",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین برق",
+   "nameEn": "Technician - Electrical",
+   "discipline": "برق و ابزار دقیق",
+   "unit": null,
+   "sourceRef": "manp_list:10604",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین ابزار دقیق",
+   "nameEn": "Technician - Instrumentation",
+   "discipline": "برق و ابزار دقیق",
+   "unit": null,
+   "sourceRef": "manp_list:10605",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کاندوئیت کار",
+   "nameEn": "Conduit worker",
+   "discipline": "برق و ابزار دقیق",
+   "unit": null,
+   "sourceRef": "manp_list:10606",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گلند و سرکابل زن",
+   "nameEn": null,
+   "discipline": "برق و ابزار دقیق",
+   "unit": null,
+   "sourceRef": "manp_list:10607",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کابل کش",
+   "nameEn": "Cable Man",
+   "discipline": "برق و ابزار دقیق",
+   "unit": null,
+   "sourceRef": "manp_list:10608",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "اپراتور تجهیزات",
+   "nameEn": "Equipment Operator",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10701",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گروه وزارت دفاع",
+   "nameEn": null,
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10702",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "گروه منابع طبیعی",
+   "nameEn": null,
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10703",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "مسئول آشپزخانه",
+   "nameEn": "Caretaker /Others",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10704",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارگرساده",
+   "nameEn": "Common Labor",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10705",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "آشپز",
+   "nameEn": "Cook",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10706",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک آشپز",
+   "nameEn": "Cook Helper",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10707",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تراشکار",
+   "nameEn": "Turner",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10708",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پرتونگار",
+   "nameEn": null,
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10709",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گروه مین روبی",
+   "nameEn": "Demining Group",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10710",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "کارگر فنی",
+   "nameEn": "Skilled Labor",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10712",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارگر روز مزد",
+   "nameEn": "Day Laborer",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10713",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین پرتونگاری",
+   "nameEn": null,
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10714",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پرتونگار درجه 1",
+   "nameEn": null,
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10715",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمکی پرتونگاری",
+   "nameEn": "NDT Commentator / Radiography",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10716",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "گروه مرادخانی(برق رسانی)",
+   "nameEn": null,
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10717",
+   "active": false
+  },
+  {
+   "kind": "person",
+   "name": "آزمایشگاه مکاینک خاک",
+   "nameEn": "Soil Mechanic Lab/Concrete Lab.",
+   "discipline": "عمومی",
+   "unit": null,
+   "sourceRef": "manp_list:10718",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست نقشه برداری",
+   "nameEn": "Surveying Manager",
+   "discipline": "گروه نقشه برداری",
+   "unit": null,
+   "sourceRef": "manp_list:10801",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "نقشه بردار",
+   "nameEn": "Surveying - Engineers",
+   "discipline": "گروه نقشه برداری",
+   "unit": null,
+   "sourceRef": "manp_list:10802",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک نقشه بردار",
+   "nameEn": "Surveying - Technicians",
+   "discipline": "گروه نقشه برداری",
+   "unit": null,
+   "sourceRef": "manp_list:10803",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مدیر پروژ",
+   "nameEn": "Project Manager",
+   "discipline": "مدیریت پروژه",
+   "unit": null,
+   "sourceRef": "manp_list:10902",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست کارگاه",
+   "nameEn": "Site Manager / Deputy",
+   "discipline": "مدیریت کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:11003",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "معاون کارگاه",
+   "nameEn": "Site Manager / Deputy",
+   "discipline": "مدیریت کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:11004",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست اجرا",
+   "nameEn": "Area / Discipline Manager",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11105",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "معاونت اجرایی",
+   "nameEn": "Area / Discipline Deputy",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11106",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست مکانیکال",
+   "nameEn": "Mechanical Manager / Deputy",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11107",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس اجرایی",
+   "nameEn": "Construction Expert",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11108",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر سیویل",
+   "nameEn": "civil- Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11109",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر نصب تجهیزات",
+   "nameEn": "Mechanical & Equipment - Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11111",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مهندس تجهیزات",
+   "nameEn": "Mechanical & Equipment - Engineers",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11112",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین تجهیزات",
+   "nameEn": "Mechanical & Equipment - Technicians",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11113",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر پایپینگ",
+   "nameEn": "Piping - Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11114",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر استراکچر",
+   "nameEn": "Civil & Steel Structure - Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11115",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست ساپورت",
+   "nameEn": "support - Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11116",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر ساپورت",
+   "nameEn": "support - Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11117",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مسئول سیویل و عملیات خاکی",
+   "nameEn": null,
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11118",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین پایپینگ",
+   "nameEn": "Piping - Technicians (Reporter)",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11133",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست رنگ وعایق",
+   "nameEn": "Insulation & Paint - Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11134",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مهندس برق قدرت",
+   "nameEn": "Electrical & Power - Engineers",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11135",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مهندس برق وابزاردقیق",
+   "nameEn": "Instrumentation & Control - Engineers",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11136",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست برق قدرت",
+   "nameEn": "Electrical & Power - Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11137",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین برق قدرت",
+   "nameEn": "Electrical & Power - Technicians",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11139",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست برق وابزاردقیق",
+   "nameEn": "Instrumentation & Control - Supervisor",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11140",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین برق وابزاردقیق",
+   "nameEn": "Instrumentation & Control - Technicians",
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11142",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر HP",
+   "nameEn": null,
+   "discipline": "اجرا",
+   "unit": null,
+   "sourceRef": "manp_list:11151",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست دفتر فنی",
+   "nameEn": "Technical Office Manager / Deputy",
+   "discipline": "دفاتر فنی",
+   "unit": null,
+   "sourceRef": "manp_list:11201",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مهندس دفتر فنی",
+   "nameEn": "Technical Office - Engineers",
+   "discipline": "دفاتر فنی",
+   "unit": null,
+   "sourceRef": "manp_list:11202",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس دفتر فنی",
+   "nameEn": "Technical Office - Expert",
+   "discipline": "دفاتر فنی",
+   "unit": null,
+   "sourceRef": "manp_list:11204",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "دفتر فنی پایپینگ",
+   "nameEn": "Technical Office - Technicians",
+   "discipline": "دفاتر فنی",
+   "unit": null,
+   "sourceRef": "manp_list:11205",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "دفتر فنی استراکچر",
+   "nameEn": "Technical Office - Technicians",
+   "discipline": "دفاتر فنی",
+   "unit": null,
+   "sourceRef": "manp_list:11206",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "دفتر فنی ساپورت",
+   "nameEn": "Technical Office - Technicians",
+   "discipline": "دفاتر فنی",
+   "unit": null,
+   "sourceRef": "manp_list:11207",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "آرشیو",
+   "nameEn": "Technical Office - Technicians",
+   "discipline": "دفاتر فنی",
+   "unit": null,
+   "sourceRef": "manp_list:11208",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین دفتر فنی",
+   "nameEn": "Technical Office - Technicians",
+   "discipline": "دفاتر فنی",
+   "unit": null,
+   "sourceRef": "manp_list:11209",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست کنترل پروژه",
+   "nameEn": "Planning & Control Manager / Deputy",
+   "discipline": "برنامه ریزی و کنترل پروژه",
+   "unit": null,
+   "sourceRef": "manp_list:11301",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس کنترل پروژه",
+   "nameEn": "Planning & Control - Expert",
+   "discipline": "برنامه ریزی و کنترل پروژه",
+   "unit": null,
+   "sourceRef": "manp_list:11302",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارمند کنترل پروژه",
+   "nameEn": "Planning & Control - Technicians",
+   "discipline": "برنامه ریزی و کنترل پروژه",
+   "unit": null,
+   "sourceRef": "manp_list:11303",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "امور قراردادها",
+   "nameEn": "Contracts Affairs",
+   "discipline": "برنامه ریزی و کنترل پروژه",
+   "unit": null,
+   "sourceRef": "manp_list:11304",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کنترل اسناد",
+   "nameEn": "Document Control Center",
+   "discipline": "برنامه ریزی و کنترل پروژه",
+   "unit": null,
+   "sourceRef": "manp_list:11307",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس حقوقی",
+   "nameEn": "Legal Expert",
+   "discipline": "برنامه ریزی و کنترل پروژه",
+   "unit": null,
+   "sourceRef": "manp_list:11308",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس تحصیل اراضی",
+   "nameEn": "Land Study Expert",
+   "discipline": "برنامه ریزی و کنترل پروژه",
+   "unit": null,
+   "sourceRef": "manp_list:11309",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست کنترل کیفیت",
+   "nameEn": "QC Manager / Deputy",
+   "discipline": "کنترل کیفیت",
+   "unit": null,
+   "sourceRef": "manp_list:11401",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "بازرس جوش و فیتاپ",
+   "nameEn": "Inspector weld",
+   "discipline": "کنترل کیفیت",
+   "unit": null,
+   "sourceRef": "manp_list:11403",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "بازرس رنگ و عایق",
+   "nameEn": "Inspector Paint& Insulation",
+   "discipline": "کنترل کیفیت",
+   "unit": null,
+   "sourceRef": "manp_list:11404",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس کنترل کیفیت",
+   "nameEn": "QA/QC Expert",
+   "discipline": "کنترل کیفیت",
+   "unit": null,
+   "sourceRef": "manp_list:11406",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "بازرس رادیوگرافی",
+   "nameEn": "NDT Controller / Radiography",
+   "discipline": "کنترل کیفیت",
+   "unit": null,
+   "sourceRef": "manp_list:11407",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس آزمایشگاه",
+   "nameEn": "Laboratory Expert",
+   "discipline": "کنترل کیفیت",
+   "unit": null,
+   "sourceRef": "manp_list:11409",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مفسر پرتونگاری",
+   "nameEn": "NDT Commentator / Radiography",
+   "discipline": "کنترل کیفیت",
+   "unit": null,
+   "sourceRef": "manp_list:11410",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست ایمنی",
+   "nameEn": "HSE Manager / Deputy",
+   "discipline": "ایمنی",
+   "unit": null,
+   "sourceRef": "manp_list:11501",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سوپروایزر ایمنی",
+   "nameEn": "HSE - Supervisor",
+   "discipline": "ایمنی",
+   "unit": null,
+   "sourceRef": "manp_list:11502",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مسئول بهداشت محیط ایمنی",
+   "nameEn": "Resp. For Health And Environment",
+   "discipline": "ایمنی",
+   "unit": null,
+   "sourceRef": "manp_list:11503",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس ایمنی",
+   "nameEn": "HSE - Expert",
+   "discipline": "ایمنی",
+   "unit": null,
+   "sourceRef": "manp_list:11504",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "افسر ایمنی",
+   "nameEn": "HSE - Officer",
+   "discipline": "ایمنی",
+   "unit": null,
+   "sourceRef": "manp_list:11505",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پزشک",
+   "nameEn": "Clinic Doctor",
+   "discipline": "ایمنی",
+   "unit": null,
+   "sourceRef": "manp_list:11506",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "بهیار",
+   "nameEn": "Fire Fighting-Nurse",
+   "discipline": "ایمنی",
+   "unit": null,
+   "sourceRef": "manp_list:11507",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده آمبولانس",
+   "nameEn": "Light Vehicle Driver(Ambulance)",
+   "discipline": "ایمنی",
+   "unit": null,
+   "sourceRef": "manp_list:11508",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست حراست",
+   "nameEn": "Security Manager / Deputy",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11909",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "افسر نگهبان",
+   "nameEn": "Security Officer",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11910",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمپاس/آبدارچی",
+   "nameEn": "Caretaker/Servitor /Others",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11911",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "خدمات",
+   "nameEn": "Services",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11913",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "نگهبان",
+   "nameEn": "Guard",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11914",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست گروه برق",
+   "nameEn": "Electrician",
+   "discipline": "تاسیسات و تجهیز کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:12001",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "برقکار",
+   "nameEn": "Electrician",
+   "discipline": "تاسیسات و تجهیز کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:12002",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک برقکار",
+   "nameEn": "Electrician",
+   "discipline": "تاسیسات و تجهیز کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:12004",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست تاسیسات",
+   "nameEn": "Facilities Supervisor",
+   "discipline": "تاسیسات و تجهیز کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:12005",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "لوله کش",
+   "nameEn": "Plumber",
+   "discipline": "تاسیسات و تجهیز کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:12006",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تاسیسات کمپ",
+   "nameEn": "Maintenance / General Services - Camp",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:12007",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "جوشکار تاسیسات",
+   "nameEn": "Facilities Welder",
+   "discipline": "تاسیسات و تجهیز کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:12008",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تاسیسات سایت",
+   "nameEn": "Maintenance / General Services - site",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:12016",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارگر تاسیسات",
+   "nameEn": "Facilities worker",
+   "discipline": "تاسیسات و تجهیز کارگاه",
+   "unit": null,
+   "sourceRef": "manp_list:12017",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "معاونت/سرپرست ماشین آلات",
+   "nameEn": "Transport manager/ Deputy",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12101",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارمند ماشین آلات",
+   "nameEn": "Machinery Employee",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12102",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "تکنسین ماشین آلات",
+   "nameEn": "Machinery Technicians",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12103",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مکانیک ماشین آلات",
+   "nameEn": "Machinery Maintenance",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12104",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "برقکار خودرو",
+   "nameEn": "Machinery Maintenance",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12105",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرویسکار",
+   "nameEn": "Machinery Maintenance",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12106",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن ریگر",
+   "nameEn": "Rigger",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12107",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده جرثقیل",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12108",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "اپراتور کرن تاور",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12109",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده تراکتور/راننده لیفتراک",
+   "nameEn": "Light Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12110",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده لیفتراکت",
+   "nameEn": "Light Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12111",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده ماشین آلات سبک",
+   "nameEn": "Light Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12112",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده ماشین آلات سنگین",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12113",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده مینی بوس/اتوبوس",
+   "nameEn": "Light Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12114",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "ریگر جرثقیل",
+   "nameEn": "Rigger",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12115",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده بیل حفاری/لودر/بابکت",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12116",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "موتورمن",
+   "nameEn": "Machinery Maintenance",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12117",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده خاور",
+   "nameEn": "Light Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12118",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده وانت",
+   "nameEn": "Light Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12119",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده جرثقیل 8 تن",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12121",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "اپراتور ژنراتور",
+   "nameEn": "Genrator operation",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12122",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده کفی 10 تن",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12130",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده جرثقیل 60 تن",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12132",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده جرثقیل 25 تن",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12134",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "ریگر راننده جرثقیل 25 تن",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12135",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "راننده جرثقیل 160 تن",
+   "nameEn": "Heavy Vehicle Driver",
+   "discipline": "گروه حمل و نقل و رانندگان",
+   "unit": null,
+   "sourceRef": "manp_list:12180",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "فورمن داربست",
+   "nameEn": "Foreman",
+   "discipline": "اسکافلد",
+   "unit": null,
+   "sourceRef": "manp_list:12201",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "داربست بند درجه1",
+   "nameEn": "Scaffolder",
+   "discipline": "اسکافلد",
+   "unit": null,
+   "sourceRef": "manp_list:12202",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "داربست بند درجه2",
+   "nameEn": "Scaffolder Helper",
+   "discipline": "اسکافلد",
+   "unit": null,
+   "sourceRef": "manp_list:12203",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "PT MAN",
+   "nameEn": null,
+   "discipline": "HP",
+   "unit": null,
+   "sourceRef": "manp_list:12308",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 250 تن زنجیری",
+   "nameEn": "CRANE 250 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21001",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 200 تن",
+   "nameEn": "CRANE 200 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21007",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 100 تن",
+   "nameEn": "CRANE 100 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21008",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 60 تن",
+   "nameEn": "CRANE 60 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21009",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 50 تن",
+   "nameEn": "CRANE 50 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21010",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 35 تن",
+   "nameEn": "CRANE 35 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21011",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 25 تن",
+   "nameEn": "CRANE 25 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21012",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 10 تن",
+   "nameEn": "CRANE 10 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21013",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 8 تن",
+   "nameEn": "CRANE 8 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21014",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 10 تن کفی",
+   "nameEn": "CRANE 10 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21016",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 8 تن کفی",
+   "nameEn": "CRANE 8 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21017",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 5 تن کفی",
+   "nameEn": "CRANE 5 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21018",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جرثقیل 3 تن کفی",
+   "nameEn": "CRANE 3 Ton",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21019",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کرین تاور",
+   "nameEn": "CRANE TOWER",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21020",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "سایدبوم D8",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21021",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "سایدبوم D6",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21022",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تریلی کمرشکن",
+   "nameEn": "Trailer",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21023",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تریلر کفی 24 تن",
+   "nameEn": "Trailer",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21024",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "لیفتراک",
+   "nameEn": "liftrack",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:21026",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "ریگر جرثقیل 8 تن",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": null,
+   "sourceRef": "manp_list:21081",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "ریگر کفی 10 تن",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": null,
+   "sourceRef": "manp_list:21082",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "ریگر جرثقیل 60 تن",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": null,
+   "sourceRef": "manp_list:21083",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "ریگر جرثقیل 160 تن",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": null,
+   "sourceRef": "manp_list:21084",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "بیل حفاری",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30201",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست انبار",
+   "nameEn": "Material Control Manager / Deputy",
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11601",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست انبار ابزار",
+   "nameEn": "Material Control Manager / Deputy",
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11602",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "متریال من",
+   "nameEn": "Custom Clearance",
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11603",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "انباردار",
+   "nameEn": "Warehouse Keeper",
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11604",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "انباردار متریال",
+   "nameEn": "Warehouse - Material Man",
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11605",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "انبار دار ابزار",
+   "nameEn": "Warehouse - Tool Man",
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11606",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کمک انباردار",
+   "nameEn": "Material Helper",
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11607",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "متصدی سوخت",
+   "nameEn": null,
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11610",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "اسپول من",
+   "nameEn": "Spool Man",
+   "discipline": "انبارداری و کنترل متریال",
+   "unit": null,
+   "sourceRef": "manp_list:11611",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست فن آوری اطلاعات",
+   "nameEn": "IT & Communication Manager",
+   "discipline": "IT",
+   "unit": null,
+   "sourceRef": "manp_list:11701",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "مهندس کامپیوتر",
+   "nameEn": "IT & Communication Engineers",
+   "discipline": "IT",
+   "unit": null,
+   "sourceRef": "manp_list:11702",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارشناس فن آوری اطلاعات",
+   "nameEn": "IT Expert",
+   "discipline": "IT",
+   "unit": null,
+   "sourceRef": "manp_list:11705",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست اداری و مالی",
+   "nameEn": "Finance / Accountant Manager",
+   "discipline": "امور مالی و اداری",
+   "unit": null,
+   "sourceRef": "manp_list:11801",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست امور اداری",
+   "nameEn": "Accountant Manager",
+   "discipline": "امور مالی و اداری",
+   "unit": null,
+   "sourceRef": "manp_list:11802",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارمند اداری",
+   "nameEn": "Accountant Employee",
+   "discipline": "امور مالی و اداری",
+   "unit": null,
+   "sourceRef": "manp_list:11803",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست امور مالی",
+   "nameEn": "Finance Manager",
+   "discipline": "امور مالی و اداری",
+   "unit": null,
+   "sourceRef": "manp_list:11804",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "امور مالی / حسابدار",
+   "nameEn": "Finance / Accountante",
+   "discipline": "امور مالی و اداری",
+   "unit": null,
+   "sourceRef": "manp_list:11805",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "دفتردار",
+   "nameEn": "Book Keeper",
+   "discipline": "امور مالی و اداری",
+   "unit": null,
+   "sourceRef": "manp_list:11808",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "منشی",
+   "nameEn": "Secretary",
+   "discipline": "امور مالی و اداری",
+   "unit": null,
+   "sourceRef": "manp_list:11809",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پرمیت من",
+   "nameEn": "permit man",
+   "discipline": "امور مالی و اداری",
+   "unit": null,
+   "sourceRef": "manp_list:11810",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست پشتیبانی",
+   "nameEn": "Logistics Manager / Deputy",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11901",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "سرپرست کمپ",
+   "nameEn": "Local Procurement / Purchaser",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11902",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "کارپرداز/تدارکات",
+   "nameEn": "Logstics",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11903",
+   "active": true
+  },
+  {
+   "kind": "person",
+   "name": "پشتیبانی",
+   "nameEn": "Local Procurement / Purchaser",
+   "discipline": "تدارکات و پشتیبانی",
+   "unit": null,
+   "sourceRef": "manp_list:11906",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "لودر",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30202",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "گریدر",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30203",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "بلدوزر",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30204",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "غلطک ماشینی",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30205",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تراک میکسر",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30207",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "پمپ بتن زمینی",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30208",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کامیون کمپرسی",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30209",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کامیونت",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30210",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کامیونت تانکر آب 4000 لیتری",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30211",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "بیل بکهول",
+   "nameEn": "Tractor",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30212",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تراکتور",
+   "nameEn": "Tractor",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30213",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "بابکت",
+   "nameEn": "Tractor",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30214",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ماشین بند",
+   "nameEn": "Bender",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30215",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه حفاری افقی",
+   "nameEn": "H.D.D/Pipe Jacking",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30216",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کمپکتور",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30220",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "اتوبوس",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30301",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "مینی بوس",
+   "nameEn": "MiniBus",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30302",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "سواری استیشن",
+   "nameEn": "car",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30304",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "سواری",
+   "nameEn": "car",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30305",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "وانت",
+   "nameEn": "vanet",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30306",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "آمبولانس",
+   "nameEn": "Ambulanse",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30307",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ماشین آتش نشانی",
+   "nameEn": "Fire truck",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30309",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ژنراتور 750 KVA",
+   "nameEn": "GENERATOR 750 KVA",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30401",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ژنراتور 600 KVA",
+   "nameEn": "GENERATOR 600 KVA",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30402",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ژنراتور 450 KVA",
+   "nameEn": "GENERATOR 450 KVA",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30403",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ژنراتور 250 KVA",
+   "nameEn": "GENERATOR 250 KVA",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30404",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ژنراتور 150 KVA",
+   "nameEn": "GENERATOR 150 KVA",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30405",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ژنراتور 125 KVA",
+   "nameEn": "GENERATOR 125 KVA",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30406",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ژنراتور 100 KVA",
+   "nameEn": "GENERATOR 100 KVA",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30407",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ژنراتور 75 KVA",
+   "nameEn": "GENERATOR 75 KVA",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30408",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کمپرسور هوا",
+   "nameEn": "Air Compressor",
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30420",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کانکس 12 متری",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30501",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کانکس 6 متری",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30502",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کانتینر 6 متری",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30503",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کانتینر 6/12 متری",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30504",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تانکر سوخت",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30601",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کفی تراکتور",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30602",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "شاسی",
+   "nameEn": null,
+   "discipline": "ماشین آلات",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:30603",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "آچار بادی",
+   "nameEn": "Air Achar",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31001",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "سنگ فرز",
+   "nameEn": "Air Achar",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31002",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "مینی سنگ",
+   "nameEn": "Air Achar",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31003",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه برش هوا گاز",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31004",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه رطوبت سنج",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31005",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه رافنس گیج",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31006",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه ایرلس",
+   "nameEn": "Airless",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31007",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه پیستوله رنگ",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31008",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دیگ و مخزن ماسه پاشی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31009",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "موتور جوش دیزلی",
+   "nameEn": "Rectifaier",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31010",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "رکتیفایر",
+   "nameEn": "Rectifaier",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31011",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه جوش اینورتر",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31012",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "آون مادر",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31013",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "آون دستی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31014",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جک هیدرولیک 50 تن",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31020",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جک هیدرولیک 10 تن",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31021",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جک دنده ای",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31022",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جک کتابی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31023",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "چین پلاک",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31024",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "پولیف",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31025",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تیفور",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31026",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه کپی و چاپگر",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31030",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کامپیوتر رو میزی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31031",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "لپ تاپ",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31032",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دوربین نقشه برداری Total",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31033",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دریل هیلتی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31040",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دریل مگنت",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31041",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دریل شارژی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31042",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دریل دستی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31043",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه کربر",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31044",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "فرز انگشتی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31045",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه تست پمپ",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31046",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه جوش پلی اتیلن",
+   "nameEn": "Welder Polyethelen",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31047",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه خم میلگرد",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31048",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه برش میلگرد",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31049",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ویبراتور",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31050",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کمپکتور روبین",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31051",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "قالب فلزی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:31052",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "سرجک",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:31053",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "پین و گوه",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "جفت",
+   "sourceRef": "manp_list:31054",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "متعلقات قالب بندی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:31055",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کنج بیرونی/داخلی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "برگ",
+   "sourceRef": "manp_list:31056",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "قالب چوبی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "متر مربع",
+   "sourceRef": "manp_list:31057",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تابلو برق",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31058",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه ایمپکت برقی",
+   "nameEn": "Impactor",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31059",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه برش گیوتین غلطکی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31070",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه لب زن",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31071",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه خم کاری",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31072",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "میکسر(هم زن برقی)",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31073",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه رول",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31074",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه چرخ زینک",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31075",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جک هیدرولیک 25 تن",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31076",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "قیچی ورق بر",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31077",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تسمه کش",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31078",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه جوشکاری آرگون",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31080",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه حدیده برقی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31081",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه لوله گیر",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31082",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "پمپ آب",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31083",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "واتر جت",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31084",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "جک پالت",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31085",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "تانکر آب",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31086",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کپسول آتش نشانی 18 کیلویی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31087",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کپسول آتش نشانی 6 کیلویی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31088",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "کولر گازی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31089",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "اره عمود بر/اره برقی(چوب بری)",
+   "nameEn": "chain Saw",
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31090",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "لوله بر اسکافلد 2 اینچ",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31091",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه برشکاری پلاسما",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31092",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "دستگاه برشکاری بول",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31093",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "چکش بادی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31094",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "قيچي دستي",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31095",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "آچار جغجغه داربست بندی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "دستگاه/روز",
+   "sourceRef": "manp_list:31098",
+   "active": true
+  },
+  {
+   "kind": "machine",
+   "name": "ابزارآلات داربست بندی",
+   "nameEn": null,
+   "discipline": "ابزارآلات غیر مصرفی",
+   "unit": "متر مربع/روز",
+   "sourceRef": "manp_list:31099",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "صفحه سنگ 6 میل بزرگ",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41001",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "صفحه سنگ 3 میل بزرگ",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41002",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "صفحه سنگ 6 میل مینی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41003",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "صفحه سنگ 3 میل مینی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41004",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "کپسول گاز",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "بالن",
+   "sourceRef": "manp_list:41005",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "کپسول هوا",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "بالن",
+   "sourceRef": "manp_list:41006",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "دستکش کارگری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "جفت",
+   "sourceRef": "manp_list:41007",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "دستکش جوشکاری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "جفت",
+   "sourceRef": "manp_list:41008",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "دستکش آرگون",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "جفت",
+   "sourceRef": "manp_list:41009",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "گازوئیل",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "لیتر",
+   "sourceRef": "manp_list:41010",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "بنزین",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "لیتر",
+   "sourceRef": "manp_list:41011",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "کاسه برس",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41012",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "تنگستن",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41013",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته چکشی هلتی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41014",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته سوراخکاری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41015",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "کپسول آرگون",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "بالن",
+   "sourceRef": "manp_list:41016",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "سرامیک",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41017",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته کربر",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41018",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "الماسه فرز انگشتی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41019",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته هلتی 22",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41020",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته گردبر",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41021",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "رادیوگرافی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "اینچ",
+   "sourceRef": "manp_list:41022",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "صفحه سنگ 1 میل بزرگ",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41023",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته کوربور",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41032",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "تینر شستشو (10000)",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "لیتر",
+   "sourceRef": "manp_list:41034",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مسباره",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41035",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته 8 میلیمتری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41040",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته 14 میلیمتری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41041",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته 20 میلیمتری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41042",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته 24 میلیمتری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41043",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته 30 میلیمتری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41044",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته 35 میلیمتری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41045",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "مته 16 میلیمتری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41046",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "ضد زنگ",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41047",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "کنف",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41048",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "PT(ست مایع نفوذی)",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "ست",
+   "sourceRef": "manp_list:41049",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "برس رنگ آمیزی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41050",
+   "active": true
+  },
+  {
+   "kind": "consumable",
+   "name": "برس سیمی تخت",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41051",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "ساندویچ پنل",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "متر مربع",
+   "sourceRef": "manp_list:41052",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "خاک مخلوط سرندی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "تن",
+   "sourceRef": "manp_list:41061",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "آب آشامیدنی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "لیتر",
+   "sourceRef": "manp_list:41062",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "واتر استاپ",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:41063",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "بلوک سیمانی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "عدد",
+   "sourceRef": "manp_list:41065",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "ماسه بادی",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "تن",
+   "sourceRef": "manp_list:41066",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "ماسه شسته",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "تن",
+   "sourceRef": "manp_list:41067",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "ماسه شکسته",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "تن",
+   "sourceRef": "manp_list:41068",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "سیمان",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "کیسه 50 کیلویی",
+   "sourceRef": "manp_list:41069",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "ایزوگام",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:41070",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "پلیت گالوانیزه",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41071",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "بتن آماده",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "متر مکعب",
+   "sourceRef": "manp_list:41072",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "گروت",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41073",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 8Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41074",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 10Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41075",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 12Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41076",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 14Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41077",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 16Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41078",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 18Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41079",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 20Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41080",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 22Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41081",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 25Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41082",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 28Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41083",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 30Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41084",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "میلگرد 32Φ",
+   "nameEn": null,
+   "discipline": "مصالح مصرفی",
+   "unit": "کیلوگرم",
+   "sourceRef": "manp_list:41085",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "کابل 4*70",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:41090",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "کابل 4*35",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:41091",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "پرایمر",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "لیتر",
+   "sourceRef": "manp_list:41092",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "راپینگ 30 سانتی متری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "رول",
+   "sourceRef": "manp_list:41093",
+   "active": true
+  },
+  {
+   "kind": "material",
+   "name": "راپینگ 23 سانتی متری",
+   "nameEn": null,
+   "discipline": "ابزارآلات مصرفی",
+   "unit": "رول",
+   "sourceRef": "manp_list:41094",
+   "active": true
+  },
+  {
+   "kind": "project_material",
+   "name": "لوله کربن استیل",
+   "nameEn": "Carbon Steel Pipe",
+   "discipline": "لوله",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:61001",
+   "active": true
+  },
+  {
+   "kind": "project_material",
+   "name": "لوله استنلس استیل",
+   "nameEn": "Stainless Steel Pipe",
+   "discipline": "لوله",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:61002",
+   "active": true
+  },
+  {
+   "kind": "project_material",
+   "name": "لوله الوی استیل",
+   "nameEn": "Alloye Steel Pipe",
+   "discipline": "لوله",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:61003",
+   "active": true
+  },
+  {
+   "kind": "project_material",
+   "name": "لوله گالوانیزه",
+   "nameEn": "Galvanized Pipe",
+   "discipline": "لوله",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:61004",
+   "active": true
+  },
+  {
+   "kind": "project_material",
+   "name": "لوله کربن خاص",
+   "nameEn": "LTCS Pipe",
+   "discipline": "لوله",
+   "unit": "متر طول",
+   "sourceRef": "manp_list:61005",
+   "active": true
+  }
+ ],
+ "problems": [
+  "«گروه پیمانکاری امانی» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه داوودی (ایستگاه)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه منصوری (فنس)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه امامی (ایستگاه)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه سلجوقی (ایستگاه)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه ظفری» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه جعفری (ایستگاه)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«پیمانکاری عبیات» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه آزادی فر» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه پایپ جکینگ (یگانه)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه پایپ جکینگ (حزباوی)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه پاپی (ایستگاه)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه خانعلی پور (HDD)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه الداغی (HDD)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه قاسمی (جوشکار)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه خانی (تست)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه فتحی» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه وزارت دفاع» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه منابع طبیعی» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه مین روبی» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«گروه مرادخانی(برق رسانی)» نام یک گروه یا پیمانکار است، نه سمت — غیرفعال وارد شد",
+  "«مسئول سیویل و عملیات خاکی» نیروی انسانی است ولی واحدش «دستگاه/روز» ثبت شده بود — بدون واحد (نفر) وارد شد",
+  "«قالب فلزی» ماشین‌آلات است ولی واحدش «عدد» است — همان‌طور وارد شد؛ بررسی شود",
+  "«سرجک» ماشین‌آلات است ولی واحدش «عدد» است — همان‌طور وارد شد؛ بررسی شود",
+  "«پین و گوه» ماشین‌آلات است ولی واحدش «جفت» است — همان‌طور وارد شد؛ بررسی شود",
+  "«متعلقات قالب بندی» ماشین‌آلات است ولی واحدش «عدد» است — همان‌طور وارد شد؛ بررسی شود",
+  "«کنج بیرونی/داخلی» ماشین‌آلات است ولی واحدش «برگ» است — همان‌طور وارد شد؛ بررسی شود",
+  "«قالب چوبی» ماشین‌آلات است ولی واحدش «متر مربع» است — همان‌طور وارد شد؛ بررسی شود",
+  "«ابزارآلات داربست بندی» ماشین‌آلات است ولی واحدش «متر مربع/روز» است — همان‌طور وارد شد؛ بررسی شود"
+ ],
+ "duplicates": 11,
+ "skipped": 0
+}

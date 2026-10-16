@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
+import { DISCLAIMER_FA, approvalLine } from "../lib/disclaimer.mjs";
 
 /* True piping-isometric projection: the three axes sit 120 deg apart.
    Model frame is x = East, y = Elevation, z = North. */
@@ -13,7 +14,7 @@ const INK = "#DDE7EE";
 const DIM = "#6F8492";
 const CY = "#43A0B4";
 
-export default function WeldMap2D({ model, meta, selected, onSelect, showDims, colorBy }) {
+export default function WeldMap2D({ model, meta, selected, onSelect, showDims, colorBy, approval = null }) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const drag = useRef(null);
@@ -110,6 +111,26 @@ export default function WeldMap2D({ model, meta, selected, onSelect, showDims, c
 
   function downloadSvg() {
     const el = svgRef.current.cloneNode(true);
+    // An SVG of a weld map gets printed and pinned up in the fabrication shop,
+    // where nothing about it says "draft" any more. Stamp it into the file.
+    const ns = "http://www.w3.org/2000/svg";
+    const box = el.viewBox.baseVal;
+    const stamp = document.createElementNS(ns, "text");
+    stamp.setAttribute("x", box.x + 12);
+    stamp.setAttribute("y", box.y + box.height - 16);
+    stamp.setAttribute("font-size", Math.max(11, box.height / 55));
+    stamp.setAttribute("fill", "#FF6B4A");
+    stamp.setAttribute("direction", "rtl");
+    stamp.textContent = DISCLAIMER_FA;
+    el.appendChild(stamp);
+    const sig = document.createElementNS(ns, "text");
+    sig.setAttribute("x", box.x + 12);
+    sig.setAttribute("y", box.y + box.height - 4);
+    sig.setAttribute("font-size", Math.max(9, box.height / 70));
+    sig.setAttribute("fill", "#8FA6B2");
+    sig.setAttribute("direction", "rtl");
+    sig.textContent = approvalLine(approval);
+    el.appendChild(sig);
     el.setAttribute("viewBox", `${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`);
     el.setAttribute("style", "background:#0A0F13");
     const blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + el.outerHTML],

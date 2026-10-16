@@ -1,0 +1,449 @@
+{
+ "id": "HDPE-25-1026-SH1",
+ "kind": "golden",
+ "title": "ISO-25-1026 sheet 1/3 rev 0 — 18 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1026",
+  "sheet": "1/3",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1026-SH1-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1026",
+   "sheet": "1/3",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "PIPE S40 BE ERW(EJ=0.85) API 5L-B PSL1 ASME B36.10",
+    "diam": "6",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE S40 BE ERW(EJ=0.85) API 5L-B PSL1 ASME B36.10",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE S40 BE ERW(EJ=0.85) API 5L-B PSL1 ASME B36.10",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE S80 PE SMLS API 5L-B PSL1 ASME B36.10",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE S80 PE SMLS API 5L-B PSL1 ASME B36.10",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "REDUCER ECCENTRIC S40 S40 BW A234-WPBW ERW(EJ=0.85) ASME B16.9",
+    "diam": "6 x 3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "HALF COUPLING 3000# SW A105 ASME B16.11",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "REDUCING TEE S40 S40 BW A234-WPBW ERW(EJ=0.85) ASME B16.9",
+    "diam": "3 x 2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "REDUCER ECCENTRIC S40 S40 BW A234-WPBW ERW(EJ=0.85) ASME B16.9",
+    "diam": "3 x 2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "HALF COUPLING 3000# SW A105 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 LR S40 BW A234-WPBW ERW(EJ=0.85) ASME B16.9",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE WELDING NECK S40 150# RF A105 ASME B16.5 SRF",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE SOCKET WELD S80 150# RF A105 ASME B16.5 SRF",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "REDUCER INSERT 3000# PLE X TSE (NPTF) A105 MSS SP-79",
+    "diam": "3/4 x 1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF GRAPHITE W/SS REINFORCEMENT 2.0mm THK KLINGER PSM/AS or EQ. ASME B16.21",
+    "diam": "3",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF GRAPHITE W/SS REINFORCEMENT 2.0mm THK KLINGER PSM/AS or EQ. ASME B16.21",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "90 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "5/8 x 90",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "70 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "1/2 x 70",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE GATE 800# SW A105 BODY W/13Cr TRIM HF-BODY SEAT & DISC SEAT OSY-BB SOLID WEDGE HAND WHEEL OP.",
+    "diam": "3/4",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "1",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "2",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "3",
+     "shape": "square",
+     "outline": "solid",
+     "label": "FFW",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "4",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": true,
+     "spool": null
+    },
+    {
+     "no": "5",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "6",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "7",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "8",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "9",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "6",
+     "branch": false,
+     "spool": "SP-1"
+    },
+    {
+     "no": "10",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": true,
+     "spool": null
+    },
+    {
+     "no": "11",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "12",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "13",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "6",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "14",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "15",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "16",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "17",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "3",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "18",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-2"
+    },
+    {
+     "no": "19",
+     "shape": "circle",
+     "outline": "dashed",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 18,
+  "fieldWeldCount": 12,
+  "fieldWelds": [
+   "1",
+   "2",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "10",
+   "11",
+   "12",
+   "14",
+   "16"
+  ],
+  "spoolCount": 2,
+  "register": [
+   {
+    "no": "1",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "2",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "3",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "4",
+    "loc": "Field",
+    "kind": "OLET",
+    "nps": 0.75
+   },
+   {
+    "no": "5",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "6",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "7",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "8",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "9",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 6
+   },
+   {
+    "no": "10",
+    "loc": "Field",
+    "kind": "OLET",
+    "nps": 1.5
+   },
+   {
+    "no": "11",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "12",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "13",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 6
+   },
+   {
+    "no": "14",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "15",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "16",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "17",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 3
+   },
+   {
+    "no": "18",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   }
+  ]
+ }
+}

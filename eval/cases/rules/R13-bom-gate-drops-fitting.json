@@ -1,0 +1,27 @@
+{
+  "id": "R13-bom-gate-drops-fitting",
+  "title": "Fitting absent from the MTO is removed from the design and reported",
+  "rule": "MTO هیچ ردیفی برای آن اتصال ندارد → اتصال حذف و دو یال مجاور به هم دوخته می‌شود",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000, "strictBom": true },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "bom": [
+      { "pt": 1, "group": "PIPE", "description": "Welded Pipe, API 5L Gr.B, SCH 40", "diam": 12, "qty": 5.66 }
+    ],
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "elbow90", "ref": "", "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 4000, "EL": 14000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 12 }
+    ]
+  },
+  "expect": {
+    "weldCount": 2,
+    "fieldWeldCount": 2,
+    "spoolCount": 1,
+    "warningLabels": ["در MTO نیست"]
+  }
+}

@@ -1,0 +1,22 @@
+[Unit]
+Description=EPC platform (Next.js + PGlite)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=epc
+Group=epc
+WorkingDirectory=@APP_DIR@
+EnvironmentFile=/etc/epc/epc.env
+ExecStart=/usr/local/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p @PORT@
+Restart=on-failure
+RestartSec=5
+# PGlite flushes on shutdown; give it time rather than SIGKILL mid-write.
+TimeoutStopSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

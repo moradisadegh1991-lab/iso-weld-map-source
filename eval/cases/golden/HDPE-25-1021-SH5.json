@@ -1,0 +1,39 @@
+{
+ "id": "HDPE-25-1021-SH5",
+ "kind": "golden",
+ "title": "ISO-25-1021 sheet 5/5 rev 0 — 0 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1021",
+  "sheet": "5/5",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1021-SH5-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1021",
+   "sheet": "5/5",
+   "rev": "0"
+  },
+  "bom": [],
+  "weldMarks": {
+   "marks": [],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 0,
+  "fieldWeldCount": 0,
+  "fieldWelds": [],
+  "register": []
+ }
+}

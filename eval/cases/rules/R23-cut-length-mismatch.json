@@ -1,0 +1,25 @@
+{
+  "id": "R23-cut-length-mismatch",
+  "title": "A cut length that does not match is reported, even when the MTO is happy",
+  "rule": "همان نقشه، بدون ابعاد فلنج: محاسبه ۳۳۳۶ می‌شود ولی نقشه ۳۲۱۱ گفته — و چک MTO راضی است",
+  "note": "This is the failure case of R22 and the reason the check exists. Two warnings are expected: the missing flange hub dimension, and the cut length that no computed piece matches.",
+  "options": { "spoolMaxLen": 12000, "maxPipeLength": 12000, "strictBom": true },
+  "input": {
+    "meta": { "drawingNo": "28\"-CWR-10-930065A-DA01-UCW", "rev": "A0", "sheet": "1/1",
+              "nps": 28, "schedule": "SCH 10", "clLengthM": 3.336, "pupLength": null },
+    "bom": [
+      { "pt": 1, "group": "PIPE", "description": "Pipe, API 5L GR.B, LSAW, BE, SCH 10", "diam": 28, "qty": 3.3 },
+      { "pt": 2, "group": "FLANGES", "description": "Flange, ASTM A105N, Weld Neck, RF, 150#, ASME B16.47B", "diam": 28, "qty": 1 }
+    ],
+    "cutLengths": [{ "piece": 1, "lengthMm": 3211, "nps": 28 }],
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "60\"-CWR-10-930002A-DA01-UCW", "E": 837391, "N": 1467586, "EL": 292062 },
+      { "id": "N2", "type": "flange-wn", "ref": "28\"-CWR-10-930066A-DA01-N", "E": 837391, "N": 1467586, "EL": 295398 }
+    ],
+    "edges": [{ "from": "N1", "to": "N2", "nps": 28 }]
+  },
+  "expect": {
+    "weldCount": 2,
+    "warningLabels": ["CUT PIPE LENGTH", "hub فلنج"]
+  }
+}

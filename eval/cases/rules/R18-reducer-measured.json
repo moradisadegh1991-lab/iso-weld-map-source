@@ -1,0 +1,20 @@
+{
+  "id": "R18-reducer-measured",
+  "title": "A dimension read off the drawing beats the estimate",
+  "rule": "faceToFace روی گره همیشه بر تخمین od×0.62 مقدم است",
+  "note": "od*0.62 approximates B16.9 overall length H to within a couple of millimetres at NPS 12 and drifts about 10% at the extremes, so a drawing that dimensions the reducer should be believed instead.",
+  "options": { "spoolMaxLen": 50000, "maxPipeLength": 50000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "reducer", "ref": "", "faceToFace": 356, "E": 0, "N": 4000, "EL": 10000 },
+      { "id": "N3", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 10000, "EL": 10000 }
+    ],
+    "edges": [
+      { "from": "N1", "to": "N2", "nps": 12 },
+      { "from": "N2", "to": "N3", "nps": 8 }
+    ]
+  },
+  "expect": { "weldCount": 4, "fieldWeldCount": 2, "maxWarnings": 0 }
+}

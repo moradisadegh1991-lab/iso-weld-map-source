@@ -1,0 +1,420 @@
+{
+ "id": "HDPE-25-1021-SH4",
+ "kind": "golden",
+ "title": "ISO-25-1021 sheet 4/5 rev 0 — 16 joints printed on the sheet",
+ "source": {
+  "drawingNo": "ISO-25-1021",
+  "sheet": "4/5",
+  "revision": "0",
+  "project": "HDPE plant, unit 25",
+  "register": "contractor's joint history (S/F, Type, Size per joint)",
+  "bom": "project MTO, this sheet"
+ },
+ "drawing": "drawings/25-1021-SH4-0.pdf",
+ "provenance": "input.weldMarks: markers transcribed from the drawing image by Claude in a development session, before looking at the register rows of the sheet; BOM from the project MTO. expect: the contractor's register for this sheet — not this engine's output.",
+ "verifiedBy": "",
+ "verifiedAt": "",
+ "legend": {
+  "shop": "circle",
+  "field": "square"
+ },
+ "input": {
+  "meta": {
+   "drawingNo": "ISO-25-1021",
+   "sheet": "4/5",
+   "rev": "0"
+  },
+  "bom": [
+   {
+    "pt": null,
+    "description": "GASKET SPIRAL WOUND 300# RF TEFLON FILLER 304SS HOOP & I.R. CS O.R. 4.5mm THK KLINGER MAXIFELEX CRIR OR EQ. ASME B 16.20",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE 10S BE EFW(EJ=1) A312-TP304 ASME B36.19",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE 40S PE SMLS A312-TP304 ASME B36.19",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "PIPE 40S PE SMLS A312-TP304 ASME B36.19",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "SWAGED NIPPLE ECC. 10S 40S BLE/PSE A403-WP304-W EFW(EJ=1) MSS SP-95",
+    "diam": "2 x 1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "HALF COUPLING 3000# SW A182-F304 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "ELBOW 90 LR 10S BW A403-WP304-W EFW(EJ=1) ASME B16.9",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FULL COUPLING 3000# SW A182-F304 ASME B16.11",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "STRAIGHT NIPPLE 40S SMLS TOE A312-TP304 (L=100mm) ASME B36.19",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "CAP 3000# NPT A182-F304 ASME B16.11",
+    "diam": "3/4",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "STUB END SP 10S BW A403-WP304-W EFW(EJ=1) ASME B16.9",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE LAP JOINT 150# FF A105 ASME B16.5",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "FLANGE SOCKET WELD 40S 300# RF A182-F304 ASME B16.5 SRF",
+    "diam": "1.1/2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "Y-STRAINER 150# RF 304SS BODY W/304SS ELEMENT",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF SHEET NON-ASBESTOS 2mm THK KLINGER C-4430 or EQ. ASME B16.21",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "GASKET 150# RF SHEET NON-ASBESTOS 2mm THK KLINGER C-4430 or EQ. ASME B16.21",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "90 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "3/4 x 90",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "90 STUD BOLT ASTM A193 GR.B7 + 2 HEAVY HEX NUTS ASTM A194 GR.2H ASME B18.2 PTFE COATED",
+    "diam": "5/8 x 90",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE GATE 150# RF A351-CF8 BODY W/304SS TRIM OSY-BB FLEXIBLE WEDGE",
+    "diam": "2",
+    "rev": "0"
+   },
+   {
+    "pt": null,
+    "description": "VALVE GATE 800# SW A182-F304 BODY W/304SS TRIM HF-BODY SEAT OSY-BB SOLID WEDGE",
+    "diam": "3/4",
+    "rev": "0"
+   }
+  ],
+  "weldMarks": {
+   "marks": [
+    {
+     "no": "28",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-8"
+    },
+    {
+     "no": "29",
+     "shape": "square",
+     "outline": "solid",
+     "label": "FFW",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "30",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-9"
+    },
+    {
+     "no": "31",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-9"
+    },
+    {
+     "no": "32",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-10"
+    },
+    {
+     "no": "33",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-10"
+    },
+    {
+     "no": "34",
+     "shape": "square",
+     "outline": "solid",
+     "label": "FFW",
+     "nps": "2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "35",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": true,
+     "spool": null
+    },
+    {
+     "no": "36",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "37",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "38",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "39",
+     "shape": "square",
+     "outline": "solid",
+     "label": "THD",
+     "nps": "3/4",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "40",
+     "shape": "circle",
+     "outline": "solid",
+     "label": "",
+     "nps": "2",
+     "branch": false,
+     "spool": "SP-11"
+    },
+    {
+     "no": "41",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "42",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    },
+    {
+     "no": "43",
+     "shape": "square",
+     "outline": "solid",
+     "label": "",
+     "nps": "1 1/2",
+     "branch": false,
+     "spool": null
+    }
+   ],
+   "unreadable": []
+  }
+ },
+ "expect": {
+  "weldCount": 16,
+  "fieldWeldCount": 10,
+  "fieldWelds": [
+   "29",
+   "34",
+   "35",
+   "36",
+   "37",
+   "38",
+   "39",
+   "41",
+   "42",
+   "43"
+  ],
+  "register": [
+   {
+    "no": "28",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "29",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "30",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "31",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "32",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "33",
+    "loc": "Shop",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "34",
+    "loc": "Field",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "35",
+    "loc": "Field",
+    "kind": "OLET",
+    "nps": 0.75
+   },
+   {
+    "no": "36",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "37",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "38",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 0.75
+   },
+   {
+    "no": "39",
+    "loc": "Field",
+    "kind": "THD",
+    "nps": 0.75
+   },
+   {
+    "no": "40",
+    "kind": "BW",
+    "nps": 2
+   },
+   {
+    "no": "41",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "42",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   },
+   {
+    "no": "43",
+    "loc": "Field",
+    "kind": "SW",
+    "nps": 1.5
+   }
+  ]
+ },
+ "_disputes": [
+  {
+   "no": "40",
+   "field": "loc",
+   "register": "Field",
+   "drawing": "printed in a circle (shop) with a spool mark"
+  }
+ ]
+}

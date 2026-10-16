@@ -1,0 +1,20 @@
+{
+  "id": "R21-spool-over-transport-limit",
+  "title": "A spool that cannot be transported is reported, not shipped on paper",
+  "rule": "برش اسپول فقط روی مرز المان‌ها ممکن است، پس یک ران لوله‌ای بلندتر از سقف حمل به‌صورت یک تکه درمی‌آید — و موتور باید این را بگوید",
+  "note": "This happens whenever maxPipeLength is set larger than spoolMaxLen, which looks harmless. The result here is a 24 m spool against a 6 m transport limit: four times over, and before this check nothing said so.",
+  "options": { "spoolMaxLen": 6000, "maxPipeLength": 24000 },
+  "input": {
+    "meta": { "nps": 12, "schedule": "SCH 40", "pupLength": 0 },
+    "nodes": [
+      { "id": "N1", "type": "tie-in", "ref": "TP-A", "E": 0, "N": 0, "EL": 10000 },
+      { "id": "N2", "type": "tie-in", "ref": "TP-B", "E": 0, "N": 24000, "EL": 10000 }
+    ],
+    "edges": [{ "from": "N1", "to": "N2", "nps": 12 }]
+  },
+  "expect": {
+    "weldCount": 2,
+    "spoolCount": 1,
+    "warningLabels": ["سقف حمل"]
+  }
+}
