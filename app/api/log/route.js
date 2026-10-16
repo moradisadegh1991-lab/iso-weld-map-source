@@ -5,6 +5,11 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { sectionLog, addComment, peopleOf, SECTION_FA } from "../../../lib/db/repos/log.mjs";
+import { LOG_SECTIONS, narrowed, tileAllowed } from "../../../lib/platform/navigation.mjs";
+
+/** A member narrowed to tiles reads the logs of their tiles' sections only. */
+const logAllowed = (m, section) => !narrowed(m)
+  || Object.entries(LOG_SECTIONS).some(([key, secs]) => secs.includes(section) && tileAllowed(m, `/log/${key}`));
 
 /** A section's log (or one record's trail): steps, signatures and comments, with who and when. */
 export async function GET(request) {
@@ -16,6 +21,7 @@ export async function GET(request) {
     const { db, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.VIEW_PROJECT);
+    if (!logAllowed(membership, section)) return Response.json({ error: "not found" }, { status: 404 });
     const entityId = url.searchParams.get("entityId");
     if (entityId && !/^[0-9a-f-]{36}$/i.test(entityId)) return Response.json({ error: "not found" }, { status: 404 });
     return await withProject(db, projectId, async () => {
@@ -34,6 +40,7 @@ export async function POST(request) {
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.COMMENT);
+    if (!logAllowed(membership, body.section)) return Response.json({ error: "not found" }, { status: 404 });
     return await withProject(db, projectId, async () => Response.json({ event: await addComment(db, {
       projectId, section: body.section, entityType: body.entityType || "section", entityId: body.entityId || null,
       label: body.label || "کامنت", comment: body.comment, userId: user.id }) }));

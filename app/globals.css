@@ -436,6 +436,19 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .tile .d{font-size:11px;color:var(--dim);line-height:1.5}
 .tile .big{font-family:var(--mono);font-size:26px;margin-top:auto;line-height:1}
 .tile .big.ok{color:var(--ok)} .tile .big.warn{color:var(--warn)} .tile .big.bad{color:var(--bad)}
+/* the launchpad: one fixed-size tile per page, in groups — as SAP Fiori does */
+.lp-group{margin:0 0 22px}
+.lp-title{font-size:14px;font-weight:600;margin:0 0 10px;color:var(--ink)}
+.lp-tiles{display:flex;flex-wrap:wrap;gap:10px}
+.lp-tile{width:176px;height:176px;box-sizing:border-box;background:var(--surf);border:1px solid var(--rule);border-radius:10px;
+  padding:14px;display:flex;flex-direction:column;gap:6px;color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s,box-shadow .15s}
+.lp-tile:hover,.lp-tile:focus-visible{border-color:var(--cy);transform:translateY(-1px);box-shadow:var(--raise)}
+.lp-head{font-size:14px;font-weight:600;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.lp-sub{font-size:11px;color:var(--dim);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.lp-foot{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between}
+.lp-ic{font-size:26px;color:var(--cy);line-height:1}
+@media (max-width:600px){.lp-tile{width:calc(50% - 5px);height:150px}}
 .tile.soon{opacity:.5;pointer-events:none}
 .tile.soon .t::after{content:" · به‌زودی";font-weight:400;color:var(--dim);font-size:10px}
 

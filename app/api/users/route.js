@@ -6,11 +6,14 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS, ROLES } from "../../../lib/authz.mjs";
 import { AREAS } from "../../../lib/platform/areas.mjs";
 import * as users from "../../../lib/db/repos/users.mjs";
+import { formTypes } from "../../../lib/db/repos/forms.mjs";
+import { tileCatalog, cleanTiles } from "../../../lib/platform/tiles.mjs";
+import { SECTIONS } from "../../../lib/platform/navigation.mjs";
 
 /**
  * GET  ?projectId=                 the project's members, the developers, and the choices
  * POST { projectId, kind, … }      invite · update · remove · link · revoke · profile ·
- *                                  contract-member(-remove) · reset-dismiss    (project admin)
+ *                                  contract-member(-remove) · reset-dismiss · tiles   (project admin)
  *                                  active · developer                         (developer only)
  */
 export async function GET(request) {
@@ -30,6 +33,7 @@ export async function GET(request) {
           FROM contract c WHERE c.project_id = $1 ORDER BY c.contract_no`, [projectId])).rows,
       companies: (await db.query("SELECT id, code, name FROM company ORDER BY code")).rows,
       resetRequests: await users.resetRequests(db, { projectId, byUser: user.id, byDeveloper: membership.role === "developer" }),
+      tileCatalog: tileCatalog(SECTIONS, await formTypes(db, { projectId })),
       iAmDeveloper: membership.role === "developer",
     }, { headers: { "Cache-Control": "no-store" } }));
   } catch (e) { return errorResponse(e); }
@@ -71,6 +75,8 @@ export async function POST(request) {
       if (kind === "contract-member") return Response.json({ member: await users.setContractMember(db, { projectId, contractId: body.contractId, userId,
         position: body.position, access: body.access }) });
       if (kind === "revoke") return Response.json(await users.endSessions(db, a));
+      if (kind === "tiles") return Response.json({ member: await users.setMemberTiles(db, { projectId, userId, tiles: body.tiles || [], cleanTiles,
+        forms: await formTypes(db, { projectId }) }) });
       if (kind === "active") return Response.json({ user: await users.setActive(db, { userId, active: body.active, byUser: user.id }) });
       if (kind === "developer") return Response.json({ user: await users.setDeveloper(db, { userId, value: body.value }) });
       return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });

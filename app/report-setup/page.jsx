@@ -21,7 +21,8 @@ export default function ReportSetupPage() {
   const { projectId, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/report-setup?projectId=${id}`, []);
   const [msg, setMsg] = useState(null);
-  const [typeId, setTypeId] = useState(null);
+  // a form's designer arrives from the forms page with ?type=ID
+  const [typeId, setTypeId] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("type")) || null);
   const [nt, setNt] = useState({ code: "", name: "", description: "" });
   const [ns, setNs] = useState({ seq: "", name: "" });
   const [ng, setNg] = useState({});        // per stage: { seq, name, title, description }
@@ -57,6 +58,7 @@ export default function ReportSetupPage() {
             ))}
           </div>
         )}
+        {data.may?.types !== false && <>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {!data.types.some((t) => t.code === "DR") && (
             <button className="btn" type="button" onClick={() => post({ kind: "template" })}>ساخت الگوی گزارش روزانه</button>
@@ -71,7 +73,8 @@ export default function ReportSetupPage() {
             </div>
             <button className="btn" type="submit">ذخیرهٔ نوع گزارش</button>
           </form>
-        </Fold>
+        </Fold></>}
+        {data.may?.types === false && <p className="sm muted">شما گردش کار فرم‌های تحویل بخش خود را تنظیم می‌کنید: مراحل، گروه‌ها، امضاکنندگان و تأییدکنندهٔ نهایی.</p>}
       </div>
 
       {type && (

@@ -93,9 +93,10 @@ function Frame({ p, pathname, children }) {
     return () => window.removeEventListener("keydown", k);
   }, [rail]);
 
-  const membership = { role: p.role, areas: p.project?.areas || [] };
-  const nav = navigationFor(membership, can);
-  const here = activeTab(pathname);
+  const membership = { role: p.role, areas: p.project?.areas || [], tiles: p.project?.tiles || [], party: p.project?.inspection_party || null };
+  const forms = p.project?.forms || [];
+  const nav = navigationFor(membership, can, { forms });
+  const here = activeTab(pathname, forms);
   const section = nav.flatMap((g) => g.items).find((s) => s.key === here?.section) || null;
   // A page this person's role does not open (a designer on the launchpad)
   // sends them to the first page it does, instead of a page of refusals.

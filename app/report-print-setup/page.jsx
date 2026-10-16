@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import PrintSheet from "../../components/reports/PrintSheet";
 import DailyPrintBody from "../../components/reports/DailyPrintBody";
+import FormPrintBody from "../../components/reports/FormPrintBody";
 
 /**
  * The daily report's print layout: paper, the heights of header, body and
@@ -22,7 +23,8 @@ const SAMPLE = {
 
 export default function ReportPrintSetup() {
   const { projectId, call } = usePlatform();
-  const [typeCode, setTypeCode] = useState("DR");
+  // a form's designer arrives from the form's page with ?type=CODE
+  const [typeCode, setTypeCode] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("type")) || "DR");
   const { data, error, reload } = useProjectData((id) => `/api/report-print?projectId=${id}&typeCode=${typeCode}`, [typeCode]);
   const [layout, setLayout] = useState(null);
   const [sample, setSample] = useState(null);
@@ -48,7 +50,8 @@ export default function ReportPrintSetup() {
   if (!data.type) return <div className="page"><div className="pagehead"><h1>قالب چاپ</h1></div>
     <div className="field" style={{ maxWidth: 320 }}><label htmlFor="pt-type">نوع گزارش</label>
         <select id="pt-type" value={typeCode} onChange={(e) => { setLayout(null); setTypeCode(e.target.value); }}>
-          <option value="DR">گزارش روزانه (DR)</option><option value="CR">گزارش روزانهٔ قرارداد (CR)</option></select></div>
+          {(data.types?.length ? data.types : [{ code: "DR", name: "گزارش روزانه" }, { code: "CR", name: "گزارش روزانهٔ قرارداد" }])
+            .map((t) => <option key={t.code} value={t.code}>{t.name} ({t.code})</option>)}</select></div>
     <p className="empty-note">این نوع گزارش هنوز تعریف نشده است (تنظیم گردش‌کار).</p></div>;
   if (!layout) return <p className="muted">در حال بارگذاری…</p>;
   const C = data.choices;
@@ -89,12 +92,13 @@ export default function ReportPrintSetup() {
     <div className="page">
       <div className="field" style={{ maxWidth: 320 }}><label htmlFor="pt-type">نوع گزارش</label>
         <select id="pt-type" value={typeCode} onChange={(e) => { setLayout(null); setTypeCode(e.target.value); }}>
-          <option value="DR">گزارش روزانه (DR)</option><option value="CR">گزارش روزانهٔ قرارداد (CR)</option></select></div>
+          {(data.types?.length ? data.types : [{ code: "DR", name: "گزارش روزانه" }, { code: "CR", name: "گزارش روزانهٔ قرارداد" }])
+            .map((t) => <option key={t.code} value={t.code}>{t.name} ({t.code})</option>)}</select></div>
       <div className="pagehead"><h1>قالب چاپ — {data.type.name}</h1>
         <span className="sub">{data.version ? `نسخهٔ ${data.version}` : "پیش‌فرض (هنوز ذخیره نشده)"}</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg" role="status">{ok}</p>}
-      {!may && <p className="muted sm">فقط مدیر اعضای پروژه قالب را تغییر می‌دهد؛ این صفحه برای شما فقط نمایش است.</p>}
+      {!may && <p className="muted sm">قالب را مدیر پروژه (و برای فرم‌های تحویل، نظارت کارفرمای همان بخش) تغییر می‌دهد؛ این صفحه برای شما فقط نمایش است.</p>}
 
       <div className="card">
         <h2>کاغذ و بخش‌ها</h2>
@@ -116,8 +120,12 @@ export default function ReportPrintSetup() {
         <div ref={box} style={{ width: "100%" }}>
           <PrintSheet mode="preview" scale={scale} layout={layout} values={values} boxes={boxes} onLayout={may ? setLayout : undefined}
             logoUrl={(id) => `/api/report-print?projectId=${projectId}&logo=${id}`} signatureUrl={(id) => `/api/signature?projectId=${projectId}&id=${id}`}>
-            <DailyPrintBody content={v.content} totals={v.totals} labels={sample?.labels || { SOURCE: { manual: "ورود دستی", hr: "کارکرد منابع انسانی", platform: "داده‌های پروژه" },
-              SHIFT: { day: "روز" }, WEATHER: { hot: "گرمای شدید" } }} />
+            {/* the body each kind of report prints: a form its own table, the daily report its lists */}
+            {sample?.content?.schema === "form1" ? <FormPrintBody content={sample.content} totals={sample.totals} />
+              : data.type.form ? <FormPrintBody content={{ def: data.type.form, header: {}, rows: [] }} />
+              : sample && sample.content?.schema !== undefined ? <p className="muted sm">پیش‌نمایش بدنهٔ این نوع گزارش در صفحهٔ چاپ خود آن است.</p>
+              : <DailyPrintBody content={v.content} totals={v.totals} labels={sample?.labels || { SOURCE: { manual: "ورود دستی", hr: "کارکرد منابع انسانی", platform: "داده‌های پروژه" },
+                SHIFT: { day: "روز" }, WEATHER: { hot: "گرمای شدید" } }} />}
           </PrintSheet>
         </div>
         {may && <button className="btn" type="button" onClick={save}>ذخیرهٔ قالب</button>}

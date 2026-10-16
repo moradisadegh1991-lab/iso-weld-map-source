@@ -6,6 +6,8 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import * as pl from "../../../lib/db/repos/print-layout.mjs";
 import * as rp from "../../../lib/db/repos/reports.mjs";
+import * as forms from "../../../lib/db/repos/forms.mjs";
+import { columnTotals } from "../../../lib/reports/forms.mjs";
 import { getStore } from "../../../lib/storage/index.mjs";
 import { dailyTotals, SOURCE, SHIFT, WEATHER } from "../../../lib/reports/daily.mjs";
 import { PAPER, ORIENTATION, FONTS, ALIGN, FOOTER_ELEMENTS, PLACEHOLDERS, DEFAULT_LAYOUT } from "../../../lib/reports/print.mjs";
@@ -43,17 +45,21 @@ export async function GET(request) {
       if (reportId) {
         const v = await rp.reportView(db, { projectId, reportId, userId: user.id });
         const lay = await pl.currentLayout(db, { projectId, reportTypeId: v.report.report_type_id });
-        return Response.json({ ...v, totals: dailyTotals(v.content), labels: { SOURCE, SHIFT, WEATHER }, project: proj,
+        // a handover form prints its own table: its definition travels with the report
+        const totals = v.content?.schema === "form1" ? columnTotals(v.content.def, v.content.rows || []) : dailyTotals(v.content);
+        return Response.json({ ...v, totals, labels: { SOURCE, SHIFT, WEATHER }, project: proj,
           layout: lay.layout, layoutVersion: lay.version });
       }
       const code = url.searchParams.get("typeCode") || "DR";
-      const { rows: [type] } = await db.query("SELECT id, code, name FROM report_type WHERE project_id = $1 AND code = $2", [projectId, code]);
-      if (!type) return Response.json({ type: null, choices: CHOICES });
+      const { rows: [type] } = await db.query("SELECT id, code, name, form, section FROM report_type WHERE project_id = $1 AND code = $2", [projectId, code]);
+      const { rows: types } = await db.query("SELECT code, name FROM report_type WHERE project_id = $1 AND active ORDER BY form IS NOT NULL, code", [projectId]);
+      if (!type) return Response.json({ type: null, types, choices: CHOICES });
       const lay = await pl.currentLayout(db, { projectId, reportTypeId: type.id });
       const { rows: [last] } = await db.query(
         "SELECT id FROM report WHERE project_id = $1 AND report_type_id = $2 AND status <> 'cancelled' ORDER BY report_date DESC LIMIT 1", [projectId, type.id]);
       return Response.json({ type, layout: lay.layout, version: lay.version, savedAt: lay.savedAt, logos: await pl.listLogos(db, { projectId }),
-        sampleReportId: last?.id || null, project: proj, choices: CHOICES, may: { edit: can(membership, ACTIONS.MANAGE_MEMBERS) } });
+        sampleReportId: last?.id || null, project: proj, choices: CHOICES, types,
+        may: { edit: can(membership, ACTIONS.MANAGE_MEMBERS) || (!!type.form && forms.mayDesign(membership, type.section)) } });
     });
   } catch (e) { return errorResponse(e); }
 }
@@ -72,9 +78,14 @@ export async function POST(request) {
     if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
-    assertCan(membership, ACTIONS.MANAGE_MEMBERS);
+    if (kind !== "layout") assertCan(membership, ACTIONS.MANAGE_MEMBERS);
     const store = kind === "logo" ? await getStore() : null;
     return await withProject(db, projectId, async () => {
+      if (kind === "layout" && !can(membership, ACTIONS.MANAGE_MEMBERS)) {
+        // a form's designer lays out their own form's print
+        const t = await forms.typeOf(db, { projectId, reportTypeId: body.reportTypeId });
+        if (!t?.form || !forms.mayDesign(membership, t.section)) assertCan(membership, ACTIONS.MANAGE_MEMBERS);
+      }
       if (kind === "logo") return Response.json({ ok: true, logo: await pl.saveLogo(db, { projectId, name: body.name, bytes: file, store, userId: user.id }) });
       if (kind === "layout") return Response.json({ ok: true, ...(await pl.saveLayout(db, { projectId, reportTypeId: body.reportTypeId, layout: body.layout, userId: user.id })) });
       return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });

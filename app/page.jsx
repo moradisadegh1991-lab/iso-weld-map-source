@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../lib/client/platform.mjs";
-import { navigationFor } from "../lib/platform/navigation.mjs";
+import { navigationFor, narrowed } from "../lib/platform/navigation.mjs";
 import { can } from "../lib/authz.mjs";
 
 /**
@@ -16,10 +16,13 @@ import { can } from "../lib/authz.mjs";
  */
 export default function Home() {
   const { project, role, projectId } = usePlatform();
-  const nav = navigationFor({ role, areas: project?.areas || [] }, can);
+  const membership = { role, areas: project?.areas || [], tiles: project?.tiles || [], party: project?.inspection_party || null };
+  const nav = navigationFor(membership, can, { forms: project?.forms || [] });
+  // a member narrowed to tiles sees their tiles, not the project's numbers
+  const mine = narrowed(membership);
 
-  const overview = useProjectData((id) => `/api/overview?projectId=${id}`, []);
-  const o = overview.data;
+  const overview = useProjectData((id) => (mine ? null : `/api/overview?projectId=${id}`), [mine]);
+  const o = mine ? null : overview.data;
 
   return (
     <div className="page">
@@ -86,26 +89,24 @@ export default function Home() {
         </div>
       )}
 
-      {nav.map((g) => (
-        <section key={g.group} className="card">
-          <h2>{g.group}</h2>
-          <div className="tiles">
-            {g.items.filter((i) => i.href !== "/").map((i) => {
-              const soon = i.status !== "live";
-              const body = (
-                <>
-                  <span className="ic">{i.icon}</span>
-                  <span className="t">{i.title}</span>
-                  <span className="d">{i.desc}</span>
-                </>
-              );
-              return soon
-                ? <span key={i.href} className="tile soon">{body}</span>
-                : <Link key={i.href} href={i.href} className="tile">{body}</Link>;
-            })}
-          </div>
-        </section>
-      ))}
+      {/* The launchpad: one tile per page, grouped as the menu is — only the tiles this person was given. */}
+      {nav.map((g) => {
+        const tiles = g.items.flatMap((sec) => sec.tabs.filter((t) => !t.log && t.href !== "/").map((t) => ({ ...t, sec })));
+        if (!tiles.length) return null;
+        return (
+          <section key={g.group} className="lp-group" aria-label={g.group}>
+            <h2 className="lp-title">{g.group}</h2>
+            <div className="lp-tiles">
+              {tiles.map((t) => (
+                <Link key={t.href} href={t.href} className="lp-tile" data-tile={t.href}>
+                  <span className="lp-head">{t.title}</span>
+                  <span className="lp-sub">{t.sec.tabs.filter((x) => !x.log).length > 1 ? t.sec.title : t.sec.desc}</span>
+                  <span className="lp-foot"><span className="lp-ic" aria-hidden="true">{t.form ? "⇄" : t.sec.icon}</span></span>
+                </Link>))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

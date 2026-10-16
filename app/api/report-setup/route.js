@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
-import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
+import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
+import * as forms from "../../../lib/db/repos/forms.mjs";
 import * as rp from "../../../lib/db/repos/reports.mjs";
 import { listProjectUsers } from "../../../lib/db/repos/users.mjs";
 import { logEvent } from "../../../lib/db/repos/log.mjs";
@@ -13,8 +14,10 @@ import { PERMISSIONS } from "../../../lib/reports/workflow.mjs";
  * The workflow of each report type: its stages, their review groups and the
  * members of each with their rights. Set by whoever manages the project's
  * members — the same person who decides who is on the project decides who
- * signs what.
+ * signs what — and, for a handover form, by the section's supervision that
+ * designs it (lib/db/repos/forms.mjs): they decide who signs their own forms.
  */
+const forbidden = () => Object.assign(new Error("تنظیم گردش کار با مدیر پروژه است؛ نظارت کارفرمای هر بخش فقط فرم‌های تحویل بخش خود را تنظیم می‌کند."), { status: 403, code: "FORBIDDEN" });
 export async function GET(request) {
   try {
     const url = new URL(request.url);
@@ -22,11 +25,13 @@ export async function GET(request) {
     if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });
     const { db, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
-    assertCan(membership, ACTIONS.MANAGE_MEMBERS);
+    const admin = can(membership, ACTIONS.MANAGE_MEMBERS);
     return await withProject(db, projectId, async () => {
       const users = (await listProjectUsers(db, { projectId }))
         .map((u) => ({ id: u.user_id, name: u.display_name || u.email, email: u.email, party: u.inspection_party, role: u.role, active: u.is_active }));
-      return Response.json({ types: await rp.reportTypes(db, { projectId }), users, permissions: PERMISSIONS });
+      const types = (await rp.reportTypes(db, { projectId })).filter((t) => admin || (t.form && forms.mayDesign(membership, t.section)));
+      if (!admin && !types.length) throw forbidden();
+      return Response.json({ types, users, permissions: PERMISSIONS, may: { types: admin } });
     });
   } catch (e) { return errorResponse(e); }
 }
@@ -44,8 +49,14 @@ export async function POST(request) {
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     if (!LABEL[kind]) return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
-    assertCan(membership, ACTIONS.MANAGE_MEMBERS);
+    const admin = can(membership, ACTIONS.MANAGE_MEMBERS);
     return await withProject(db, projectId, async () => {
+      if (!admin) {
+        // a form's designer: only the workflow of a form of a section they design
+        if (["type", "template"].includes(kind)) throw forbidden();
+        const t = await forms.typeOf(db, { projectId, reportTypeId: body.reportTypeId || null, stageId: body.stageId || null, groupId: body.groupId || null });
+        if (!t?.form || !forms.mayDesign(membership, t.section)) throw forbidden();
+      }
       const a = { ...body, projectId };
       const row = await {
         type: () => rp.upsertReportType(db, a),
