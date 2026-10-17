@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
-import { getProjectProfile, updateProjectProfile } from "../../../lib/db/repos/projects.mjs";
+import { getProjectProfile, updateProjectProfile, projectParties } from "../../../lib/db/repos/projects.mjs";
 
 export async function GET(request) {
   try {
@@ -14,7 +14,7 @@ export async function GET(request) {
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.VIEW_PROJECT);
     return await withProject(db, projectId, async () =>
-      Response.json({ project: await getProjectProfile(db, { projectId }) }));
+      Response.json({ project: await getProjectProfile(db, { projectId }), parties: await projectParties(db, { projectId }) }));
   } catch (e) { return errorResponse(e); }
 }
 

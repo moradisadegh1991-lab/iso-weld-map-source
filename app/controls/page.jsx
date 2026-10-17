@@ -12,10 +12,11 @@ import { WorkDateScope, WorkDateField, useWorkDate } from "../../components/ui/W
  * Project controls: each control account's planned curve, what has been
  * earned and from where, what it cost, and the indices — then the risks.
  *
- * PV is read off the planner's points. EV is either counted by the
- * platform (installed and tested items, under the project's rule of credit)
- * or reported by a person — the table says which, every row. No money is
- * shown without the contract currency, and no ratio over a zero.
+ * PV is the master plan's curve for an account on a WBS node (dates and
+ * weights of its activities), or the planner's typed points for an older
+ * account. EV is the node's progress, the platform's count (installed and
+ * tested items, under the project's rule of credit), or a reported figure —
+ * the table says which, every row. No money without the base currency.
  */
 const RISK = { open: ["", "باز"], overdue: ["bad", "معوق"], no_response: ["warn", "بدون پاسخ"], closed: ["ok", "بسته"] };
 
@@ -50,7 +51,7 @@ function ControlsPageBody() {
   return (
     <div className="page">
       <div className="pagehead">
-        <h1>کنترل پروژه</h1>
+        <h1>EVM و ریسک</h1>
         <span className="sub">
           {data.accounts.length} حساب کنترلی{behind > 0 && ` · ${behind} عقب از برنامه`} · {openRisks} ریسک باز
           {overdueRisks > 0 && ` · ${overdueRisks} اقدام معوق`} · ارز: {cur || "تعیین نشده"}
@@ -58,7 +59,7 @@ function ControlsPageBody() {
       </div>
       <WorkDateField />
       {msg && <p className="err">{msg}</p>}
-      {!cur && <p className="err">ارز قرارداد در <a href="/project">مشخصات پروژه</a> تعیین نشده — بودجه و هزینه ثبت نمی‌شود و فقط SPI درصدی نشان داده می‌شود.</p>}
+      {!cur && <p className="err">ارز پایهٔ پروژه در <a href="/project">مشخصات پروژه</a> انتخاب نشده — بودجه و هزینه ثبت نمی‌شود و فقط SPI درصدی نشان داده می‌شود.</p>}
 
       <div className="card" data-keep>
         <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
@@ -133,7 +134,10 @@ function AccountRow({ a, data, open, onToggle, post, may, call, projectId }) {
         <td className="mono">{a.code}</td>
         <td>{a.title}{a.contractorCode && <div className="muted sm">{a.contractorCode}</div>}</td>
         <td className="sm">
-          {a.evMethod === "platform"
+          {a.evMethod === "wbs"
+            ? <><span className="pill ok">پیشرفت WBS</span> {a.ev.detail?.version || a.baselineRev}{a.wbsMissing && <div className="pill bad sm">گره در Master نیست</div>}
+                {a.ev.source === "snapshot" && <div><span className="pill">اسنپ‌شات {fa(a.ev.detail.snapshotOn)}</span></div>}</>
+            : a.evMethod === "platform"
             ? <><span className="pill ok">محاسبه‌شده</span> {data.platformDisciplines[a.evDiscipline]}{a.subsystemCode && ` · ${a.subsystemCode}`}
                 {a.ev.source === "snapshot" && <div><span className="pill">اسنپ‌شات {fa(a.ev.detail.snapshotOn)}</span></div>}
                 {a.ev.detail && a.ev.detail.items != null && <div className="muted">{a.ev.detail.items} آیتم · {a.ev.detail.installed} نصب · {a.ev.detail.tested} تست · سهم نصب {a.creditInstalledPct ?? "؟"}٪</div>}</>
@@ -188,7 +192,8 @@ function AccountDetail({ a, data, post, may, call, projectId }) {
       )}
       {may && (
         <div className="grid2">
-          <BaselineForm a={a} post={async (b) => { const r = await post(b); if (r) load(); return r; }} />
+          {a.wbsNodeId ? <p className="muted sm">خط مبنا: برنامهٔ اصلی {a.baselineRev} — از تاریخ‌ها و وزن‌های WBS، بدون صدور جداگانه.</p>
+            : <BaselineForm a={a} post={async (b) => { const r = await post(b); if (r) load(); return r; }} />}
           {a.evMethod === "manual" && <ProgressForm a={a} post={post} />}
           {cur && <CostForm a={a} cur={cur} post={async (b) => { const r = await post(b); if (r) load(); return r; }} />}
         </div>
@@ -275,31 +280,52 @@ function CostForm({ a, cur, post }) {
   );
 }
 
-/** New, or the same form filled with an account to amend (its code is the key and stays). */
+/**
+ * New, or the same form filled with an account to amend. A control account is
+ * a node of a master plan's WBS (one WBS, 077): picked here, never typed — its
+ * code, title and budget are the node's. An account made before keeps its
+ * typed code until it is linked to a node.
+ */
 function AccountForm({ data, post, initial = null, onDone }) {
-  const blank = { code: "", title: "", contractorId: "", bac: "", evMethod: "manual", evDiscipline: "piping", evSubsystemId: "", creditInstalledPct: "" };
   const s0 = (v) => (v === null || v === undefined ? "" : String(v));
-  const [f, setF] = useState(initial ? { code: initial.code, title: initial.title, contractorId: initial.contractorId || "", bac: s0(initial.bacEntered),
-    evMethod: initial.evMethod, evDiscipline: initial.evDiscipline || "piping", evSubsystemId: initial.evSubsystemId || "",
-    creditInstalledPct: s0(initial.creditInstalledPct) } : blank);
+  const blank = { wbsNodeId: "", evMethod: "wbs", evDiscipline: "piping", evSubsystemId: "", creditInstalledPct: "" };
+  const [f, setF] = useState(initial ? { wbsNodeId: initial.wbsNodeId || "", code: initial.code, title: initial.title,
+    contractorId: initial.contractorId || "", bac: s0(initial.bacEntered), evMethod: initial.evMethod, evDiscipline: initial.evDiscipline || "piping",
+    evSubsystemId: initial.evSubsystemId || "", creditInstalledPct: s0(initial.creditInstalledPct) } : blank);
   const x = initial ? "ae" : "ac";
+  const taken = new Set(data.accounts.filter((a) => a.wbsNodeId && a.id !== initial?.id).map((a) => a.wbsNodeId));
+  const choices = (data.wbsChoices || []).filter((c) => !taken.has(c.id));
+  const legacy = initial && !initial.wbsNodeId && !f.wbsNodeId;
   return (
     <form style={{ marginTop: 10 }} onSubmit={async (e) => {
       e.preventDefault();
-      if (await post({ kind: "account", ...f })) { if (initial) onDone?.(); else setF(blank); }
+      const body = f.wbsNodeId ? { kind: "account", ...f, code: initial?.code } : { kind: "account", ...f };
+      if (await post(body)) { if (initial) onDone?.(); else setF(blank); }
     }}>
       <h2>حساب کنترلی</h2>
+      {!choices.length && !initial?.wbsNodeId && (
+        <p className="muted sm">WBS برنامهٔ اصلی هنوز گره‌ای ندارد. حساب کنترلی گره‌ای از WBS است: اول در
+          «برنامه‌ریزی و کنترل پروژه ◄ WBS و فعالیت‌ها» نسخهٔ Master و گره‌های آن را بسازید.</p>)}
       <div className="grid2">
-        <Field id={`${x}-code`} label="کد (WBS/CBS)" value={f.code} on={(v) => setF({ ...f, code: v })} required readOnly={!!initial} />
-        <Field id={`${x}-title`} label="عنوان" value={f.title} on={(v) => setF({ ...f, title: v })} required />
-        <div className="field"><label htmlFor={`${x}-c`}>پیمانکار</label>
-          <select id={`${x}-c`} value={f.contractorId} onChange={(e) => setF({ ...f, contractorId: e.target.value })}>
-            <option value="">—</option>{data.contractors.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
-          </select></div>
-        <Field id={`${x}-bac`} label={`BAC (${data.currency || "ارز تعیین نشده"})`} type="number" value={f.bac} on={(v) => setF({ ...f, bac: v })} />
+        <div className="field"><label htmlFor={`${x}-node`}>گرهٔ WBS (برنامهٔ اصلی)</label>
+          <select id={`${x}-node`} value={f.wbsNodeId} required={!legacy} onChange={(e) => setF({ ...f, wbsNodeId: e.target.value,
+            evMethod: e.target.value && f.evMethod === "manual" ? "wbs" : f.evMethod })}>
+            <option value="">{legacy ? "— بدون گره (کد تایپی قدیمی) —" : "— انتخاب کنید —"}</option>
+            {initial?.wbsNodeId && <option value={initial.wbsNodeId}>{initial.code} — {initial.title}</option>}
+            {choices.filter((c) => c.id !== initial?.wbsNodeId).map((c) => <option key={c.id} value={c.id}>
+              {"\u2003".repeat(Math.max(0, (c.level || 1) - 1))}{c.code} — {c.name} ({c.contractNo} · {c.version})</option>)}
+          </select>
+          <span className="hint">کد، عنوان و BAC از همین گره خوانده می‌شود؛ خط مبنا تاریخ‌ها و وزن‌های برنامهٔ اصلی است.</span></div>
+        {legacy && <>
+          <Field id={`${x}-code`} label="کد (قدیمی)" value={f.code} on={() => {}} readOnly />
+          <Field id={`${x}-title`} label="عنوان" value={f.title} on={(v) => setF({ ...f, title: v })} required />
+          <Field id={`${x}-bac`} label={`BAC (${data.currency || "ارز تعیین نشده"})`} type="number" value={f.bac} on={(v) => setF({ ...f, bac: v })} />
+        </>}
         <div className="field"><label htmlFor={`${x}-m`}>منبع EV</label>
           <select id={`${x}-m`} value={f.evMethod} onChange={(e) => setF({ ...f, evMethod: e.target.value })}>
-            <option value="manual">گزارش دستی</option><option value="platform">محاسبه از پلتفرم</option>
+            {f.wbsNodeId && <option value="wbs">پیشرفت WBS (گزارش روزانه و پیوند پلتفرم)</option>}
+            <option value="platform">شمارش آیتم‌های پلتفرم (نصب و تست)</option>
+            {!f.wbsNodeId && <option value="manual">گزارش دستی</option>}
           </select></div>
         {f.evMethod === "platform" && <>
           <div className="field"><label htmlFor={`${x}-d`}>آیتم‌ها</label>
@@ -313,7 +339,7 @@ function AccountForm({ data, post, initial = null, onDone }) {
           <Field id={`${x}-k`} label="سهم نصب از 100 (باقی در تست)" type="number" value={f.creditInstalledPct} on={(v) => setF({ ...f, creditInstalledPct: v })} />
         </>}
       </div>
-      <div><button className="btn" type="submit">{initial ? "ذخیرهٔ تغییرات" : "ثبت حساب"}</button></div>
+      <div><button className="btn" type="submit" disabled={!f.wbsNodeId && !legacy}>{initial ? "ذخیرهٔ تغییرات" : "ثبت حساب"}</button></div>
     </form>
   );
 }

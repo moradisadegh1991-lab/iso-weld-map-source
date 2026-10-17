@@ -46,6 +46,15 @@ test("work front: the plan spread over the planned days, the work done each day,
   equal([r["2026-03-07"].inPlan, r["2026-03-07"].plan, r["2026-03-07"].doneCum], [false, 0, 20]);
 });
 
+test("the planned curve of a WBS node: each activity's plan spread over its days, rolled up by W.F; nothing planned → unknown, not zero", async () => {
+  const node = { activities: [{ wf: 60, plan_start: "2026-03-01", plan_end: "2026-03-10" }, { wf: 40, plan_start: "2026-03-06", plan_end: "2026-03-15" }] };
+  equal([ea.plannedPctAt(node, "2026-02-28"), ea.plannedPctAt(node, "2026-03-05"), ea.plannedPctAt(node, "2026-03-10"), ea.plannedPctAt(node, "2026-03-20")],
+    [0, 30, 80, 100], "5 of 10 days of the first (60 × 0.5); then 60 + 40 × 0.5");
+  equal(ea.plannedPctAt({ children: [{ wf: 50, ...node }, { wf: 50, activities: [{ wf: 100 }] }] }, "2026-03-10"), 40, "a child with no dates adds nothing");
+  equal(ea.plannedPctAt({ activities: [{ wf: 100 }] }, "2026-03-10"), null);
+  equal(ea.plannedCurve(node).map((p) => [p.date, p.pct]), [["2026-02-28", 0], ["2026-03-05", 30], ["2026-03-10", 80], ["2026-03-15", 100]]);
+});
+
 test("roles, delays, the tree filter and the code summary", async () => {
   equal(ea.roleCost({ budget_unit: "hour", per_day: 8, rate: 50, actual_time: 30 }, { planDays: 5 }), { totalTime: 40, totalPrice: 2000, actualTime: 30, actualPrice: 1500 });
   equal(ea.roleCost({ budget_unit: "unit", per_day: 3, rate: 10 }, { planDays: 5 }).totalPrice, 30, "a lump quantity is not spread over the days");
@@ -289,6 +298,29 @@ test("a node's child nodes and its activities share one numbering: no code is bo
     equal([hand.code === kid.code, hand.code === kid1?.code], [false, false], `the activity took ${hand.code}`);
     await eps.removeActivity(db, { projectId: P, id: hand.id });
     for (const k of [kid1, kid].filter(Boolean)) await eps.removeNode(db, { projectId: P, versionId: V1.id, id: k.id });
+  });
+});
+
+test("one WBS: a control account is a node of the master plan — code, title and BAC from the node, PV from its dates and weights, EV from its progress", async () => {
+  const controls = await import("../../lib/db/repos/controls.mjs");
+  await inP(async () => {
+    await projects.updateProjectProfile(db, { projectId: P, patch: { contract_currency: "USD" } });
+    const v = await view();
+    const node = v.roots.find((n) => n.id === N.id);
+    const a = await controls.upsertAccount(db, { projectId: P, wbsNodeId: N.id, code: "TYPED", title: "ignored", bac: 5 });
+    equal([a.code, a.ev_method, a.bac], [N.code, "wbs", null], "nothing typed beside the node is kept");
+    const row = (await controls.controlsBoard(db, { projectId: P })).accounts.find((x) => x.id === a.id);
+    equal([row.title, row.bac, row.ev.pct, row.pvPct], [node.name, node.budgetPlan, node.pct, ea.plannedPctAt(node, today)]);
+    assert(node.pct != null && row.points.length > 0, `the node has progress (${node.pct}) and a planned curve`);
+    // the node renamed in the WBS is renamed as the account, read on every use
+    await eps.saveNode(db, { projectId: P, versionId: V1.id, id: N.id, name: "سیویل — بازنامیده", wf: node.wf_typed, budgetPlan: node.budget_plan });
+    equal((await controls.controlsBoard(db, { projectId: P })).accounts.find((x) => x.id === a.id).title, "سیویل — بازنامیده");
+    await throws(() => controls.setBaseline(db, { projectId: P, accountId: a.id, points: [{ date: today, pct: 0 }], revision: "1", reason: "x" }), "برنامهٔ اصلی");
+    await throws(() => controls.reportProgress(db, { projectId: P, accountId: a.id, asOf: today, pct: 5, source: "x" }), "پلتفرم");
+    const { rows: [other] } = await db.query("SELECT id FROM wbs_node WHERE version_id = $1 LIMIT 1", [V2.id]);
+    await throws(() => controls.upsertAccount(db, { projectId: P, wbsNodeId: other.id }), "Master", "a node of a version that is not the master plan is refused");
+    await throws(() => eps.removeNode(db, { projectId: P, versionId: V1.id, id: N.id }), "حساب کنترلی", "a node an account stands on is not deleted under it");
+    await db.query("DELETE FROM control_account WHERE id = $1", [a.id]);
   });
 });
 

@@ -45,7 +45,9 @@ export async function GET(request) {
         return Response.json({ ...v, totals: dailyTotals(v.content), labels: { SOURCE, SHIFT, WEATHER } });
       }
       const type = await dailyType(db, projectId);
-      if (!type) return Response.json({ type: null, reports: [], may: { create: false } });
+      // a project with contracts writes its daily report per contract (one daily report, 2026-10-17); this one stays to read and sign what was written before
+      const { rows: [{ n: contracts }] } = await db.query("SELECT count(*)::int AS n FROM contract WHERE project_id = $1", [projectId]);
+      if (!type) return Response.json({ type: null, reports: [], may: { create: false }, contracts });
       const stages = await rp.workflowOf(db, { projectId, reportTypeId: type.id });
       const { rows: users } = await db.query(
         `SELECT u.id, COALESCE(u.display_name, u.email) AS name FROM project_member m JOIN app_user u ON u.id = m.user_id
@@ -53,7 +55,7 @@ export async function GET(request) {
       return Response.json({
         type: { id: type.id, code: type.code, name: type.name, stages: stages.map((s) => ({ seq: s.seq, name: s.name })) },
         reports: await rp.listReports(db, { projectId, reportTypeId: type.id, userId: user.id }),
-        may: { create: checkCreate(stages, user.id).ok }, users, labels: { SOURCE, SHIFT, WEATHER },
+        may: { create: !contracts && checkCreate(stages, user.id).ok }, contracts, users, labels: { SOURCE, SHIFT, WEATHER },
         catalog: (await listCatalog(db, { projectId, activeOnly: true })).map((i) => ({ kind: i.kind, name: i.name, discipline: i.discipline, unit: i.unit })),
       });
     });
@@ -79,6 +81,8 @@ export async function POST(request) {
         create: async () => {
           const type = await dailyType(db, projectId);
           if (!type) throw bad("گردش‌کار گزارش روزانه هنوز تنظیم نشده است (تنظیم گردش‌کار).");
+          const { rows: [{ n }] } = await db.query("SELECT count(*)::int AS n FROM contract WHERE project_id = $1", [projectId]);
+          if (n) throw bad("گزارش روزانهٔ تازه در «گزارش روزانهٔ قرارداد» نوشته می‌شود؛ اینجا گزارش‌های پیشین خوانده، امضا و تأیید می‌شوند.");
           return rp.createReport(db, { ...a, reportTypeId: type.id, reportDate: body.reportDate, title: body.title, content: content() });
         },
         edit: () => rp.editReport(db, { ...a, content: content() }),

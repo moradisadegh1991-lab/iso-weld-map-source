@@ -8,6 +8,8 @@ import * as eps from "../../../lib/db/repos/eps.mjs";
 import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
 import { BUDGET_MODES, SEPARATORS } from "../../../lib/eps/wbs.mjs";
 import { PMS_TYPES } from "../../../lib/db/repos/eps.mjs";
+import { importPlan, convertLegacy, legacyImports } from "../../../lib/db/repos/eps-import.mjs";
+import { logEvent } from "../../../lib/db/repos/log.mjs";
 
 /**
  * EPS, PMS versions, WBS and activity templates (lib/db/repos/eps.mjs).
@@ -21,7 +23,9 @@ import { PMS_TYPES } from "../../../lib/db/repos/eps.mjs";
  *   GET ?projectId&templates=1             the activity templates
  *   POST {kind: pms | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
  *         attach | activity | activity-remove | template | template-move | template-copy | template-remove |
- *         template-activity | template-activity-remove | template-sync}
+ *         template-activity | template-activity-remove | template-sync | convert-legacy}
+ *   POST multipart {kind: import-plan, pmsId, versionCode, fileKind: mspdi | pms, file}
+ *        a plan file (MS Project XML or the PMS workbook) as a new version of a PMS
  */
 const LABELS = { budgetModes: BUDGET_MODES, separators: SEPARATORS, pmsTypes: PMS_TYPES };
 const notFound = () => Object.assign(new Error("not found"), { status: 404 });
@@ -38,6 +42,7 @@ async function contractOf(db, projectId, b) {
   switch (b.kind) {
     case "pms": return b.id ? q(PMS, b.id) : b.contractId || null;
     case "version": return b.id ? q(VERSION, b.id) : q(PMS, b.pmsId);
+    case "import-plan": case "convert-legacy": return q(PMS, b.pmsId);
     case "version-master": return q(VERSION, b.id);
     case "eps-move": case "eps-remove": return b.epsKind === "version" ? q(VERSION, b.id) : q(PMS, b.id);
     case "settings": case "node": case "node-move": case "node-copy": case "node-remove": return q(VERSION, b.versionId);
@@ -70,14 +75,27 @@ export async function GET(request) {
       const contractId = q("contractId");
       if (!contractId) return Response.json({ error: "contractId is required" }, { status: 400 });
       const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
-      return Response.json({ pms: await eps.epsBoard(db, { projectId, contractId }), labels: LABELS, may: { edit: access !== "view" } });
+      return Response.json({ pms: await eps.epsBoard(db, { projectId, contractId }), labels: LABELS, may: { edit: access !== "view" },
+        legacy: await legacyImports(db, { projectId }) });
     });
   } catch (e) { return errorResponse(e); }
 }
 
+const MAX = 20 * 1024 * 1024;
+
 export async function POST(request) {
   try {
-    const b = await request.json().catch(() => ({}));
+    // a plan file comes as multipart; everything else as JSON
+    let b, file = null, fileName = null;
+    if ((request.headers.get("content-type") || "").startsWith("multipart/form-data")) {
+      const form = await request.formData();
+      b = Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === "string"));
+      const f = form.get("file");
+      if (f && typeof f === "object" && f.size) {
+        if (f.size > MAX) return Response.json({ error: "فایل بزرگ‌تر از ۲۰ مگابایت است." }, { status: 400 });
+        file = Buffer.from(await f.arrayBuffer()); fileName = f.name || "upload";
+      }
+    } else b = await request.json().catch(() => ({}));
     const { projectId, kind } = b;
     if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });
     const { db, user, membership } = await authenticate(request, { projectId });
@@ -116,6 +134,14 @@ export async function POST(request) {
         "template-activity": () => eps.saveTemplateActivity(db, a),
         "template-activity-remove": () => eps.removeTemplateActivity(db, a),
         "template-sync": () => eps.syncTemplate(db, a),
+        "import-plan": async () => {
+          if (!file) throw Object.assign(new Error("فایل برنامه را انتخاب کنید."), { status: 400 });
+          const r = await importPlan(db, { ...a, kind: b.fileKind, versionCode: b.versionCode, title: b.title || null, sourceName: fileName, content: file });
+          await logEvent(db, { projectId, section: "controls", entityType: "eps_version", entityId: r.version.id, label: `نسخهٔ ${r.version.code} از ${fileName}`,
+            action: "imported", comment: `${r.nodes} گره، ${r.activities} فعالیت، ${r.relations} رابطه`, userId: user.id });
+          return r;
+        },
+        "convert-legacy": () => convertLegacy(db, { ...a, versionCode: b.versionCode }),
       }[kind];
       if (!run) return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
       return Response.json({ ok: true, row: (await run()) ?? null });

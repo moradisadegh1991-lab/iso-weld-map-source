@@ -48,6 +48,9 @@ export default function ContractReportsPage() {
       {!openId && msg && <p className="err" role="alert">{msg}</p>}
       {!openId && ok && <p className="okmsg" role="status">{ok}</p>}
       {!openId && <>
+        {(data.legacyDaily > 0 || !data.contracts?.length) && <p className="sm muted" data-legacy-link>
+          {data.contracts?.length ? `${data.legacyDaily} گزارش روزانهٔ پیشین (بدون قرارداد) هست: ` : "این پروژه هنوز قراردادی ندارد؛ گزارش روزانهٔ پروژه: "}
+          <a href="/daily-reports">گزارش روزانهٔ پروژه</a></p>}
         {contract ? <p className="sm"><b>قرارداد {contract.contract_no}</b> — {contract.title}</p>
           : <p className="empty-note">قرارداد را از فهرست بالای صفحه انتخاب کنید.</p>}
         {!data.typeReady && (

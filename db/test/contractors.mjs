@@ -177,4 +177,31 @@ test("package progress names the company behind a subsystem", async () => {
   });
 });
 
+test("one register of parties: a contractor is a company, its name is the company's, and it is a party of its project", async () => {
+  const org = await import("../../lib/db/repos/org.mjs");
+  await withProject(db, proj.id, async () => {
+    // typed by code and name (the old way, and every loader): the company is found or registered once
+    const k = await contractors.upsertContractor(db, { projectId: proj.id, code: "C-REG", name: "ثبت قدیمی" });
+    const { rows: [co] } = await db.query("SELECT * FROM company WHERE id = $1", [k.company_id]);
+    equal([co.code, co.name], ["C-REG", "ثبت قدیمی"]);
+    // picked from the companies: the same contractor, never a second one
+    const again = await contractors.upsertContractor(db, { projectId: proj.id, companyId: co.id, status: "suspended" });
+    equal([again.id, again.status], [k.id, "suspended"]);
+    // the company renamed is renamed as the contractor
+    await org.upsertCompany(db, { id: co.id, code: co.code, name: "نام تازه" });
+    equal((await db.query("SELECT name FROM contractor WHERE id = $1", [k.id])).rows[0].name, "نام تازه");
+    // and the contractor is a party of the project
+    const { rows: st } = await db.query("SELECT role FROM project_stakeholder WHERE project_id = $1 AND company_id = $2", [proj.id, co.id]);
+    equal(st.map((r) => r.role), ["contractor"]);
+    // a company given the role of subcontractor is the project's contractor too
+    const { rows: [sub] } = await db.query("INSERT INTO company (code, name) VALUES ('SUBX', 'جزء') RETURNING id");
+    await org.addProjectStakeholder(db, { projectId: proj.id, companyId: sub.id, role: "subcontractor" });
+    const { rows: ks } = await db.query("SELECT code, name FROM contractor WHERE company_id = $1", [sub.id]);
+    equal(ks, [{ code: "SUBX", name: "جزء" }]);
+    // the project page reads its parties from here
+    const parties = await projects.projectParties(db, { projectId: proj.id });
+    assert(parties.contractors.includes("SUBX — جزء") && parties.contractors.includes("C-REG — نام تازه"), parties.contractors.join(" | "));
+  });
+});
+
 await run();

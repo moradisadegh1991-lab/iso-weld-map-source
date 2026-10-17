@@ -10,6 +10,60 @@ import { flatten } from "../../../components/ui/TreeEditor";
  * take it out of every branch.
  */
 const fmt = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("fa-IR", { maximumFractionDigits: 2 }));
+/**
+ * The project's resource library — names, kinds and units the project already
+ * knows (the old Access daily report's list, and what is added here). It is
+ * kept on this page, not on a page of its own: a contract takes its resources
+ * from it, and nobody types a name the project already holds.
+ */
+function Library({ data, T, post }) {
+  const [q, setQ] = useState("");
+  const [kind, setKind] = useState("");
+  const [pick, setPick] = useState(new Set());
+  const [nf, setNf] = useState({ itemKind: "person", name: "", unit: "", discipline: "" });
+  const lib = data.library || [];
+  const inContract = new Set((T?.resources || []).map((r) => `${r.kind}|${r.name}`));
+  const shown = lib.filter((i) => (!kind || i.kind === kind) && (!q || `${i.name} ${i.discipline || ""}`.includes(q)));
+  const toggle = (id) => { const s = new Set(pick); s.has(id) ? s.delete(id) : s.add(id); setPick(s); };
+  return (
+    <div className="card" data-library>
+      <h2>کتابخانهٔ منابع پروژه</h2>
+      <p className="sm muted">نام‌ها، نوع و واحدی که پروژه می‌شناسد. منابع قرارداد از همین‌جا برداشته می‌شوند؛ نام تکراری تایپ نمی‌شود.
+        {data.bundled && data.may.library && <> فهرست گزارش روزانهٔ Access ({data.bundled.items} مورد) با یک دکمه وارد می‌شود.</>}</p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
+        <div className="field"><label htmlFor="lb-q">جست‌وجو</label><input id="lb-q" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <div className="field"><label htmlFor="lb-k">نوع</label><select id="lb-k" value={kind} onChange={(e) => setKind(e.target.value)}><option value="">همه</option>
+          {Object.entries(data.kinds).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
+        {T && data.may.edit && <button className="btn" type="button" disabled={!pick.size}
+          onClick={async () => { const r = await post({ kind: "from-library", ids: [...pick] }, (x) => `${x.row.added} منبع به قرارداد افزوده شد${x.row.kept ? `؛ ${x.row.kept} مورد از قبل بود` : ""}.`); if (r) setPick(new Set()); }}>
+          افزودن {pick.size || ""} مورد به منابع این قرارداد</button>}
+        {data.bundled && data.may.library && <button className="btn ghost" type="button"
+          onClick={() => post({ kind: "library-import-access" }, (x) => `${x.row.added} مورد به کتابخانه افزوده شد؛ ${x.row.kept} مورد از قبل بود.`)}>ورود فهرست گزارش روزانهٔ Access</button>}
+      </div>
+      {lib.length === 0 ? <p className="empty-note">کتابخانه خالی است.</p> : (
+        <div className="tablewrap" style={{ maxHeight: 360, overflow: "auto" }}><table className="dtable">
+          <thead><tr>{T && data.may.edit && <th />}<th>نام</th><th>نوع</th><th>رشته</th><th>واحد</th><th>در این قرارداد</th></tr></thead>
+          <tbody>{shown.slice(0, 400).map((i) => { const has = inContract.has(`${i.kind}|${i.name}`); return (
+            <tr key={i.id} data-lib={i.name}>
+              {T && data.may.edit && <td><input type="checkbox" aria-label={`انتخاب ${i.name}`} disabled={has} checked={pick.has(i.id)} onChange={() => toggle(i.id)} /></td>}
+              <td>{i.name}</td><td className="sm">{data.kinds[i.kind]}</td><td className="sm">{i.discipline || "—"}</td>
+              <td className="sm">{i.unit || (i.kind === "person" ? "نفر" : i.kind === "machine" ? "دستگاه" : "—")}</td>
+              <td>{has ? <span className="pill ok">هست</span> : ""}</td></tr>); })}</tbody></table></div>)}
+      {data.may.library && (
+        <form style={{ marginTop: 8 }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "library-add", ...nf }, () => "به کتابخانه افزوده شد.")) setNf({ ...nf, name: "", unit: "" }); }}>
+          <div className="grid2">
+            <div className="field"><label htmlFor="lb-nk">نوع</label><select id="lb-nk" value={nf.itemKind} onChange={(e) => setNf({ ...nf, itemKind: e.target.value })}>
+              {Object.entries(data.kinds).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
+            <div className="field"><label htmlFor="lb-nn">نام</label><input id="lb-nn" required value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} /></div>
+            <div className="field"><label htmlFor="lb-nd">رشته</label><input id="lb-nd" value={nf.discipline} onChange={(e) => setNf({ ...nf, discipline: e.target.value })} /></div>
+            <div className="field"><label htmlFor="lb-nu">واحد</label><input id="lb-nu" value={nf.unit} onChange={(e) => setNf({ ...nf, unit: e.target.value })} /></div>
+          </div>
+          <button className="btn ghost" type="submit">افزودن به کتابخانه</button>
+        </form>)}
+    </div>
+  );
+}
+
 const BLANK = { id: null, resourceKind: "person", categoryId: "", name: "", direct: true, unit: "", forecastQty: "", actualQty: "", status: "active", description: "", seq: "" };
 
 export default function ResourcesPage() {
@@ -128,6 +182,7 @@ export default function ResourcesPage() {
           {T.resources.length === 0 && <p className="empty-note">هنوز منبعی ثبت نشده.</p>}
         </div>
       </>}
+      <Library data={data} T={T} post={post} />
     </div>
   );
 }

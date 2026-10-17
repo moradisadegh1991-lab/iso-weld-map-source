@@ -65,4 +65,8 @@ console.log(`  schedule: ${r.s.tasks} tasks, ${r.s.links} links`);
 console.log(`  PMS: ${r.p.steps} steps · stated ${(r.p.stated * 100).toFixed(4)}% · computed ${(r.p.computed * 100).toFixed(4)}% · ${r.p.problems} inconsistencies`);
 console.log(`  linked to the plan: ${r.p.linked} of ${r.p.elements} OLF1 elements`);
 for (const d of r.decisions) console.log(`  ${d}`);
+// The plan lives in the contract's EPS. The F-110 files do not say who the
+// contract is with or in what currency, so the loader does not invent one.
+console.log("  next: register the main contract (قراردادها), then in «EPS و PMS ◄ ورود برنامه از فایل» convert");
+console.log("        the schedule and the PMS above into versions of a PMS and choose the master plan.");
 process.exit(0);

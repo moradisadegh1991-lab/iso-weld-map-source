@@ -24,6 +24,7 @@ export default function EpsPage() {
   const [ok, setOk] = useState(null);
   const [pf, setPf] = useState(null);
   const [vf, setVf] = useState(null);
+  const [imp, setImp] = useState(null);
   async function post(body, done) {
     setMsg(null); setOk(null);
     try { const r = await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, contractId, ...body }) }); reload(); if (done) setOk(done(r)); return r; }
@@ -86,7 +87,9 @@ export default function EpsPage() {
         <span className="sub">قرارداد {contract?.contract_no} — {contract?.title} · PMSها و نسخه‌های برنامهٔ زمان‌بندی؛ با کشیدن و رها کردن جابه‌جا و مرتب می‌شوند</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg" role="status">{ok}</p>}
-      {may && !pf && !vf && <p><button className="btn" type="button" onClick={() => setPf({ ...BLANK_PMS })}>+ PMS تازه</button></p>}
+      {may && !pf && !vf && <p><button className="btn" type="button" onClick={() => setPf({ ...BLANK_PMS })}>+ PMS تازه</button>{" "}
+        {data.pms.length > 0 && <button className="btn ghost" type="button" data-import-open onClick={() => setImp({ pmsId: data.pms[0].id, versionCode: "", fileKind: "mspdi", file: null })}>ورود برنامه از فایل (MS Project / PMS اکسل)</button>}</p>}
+      {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} done={(m) => { setImp(null); setOk(m); reload(); }} fail={setMsg} />}
       {pf && (
         <form className="card" onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "pms", ...pf }, (r) => `PMS ${r.row.code} ذخیره شد.`)) setPf(null); }}>
           <h2>{pf.id ? `ویرایش PMS ${pf.code}` : "PMS تازه"}</h2>
@@ -124,5 +127,76 @@ export default function EpsPage() {
           از نسخه‌های هر PMS فقط یکی «Master plan» است؛ انتخاب نسخهٔ دیگر آن را جابه‌جا می‌کند.</p>}
       </div>
     </div>
+  );
+}
+
+/**
+ * A plan file as a new version of a PMS: the MS Project schedule (Save As ◄
+ * XML) or the PMS workbook. The plan lives in the EPS — there is no second
+ * schedule page beside it. What was imported before (into the old «برنامه و
+ * PMS» page) is carried over from here too, without the file.
+ */
+function ImportPlan({ data, imp, setImp, projectId, done, fail }) {
+  const [busy, setBusy] = useState(false);
+  const pms = data.pms.find((p) => p.id === imp.pmsId);
+  async function send(e) {
+    e.preventDefault(); setBusy(true); fail(null);
+    try {
+      const form = new FormData();
+      for (const [k, v] of Object.entries({ projectId, kind: "import-plan", pmsId: imp.pmsId, versionCode: imp.versionCode, fileKind: imp.fileKind })) form.set(k, v);
+      form.set("file", imp.file);
+      const res = await fetch("/api/eps", { method: "POST", body: form, credentials: "same-origin" });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(b.error || `پاسخ ${res.status}`);
+      const r = b.row;
+      done(`نسخهٔ ${r.version.code}: ${r.nodes} گره، ${r.activities} فعالیت، ${r.relations} رابطه.${r.problems.length ? ` · ${r.problems.length} نکته: ${r.problems.slice(0, 3).join(" · ")}` : ""}`);
+    } catch (e2) { fail(e2.message); } finally { setBusy(false); }
+  }
+  async function convert(source, importId, label) {
+    const code = imp.versionCode;
+    if (!code) { fail("کد نسخهٔ تازه را بالا بنویسید."); return; }
+    setBusy(true); fail(null);
+    try {
+      const res = await fetch("/api/eps", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId, kind: "convert-legacy", pmsId: imp.pmsId, versionCode: code, source, importId }) });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(b.error || `پاسخ ${res.status}`);
+      done(`نسخهٔ ${b.row.version.code} از «${label}» ساخته شد: ${b.row.nodes} گره، ${b.row.activities} فعالیت.`);
+    } catch (e2) { fail(e2.message); } finally { setBusy(false); }
+  }
+  const legacy = data.legacy || { schedules: [], pms: [] };
+  return (
+    <form className="card" onSubmit={send} data-import-plan>
+      <h2>ورود برنامه از فایل</h2>
+      <p className="sm muted">برنامه نسخهٔ تازه‌ای از یک PMS این قرارداد می‌شود: تسک‌های خلاصه گرهٔ WBS، تسک‌های زیرشان فعالیت و پیوندها رابطه.
+        W.F فقط از ستون WF فایل خوانده می‌شود و پیشرفت اعلام‌شده تا ثبت گزارش روزانه می‌ماند. نسخه خودکار Master نمی‌شود.</p>
+      <div className="grid2">
+        <div className="field"><label htmlFor="im-pms">PMS</label>
+          <select id="im-pms" value={imp.pmsId} onChange={(e) => setImp({ ...imp, pmsId: e.target.value })}>
+            {data.pms.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
+        <div className="field"><label htmlFor="im-code">کد نسخهٔ تازه</label>
+          <input id="im-code" dir="ltr" required value={imp.versionCode} placeholder={`${pms?.code || "PM01"}-R${(pms?.versions.length || 0) + 1}`}
+            onChange={(e) => setImp({ ...imp, versionCode: e.target.value })} /></div>
+        <div className="field"><label htmlFor="im-kind">نوع فایل</label>
+          <select id="im-kind" value={imp.fileKind} onChange={(e) => setImp({ ...imp, fileKind: e.target.value })}>
+            <option value="mspdi">MS Project (XML — Save As ◄ XML Format)</option>
+            <option value="pms">PMS اکسل (گام‌ها با ستون CC)</option></select></div>
+        <div className="field"><label htmlFor="im-file">فایل</label>
+          <input id="im-file" type="file" required accept={imp.fileKind === "mspdi" ? ".xml" : ".xlsx,.xls"} onChange={(e) => setImp({ ...imp, file: e.target.files?.[0] || null })} /></div>
+      </div>
+      <button className="btn" type="submit" disabled={busy || !imp.file || !imp.versionCode}>{busy ? "در حال ورود…" : "ورود به‌عنوان نسخهٔ تازه"}</button>{" "}
+      <button className="btn ghost" type="button" onClick={() => setImp(null)}>انصراف</button>
+      {(legacy.schedules.length > 0 || legacy.pms.length > 0) && (
+        <div style={{ marginTop: 12 }} data-legacy>
+          <h3>ورودی‌های قبلی (صفحهٔ قدیمی «برنامه و PMS»)</h3>
+          <p className="sm muted">این فایل‌ها پیش از یکی شدن برنامه‌ها وارد شده‌اند. با «کد نسخهٔ تازه» بالا، هر کدام را به نسخه‌ای از PMS انتخاب‌شده تبدیل کنید؛ فایل لازم نیست.</p>
+          <ul className="sm">
+            {legacy.schedules.map((s) => <li key={s.id}>برنامهٔ MS Project «{s.source_name}» ({s.task_count} تسک) <button type="button" className="btn ghost sm" disabled={busy}
+              onClick={() => convert("schedule", s.id, s.source_name)}>تبدیل به نسخه</button></li>)}
+            {legacy.pms.map((s) => <li key={s.id}>PMS اکسل «{s.source_name}»{s.data_date && ` (تاریخ داده ${s.data_date})`} <button type="button" className="btn ghost sm" disabled={busy}
+              onClick={() => convert("pms", s.id, s.source_name)}>تبدیل به نسخه</button></li>)}
+          </ul>
+        </div>)}
+    </form>
   );
 }

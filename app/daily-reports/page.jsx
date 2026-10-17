@@ -157,9 +157,11 @@ export default function DailyReportsPage() {
 
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
+  const legacyNote = data.contracts > 0 && <p className="note" data-legacy-daily>گزارش روزانهٔ تازه در <a href="/contract-reports">گزارش روزانهٔ قرارداد</a> نوشته می‌شود.
+    اینجا گزارش‌هایی که پیش از آن نوشته شده‌اند خوانده، امضا، تأیید و چاپ می‌شوند.</p>;
   if (!data.type) return (
     <div className="page"><div className="pagehead"><h1>گزارش روزانه</h1></div>
-      <p className="empty-note">گردش‌کار گزارش روزانه هنوز تنظیم نشده است. مدیر پروژه آن را در «تنظیم گردش‌کار» می‌سازد و اعضای هر مرحله را تعیین می‌کند.</p></div>
+      {legacyNote || <p className="empty-note">گردش‌کار گزارش روزانه هنوز تنظیم نشده است. مدیر پروژه آن را در «تنظیم گردش‌کار» می‌سازد و اعضای هر مرحله را تعیین می‌کند.</p>}</div>
   );
   const L = data.labels;
   const v = view;
@@ -169,6 +171,7 @@ export default function DailyReportsPage() {
       <div className="pagehead"><h1>گزارش روزانه</h1>
         <span className="sub">{data.reports.length} گزارش · {data.type.stages.map((s) => s.name).join(" ← ")}</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
+      {legacyNote}
 
       <div className="card">
         <h2>گزارش‌ها</h2>
