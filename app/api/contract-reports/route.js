@@ -78,7 +78,9 @@ export async function GET(request) {
       const { rows: users } = await db.query(
         `SELECT u.id, COALESCE(u.display_name, u.email) AS name FROM project_member m JOIN app_user u ON u.id = m.user_id
           WHERE m.project_id = $1 AND u.is_active ORDER BY 2`, [projectId]);
-      return Response.json({ contracts, typeReady: !!type && stages.length > 0, users, labels,
+      const { rows: [{ n: legacyDaily }] } = await db.query(
+        "SELECT count(*)::int AS n FROM report r JOIN report_type t ON t.id = r.report_type_id WHERE r.project_id = $1 AND t.code = 'DR'", [projectId]);
+      return Response.json({ contracts, typeReady: !!type && stages.length > 0, users, labels, legacyDaily,
         reports: contractId ? await cr.listContractReports(db, { projectId, contractId, userId: user.id }) : [],
         may: { create: type && access && access !== "view" ? checkCreate(stages, user.id).ok : false, setup: membership.role === "admin" || membership.role === "developer" } });
     });

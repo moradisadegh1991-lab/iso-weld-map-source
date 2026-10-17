@@ -7,6 +7,7 @@ import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import {
   listContractors, upsertContractor, packageProgress, lapsedWithWork, upsertPackage,
 } from "../../../lib/db/repos/contractors.mjs";
+import { listCompanies } from "../../../lib/db/repos/org.mjs";
 
 export async function GET(request) {
   try {
@@ -20,6 +21,7 @@ export async function GET(request) {
       contractors: await listContractors(db, { projectId }),
       packages: await packageProgress(db, { projectId }),
       lapsed: await lapsedWithWork(db, { projectId }),
+      companies: await listCompanies(db),
     }));
   } catch (e) { return errorResponse(e); }
 }

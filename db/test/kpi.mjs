@@ -64,6 +64,28 @@ test("the KPIs for F10 are the PMS page's own figures", async () => {
   assert(K(r, "progress", "فعالیت‌های عقب از مبنا").value > 0);
 });
 
+test("once the PMS is the contract's master plan in the EPS, the progress KPIs are read from it — the old page's figures step aside", async () => {
+  const ctr = await import("../../lib/db/repos/contracts.mjs");
+  const eps = await import("../../lib/db/repos/eps.mjs");
+  const imp = await import("../../lib/db/repos/eps-import.mjs");
+  const before = await inP(f10, (tx) => projectKpis(tx, { projectId: f10.id, today: "2026-10-10" }));
+  const stated = K(before, "progress", "پیشرفت فیزیکی (PMS)").value;
+  await inP(f10, async (tx) => {
+    const c = await ctr.upsertContract(tx, { projectId: f10.id, contractNo: "F10-C", title: "F-110", kind: "main", counterparty: "KPC", currency: "IRR", userId: me.id });
+    const pm = await eps.savePms(tx, { projectId: f10.id, contractId: c.id, code: "F10", title: "F-110", userId: me.id });
+    const { rows: [old] } = await tx.query("SELECT id FROM pms_import WHERE project_id = $1 ORDER BY created_at LIMIT 1", [f10.id]);
+    // the workbook as it was imported, without later site progress: its own stated figures
+    const { rows: [{ n }] } = await tx.query("SELECT count(*)::int AS n FROM pms_progress WHERE project_id = $1", [f10.id]);
+    const v = await imp.convertLegacy(tx, { projectId: f10.id, pmsId: pm.id, versionCode: "F10-PMS", source: "pms", importId: old.id, userId: me.id });
+    await eps.setMaster(tx, { projectId: f10.id, id: v.version.id, userId: me.id });
+    const r = await projectKpis(tx, { projectId: f10.id, today: "2026-10-10" });
+    const k = K(r, "progress", "پیشرفت فیزیکی — F10-C");
+    assert(k && k.href === "/eps/activities" && k.value > 0 && k.value < 100, JSON.stringify(k));
+    if (!n) equal(Math.round(k.value), Math.round(stated), "the stated progress carried over weighs the same");
+    equal(K(r, "progress", "پیشرفت فیزیکی (PMS)"), undefined, "no second progress figure from the old page");
+  });
+});
+
 test("HSE rates are the HSE module's: LTIF per million hours, days since the last LTI", async () => {
   await inP(f10, async (tx) => {
     await hse.recordManhours(tx, { projectId: f10.id, workDate: "2026-09-01", hours: 400000, userId: me.id });

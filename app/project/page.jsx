@@ -18,13 +18,6 @@ import Tabs from "../../components/ui/Tabs";
  */
 const FIELDS = [
   ["name", "نام پروژه", "text"],
-  ["client_name", "کارفرما", "text"],
-  ["consultant_name", "مشاور / مهندس کارفرما", "text"],
-  ["contractor_name", "پیمانکار اصلی (EPC)", "text"],
-  ["contract_no", "شمارهٔ قرارداد", "text"],
-  ["contract_date", "تاریخ قرارداد", "date"],
-  ["contract_value", "مبلغ قرارداد", "number"],
-  ["contract_currency", "واحد پول", "text"],
   ["site_location", "محل اجرا", "text"],
   ["start_date", "تاریخ شروع", "date"],
   ["planned_end_date", "پایان برنامه‌ای", "date"],
@@ -175,13 +168,13 @@ export default function ProjectPage() {
 
       {!editable && (
         <p className="muted sm">
-          شما دسترسی ویرایش ندارید. مبلغ قرارداد و نام کارفرما را فقط مدیر پروژه تغییر می‌دهد.
+          شما دسترسی ویرایش ندارید. مشخصات پروژه را فقط مدیر پروژه تغییر می‌دهد.
         </p>
       )}
 
       <Tabs name="project">
       <form className="card" data-tab="spec" data-tab-title="مشخصات و قواعد پروژه" onSubmit={save}>
-        <h2>قرارداد و طرفین</h2>
+        <h2>پروژه</h2>
         <div className="grid2">
           {FIELDS.map(([k, label, type]) => (
             <div className="field" key={k}>
@@ -189,12 +182,21 @@ export default function ProjectPage() {
               <input id={k} type={type} disabled={!editable}
                      dir={type === "text" ? "auto" : "ltr"}
                      value={form[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
-              {k === "contract_value" && (
-                <span className="hint">مبلغ بدون واحد پول ثبت نمی‌شود.</span>
-              )}
             </div>
           ))}
+          <div className="field">
+            <label htmlFor="contract_currency">ارز پایهٔ پروژه (کنترل پروژه و گزارش‌ها)</label>
+            {data.parties?.currencies?.length ? (
+              <select id="contract_currency" disabled={!editable} value={form.contract_currency ?? ""}
+                      onChange={(e) => set("contract_currency", e.target.value)}>
+                <option value="">—</option>
+                {data.parties.currencies.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+              </select>
+            ) : <input id="contract_currency" readOnly value={form.contract_currency ?? ""} placeholder="—" />}
+            <span className="hint">از ارزهای تعریف‌شده در «شرکت‌ها، ذی‌نفعان و بودجه» انتخاب می‌شود.</span>
+          </div>
         </div>
+        <Parties parties={data.parties} />
 
         <div className="field">
           <label htmlFor="description">شرح پروژه</label>
@@ -542,6 +544,38 @@ function FormCodesCard({ projectId, call, editable }) {
           ))}</tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+/**
+ * The parties and the contract, as they are recorded where they belong: the
+ * companies and their roles in «شرکت‌ها، ذی‌نفعان و بودجه», the contracts in
+ * «قراردادها». Shown here, never typed here a second time.
+ */
+function Parties({ parties }) {
+  if (!parties) return null;
+  const row = (label, list, legacy) => (
+    <tr><th>{label}</th><td>{list.length ? list.join("، ") : legacy
+      ? <span>{legacy} <span className="pill warn sm">متن قدیمی — در شرکت‌ها و ذی‌نفعان ثبت کنید</span></span>
+      : <span className="muted">ثبت نشده</span>}</td></tr>);
+  const L = parties.legacy || {};
+  return (
+    <div data-parties style={{ marginTop: 8 }}>
+      <h2>طرفین و قرارداد اصلی</h2>
+      <p className="muted sm">طرفین از «پروژه ◄ شرکت‌ها، ذی‌نفعان و بودجه» و قرارداد از «قراردادها و پیمان‌ها» خوانده می‌شوند و اینجا دوباره وارد نمی‌شوند.</p>
+      <table className="dtable"><tbody>
+        {row("کارفرما", parties.employer, L.client_name)}
+        {row("مشاور / نظارت", parties.consultant, L.consultant_name)}
+        {row("پیمانکار EPC", parties.epc, L.contractor_name)}
+        {row("پیمانکاران", parties.contractors)}
+        <tr><th>قرارداد اصلی</th><td>{parties.contracts.length ? parties.contracts.map((c) => (
+          <div key={c.id}><span className="mono">{c.contract_no}</span> — {c.title}
+            {c.value != null && <span className="mono"> · {c.value.toLocaleString("en-US")} {c.currency}</span>}</div>))
+          : L.contract_no || L.contract_value
+            ? <span>{[L.contract_no, L.contract_value].filter(Boolean).join(" · ")} <span className="pill warn sm">متن قدیمی — قرارداد را در «قراردادها» ثبت کنید</span></span>
+            : <span className="muted">قرارداد اصلی (نوع «اصلی») در «قراردادها» ثبت نشده</span>}</td></tr>
+      </tbody></table>
     </div>
   );
 }

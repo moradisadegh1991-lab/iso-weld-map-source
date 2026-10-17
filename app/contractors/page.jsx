@@ -36,7 +36,7 @@ export default function ContractorsPage() {
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
 
-  const { contractors, packages, lapsed } = data;
+  const { contractors, packages, lapsed, companies = [] } = data;
 
   return (
     <div className="page">
@@ -107,7 +107,7 @@ export default function ContractorsPage() {
             </table>
           </TableKit>
         )}
-        {mayEdit && <Fold title="افزودن پیمانکار"><ContractorForm projectId={projectId} call={call} onDone={reload} /></Fold>}
+        {mayEdit && <Fold title="افزودن پیمانکار"><ContractorForm projectId={projectId} call={call} onDone={reload} companies={companies} taken={contractors} /></Fold>}
         {mayEdit && (
           <Fold title={`ویرایش ${editing?.code || ""}`} button={false} open={!!editing} onClose={() => setEditing(null)}>
             {editing && <ContractorForm key={editing.id} initial={editing} projectId={projectId} call={call}
@@ -162,12 +162,16 @@ export default function ContractorsPage() {
   );
 }
 
-const BLANK = { code: "", name: "", status: "active", disciplines: [] };
+const BLANK = { companyId: "", status: "active", disciplines: [] };
 
-/** New, or the same form filled with a contractor to amend it (its code is its key and stays). */
-function ContractorForm({ initial = null, projectId, call, onDone }) {
+/**
+ * New, or the same form filled with a contractor to amend it. A contractor
+ * is a company of the companies list (one register of who a company is):
+ * picked here, never typed again; its code and name are the company's.
+ */
+function ContractorForm({ initial = null, projectId, call, onDone, companies = [], taken = [] }) {
   const [f, setF] = useState(initial ? {
-    code: initial.code, name: initial.name, status: initial.status, disciplines: initial.disciplines || [],
+    companyId: initial.companyId, code: initial.code, status: initial.status, disciplines: initial.disciplines || [],
     prequalifiedUntil: initial.prequalifiedUntil ? String(initial.prequalifiedUntil).slice(0, 10) : "",
   } : BLANK);
   const [err, setErr] = useState(null);
@@ -196,14 +200,14 @@ function ContractorForm({ initial = null, projectId, call, onDone }) {
     <form onSubmit={submit}>
       <div className="grid2">
         <div className="field">
-          <label htmlFor={initial ? "ce-code" : "c-code"}>کد</label>
-          <input id={initial ? "ce-code" : "c-code"} required value={f.code} dir="ltr" readOnly={!!initial}
-                 onChange={(e) => setF({ ...f, code: e.target.value })} />
-        </div>
-        <div className="field">
-          <label htmlFor={initial ? "ce-name" : "c-name"}>نام شرکت</label>
-          <input id={initial ? "ce-name" : "c-name"} required value={f.name}
-                 onChange={(e) => setF({ ...f, name: e.target.value })} />
+          <label htmlFor={initial ? "ce-co" : "c-co"}>شرکت</label>
+          {initial ? <input id="ce-co" readOnly value={`${initial.code} — ${initial.name}`} /> : (
+            <select id="c-co" required value={f.companyId} onChange={(e) => setF({ ...f, companyId: e.target.value })}>
+              <option value="">— از فهرست شرکت‌ها —</option>
+              {companies.filter((c) => !taken.some((t) => t.companyId === c.id))
+                .map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+            </select>)}
+          <span className="hint">شرکت تازه را در «شرکت‌ها، ذی‌نفعان و بودجه» ثبت کنید؛ نام و کد از همان‌جا می‌آید.</span>
         </div>
         <div className="field">
           <label htmlFor={initial ? "ce-status" : "c-status"}>وضعیت</label>
@@ -237,7 +241,7 @@ function ContractorForm({ initial = null, projectId, call, onDone }) {
 
       {err && <p className="err">{err}</p>}
       <div>
-        <button className="btn" type="submit" disabled={busy || !f.code || !f.name}>
+        <button className="btn" type="submit" disabled={busy || !(f.companyId || f.code)}>
           {busy ? "در حال ثبت…" : initial ? "ذخیرهٔ تغییرات" : "ثبت"}
         </button>
       </div>
