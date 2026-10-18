@@ -23,6 +23,7 @@ import quality from "../../lib/i18n/sections/quality.mjs";
 import contracts from "../../lib/i18n/sections/contracts.mjs";
 import reports from "../../lib/i18n/sections/reports.mjs";
 import grid from "../../lib/i18n/sections/grid.mjs";
+import eps from "../../lib/i18n/sections/eps.mjs";
 import { translate, dirOf, num, dateIn, keys as keysOf } from "../../lib/i18n/index.mjs";
 import { LABELS, label } from "../../lib/i18n/labels.mjs";
 import { INSPECTABLE } from "../../lib/platform/precedence.mjs";
@@ -44,6 +45,9 @@ import { SIGNATURE_KIND } from "../../lib/db/repos/signatures.mjs";
 import { ORIENTATION, ALIGN, FOOTER_ELEMENTS, PLACEHOLDERS } from "../../lib/reports/print.mjs";
 import { SOURCE as DAILY_SOURCE, SHIFT as DAILY_SHIFT, WEATHER as DAILY_WEATHER } from "../../lib/reports/daily.mjs";
 import { FORM_PARTS } from "../../lib/db/repos/workflows.mjs";
+import { REL_TYPES, BUDGET_UNITS, ROLE_STATUS, QTY_MODES } from "../../lib/eps/activities.mjs";
+import { DISCIPLINES as SCOPE_DISC, MEASURES as SCOPE_MEASURES, MODES as SCOPE_MODES } from "../../lib/eps/scope.mjs";
+import { BUDGET_MODES, SEPARATORS, SEPARATOR_NAMES } from "../../lib/eps/wbs.mjs";
 import { NAV_I18N, localizeNav } from "../../lib/i18n/nav.mjs";
 import { SECTIONS } from "../../lib/platform/navigation.mjs";
 import { cleanPrefs, withDefaults, PREFS } from "../../lib/prefs.mjs";
@@ -69,7 +73,7 @@ test("the three dictionaries hold the same keys, none empty", () => {
     equal(K.filter((k) => !String(d[k]).trim()), [], `${name}: empty strings`);
   }
   assert(F.length > 150, `${F.length} keys`);
-  const sections = [quality, contracts, reports, grid];
+  const sections = [quality, contracts, reports, grid, eps];
   const seen = new Set(Object.keys(base));
   const twice = [];
   for (const x of sections) for (const k of Object.keys(x.fa)) { if (seen.has(k)) twice.push(k); seen.add(k); }
@@ -134,6 +138,12 @@ test("every domain label a translated page shows is in English and Arabic", () =
     ...Object.keys(PLACEHOLDERS).map((k) => `print.placeholder.${k}`), ...Object.keys(DAILY_SOURCE).map((k) => `daily.source.${k}`),
     ...Object.keys(DAILY_SHIFT).map((k) => `daily.shift.${k}`),
     ...[...new Set(Object.values(FORM_PARTS).flatMap((x) => Object.keys(x)))].map((k) => `report.part.${k}`),
+    ...Object.keys(REL_TYPES).map((k) => `eps.relType.${k}`), ...Object.keys(BUDGET_UNITS).map((k) => `eps.budgetUnit.${k}`),
+    ...Object.keys(ROLE_STATUS).map((k) => `eps.roleStatus.${k}`), ...Object.keys(QTY_MODES).map((k) => `eps.qtyMode.${k}`),
+    ...Object.entries(SCOPE_DISC).flatMap(([k, d]) => [`eps.scope.disc.${k}`, ...(d.kindLabel ? [`eps.scope.kind.${k}`] : []),
+      ...Object.keys(d.milestones).map((m) => `eps.scope.ms.${k}.${m}`)]),
+    ...Object.keys(SCOPE_MEASURES).map((k) => `eps.scope.measure.${k}`), ...Object.keys(SCOPE_MODES).map((k) => `eps.scope.mode.${k}`),
+    ...Object.keys(BUDGET_MODES).map((k) => `eps.budgetMode.${k}`), ...Object.keys(SEPARATORS).map((k) => `eps.separator.${SEPARATOR_NAMES[k]}`),
   ];
   equal(want.filter((k) => !LABELS[k]?.en || !LABELS[k]?.ar), [], "labels missing a translation");
   equal(Object.keys(LABELS).filter((k) => !want.includes(k)), [], "labels for nothing the platform declares");
@@ -153,7 +163,10 @@ const TRANSLATED = ["app/quality/page.jsx", "app/inspection/page.jsx", "app/ndt-
   "components/ui/EntityLog.jsx", "components/ui/Fold.jsx", "components/ui/TableKit.jsx", "components/platform/Shell.jsx",
   "components/platform/SignIn.jsx", "app/account/page.jsx",
   "app/contract-reports/page.jsx", "components/reports/WorkflowPanel.jsx", "app/report-setup/page.jsx", "app/report-print-setup/page.jsx",
-  "app/signature/page.jsx", "app/daily-reports/page.jsx"];
+  "app/signature/page.jsx", "app/daily-reports/page.jsx",
+  "app/eps/page.jsx", "app/eps/wbs/page.jsx", "app/eps/templates/page.jsx", "app/eps/codes/page.jsx", "app/eps/activities/page.jsx",
+  "app/eps/progress/page.jsx", "app/eps/progress/days/page.jsx", "app/eps/scope/page.jsx",
+  "components/eps/ActivityDetail.jsx", "components/eps/ActivityGrid.jsx", "components/eps/ScopePanel.jsx", "components/eps/shared.jsx"];
 
 test("a translated page keeps no Persian of its own", async () => {
   const left = [];

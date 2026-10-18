@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { filterTree, splitHits } from "../../lib/eps/activities.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
+import { useEpsFmt } from "./ActivityDetail";
 
 /**
  * The activity view after Primavera P6: on the left a tree table of the WBS
@@ -60,7 +61,9 @@ export function Hl({ text, q }) {
 
 export default function ActivityGrid({ data, columns, defaultCols, storeKey, selected, onSelect, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null }) {
   const all = useMemo(() => flatRows(data.roots), [data]);
-  const { t } = usePrefs();
+  const { t, locale } = usePrefs();
+  // what a column's get(row, x) writes with: numbers, dates and words in the reader's language
+  const x = { ...useEpsFmt(), t };
   const [picked, setPicked] = useState(() => new Set());
   const [editing, setEditing] = useState(null);         // { id, row, values, orig, draftOf? }
   const [ask, setAsk] = useState(null);                 // leaving a changed row: { next }
@@ -164,7 +167,7 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
   const copyOut = (rowsToClip, mode) => {
     setClip({ mode, rows: rowsToClip });
     // what is copied is on the system clipboard too, as tab-separated text Excel takes
-    const text = rowsToClip.map((r) => shown.map((c) => String(c.get(r) ?? "")).join("\t")).join("\n");
+    const text = rowsToClip.map((r) => shown.map((c) => String(c.get(r, x) ?? "")).join("\t")).join("\n");
     try { navigator.clipboard?.writeText(text); } catch { /* not allowed here */ }
   };
   const removeRows = async (list) => {
@@ -180,9 +183,9 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
     // the tree as it shows, each row with its parent's code in the column before its own
     const XLSX = await import("xlsx");
     const code = new Map(all.map((r) => [r.id, r.item.code]));
-    const head = [t("gr.level"), t("gr.parentCode"), t("gr.code"), ...shown.filter((c) => c.key !== "code").map((c) => c.title)];
+    const head = [t("gr.level"), t("gr.parentCode"), t("gr.code"), ...shown.filter((c) => c.key !== "code").map((c) => t(c.title))];
     const body = rows.map((r) => [r.level, r.parentId ? code.get(r.parentId) || "" : "", r.item.code,
-      ...shown.filter((c) => c.key !== "code").map((c) => { const v = c.get(r); return v == null ? "" : String(v); })]);
+      ...shown.filter((c) => c.key !== "code").map((c) => { const v = c.get(r, x); return v == null ? "" : String(v); })]);
     const ws = XLSX.utils.aoa_to_sheet([head, ...body]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "WBS");
@@ -234,17 +237,17 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
     const months = [], marks = [];
     for (let t = span.lo; t <= span.hi; t += DAY) {
       const d = new Date(t);
-      if (d.getUTCDate() === 1 || t === span.lo) months.push({ x: ((t - span.lo) / DAY) * px, label: d.toLocaleDateString("fa-IR", { year: "numeric", month: "short", timeZone: "UTC" }) });
-      if (zoom === "day") marks.push({ x: ((t - span.lo) / DAY) * px, label: d.toLocaleDateString("fa-IR", { day: "numeric", timeZone: "UTC" }), weekend: d.getUTCDay() === 5 });
-      else if (zoom === "week" && d.getUTCDay() === 6) marks.push({ x: ((t - span.lo) / DAY) * px, label: d.toLocaleDateString("fa-IR", { day: "numeric", month: "numeric", timeZone: "UTC" }) });
+      if (d.getUTCDate() === 1 || t === span.lo) months.push({ x: ((t - span.lo) / DAY) * px, label: d.toLocaleDateString(locale, { year: "numeric", month: "short", timeZone: "UTC" }) });
+      if (zoom === "day") marks.push({ x: ((t - span.lo) / DAY) * px, label: d.toLocaleDateString(locale, { day: "numeric", timeZone: "UTC" }), weekend: d.getUTCDay() === 5 });
+      else if (zoom === "week" && d.getUTCDay() === 6) marks.push({ x: ((t - span.lo) / DAY) * px, label: d.toLocaleDateString(locale, { day: "numeric", month: "numeric", timeZone: "UTC" }) });
     }
     return { months, marks };
-  }, [span, px, zoom]);
+  }, [span, px, zoom, locale]);
   const today = new Date().toISOString().slice(0, 10);
   const rowIndex = new Map(shownRows.map((r, i) => [r.id, i]));
 
   const cell = (r, c) => {
-    const v = c.get(r);
+    const v = c.get(r, x);
     // <bdi>: a name like "20-E-201 — CW cooler" keeps its own direction inside the RTL table
     if (c.hits && typeof v === "string") return c.key === "name" ? <bdi><Hl text={v} q={q} /></bdi> : <Hl text={v} q={q} />;
     return v;
@@ -254,30 +257,30 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
   return (
     <div className="p6">
       <div className="p6-bar" data-p6-bar>
-        <input className="p6-filter" type="search" placeholder="فیلتر: کد یا نام…" aria-label="فیلتر فعالیت‌ها" value={q} onChange={(e) => setQ(e.target.value)} />
-        <span className="p6-levels" dir="ltr" aria-label="باز کردن تا سطح">
-          {Array.from({ length: maxLevel }, (_, i) => i + 1).map((k) => <button key={k} type="button" className="btn ghost sm" data-level={k} onClick={() => openTo(k)} title={`تا سطح ${k}`}>{k}</button>)}
-          <button type="button" className="btn ghost sm" onClick={() => setShut(new Set())} title="همه باز">⊞</button>
+        <input className="p6-filter" type="search" placeholder={t("ep.g.filter")} aria-label={t("ep.g.filterLabel")} value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="p6-levels" dir="ltr" aria-label={t("ep.g.levels")}>
+          {Array.from({ length: maxLevel }, (_, i) => i + 1).map((k) => <button key={k} type="button" className="btn ghost sm" data-level={k} onClick={() => openTo(k)} title={t("ep.g.toLevel", { k })}>{k}</button>)}
+          <button type="button" className="btn ghost sm" onClick={() => setShut(new Set())} title={t("ep.g.openAll")}>⊞</button>
         </span>
-        <span className="sm muted">{visibleActs.length} فعالیت</span>
-        {gantt && <select aria-label="مقیاس گانت" value={zoom} onChange={(e) => setZoom(e.target.value)}>
-          <option value="day">روز</option><option value="week">هفته</option><option value="month">ماه</option></select>}
+        <span className="sm muted">{t("ep.g.count", { n: visibleActs.length })}</span>
+        {gantt && <select aria-label={t("ep.g.zoom")} value={zoom} onChange={(e) => setZoom(e.target.value)}>
+          <option value="day">{t("ep.g.day")}</option><option value="week">{t("ep.g.week")}</option><option value="month">{t("ep.g.month")}</option></select>}
         <span style={{ position: "relative" }}>
-          <button type="button" className="btn ghost sm" onClick={() => setChooser(!chooser)} aria-expanded={chooser}>ستون‌ها ▾</button>
+          <button type="button" className="btn ghost sm" onClick={() => setChooser(!chooser)} aria-expanded={chooser}>{t("ep.g.columns")} ▾</button>
           {chooser && (
-            <div className="p6-chooser card" role="dialog" aria-label="انتخاب ستون‌ها">
+            <div className="p6-chooser card" role="dialog" aria-label={t("ep.g.chooseColumns")}>
               {[...shown, ...columns.filter((c) => !cols.includes(c.key))].map((c) => {
                 const on = cols.includes(c.key), i = cols.indexOf(c.key);
                 return (
                   <div key={c.key} className="row" style={{ gap: 4, alignItems: "center" }}>
-                    <label style={{ flex: 1 }}><input type="checkbox" checked={on} onChange={() => setCols(on ? cols.filter((k) => k !== c.key) : [...cols, c.key])} /> {c.title}</label>
+                    <label style={{ flex: 1 }}><input type="checkbox" checked={on} onChange={() => setCols(on ? cols.filter((k) => k !== c.key) : [...cols, c.key])} /> {t(c.title)}</label>
                     {on && <>
-                      <button type="button" className="btn ghost sm" disabled={i === 0} aria-label="بالا" onClick={() => { const n = [...cols]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; setCols(n); }}>▲</button>
-                      <button type="button" className="btn ghost sm" disabled={i === cols.length - 1} aria-label="پایین" onClick={() => { const n = [...cols]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; setCols(n); }}>▼</button></>}
+                      <button type="button" className="btn ghost sm" disabled={i === 0} aria-label={t("ep.g.up")} onClick={() => { const n = [...cols]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; setCols(n); }}>▲</button>
+                      <button type="button" className="btn ghost sm" disabled={i === cols.length - 1} aria-label={t("ep.g.down")} onClick={() => { const n = [...cols]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; setCols(n); }}>▼</button></>}
                   </div>);
               })}
-              <p className="row" style={{ gap: 4 }}><button type="button" className="btn ghost sm" onClick={() => { setCols(defaultCols); setWidths({}); }}>پیش‌فرض</button>
-                <button type="button" className="btn sm" onClick={() => setChooser(false)}>بستن</button></p>
+              <p className="row" style={{ gap: 4 }}><button type="button" className="btn ghost sm" onClick={() => { setCols(defaultCols); setWidths({}); }}>{t("ep.g.default")}</button>
+                <button type="button" className="btn sm" onClick={() => setChooser(false)}>{t("ep.close")}</button></p>
             </div>)}
         </span>
         <button type="button" className="btn ghost sm" data-excel onClick={exportExcel}>{t("gr.excel")}</button>
@@ -297,7 +300,7 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
             <colgroup>{ops && <col style={{ width: 28 }} />}{shown.map((c) => <col key={c.key} style={{ width: width(c) }} />)}</colgroup>
             <thead><tr>{ops && <th className="p6-pick"><input type="checkbox" aria-label={t("gr.pickAll")} checked={rows.length > 0 && rows.every((r) => picked.has(r.id))}
               onChange={(e) => setPicked(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /></th>}{shown.map((c) => (
-              <th key={c.key} dir="auto" title={c.tip || c.title}>{c.title}
+              <th key={c.key} dir="auto" title={t(c.tip || c.title)}>{t(c.title)}
                 <span className="p6-colgrip" onMouseDown={(e) => dragFrom(e, width(c), (w) => setWidths((x) => ({ ...x, [c.key]: Math.max(40, Math.round(w)) })))} /></th>))}</tr></thead>
             <tbody>{shownRows.map((r) => {
               const isSel = r.id === selected;
@@ -315,11 +318,11 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
                     <td key={c.key} className={c.mono ? "mono" : undefined} dir={c.dir || (c.mono ? "ltr" : "rtl")}
                       style={ci === 0 ? { paddingLeft: 4 + (r.level - 1) * 14, borderLeft: `3px solid ${r.color || "transparent"}` } : undefined}>
                       {ci === 0 && (r.kind === "node"
-                        ? <button type="button" className="p6-tog" aria-label={shut.has(r.id) ? "باز کردن" : "بستن"} onClick={(e) => { e.stopPropagation(); flip(r.id); }}
+                        ? <button type="button" className="p6-tog" aria-label={t(shut.has(r.id) ? "ep.g.open" : "ep.close")} onClick={(e) => { e.stopPropagation(); flip(r.id); }}
                           style={{ visibility: hasKids.has(r.id) ? "visible" : "hidden" }}>{shut.has(r.id) && !filt ? "▸" : "▾"}</button>
                         : <span className="p6-tog" aria-hidden="true">·</span>)}
                       {ed && field(c.key) ? (
-                        <input className="p6-in" aria-label={c.title} type={field(c.key).type === "number" ? "number" : field(c.key).type === "date" ? "date" : "text"}
+                        <input className="p6-in" aria-label={t(c.title)} type={field(c.key).type === "number" ? "number" : field(c.key).type === "date" ? "date" : "text"}
                           step="any" dir={field(c.key).type === "text" ? "auto" : "ltr"} value={ed.values[c.key] ?? ""}
                           onChange={(e) => setEditing({ ...ed, values: { ...ed.values, [c.key]: e.target.value } })}
                           onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(null); }} />
@@ -334,7 +337,7 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
                 </tr>);
             })}</tbody>
           </table>
-          {rows.length === 0 && <p className="empty-note" dir="rtl">ردیفی نیست.</p>}
+          {rows.length === 0 && <p className="empty-note">{t("ep.g.noRows")}</p>}
           {menu && typeof document !== "undefined" && createPortal(
             <div className="p6-menu card" role="menu" aria-label={t("gr.menu")} style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} data-row-menu>
               {fieldsOf(menu.row).length > 0 && <button type="button" role="menuitem" onClick={() => { setMenu(null); open(menu.row); }}>{t("gr.edit")}</button>}
@@ -353,15 +356,15 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
             </div>, document.body)}
         </div>
         {gantt && <>
-          <div className="p6-vsplit" role="separator" aria-orientation="vertical" title="کشیدن برای تغییر پهنا" onMouseDown={(e) => dragFrom(e, leftW, (w) => setLeftW(Math.max(200, Math.round(w))))} />
+          <div className="p6-vsplit" role="separator" aria-orientation="vertical" title={t("ep.g.dragWidth")} onMouseDown={(e) => dragFrom(e, leftW, (w) => setLeftW(Math.max(200, Math.round(w))))} />
           <div className="p6-right" ref={right} onScroll={sync(right, left)}>
-            {!span ? <p className="empty-note" dir="rtl">هیچ ردیفی تاریخ ندارد؛ گانت خالی است.</p> : (
+            {!span ? <p className="empty-note">{t("ep.g.noDates")}</p> : (
               <div style={{ width: chartW, position: "relative" }}>
                 <div className="p6-ghead" style={{ width: chartW }}>
                   <div className="p6-months">{ticks.months.map((m) => <span key={m.x} style={{ left: m.x }}>{m.label}</span>)}</div>
                   <div className="p6-days">{ticks.marks.map((m) => <span key={m.x} style={{ left: m.x, width: zoom === "day" ? px : undefined }} className={m.weekend ? "we" : undefined}>{m.label}</span>)}</div>
                 </div>
-                <svg width={chartW} height={shownRows.length * ROW} className="p6-svg" role="img" aria-label="نمودار گانت">
+                <svg width={chartW} height={shownRows.length * ROW} className="p6-svg" role="img" aria-label={t("ep.g.gantt")}>
                   <defs><marker id="p6-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--dim)" /></marker></defs>
                   {shownRows.map((r, i) => <rect key={`bg${r.id}`} x={0} y={i * ROW} width={chartW} height={ROW} fill={r.id === selected ? "var(--cy-soft)" : i % 2 ? "var(--hover)" : "transparent"}
                     onClick={() => onSelect && onSelect(r)} />)}
@@ -378,7 +381,7 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
                       <g key={r.id} data-gantt={a.code} onClick={() => onSelect && onSelect(r)}>
                         {plan && <rect x={plan.x} y={y + 5} width={plan.w} height={8} rx={2} fill="#3b82c4" opacity={0.85}><title>{`${a.code} — ${a.plan_start} → ${a.plan_end}`}</title></rect>}
                         {plan && a.pct != null && <rect x={plan.x} y={y + 5} width={(plan.w * Math.min(a.pct, 100)) / 100} height={8} rx={2} fill="#1f4f7a" />}
-                        {act && <rect x={act.x} y={y + 15} width={act.w} height={6} rx={2} fill="#2fa36b"><title>{`واقعی ${a.actual_start} → ${a.actual_end}`}</title></rect>}
+                        {act && <rect x={act.x} y={y + 15} width={act.w} height={6} rx={2} fill="#2fa36b"><title>{t("ep.g.actualBar", { from: a.actual_start, to: a.actual_end })}</title></rect>}
                       </g>);
                   })}
                   {(data.relations || []).map((rel) => {
@@ -402,11 +405,12 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
 
 /** A height the user drags: the line between the activities and their details. */
 export function useSplit(storeKey, initial = 420) {
+  const { t } = usePrefs();
   const [h, setH] = useState(initial);
   useEffect(() => { const v = read(`${storeKey}:h`, null); if (v) setH(v); }, [storeKey]);
   useEffect(() => { write(`${storeKey}:h`, h); }, [storeKey, h]);
   const grip = (
-    <div className="p6-hsplit" role="separator" aria-orientation="horizontal" title="کشیدن برای تغییر ارتفاع"
+    <div className="p6-hsplit" role="separator" aria-orientation="horizontal" title={t("ep.g.dragHeight")}
       onMouseDown={(e) => {
         e.preventDefault();
         const y0 = e.clientY, h0 = h;
