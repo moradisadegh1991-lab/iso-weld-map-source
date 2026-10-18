@@ -63,6 +63,9 @@ test("roles, delays, the tree filter and the code summary", async () => {
   equal([ea.delayRow({}, { actual_start: "2026-01-05" }, null).startDelay], [null], "no master plan: no baseline, no delay figure");
   const f = ea.filterTree([{ id: "r", text: "PM01" }, { id: "n", parentId: "r", text: "Civil" }, { id: "a", parentId: "n", text: "Excavation" }, { id: "b", parentId: "r", text: "Piping" }], "exca");
   equal([[...f.matches], [...f.visible].sort()], [["a"], ["a", "n", "r"]], "a match keeps every row above it");
+  const g = ea.filterTree([{ id: "r", text: "PM01" }, { id: "n", parentId: "r", text: "Civil" }, { id: "a", parentId: "n", text: "Excavation" },
+    { id: "a2", parentId: "a", text: "Trench" }, { id: "b", parentId: "r", text: "Piping" }], "civil");
+  equal([...g.visible].sort(), ["a", "a2", "n", "r"], "and every row under it: a matched branch shows whole (owner's requirements 2026-10-18, item 10)");
   equal(ea.splitHits("Excavation & excavation", "exca").filter((x) => x.hit).length, 2);
   const s = ea.codeSummary([{ id: "c1", code: "EX" }], [{ id: "a", codeIds: ["c1"], volumePlan: 100, volumeActual: 120 }, { id: "b", codeIds: [], volumeActual: 5 }],
     [{ activityId: "a", qty: 30, areaId: "k1" }, { activityId: "a", qty: 6, areaId: "k2" }, { activityId: "b", qty: 5, areaId: "k1" }]);

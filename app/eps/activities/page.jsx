@@ -45,6 +45,40 @@ export default function ActivitiesPage() {
     try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) }); reload(); detail.reload(); if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; }
   }
+  // editing rows in place, adding under a node, cut / copy / paste / delete (owner's requirements 2026-10-18, items 4, 7, 15)
+  const ops = useMemo(() => {
+    if (!data?.may?.edit) return null;
+    const send = (body) => call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) });
+    const batch = async (list, done) => {
+      setMsg(null); setOk(null);
+      try { for (const b of list) await send(b); reload(); detail.reload(); if (done) setOk(done); return true; }
+      catch (e) { setMsg(e.message); reload(); return false; }
+    };
+    const actBody = (v) => ({ name: v.name, wf: v.wf === "" ? null : v.wf, planStart: v.start || null, planEnd: v.finish || null,
+      volumePlan: v.volPlan === "" ? null : v.volPlan, volumeActual: v.volActual === "" ? null : v.volActual });
+    const valueOf = (it) => ({ name: it.name ?? "", wf: it.wf ?? "", volPlan: it.volumePlan ?? "", volActual: it.volumeActual ?? "",
+      start: it.plan_start ? String(it.plan_start).slice(0, 10) : "", finish: it.plan_end ? String(it.plan_end).slice(0, 10) : "" });
+    return {
+      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "wf", type: "number" }, { key: "volPlan", type: "number" },
+        { key: "volActual", type: "number" }, { key: "start", type: "date" }, { key: "finish", type: "date" }] : []),
+      value: (row) => valueOf(row.item),
+      save: (row, v) => batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...actBody(v) }]),
+      create: (node, v) => batch([{ kind: "activity", nodeId: node.id, ...actBody(v) }]),
+      remove: (rows) => batch(rows.filter((x) => x.kind === "act").map((x) => ({ kind: "activity-remove", id: x.id }))
+        .concat(rows.filter((x) => x.kind === "node").reverse().map((x) => ({ kind: "node-remove", id: x.id })))),
+      paste: (node, rows, mode) => {
+        const nodes = rows.filter((x) => x.kind === "node"), inNode = new Set(nodes.flatMap((n) => [n.id]));
+        // an activity whose node is pasted too travels with it
+        const lone = rows.filter((x) => x.kind === "act" && !inNode.has(x.parentId));
+        const top = nodes.filter((n) => !inNode.has(n.parentId));
+        return batch([
+          ...top.map((n) => (mode === "cut" ? { kind: "node-move", id: n.id, parentId: node.id } : { kind: "node-copy", id: n.id, parentId: node.id })),
+          ...lone.map((a) => ({ kind: "activity", nodeId: node.id, ...actBody(valueOf(a.item)) })),
+          ...(mode === "cut" ? lone.map((a) => ({ kind: "activity-remove", id: a.id })) : []),
+        ]);
+      },
+    };
+  }, [data?.may?.edit, projectId, versionId, call]); // eslint-disable-line react-hooks/exhaustive-deps
   const acts = useMemo(() => {
     const out = []; const walk = (n) => { out.push(...n.activities); n.children.forEach(walk); }; (data?.roots || []).forEach(walk); return out;
   }, [data]);
@@ -84,7 +118,7 @@ export default function ActivitiesPage() {
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>ناسازگاری‌ها</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
       <div style={{ height }}>
         <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "name", "wf", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur"]}
-          storeKey="p6-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} />
+          storeKey="p6-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} ops={ops} />
       </div>
       {grip}
       <div className="p6-detail">

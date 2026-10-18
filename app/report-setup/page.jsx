@@ -103,10 +103,17 @@ export default function ReportSetupPage() {
           <h2>{tr("rs.duties")}</h2>
           <p className="sm muted">{tr("rs.dutiesNote")}</p>
           {data.duties.length === 0 ? <p className="empty-note">{tr("rs.noDuties")}</p> : (
-            <TableKit name="report-setup-duties"><table className="dtable">
+            <TableKit name="report-setup-duties"
+              onDelete={(id) => post({ kind: "duty-remove", id })}
+              rowEdit={{
+                fields: [{ col: tr("rs.code"), name: "code", type: "text" }, { col: tr("rs.duty"), name: "name", type: "text" }],
+                value: (id) => { const d = data.duties.find((x) => x.id === id); return { code: d?.code || "", name: d?.name || "" }; },
+                onSave: (id, v) => { const d = data.duties.find((x) => x.id === id); return post({ kind: "duty", id, code: v.code, name: v.name, description: d.description, permissions: d.permissions }, tr("rs.dutySaved")); },
+                onAdd: (v) => post({ kind: "duty", code: v.code, name: v.name, permissions: ["view"] }, tr("rs.dutySaved")),
+              }}><table className="dtable">
               <thead><tr><th>{tr("rs.code")}</th><th>{tr("rs.duty")}</th><th>{tr("rs.h.rights")}</th><th>{tr("rs.holders")}</th><th>{tr("rs.usedIn")}</th><th /></tr></thead>
               <tbody>{data.duties.map((d) => (
-                <tr key={d.id} data-duty={d.code || d.name}>
+                <tr key={d.id} data-key={d.id} data-duty={d.code || d.name}>
                   <td className="mono">{d.code || "—"}</td><td>{d.name}</td>
                   <td className="sm">{d.permissions.map(perm).join(tr("c.sep"))}</td>
                   <td><Holders duty={d} users={data.users} post={post} /></td>
@@ -301,10 +308,16 @@ function Workflow({ wf, data, post, perm, tr }) {
         <h2>{tr("rs.pagesOf", { name: wf.name })}</h2>
         <p className="sm muted">{tr("rs.pagesNote")}</p>
         {wf.pages.length === 0 ? <p className="empty-note">{tr("rs.noPages")}</p> : (
-          <TableKit name="report-setup-pages"><table className="dtable">
+          <TableKit name="report-setup-pages"
+            onDelete={(id) => post({ kind: "page-remove", id, workflowId: wf.id })}
+            rowEdit={{
+              fields: [{ col: tr("rs.pageNo"), name: "pageNo", type: "number" }, { col: tr("rs.name"), name: "name", type: "text" }],
+              value: (id) => { const p = wf.pages.find((x) => x.id === id); return { pageNo: String(p?.pageNo ?? ""), name: p?.name || "" }; },
+              onSave: (id, v) => { const p = wf.pages.find((x) => x.id === id); return post({ kind: "page", workflowId: wf.id, id, pageNo: Number(v.pageNo), name: v.name, sections: p.sections }); },
+            }}><table className="dtable">
             <thead><tr><th>{tr("rs.pageNo")}</th><th>{tr("rs.name")}</th><th>{tr("rs.parts")}</th><th /></tr></thead>
             <tbody>{wf.pages.map((p) => (
-              <tr key={p.id} data-page={p.pageNo}><td className="mono">{p.pageNo}</td><td>{p.name}</td>
+              <tr key={p.id} data-key={p.id} data-page={p.pageNo}><td className="mono">{p.pageNo}</td><td>{p.name}</td>
                 <td className="sm">{p.sections.length ? p.sections.map(secName).join(tr("c.sep")) : tr("rs.allParts")}</td>
                 <td><button className="btn ghost sm" type="button" onClick={() => setNp({ id: p.id, pageNo: p.pageNo, name: p.name, sections: p.sections })}>{tr("dr.edit")}</button>
                   <button className="btn ghost sm" type="button" onClick={() => post({ kind: "page-remove", id: p.id, workflowId: wf.id })}>{tr("dr.remove")}</button></td></tr>))}</tbody>

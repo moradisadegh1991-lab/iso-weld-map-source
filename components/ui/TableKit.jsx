@@ -55,8 +55,23 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  * true or the reason the action is not open for that row — a signed or
  * evidence record is revised or revoked, never deleted, and the disabled
  * button says so rather than disappearing.
+ *
+ * Several rows (owner's requirements 2026-10-18, items 4, 7, 15). Every row
+ * has a box at the start of its first cell (and the heading one for all the
+ * rows shown); Ctrl- or Shift-click picks too. The picked rows are copied
+ * (tab-separated, as Excel pastes), cut or deleted together — cut and delete
+ * when the page passes `onDelete`, paste when it passes `onPaste(rows)`. A
+ * right click on a row opens the same actions for it.
+ *
+ * Editing a row in place, when the page passes `rowEdit`:
+ *   { fields: [{ col: heading text, name, type: text|number|date|select, options: [[value, label]] }],
+ *     value(key) → { name: value }, onSave(key, values) → truthy, onAdd(values) → truthy (optional) }
+ * A click on a row opens it for editing where it stands — framed and written
+ * in blue, its editable cells as fields, with save, cancel and delete; no
+ * dialog opens. Leaving it changed asks whether to save or discard. With
+ * `onAdd`, a «+» under the last row opens a new row the same way.
  */
-export default function TableKit({ children, name = "table", min = 1, onEdit, onDelete, canEdit, canDelete, checkDelete, view, editLabel, deleteLabel }) {
+export default function TableKit({ children, name = "table", min = 1, onEdit, onDelete, canEdit, canDelete, checkDelete, view, editLabel, deleteLabel, onPaste, rowEdit }) {
   const { t, num, prefs, dir } = usePrefs();
   editLabel = editLabel || t("tk.edit");
   deleteLabel = deleteLabel || t("tk.delete");
@@ -82,6 +97,11 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [probe, setProbe] = useState(null);               // null | "…" | true | "why not"
+  const [picks, setPicks] = useState(0);                  // how many rows are picked (the rows: st.current.picks)
+  const [rowMenu, setRowMenu] = useState(null);           // a row's right-click menu: { x, y, row }
+  const [clip, setClip] = useState(null);                 // rows copied or cut: [[cell…]…]
+  const [ed, setEd] = useState(null);                     // a row open for editing: { row|null (new), key, values, orig, tr }
+  const [leave, setLeave] = useState(null);               // leaving a changed row: { next }
 
   const heads = meta.heads;
   const disp = useMemo(() => displayOrder(heads, lay), [heads, lay]);
@@ -99,6 +119,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     // replaced some without a record we saw).
     const inDom = new Set(tbody.rows);
     s.orig = s.orig.filter((r) => inDom.has(r));
+    if (s.picks) for (const r of [...s.picks]) if (!inDom.has(r)) s.picks.delete(r);
     const have = new Set(s.orig);
     for (const r of tbody.rows) if (own(r) && !have.has(r)) s.orig.push(r);
 
@@ -195,8 +216,9 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
         });
         want.push(tr);
       }
-      for (const g of b.gs) want.push(g.main, ...g.rest);
+      for (const g of b.gs) { want.push(g.main, ...g.rest); if (s.editTr && s.editFor === g.main) want.push(s.editTr); }
     }
+    if (s.editTr && !s.editFor) want.push(s.editTr);           // a new row: last
     for (const [v, tr] of s.grp) if (!keepGrp.has(tr)) { tr.remove(); s.grp.delete(v); }
     if (want.length !== tbody.rows.length || want.some((r, k) => tbody.rows[k] !== r)) for (const r of want) tbody.appendChild(r);
 
@@ -292,6 +314,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
 
   function onHeadClick(e) {
     const hit = headOf(e);
+    if (hit && hit.th.cellIndex === 0 && inBox(hit.th, e.clientX, dir)) { pickAll(); return; }
     if (!hit || !hit.h.label) return;
     if (mode === "grid") {
       const z = zone(hit.th, e.clientX);
@@ -301,6 +324,13 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     sortBy(hit.h.key, null, e.shiftKey);
   }
   function onContext(e) {
+    const tr = e.target.closest?.("tbody tr");
+    if (tr && box.current?.contains(tr) && !tr.classList.contains("tk-grp") && !tr.classList.contains("tk-edit") && !isDetail(tr)
+      && tr.closest("table") === box.current.querySelector("table")) {
+      e.preventDefault();
+      setRowMenu({ x: e.clientX, y: e.clientY, row: tr });
+      return;
+    }
     if (mode !== "grid") return;
     const hit = headOf(e);
     if (!hit) return;
@@ -383,9 +413,15 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
       setCollapsed((c) => { const n = new Set(c); n.has(v) ? n.delete(v) : n.add(v); return n; });
       return;
     }
+    if (tr.classList.contains("tk-edit")) return;
     if (e.target.closest("button, a, input, select, textarea, label, summary, details, [contenteditable]")) return;
     const row = tr;
     if (isDetail(row)) return;                          // an opened panel belongs to its row
+    if (e.type === "click" && (e.ctrlKey || e.metaKey || e.shiftKey || (row.cells[0] && inBox(row.cells[0], e.clientX, dir)))) {
+      togglePick(row, e.shiftKey);
+      return;
+    }
+    if (rowEdit && e.type === "click") { guard(() => openEdit(row)); }
     const cur = st.current.selRow;
     if (cur && cur !== row) delete cur.dataset.tkSel;
     if (cur === row && e.type === "click" && e.detail === 1) { delete row.dataset.tkSel; st.current.selRow = null; setSel(null); return; }
@@ -395,6 +431,104 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     setErr("");
     if (e.type === "dblclick") setDialog("view");
   }
+  // ── several rows: pick, copy, cut, delete, paste ─────────────────────────
+  const picksOf = () => { const s = st.current; if (!s.picks) s.picks = new Set(); return s.picks; };
+  const mainRows = () => (st.current.orig || []).filter((r) => !isDetail(r) && !r.hidden);
+  function togglePick(row, range) {
+    const set = picksOf();
+    const rows = mainRows();
+    const last = st.current.lastPick;
+    const span = range && last && rows.includes(last) ? rows.slice(Math.min(rows.indexOf(last), rows.indexOf(row)), Math.max(rows.indexOf(last), rows.indexOf(row)) + 1) : [row];
+    const on = !set.has(row);
+    for (const r of span) { if (on) set.add(r); else set.delete(r); flag(r, "tkPick", on); }
+    st.current.lastPick = row;
+    setPicks(set.size);
+  }
+  function pickAll() {
+    const set = picksOf();
+    const rows = mainRows();
+    const on = !(rows.length && rows.every((r) => set.has(r)));
+    for (const r of rows) { if (on) set.add(r); else set.delete(r); flag(r, "tkPick", on); }
+    flag(box.current?.querySelector("thead tr") || document.createElement("tr"), "tkPickAll", on);
+    setPicks(set.size);
+  }
+  function clearPicks() {
+    for (const r of picksOf()) flag(r, "tkPick", false);
+    picksOf().clear();
+    const hr = box.current?.querySelector("thead tr"); if (hr) flag(hr, "tkPickAll", false);
+    setPicks(0);
+  }
+  const rowsText = (rows) => rows.map((r) => [...r.cells].map((c) => c.textContent.replace(/\s+/g, " ").trim()));
+  function copyRows(rows) {
+    const data = rowsText(rows);
+    setClip(data);
+    try { navigator.clipboard?.writeText(data.map((x) => x.join("\t")).join("\n")); } catch { /* not allowed here */ }
+  }
+  async function deleteRows(rows, ask = true) {
+    const keyed = rows.filter((r) => r.dataset.key);
+    if (!onDelete || !keyed.length) return false;
+    const refused = keyed.map((r) => [r, canDelete ? canDelete(r.dataset.key) : true]).filter(([, v]) => !(v === true || v === undefined || v === null));
+    if (refused.length) { setErr(`${deleteLabel}: ${String(refused[0][1] || t("tk.notOpen"))}`); return false; }
+    if (ask && !window.confirm(t("tk.deleteMany", { n: num(keyed.length) }))) return false;
+    setBusy(true); setErr("");
+    try { for (const r of keyed) { if (await onDelete(r.dataset.key) === false) throw new Error(t("tk.deleteFailed")); } clearPicks(); return true; }
+    catch (e) { setErr(e?.message || t("tk.deleteError")); return false; }
+    finally { setBusy(false); }
+  }
+  const cutRows = async (rows) => { copyRows(rows); await deleteRows(rows); };
+  const picked = () => [...picksOf()].filter((r) => box.current?.contains(r));
+
+  // ── editing a row where it stands ───────────────────────────────────────
+  const edDirty = !!ed && JSON.stringify(ed.values) !== JSON.stringify(ed.orig);
+  const guard = (next) => (edDirty ? setLeave({ next }) : next());
+  function closeEdit() {
+    const s = st.current;
+    if (s.editFor) flag(s.editFor, "tkEditing", false);
+    s.editTr?.remove();
+    s.editTr = null; s.editFor = null;
+    setEd(null);
+  }
+  function openEdit(row) {
+    closeEdit();
+    const key = row ? row.dataset.key : null;
+    if (row && !key) return;
+    const tr = document.createElement("tr");
+    tr.className = "tk-edit";
+    const s = st.current;
+    s.editTr = tr; s.editFor = row || null;
+    if (row) { flag(row, "tkEditing", true); row.after(tr); } else box.current?.querySelector("tbody")?.appendChild(tr);
+    const v = row ? (rowEdit.value ? rowEdit.value(key) : {}) : Object.fromEntries(rowEdit.fields.map((f) => [f.name, ""]));
+    setEd({ row, key, values: v || {}, orig: v || {}, tr });
+  }
+  async function saveEdit() {
+    if (!ed) return true;
+    setBusy(true); setErr("");
+    try {
+      const ok = ed.row ? await rowEdit.onSave(ed.key, ed.values) : await rowEdit.onAdd(ed.values);
+      if (ok) { closeEdit(); return true; }
+      return false;
+    } catch (e) { setErr(e?.message || t("tk.saveError")); return false; }
+    finally { setBusy(false); }
+  }
+  useEffect(() => {
+    if (!rowMenu) return undefined;
+    const close = () => setRowMenu(null);
+    window.addEventListener("click", close); window.addEventListener("scroll", close, true);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); };
+  }, [rowMenu]);
+  // a click outside the row being edited, when it has changed, asks first
+  useEffect(() => {
+    if (!ed) return undefined;
+    const away = (e) => {
+      if (!edDirty || e.target.closest?.(".tk-edit, .tk-leave, .tk-rowmenu")) return;
+      if (box.current?.contains(e.target) && e.target.closest("tbody tr")) return;   // another row: the row click asks
+      e.preventDefault(); e.stopPropagation();
+      setLeave({ next: () => {} });
+    };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, [ed, edDirty]);
+
   useEffect(() => {
     // A row React replaced takes the selection with it.
     if (!sel && st.current.selRow) { delete st.current.selRow.dataset.tkSel; st.current.selRow = null; }
@@ -509,6 +643,15 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
           )}
           <button type="button" onClick={exportCsv} title={t("tk.exportTitle")}>{t("tk.exportCsv")}</button>
           <button type="button" onClick={exportXlsx} title={t("tk.exportTitle")}>{t("tk.exportXlsx")}</button>
+          {picks > 0 && (
+            <span className="tk-bulk" data-tk-bulk>
+              <b>{t("tk.picked", { n: num(picks) })}</b>
+              <button type="button" onClick={() => copyRows(picked())}>{t("tk.copy")}</button>
+              {onDelete && <button type="button" onClick={() => cutRows(picked())}>{t("tk.cut")}</button>}
+              {onDelete && <button type="button" className="danger" data-tk-bulk-delete disabled={busy} onClick={() => deleteRows(picked())}>{deleteLabel}</button>}
+              <button type="button" onClick={clearPicks}>{t("tk.unpick")}</button>
+            </span>)}
+          {onPaste && clip && <button type="button" data-tk-paste onClick={async () => { if (await onPaste(clip)) setClip(null); }}>{t("tk.paste", { n: num(clip.length) })}</button>}
           <span className="tk-acts">
             <button type="button" disabled={!sel} onClick={() => setDialog("view")}
                     title={sel ? t("tk.viewTitle") : t("tk.pickFirst")}>{t("tk.view")}</button>
@@ -526,6 +669,55 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
       <div className="wrap" ref={box} onClick={(e) => { onHeadClick(e); pick(e); }} onDoubleClick={pick} onContextMenu={onContext}
            onPointerDown={onDown} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop}
            onDragEnd={() => box.current?.querySelectorAll("th.tk-drop").forEach((x) => x.classList.remove("tk-drop"))}>{children}</div>
+      {rowEdit?.onAdd && !(ed && !ed.row) && (
+        <button type="button" className="tk-add no-print" data-tk-add onClick={() => guard(() => openEdit(null))}>{t("tk.addRow")}</button>)}
+      {err && !dialog && <p className="err sm no-print" role="alert">{err}</p>}
+      {ed && createPortal(heads.map((h, k) => {
+        const f = rowEdit.fields.find((x) => x.col === h.key || x.col === h.label);
+        const last = k === heads.length - 1;
+        const set = (v) => setEd((x) => ({ ...x, values: { ...x.values, [f.name]: v } }));
+        return (
+          <td key={h.key}>
+            {f ? (f.type === "select"
+              ? <select aria-label={h.label} value={ed.values[f.name] ?? ""} onChange={(e) => set(e.target.value)}>
+                  <option value="">—</option>{(f.options || []).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+              : <input aria-label={h.label} type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} step="any"
+                  dir={f.type === "text" ? "auto" : "ltr"} value={ed.values[f.name] ?? ""} onChange={(e) => set(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") closeEdit(); }} />)
+              : ed.row ? <span className="tk-ed-ro">{ed.row.cells[h.i]?.textContent || ""}</span> : null}
+            {last && (
+              <span className="tk-ed-btns">
+                <button type="button" className="btn sm" data-tk-save disabled={busy} onClick={saveEdit}>{t("common.save")}</button>
+                <button type="button" className="btn ghost sm" onClick={closeEdit}>{t("common.cancel")}</button>
+                {ed.row && onDelete && <button type="button" className="btn ghost sm danger" onClick={async () => { if (await deleteRows([ed.row])) closeEdit(); }}>{deleteLabel}</button>}
+              </span>)}
+          </td>);
+      }), ed.tr)}
+      {leave && createPortal(
+        <div className="tk-leave card" role="alertdialog" aria-label={t("tk.leaveTitle")} data-tk-leave>
+          <b>{t("tk.leaveTitle")}</b>
+          <p style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <button type="button" className="btn sm" onClick={async () => { const nx = leave.next; setLeave(null); if (await saveEdit()) nx(); }}>{t("tk.leaveSave")}</button>
+            <button type="button" className="btn ghost sm" onClick={() => { const nx = leave.next; setLeave(null); closeEdit(); nx(); }}>{t("tk.leaveDrop")}</button></p>
+        </div>, document.body)}
+      {rowMenu && createPortal(
+        <div className="tk-rowmenu card" role="menu" aria-label={t("tk.rowMenu")} style={{ left: rowMenu.x, top: rowMenu.y }} onClick={(e) => e.stopPropagation()} data-tk-rowmenu>
+          {(() => {
+            const r = rowMenu.row, k = r.dataset.key || null;
+            const many = picksOf().has(r) ? picked() : [r];
+            const done = () => setRowMenu(null);
+            return <>
+              <button type="button" role="menuitem" onClick={() => { done(); pick({ target: r.cells[0] || r, type: "dblclick" }); }}>{t("tk.view")}</button>
+              {rowEdit && k && <button type="button" role="menuitem" onClick={() => { done(); guard(() => openEdit(r)); }}>{t("tk.edit")}</button>}
+              {!rowEdit && onEdit && k && <button type="button" role="menuitem" onClick={() => { done(); onEdit(k); }}>{editLabel}</button>}
+              {rowEdit?.onAdd && <button type="button" role="menuitem" onClick={() => { done(); guard(() => openEdit(null)); }}>{t("tk.add")}</button>}
+              <button type="button" role="menuitem" onClick={() => { done(); copyRows(many); }}>{t("tk.copy")}</button>
+              {onDelete && <button type="button" role="menuitem" onClick={() => { done(); cutRows(many); }}>{t("tk.cut")}</button>}
+              {onPaste && <button type="button" role="menuitem" disabled={!clip} onClick={async () => { done(); if (await onPaste(clip)) setClip(null); }}>{t("tk.pasteShort")}</button>}
+              {onDelete && <button type="button" role="menuitem" className="danger" onClick={() => { done(); deleteRows(many); }}>{deleteLabel}</button>}
+            </>;
+          })()}
+        </div>, document.body)}
       {rich && meta.pages > 1 && (
         <div className="tk-pager no-print">
           <button type="button" disabled={meta.pg === 0} onClick={() => setPage(meta.pg - 1)}>{t("tk.prev")}</button>
@@ -795,7 +987,10 @@ function footRow(s, table, n) {
   return s.foot;
 }
 
-const own = (r) => !r.classList?.contains("tk-grp");
+const own = (r) => !r.classList?.contains("tk-grp") && !r.classList?.contains("tk-edit");
+// the box drawn at the start of a row's first cell: a click within this many pixels of the cell's start picks the row
+const BOX = 24;
+const inBox = (cell, x, dir) => { const r = cell.getBoundingClientRect(); return dir === "rtl" ? r.right - x <= BOX : x - r.left <= BOX; };
 const isDetail = (r) => r.cells.length === 1 && r.cells[0].colSpan > 1;
 const cellOf = (r, i) => (r.cells[i]?.textContent || "").replace(/\s+/g, " ").trim();
 const flag = (el, k, on) => { if (on) { if (!(k in el.dataset)) el.dataset[k] = ""; } else if (k in el.dataset) delete el.dataset[k]; };

@@ -735,6 +735,32 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 
 /* ═══ table kit ═══ */
 .tk-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+/* the table's tools at the left edge, the search first (owner's requirements 2026-10-18, item 4) */
+.tk-bar{direction:ltr;justify-content:flex-start}
+[dir=rtl] .tk-bar > *{direction:rtl}
+.tk-bulk{display:inline-flex;gap:4px;align-items:center;padding:2px 6px;border:1px solid var(--cy);border-radius:6px;font-size:12px}
+/* the box at the start of each row's first cell, and of the first heading: a click on it picks */
+.tk table > tbody > tr:not(.tk-grp):not(.tk-edit) > td:first-child::before,
+.tk table > thead > tr > th:first-child::before{content:"";display:inline-block;width:12px;height:12px;border:1.5px solid var(--dim);border-radius:3px;
+  margin-inline-end:7px;vertical-align:-2px;cursor:pointer;background:var(--surf)}
+.tk table > tbody > tr[data-tk-pick] > td:first-child::before,
+.tk table > thead > tr[data-tk-pick-all] > th:first-child::before{background:var(--cy);border-color:var(--cy);
+  box-shadow:inset 0 0 0 2px var(--surf)}
+.tk table > tbody > tr[data-tk-pick] > td{background:var(--cy-soft)}
+.tk table > tbody > tr > td[colspan]:first-child:only-child::before{display:none}
+/* a row open for editing where it stands: framed and written in blue */
+.tk table > tbody > tr[data-tk-editing]{display:none}
+.tk table > tbody > tr.tk-edit{outline:1.5px solid #1d6fd8;outline-offset:-1px}
+.tk table > tbody > tr.tk-edit > td{color:#1d6fd8;background:var(--surf);vertical-align:middle}
+.tk table > tbody > tr.tk-edit input,.tk table > tbody > tr.tk-edit select{width:100%;min-width:60px;color:#1d6fd8;border:1px solid #9cc2f0;border-radius:4px;padding:3px 5px;background:var(--surf);font:inherit}
+.tk-ed-btns{display:inline-flex;gap:4px;margin-inline-start:6px}
+.tk-add{margin-top:6px;border:1px dashed var(--rule);background:none;color:var(--cy);border-radius:6px;padding:4px 12px;cursor:pointer}
+.tk-rowmenu{position:fixed;z-index:60;display:flex;flex-direction:column;min-width:170px;padding:4px}
+.tk-rowmenu button{all:unset;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:13px}
+.tk-rowmenu button:hover{background:var(--hover)}
+.tk-rowmenu button:disabled{opacity:.45;cursor:default}
+.tk-rowmenu .danger{color:var(--bad)}
+.tk-leave{position:fixed;z-index:61;top:30%;left:50%;transform:translateX(-50%);padding:14px 18px;box-shadow:0 8px 30px rgba(0,0,0,.3)}
 .tk-bar input, .tk-bar select{background:var(--surf2);border:1px solid var(--rule);border-radius:6px;color:var(--ink);
   padding:6px 9px;font:inherit;font-size:12px;outline:none}
 .tk-bar input:focus, .tk-bar select:focus{border-color:var(--cy)}
@@ -827,6 +853,7 @@ ol.timeline li.bad::before{background:var(--bad)}
 .permgrid{display:flex;flex-wrap:wrap;gap:4px 12px}
 .toolbar-left{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;justify-content:left;margin:6px 0 10px}
 .toolbar-left .field{margin:0}
+.tree-q{width:100%;max-width:340px;margin-bottom:6px}
 .linkbtn{background:none;border:0;padding:0;color:inherit;cursor:pointer;text-align:start;font:inherit}
 .linkbtn:hover{color:var(--cy)}
 .permgrid label{display:flex;gap:4px;align-items:center;font-size:12px}
@@ -907,6 +934,26 @@ tr.sel td{background:var(--cy-soft)}
 /* ── the activity view (components/eps/ActivityGrid.jsx), after Primavera P6 ── */
 .p6{display:flex;flex-direction:column;height:100%;min-height:0;border:1px solid var(--rule);border-radius:4px;background:var(--surf)}
 .p6-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--rule)}
+/* the tools sit at the left edge, the search beside the level buttons (owner's requirements 2026-10-18, item 4) */
+.p6-bar{direction:ltr;justify-content:flex-start}
+[dir=rtl] .p6-bar > *{direction:rtl}
+.p6-levels{display:inline-flex;gap:0}
+.p6-levels .btn{border-radius:0;margin:0}
+.p6-levels .btn:first-child{border-radius:4px 0 0 4px}
+.p6-levels .btn:last-child{border-radius:0 4px 4px 0}
+.p6-pick{width:28px;text-align:center;padding:0 !important}
+.p6-pick input{margin:0;cursor:pointer}
+tr.p6-editing td{color:#1d6fd8;background:var(--surf)}
+tr.p6-editing{outline:1.5px solid #1d6fd8;outline-offset:-1px}
+.p6-in{width:100%;min-width:0;height:22px;padding:0 4px;font:inherit;color:#1d6fd8;border:1px solid #9cc2f0;border-radius:3px;background:var(--surf)}
+.p6-edbtns{display:inline-flex;gap:3px;margin-inline-start:6px;vertical-align:middle}
+.p6-edbtns .btn{padding:0 6px;height:20px;font-size:11px}
+.p6-menu{position:fixed;z-index:60;display:flex;flex-direction:column;min-width:190px;padding:4px}
+.p6-menu button{all:unset;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:13px}
+.p6-menu button:hover{background:var(--hover)}
+.p6-menu button:disabled{opacity:.45;cursor:default}
+.p6-ask{position:fixed;z-index:61;top:30%;left:50%;transform:translateX(-50%);padding:14px 18px;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.p6-bulk{display:inline-flex;gap:4px;align-items:center;padding:2px 6px;border:1px solid var(--rule);border-radius:4px}
 .p6-filter{min-width:220px}
 .p6-levels{display:inline-flex;gap:2px}
 .p6-levels .btn{min-width:26px;padding:2px 6px}

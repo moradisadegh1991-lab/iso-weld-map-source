@@ -22,6 +22,7 @@ import base from "../../lib/i18n/fa.mjs";
 import quality from "../../lib/i18n/sections/quality.mjs";
 import contracts from "../../lib/i18n/sections/contracts.mjs";
 import reports from "../../lib/i18n/sections/reports.mjs";
+import grid from "../../lib/i18n/sections/grid.mjs";
 import { translate, dirOf, num, dateIn, keys as keysOf } from "../../lib/i18n/index.mjs";
 import { LABELS, label } from "../../lib/i18n/labels.mjs";
 import { INSPECTABLE } from "../../lib/platform/precedence.mjs";
@@ -68,7 +69,7 @@ test("the three dictionaries hold the same keys, none empty", () => {
     equal(K.filter((k) => !String(d[k]).trim()), [], `${name}: empty strings`);
   }
   assert(F.length > 150, `${F.length} keys`);
-  const sections = [quality, contracts, reports];
+  const sections = [quality, contracts, reports, grid];
   const seen = new Set(Object.keys(base));
   const twice = [];
   for (const x of sections) for (const k of Object.keys(x.fa)) { if (seen.has(k)) twice.push(k); seen.add(k); }
