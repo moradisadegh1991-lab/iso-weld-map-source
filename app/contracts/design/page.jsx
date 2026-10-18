@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { parseDelimited, guessMapping } from "../../../lib/truth/parse.mjs";
 import TableKit from "../../../components/ui/TableKit";
+import { usePrefs } from "../../../lib/client/prefs.mjs";
 
 /**
  * The design model's quantities — the MTO / bulk report of PDMS or E3D —
@@ -14,16 +15,17 @@ import TableKit from "../../../components/ui/TableKit";
  */
 const S = "[\\s_.\\-]*";
 const PATTERNS = {
-  code: [new RegExp(`\\b(item${S}code|commodity${S}code|code|ident|item)\\b`, "i"), /کد/],
-  description: [/\b(description|desc|name)\b/i, /شرح/],
-  unit: [/\b(unit|uom)\b/i, /واحد/],
-  qty: [/\b(qty|quantity|total|amount)\b/i, /مقدار|تعداد/],
+  code: [new RegExp(`\\b(item${S}code|commodity${S}code|code|ident|item)\\b`, "i"), /کد/],   // i18n: a Persian header a file may carry
+  description: [/\b(description|desc|name)\b/i, /شرح/],   // i18n: a Persian header a file may carry
+  unit: [/\b(unit|uom)\b/i, /واحد/],   // i18n: a Persian header a file may carry
+  qty: [/\b(qty|quantity|total|amount)\b/i, /مقدار|تعداد/],   // i18n: a Persian header a file may carry
   wbs: [/\bwbs\b/i, /\b(cbs|control${S}account)\b/i],
-  area: [/\b(area|zone|site)\b/i, /ناحیه|محدوده/],
+  area: [/\b(area|zone|site)\b/i, /ناحیه|محدوده/],   // i18n: a Persian header a file may carry
 };
 
 export default function DesignQuantitiesPage() {
   const { projectId, role, call } = usePlatform();
+  const { t } = usePrefs();
   const { data, error, reload } = useProjectData((id) => `/api/contracts?projectId=${id}`, []);
   const [rev, setRev] = useState("");
   const [source, setSource] = useState("PDMS");
@@ -43,7 +45,7 @@ export default function DesignQuantitiesPage() {
     const { headers, rows: raw } = parseDelimited(text);
     const { mapping, unmapped } = guessMapping(headers, PATTERNS);
     if (mapping.code == null || mapping.qty == null || mapping.unit == null) {
-      setMsg(`ستون‌های کد، مقدار و واحد پیدا نشد. سرستون‌ها: ${headers.join("، ")}`); return;
+      setMsg(t("dq.missingCols", { heads: headers.join(t("c.sep")) })); return;
     }
     const got = raw.map((r) => Object.fromEntries(Object.keys(PATTERNS).map((k) => [k, mapping[k] == null ? "" : r[mapping[k]]])))
       .filter((r) => String(r.code || "").trim());
@@ -59,39 +61,39 @@ export default function DesignQuantitiesPage() {
   }
 
   if (error) return <p className="err">{error}</p>;
-  if (!data) return <p className="muted">در حال بارگذاری…</p>;
+  if (!data) return <p className="muted">{t("common.loading")}</p>;
   return (
     <div className="page">
-      <div className="pagehead"><h1>مقادیر طراحی (PDMS)</h1><span className="sub">{data.design.length} آیتم</span></div>
+      <div className="pagehead"><h1>{t("dq.title")}</h1><span className="sub">{t("dq.sub", { n: data.design.length })}</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
       {may && (
         <div className="card">
-          <h2>ورود گزارش مقادیر مدل</h2>
-          <p className="muted sm">گزارش MTO یا Bulk مدل (PDMS / E3D / Plant 3D) را به‌صورت Excel یا CSV بدهید؛ ستون‌ها: کد آیتم، شرح، واحد، مقدار، WBS (کد حساب کنترلی) و ناحیه. همان کد با رویژن جدید، ردیف تازه می‌سازد و رویژن قبلی می‌ماند.</p>
+          <h2>{t("dq.import")}</h2>
+          <p className="muted sm">{t("dq.importNote")}</p>
           <div className="grid2">
-            <div className="field"><label htmlFor="dq-rev">رویژن مدل</label><input id="dq-rev" dir="ltr" value={rev} onChange={(e) => setRev(e.target.value)} /></div>
-            <div className="field"><label htmlFor="dq-src">منبع</label><input id="dq-src" dir="ltr" value={source} onChange={(e) => setSource(e.target.value)} /></div>
-            <div className="field"><label htmlFor="dq-file">فایل</label><input id="dq-file" type="file" accept=".xlsx,.xls,.csv,.txt" onChange={(e) => e.target.files?.[0] && read(e.target.files[0])} /></div>
+            <div className="field"><label htmlFor="dq-rev">{t("dq.rev")}</label><input id="dq-rev" dir="ltr" value={rev} onChange={(e) => setRev(e.target.value)} /></div>
+            <div className="field"><label htmlFor="dq-src">{t("dq.source")}</label><input id="dq-src" dir="ltr" value={source} onChange={(e) => setSource(e.target.value)} /></div>
+            <div className="field"><label htmlFor="dq-file">{t("dq.file")}</label><input id="dq-file" type="file" accept=".xlsx,.xls,.csv,.txt" onChange={(e) => e.target.files?.[0] && read(e.target.files[0])} /></div>
           </div>
           {rows && (
             <div>
-              <p className="note sm">«{rows.name}»: {rows.rows.length} ردیف{rows.unmapped.length ? ` · بدون ستون: ${rows.unmapped.join("، ")}` : ""}</p>
-              <button className="btn" disabled={!rev.trim()} onClick={save}>ثبت {rows.rows.length} ردیف با رویژن {rev || "؟"}</button>
+              <p className="note sm">{t("dq.read", { name: rows.name, n: rows.rows.length })}{rows.unmapped.length ? t("dq.unmapped", { list: rows.unmapped.join(t("c.sep")) }) : ""}</p>
+              <button className="btn" disabled={!rev.trim()} onClick={save}>{t("dq.save", { n: rows.rows.length, rev: rev || t("st.q") })}</button>
             </div>
           )}
-          {report && <p className="note sm">{report.imported} ردیف ثبت شد{report.problems.length ? ` · ${report.problems.length} ردیف رد شد: ${report.problems.slice(0, 3).join("؛ ")}` : ""}
-            {report.noWbs.length ? ` · WBS ناشناخته (بدون WBS ثبت شد): ${report.noWbs.slice(0, 5).join("، ")}` : ""}</p>}
+          {report && <p className="note sm">{t("dq.done", { n: report.imported })}{report.problems.length ? t("dq.rejected", { n: report.problems.length, list: report.problems.slice(0, 3).join("; ") }) : ""}
+            {report.noWbs.length ? t("dq.noWbs", { list: report.noWbs.slice(0, 5).join(t("c.sep")) }) : ""}</p>}
         </div>
       )}
       <div className="card">
-        <h2>آیتم‌های مدل (آخرین رویژن)</h2>
-        {data.design.length === 0 ? <p className="empty-note">هنوز گزارشی از مدل وارد نشده است.</p> : (
+        <h2>{t("dq.items")}</h2>
+        {data.design.length === 0 ? <p className="empty-note">{t("dq.empty")}</p> : (
           <TableKit name="design-qty">
             <table className="dtable">
-              <thead><tr><th>کد</th><th>شرح</th><th>مقدار</th><th>واحد</th><th>WBS</th><th>ناحیه</th><th>منبع</th></tr></thead>
+              <thead><tr><th>{t("dq.h.code")}</th><th>{t("c.description")}</th><th>{t("ct.h.qty")}</th><th>{t("ct.h.unit")}</th><th>WBS</th><th>{t("dq.h.area")}</th><th>{t("dq.source")}</th></tr></thead>
               <tbody>{data.design.map((d) => (
                 <tr key={d.id}><td className="mono">{d.code}</td><td>{d.description || "—"}</td><td className="mono">{d.qty}</td><td className="sm">{d.unit}</td>
-                  <td className="mono sm">{d.wbs || <span className="pill warn">بدون WBS</span>}</td><td className="sm">{d.area || "—"}</td>
+                  <td className="mono sm">{d.wbs || <span className="pill warn">{t("ct.noWbs")}</span>}</td><td className="sm">{d.area || "—"}</td>
                   <td className="sm">{d.source} Rev.{d.modelRev}</td></tr>
               ))}</tbody>
             </table>

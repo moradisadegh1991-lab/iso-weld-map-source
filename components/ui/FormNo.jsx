@@ -1,5 +1,6 @@
 "use client";
 import { useProjectData } from "../../lib/client/platform.mjs";
+import { usePrefs } from "../../lib/client/prefs.mjs";
 
 /**
  * A form's number field. Left empty, the platform issues the form's next
@@ -12,13 +13,14 @@ import { useProjectData } from "../../lib/client/platform.mjs";
 export default function FormNo({ id, form, label, value, on, scope = null, readOnly = false }) {
   const { data, reload } = useProjectData(
     (pid) => `/api/numbering?projectId=${pid}&forms=${form}${scope ? `&scope=${encodeURIComponent(scope)}` : ""}`, [form, scope]);
+  const { t } = usePrefs();
   const next = data?.next?.[form];
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <input id={id} dir="ltr" value={value || ""} readOnly={readOnly} onFocus={() => reload()}
-             placeholder={next ? `خودکار: ${next}` : "خودکار"} onChange={(e) => on(e.target.value)} />
-      {!readOnly && !value && next && <span className="muted sm" data-next-no={next}>خالی بماند تا {next} بگیرد</span>}
+             placeholder={next ? t("ui.formNo.autoNext", { next }) : t("ui.formNo.auto")} onChange={(e) => on(e.target.value)} />
+      {!readOnly && !value && next && <span className="muted sm" data-next-no={next}>{t("ui.formNo.leaveEmpty", { next })}</span>}
     </div>
   );
 }

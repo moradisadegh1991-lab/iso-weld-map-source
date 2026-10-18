@@ -20,6 +20,7 @@ import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { readFile } from "node:fs/promises";
 import base from "../../lib/i18n/fa.mjs";
 import quality from "../../lib/i18n/sections/quality.mjs";
+import contracts from "../../lib/i18n/sections/contracts.mjs";
 import { translate, dirOf, num, dateIn, keys as keysOf } from "../../lib/i18n/index.mjs";
 import { LABELS, label } from "../../lib/i18n/labels.mjs";
 import { INSPECTABLE } from "../../lib/platform/precedence.mjs";
@@ -29,6 +30,11 @@ import { PHOTO_STAGES } from "../../lib/quality/photo.mjs";
 import { SCOPES as NDT_SCOPES, JOINT_TYPES, EXTENSIONS } from "../../lib/ndt/joints.mjs";
 import { STATUS as NDT_STATUS } from "../../lib/ndt/compliance.mjs";
 import { ACTION_FA } from "../../lib/db/repos/log.mjs";
+import { METHODS as BOQ_METHODS, STATUS as STATEMENT_STATUS, CONTRACT_STATUS, CONTRACT_KIND } from "../../lib/contracts/statement.mjs";
+import { METRICS } from "../../lib/contracts/metrics.mjs";
+import { CONTRACT_ROLES, AMENDMENT_KINDS, TREES } from "../../lib/db/repos/org.mjs";
+import { STATUS as RESOURCE_STATUS } from "../../lib/db/repos/resources.mjs";
+import { KIND as RESOURCE_KIND } from "../../lib/reports/catalog.mjs";
 import { NAV_I18N, localizeNav } from "../../lib/i18n/nav.mjs";
 import { SECTIONS } from "../../lib/platform/navigation.mjs";
 import { cleanPrefs, withDefaults, PREFS } from "../../lib/prefs.mjs";
@@ -54,8 +60,11 @@ test("the three dictionaries hold the same keys, none empty", () => {
     equal(K.filter((k) => !String(d[k]).trim()), [], `${name}: empty strings`);
   }
   assert(F.length > 150, `${F.length} keys`);
-  const shared = Object.keys(quality.fa).filter((k) => k in base);
-  equal(shared, [], "a section's key overriding a platform key");
+  const sections = [quality, contracts];
+  const seen = new Set(Object.keys(base));
+  const twice = [];
+  for (const x of sections) for (const k of Object.keys(x.fa)) { if (seen.has(k)) twice.push(k); seen.add(k); }
+  equal(twice, [], "a key two sections (or a section and the platform) both define — the later would silently win");
 });
 
 test("each translation fills the same placeholders as the Persian", () => {
@@ -103,6 +112,11 @@ test("every domain label a translated page shows is in English and Arabic", () =
     ...Object.keys(NDT_SCOPES).map((k) => `ndt.scope.${k}`), ...Object.keys(JOINT_TYPES).map((k) => `ndt.joint.${k}`),
     ...Object.keys(EXTENSIONS).map((k) => `ndt.ext.${k}`), ...Object.keys(NDT_STATUS).map((k) => `ndt.status.${k}`),
     ...Object.keys(ACTION_FA).map((k) => `log.action.${k}`),
+    ...Object.keys(CONTRACT_KIND).map((k) => `contract.kind.${k}`), ...Object.keys(CONTRACT_STATUS).map((k) => `contract.status.${k}`),
+    ...Object.keys(STATEMENT_STATUS).map((k) => `statement.status.${k}`), ...Object.keys(BOQ_METHODS).map((k) => `boq.method.${k}`),
+    ...Object.keys(METRICS).map((k) => `metric.${k}`), ...Object.keys(CONTRACT_ROLES).map((k) => `contract.role.${k}`),
+    ...Object.keys(AMENDMENT_KINDS).map((k) => `amendment.kind.${k}`), ...Object.keys(TREES).map((k) => `tree.${k}`),
+    ...Object.keys(RESOURCE_KIND).map((k) => `resource.kind.${k}`), ...Object.keys(RESOURCE_STATUS).map((k) => `resource.status.${k}`),
   ];
   equal(want.filter((k) => !LABELS[k]?.en || !LABELS[k]?.ar), [], "labels missing a translation");
   equal(Object.keys(LABELS).filter((k) => !want.includes(k)), [], "labels for nothing the platform declares");
@@ -117,6 +131,8 @@ test("every domain label a translated page shows is in English and Arabic", () =
 
 // The pages translated so far, section by section (docs/digital-epc/11-ui-i18n.md).
 const TRANSLATED = ["app/quality/page.jsx", "app/inspection/page.jsx", "app/ndt-joints/page.jsx", "app/log/[section]/page.jsx",
+  "app/contracts/page.jsx", "app/contracts/setup/page.jsx", "app/contracts/resources/page.jsx", "app/contracts/statements/page.jsx",
+  "app/contracts/design/page.jsx", "components/ui/TreeEditor.jsx", "components/contracts/ui.jsx", "components/ui/FormNo.jsx", "components/ui/WorkDate.jsx",
   "components/ui/EntityLog.jsx", "components/ui/Fold.jsx", "components/ui/TableKit.jsx", "components/platform/Shell.jsx",
   "components/platform/SignIn.jsx", "app/account/page.jsx"];
 

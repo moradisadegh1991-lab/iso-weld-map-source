@@ -60,7 +60,7 @@ export function LogList({ log, showSection = false }) {
           <b>{e.user}</b>
           <span className="sm">{e.label}</span>
           {showSection && e.sectionFa && <span className="muted sm">[{e.sectionFa}]</span>}
-          {(e.from || e.to) && <span className="muted sm">{e.from ? t("log.from", { x: state(e.from) }) : ""}{e.to ? t("log.to", { x: state(e.to) }) : ""}</span>}
+          {(e.from || e.to) && <span className="muted sm">{e.from ? t("log.from", { x: state(L, e.from) }) : ""}{e.to ? t("log.to", { x: state(L, e.to) }) : ""}</span>}
           <span className="muted sm mono">{dateTime(e.at)}</span>
           {e.comment && <div className="logcomment" dir="auto">{e.comment}</div>}
         </li>
@@ -70,4 +70,6 @@ export function LogList({ log, showSection = false }) {
 }
 
 // States in words: a statement's and a contract's share some names (draft); either reads the same.
-const state = (k) => STATUS[k]?.split(" — ")[0] || CONTRACT_STATUS[k] || k;
+// A statement's state is its first part ("verified — awaiting the contracts department" → "verified").
+const state = (L, k) => (STATUS[k] ? L(`statement.status.${k}`, STATUS[k]).split(" — ")[0]
+  : CONTRACT_STATUS[k] ? L(`contract.status.${k}`, CONTRACT_STATUS[k]) : k);
