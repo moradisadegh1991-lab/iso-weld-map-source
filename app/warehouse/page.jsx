@@ -80,7 +80,7 @@ export default function WarehousePage() {
       <div className="card">
         <h2>موجودی به تفکیک لات</h2>
         {data.lots.length === 0 ? <p className="empty-note">هنوز رسیدی ثبت نشده است.</p> : (
-          <TableKit name="warehouse">
+          <TableKit name="warehouse-1">
             <table className="dtable">
               <thead><tr><th>کالا</th><th>رسید</th><th>Heat</th><th>MIR</th><th>MTC</th><th>دریافتی</th><th>پذیرفته</th>
                 <th>حواله خالص</th><th>موجود</th><th>قابل حواله</th><th /></tr></thead>
@@ -115,7 +115,7 @@ function Shortages({ rows }) {
     <div className="card">
       <h2>نیاز MTO در برابر موجودی</h2>
       <p className="muted sm">موجودی قرنطینه (بدون MIR یا MTC پذیرفته) از کسری کم نمی‌شود — لوله‌ای که نمی‌شود جوش داد موجودی نیست.</p>
-      <TableKit name="warehouse">
+      <TableKit name="warehouse-2">
         <table className="dtable">
           <thead><tr><th>کالا</th><th>منبع</th><th>نیاز</th><th>حواله‌شده</th><th>قابل حواله</th><th>قرنطینه</th><th>کسری</th><th>دسترسی</th><th>در راه (PO)</th></tr></thead>
           <tbody>
@@ -251,7 +251,7 @@ function LotDetail({ l, data, post, mayRecord, mayInspect, call, projectId }) {
 function Recall({ list }) {
   if (!list.length) return <p className="muted sm">چیزی از این لات در کار نیست.</p>;
   return (
-    <TableKit name="warehouse">
+    <TableKit name="warehouse-3">
       <table className="dtable">
         <thead><tr><th>خط / اسپول</th><th>تگ / مصرف</th><th>مقدار</th><th>مرحلهٔ اسپول</th></tr></thead>
         <tbody>

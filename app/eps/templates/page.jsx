@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { useTreeDrag } from "../../../components/ui/treeDrag";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * Activity templates: a tree of templates, each with its activities — row
  * number (its code is the template's code and two digits), name, W.F and
@@ -104,9 +105,9 @@ export default function TemplatesPage() {
           <button className="btn ghost sm" type="button" onClick={() => setShut(new Set())}>باز کردن همه</button>
           <button className="btn ghost sm" type="button" onClick={() => setShut(new Set(all(tree(flat))))}>بستن همه</button></p>}
         {flat.length === 0 ? <p className="empty-note">هنوز الگویی نیست.</p> : (
-          <div className="tablewrap"><table className="dtable">
+          <div className="tablewrap"><TableKit name="eps-templates-1"><table className="dtable">
             <thead><tr><th>کد</th><th>نام</th><th>فعالیت</th><th>جمع W.F</th><th /></tr></thead>
-            <tbody>{rows(tree(flat), 0)}</tbody></table></div>)}
+            <tbody>{rows(tree(flat), 0)}</tbody></table></TableKit></div>)}
         {may && flat.length > 1 && <p className="sm muted">الگو را روی الگوی دیگر رها کنید تا زیر آن برود؛ بالا یا پایینش رها کنید تا ترتیب عوض شود.</p>}
       </div>
       {T && (
@@ -114,14 +115,14 @@ export default function TemplatesPage() {
           <h2>فعالیت‌های الگوی <span className="mono">{T.code}</span> — {T.name}</h2>
           {may && T.activities.length > 0 && <p><button className="btn" type="button" data-sync={T.code} onClick={() => sync(T)}>اعمال تغییرات الگو روی فعالیت‌های WBS</button>
             <span className="sm muted"> نام، W.F، توضیحات و شمارهٔ هر فعالیت روی فعالیت‌هایی که از این الگو الصاق شده‌اند نوشته می‌شود و فعالیت تازهٔ الگو به گره‌هایی که الگو را گرفته‌اند اضافه می‌شود؛ اگر جایی جمع W.F از ۱۰۰٪ بگذرد هیچ تغییری اعمال نمی‌شود.</span></p>}
-          <table className="dtable">
+          <TableKit name="eps-templates-2"><table className="dtable">
             <thead><tr><th>ردیف</th><th>کد فعالیت</th><th>نام فعالیت</th><th>درصد وزنی W.F</th><th>توضیحات</th>{may && <th />}</tr></thead>
             <tbody>{T.activities.map((a) => (
               <tr key={a.id} data-template-activity={a.code}><td className="mono">{a.number}</td><td className="mono">{a.code}</td><td>{a.name}</td><td className="mono">{a.wf ?? "—"}</td>
                 <td className="sm">{a.description || "—"}</td>
                 {may && <td><button className="btn ghost sm" type="button" onClick={() => setAf({ id: a.id, number: String(a.number), name: a.name, wf: a.wf ?? "", description: a.description || "" })}>ویرایش</button>
                   <button className="btn ghost sm" type="button" onClick={() => post({ kind: "template-activity-remove", id: a.id }, () => "حذف شد.")}>حذف</button></td>}</tr>))}
-              {T.activities.length > 0 && <tr><td colSpan={3}><b>جمع</b></td><td className="mono"><b>{T.wfTotal}٪</b></td><td colSpan={may ? 2 : 1} /></tr>}</tbody></table>
+              {T.activities.length > 0 && <tr><td colSpan={3}><b>جمع</b></td><td className="mono"><b>{T.wfTotal}٪</b></td><td colSpan={may ? 2 : 1} /></tr>}</tbody></table></TableKit>
           {may && (
             <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}
               onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "template-activity", templateId: T.id, ...af }, () => (af.id ? "فعالیت ویرایش شد." : "فعالیت اضافه شد."))) setAf(BLANK_A); }}>

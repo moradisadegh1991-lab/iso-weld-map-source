@@ -90,7 +90,7 @@ export default function HsePage() {
           </p>
         )}
         {data.permits.length === 0 ? <p className="empty-note">مجوزی ثبت نشده است.</p> : (
-          <TableKit name="hse">
+          <TableKit name="hse-1">
             <table className="dtable">
               <thead><tr><th>شماره</th><th>نوع</th><th>محدوده</th><th>اعتبار</th><th>وضعیت</th><th>تست گاز</th><th>آمادگی / SIMOPS</th><th /></tr></thead>
               <tbody>
@@ -108,7 +108,7 @@ export default function HsePage() {
         <h2>رویدادها</h2>
         <p className="muted sm">طبقه انتخاب نمی‌شود؛ از واقعیت‌ها (فوت، روز غیبت، روز کار محدود، نوع درمان) طبق IOGP به دست می‌آید. هر تغییر واقعیت با دلیلش ثبت می‌شود.</p>
         {data.incidents.length === 0 ? <p className="empty-note">رویدادی ثبت نشده است.</p> : (
-          <TableKit name="hse">
+          <TableKit name="hse-2">
             <table className="dtable">
               <thead><tr><th>شماره</th><th>زمان</th><th>پیمانکار</th><th>محدوده</th><th>شرح</th><th>طبقه</th><th /></tr></thead>
               <tbody>
@@ -123,7 +123,7 @@ export default function HsePage() {
       <div className="card" data-badge={overdue} data-tone="bad">
         <h2>مشاهدات ایمنی</h2>
         {data.observations.length === 0 ? <p className="empty-note">مشاهده‌ای ثبت نشده است.</p> : (
-          <TableKit name="hse">
+          <TableKit name="hse-3">
             <table className="dtable">
               <thead><tr><th>تاریخ</th><th>نوع</th><th>شدت</th><th>محدوده</th><th>شرح</th><th>اقدام</th><th>مهلت</th><th>وضعیت</th><th /></tr></thead>
               <tbody>
@@ -137,7 +137,7 @@ export default function HsePage() {
 
       <div className="card">
         <h2>به تفکیک پیمانکار</h2>
-        <TableKit name="hse">
+        <TableKit name="hse-4">
           <table className="dtable">
             <thead><tr><th>پیمانکار</th><th>نفرساعت</th><th>LTI</th><th>TRC</th><th>LTIF (IOGP)</th><th>TRIR (IOGP)</th><th>TRIR (OSHA)</th></tr></thead>
             <tbody>

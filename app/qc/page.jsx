@@ -36,7 +36,7 @@ export default function QcPage() {
         {gap.length === 0 ? (
           <p className="empty-note">شکافی نیست.</p>
         ) : (
-          <TableKit name="qc">
+          <TableKit name="qc-1">
             <table className="dtable">
               <thead><tr><th>جوش</th><th>خط</th><th>محل</th><th>NDT لازم</th><th>جوشکار</th></tr></thead>
               <tbody>
@@ -63,7 +63,7 @@ export default function QcPage() {
             دو بار بابت یک عیب جریمه می‌کند و آن‌که ریجکتش دوباره تست نشده را
             پاداش می‌دهد.
           </p>
-          <TableKit name="qc">
+          <TableKit name="qc-2">
             <table className="dtable">
               <thead><tr><th>مهر</th><th>نام</th><th>فرایند</th><th>جوش</th>
                          <th>شات</th><th>ریجکت</th><th>نرخ تعمیر</th></tr></thead>

@@ -6,6 +6,7 @@ import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { SECTIONS, LOG_SECTIONS } from "../../../lib/platform/navigation.mjs";
 import { LogList } from "../../../components/ui/EntityLog";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * A section's log: every step its records took through their workflow, who
  * took it and when, and every comment — read from the log and from the
@@ -70,11 +71,11 @@ export default function SectionLogPage() {
           <div className="card">
             <h2>چه کسانی امضا یا کامنت گذاشته‌اند</h2>
             {people.length === 0 ? <p className="empty-note">هنوز کسی در این بخش چیزی ثبت نکرده است.</p> : (
-              <table className="dtable"><thead><tr><th>نفر</th><th>ثبت و امضا</th><th>کامنت</th><th /></tr></thead>
+              <TableKit name="log-section-1"><table className="dtable"><thead><tr><th>نفر</th><th>ثبت و امضا</th><th>کامنت</th><th /></tr></thead>
                 <tbody>{people.map((p) => (
                   <tr key={p.user}><td>{p.user}</td><td className="mono">{p.signed}</td><td className="mono">{p.comments}</td>
                     <td><button className="btn ghost" onClick={() => setWho(who === p.user ? "" : p.user)}>{who === p.user ? "همه" : "فقط این نفر"}</button></td></tr>
-                ))}</tbody></table>
+                ))}</tbody></table></TableKit>
             )}
           </div>
           <div className="card">

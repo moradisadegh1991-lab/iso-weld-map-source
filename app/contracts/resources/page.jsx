@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { flatten } from "../../../components/ui/TreeEditor";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * Step 4 of the organisation's process: a contract's resources, shown in its
  * resource tree (discipline and work group). A resource or a branch moves by
@@ -41,14 +42,14 @@ function Library({ data, T, post }) {
           onClick={() => post({ kind: "library-import-access" }, (x) => `${x.row.added} مورد به کتابخانه افزوده شد؛ ${x.row.kept} مورد از قبل بود.`)}>ورود فهرست گزارش روزانهٔ Access</button>}
       </div>
       {lib.length === 0 ? <p className="empty-note">کتابخانه خالی است.</p> : (
-        <div className="tablewrap" style={{ maxHeight: 360, overflow: "auto" }}><table className="dtable">
+        <div className="tablewrap" style={{ maxHeight: 360, overflow: "auto" }}><TableKit name="contracts-resources-1"><table className="dtable">
           <thead><tr>{T && data.may.edit && <th />}<th>نام</th><th>نوع</th><th>رشته</th><th>واحد</th><th>در این قرارداد</th></tr></thead>
           <tbody>{shown.slice(0, 400).map((i) => { const has = inContract.has(`${i.kind}|${i.name}`); return (
             <tr key={i.id} data-lib={i.name}>
               {T && data.may.edit && <td><input type="checkbox" aria-label={`انتخاب ${i.name}`} disabled={has} checked={pick.has(i.id)} onChange={() => toggle(i.id)} /></td>}
               <td>{i.name}</td><td className="sm">{data.kinds[i.kind]}</td><td className="sm">{i.discipline || "—"}</td>
               <td className="sm">{i.unit || (i.kind === "person" ? "نفر" : i.kind === "machine" ? "دستگاه" : "—")}</td>
-              <td>{has ? <span className="pill ok">هست</span> : ""}</td></tr>); })}</tbody></table></div>)}
+              <td>{has ? <span className="pill ok">هست</span> : ""}</td></tr>); })}</tbody></table></TableKit></div>)}
       {data.may.library && (
         <form style={{ marginTop: 8 }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "library-add", ...nf }, () => "به کتابخانه افزوده شد.")) setNf({ ...nf, name: "", unit: "" }); }}>
           <div className="grid2">
@@ -172,13 +173,13 @@ export default function ResourcesPage() {
           {may && <div data-drop-root="" {...target("root", null)} className="sm muted"
             style={{ padding: 6, marginBottom: 6, borderRadius: 6, border: `1px dashed ${over === "root" ? "var(--cy, #1b7f99)" : "var(--line, #ccd)"}` }}>
             منبع یا شاخه را روی یک شاخه رها کنید تا زیر آن برود؛ اینجا رها کنید تا از همهٔ شاخه‌ها بیرون بیاید (منبع) یا به بالاترین سطح برود (شاخه).</div>}
-          <div className="tablewrap"><table className="dtable">
+          <div className="tablewrap"><TableKit name="contracts-resources-2"><table className="dtable">
             <thead><tr><th title="ترتیب نمایش">ترتیب</th><th>نام منبع</th><th>نوع</th><th>مستقیم</th><th>واحد</th><th>پیش‌بینی</th><th>واقعی مورد نیاز</th><th>وضعیت</th><th>توضیحات</th>{may && <th />}</tr></thead>
             <tbody>
               {T.tree.flatMap((n) => branchRows(n, 0))}
               {T.loose.length > 0 && <tr><td colSpan={may ? 10 : 9}><b>بدون دسته</b></td></tr>}
               {T.loose.map((r) => resourceRow(r, 1))}
-            </tbody></table></div>
+            </tbody></table></TableKit></div>
           {T.resources.length === 0 && <p className="empty-note">هنوز منبعی ثبت نشده.</p>}
         </div>
       </>}

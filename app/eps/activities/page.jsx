@@ -7,6 +7,7 @@ import ActivityDetail, { TABS, fmt, day } from "../../../components/eps/Activity
 import { COLUMNS, useVersion } from "../../../components/eps/shared";
 import { NodeScope } from "../../../components/eps/ScopePanel";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * The activity view of a version, after Primavera P6: the WBS and its
  * activities as a tree table beside their Gantt chart, the details of the
@@ -133,11 +134,11 @@ function Attach({ node, templates, post, close }) {
         {templates.length === 0 ? <p className="empty-note">الگویی که فعالیت داشته باشد نیست (الگوهای فعالیت).</p> : <>
           <div className="field"><label htmlFor="at-t">الگو</label><select id="at-t" value={pick} onChange={(e) => setPick(e.target.value)}>
             {templates.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name} ({x.activities.length} فعالیت)</option>)}</select></div>
-          {t && <table className="dtable"><thead><tr><th>کد تازه</th><th>کد الگو</th><th>نام</th><th>W.F</th><th>W.V</th><th>بودجه</th></tr></thead>
+          {t && <TableKit name="eps-activities-1"><table className="dtable"><thead><tr><th>کد تازه</th><th>کد الگو</th><th>نام</th><th>W.F</th><th>W.V</th><th>بودجه</th></tr></thead>
             <tbody>{t.activities.map((a) => (
               <tr key={a.id}><td className="mono" dir="ltr">{node.code}{sep}{String(a.number).slice(-2).padStart(2, "0")}</td><td className="mono">{a.code}</td><td>{a.name}</td>
                 <td className="mono">{fmt(a.wf, 4)}</td><td className="mono">{a.wf != null && node.wv != null ? fmt((a.wf * node.wv) / 100, 5) : "—"}</td>
-                <td className="mono">{a.wf != null && node.budgetPlan != null ? fmt((a.wf * node.budgetPlan) / 100) : "—"}</td></tr>))}</tbody></table>}
+                <td className="mono">{a.wf != null && node.budgetPlan != null ? fmt((a.wf * node.budgetPlan) / 100) : "—"}</td></tr>))}</tbody></table></TableKit>}
           <p className="sm muted">حجم‌ها و تاریخ‌ها از گره خوانده می‌شوند؛ بودجه‌ها = W.F × بودجهٔ گره؛ پیشرفت از گزارش‌های روزانه. فعالیتی که قبلاً از همین الگو الصاق شده تکرار نمی‌شود.</p>
           <button className="btn" type="button" onClick={async () => { if (await post("/api/eps", { kind: "attach", nodeId: node.id, templateId: pick }, (r) => `${r.row.added} فعالیت الصاق شد${r.row.skipped ? `؛ ${r.row.skipped} از پیش بود` : ""}.`)) close(); }}>الصاق</button></>}
         {" "}<button className="btn ghost" type="button" onClick={close}>بستن</button>

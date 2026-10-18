@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { useTreeDrag } from "../../../components/ui/treeDrag";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * A version's WBS. Part one: the settings — a colour per level, how each
  * level is numbered and the separator, and how budget and weight relate
@@ -118,7 +119,7 @@ export default function WbsPage() {
           <button className="btn ghost sm" type="button" onClick={() => setClosed(new Set())}>همه</button>
           {clip && <span className="sm">کپی: <b className="mono">{clip.code}</b> <button className="btn ghost sm" type="button" onClick={() => setClip(null)}>×</button></span>}
         </div>
-        <div className="tablewrap"><table className="dtable" data-wbs-table="">
+        <div className="tablewrap"><TableKit name="eps-wbs-1"><table className="dtable" data-wbs-table="">
           <thead><tr><th>کد WBS</th><th>نام گره</th><th>بودجهٔ پیش‌بینی</th><th>بودجهٔ واقعی</th><th>تعداد</th><th>حجم پیش‌بینی / واقعی</th><th>W.F</th><th>W.V</th>
             <th>برنامه‌ای</th><th>واقعی</th><th>الگو / فعالیت‌ها</th><th /></tr></thead>
           <tbody>
@@ -131,7 +132,7 @@ export default function WbsPage() {
                 {clip && <button className="btn ghost sm" type="button" onClick={() => post({ kind: "node-copy", id: clip.id, parentId: null }, (r) => `کپی با کد ${r.row.code} ساخته شد.`)}>چسباندن</button>}</>}</td>
             </tr>
             {data.roots.flatMap(nodeRow)}
-          </tbody></table></div>
+          </tbody></table></TableKit></div>
         {may && <p className="sm muted">گره را روی گرهٔ دیگر (یا ریشه) رها کنید تا فرزند آن شود؛ لبهٔ بالا یا پایین گرهٔ هم‌سطح رها کنید تا ترتیب عوض شود. با جابه‌جایی، کد گره و فرزندانش با والد تازه بازسازی می‌شود.</p>}
       </div>
     </div>
@@ -212,7 +213,7 @@ function Activities({ n, may, post, templates }) {
   const [f, setF] = useState(null);
   return (
     <div style={{ padding: "4px 0" }} data-activities={n.code}>
-      <table className="dtable">
+      <TableKit name="eps-wbs-3"><table className="dtable">
         <thead><tr><th>کد فعالیت</th><th>کد فعالیت الگو</th><th>نام فعالیت</th><th>W.F</th><th>W.V</th><th>بودجهٔ برنامه / واقعی</th><th>حجم برنامه / واقعی</th>
           <th>برنامه‌ای</th><th>واقعی</th><th>پیشرفت ٪</th>{may && <th />}</tr></thead>
         <tbody>{n.activities.map((a) => (
@@ -224,7 +225,7 @@ function Activities({ n, may, post, templates }) {
             {may && <td style={{ whiteSpace: "nowrap" }}>
               <button className="btn ghost sm" type="button" onClick={() => setF({ id: a.id, code: a.code, name: a.name, wf: a.wf ?? "", progress: a.progress ?? "", description: a.description || "" })}>ویرایش</button>
               <button className="btn ghost sm" type="button" onClick={() => post({ kind: "activity-remove", id: a.id }, () => "حذف شد.")}>حذف</button></td>}</tr>))}
-          {n.activities.length > 0 && <tr><td colSpan={3}><b>جمع</b></td><td className="mono"><b>{fmt(n.activityWf, 4)}٪</b></td><td colSpan={may ? 7 : 6} /></tr>}</tbody></table>
+          {n.activities.length > 0 && <tr><td colSpan={3}><b>جمع</b></td><td className="mono"><b>{fmt(n.activityWf, 4)}٪</b></td><td colSpan={may ? 7 : 6} /></tr>}</tbody></table></TableKit>
       {n.activities.length === 0 && <p className="sm muted">فعالیتی ندارد.</p>}
       {may && (
         <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap", marginTop: 6 }}>

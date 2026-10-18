@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import Tabs from "../../components/ui/Tabs";
 
+import TableKit from "../../components/ui/TableKit";
 /**
  * Step 1 of the organisation's process: the companies (one directory for
  * every project, each with its logos), the project's stakeholders chosen
@@ -68,7 +69,7 @@ function Companies({ data, may, post, projectId, setMsg, setOk, reload }) {
           {f.id && <button className="btn ghost" type="button" onClick={() => setF(BLANK)}>انصراف</button>}
         </form>
       )}
-      <div className="tablewrap"><table className="dtable">
+      <div className="tablewrap"><TableKit name="organization-1"><table className="dtable">
         <thead><tr><th>کد</th><th>نام</th><th>شناسهٔ ملی / کد مالیاتی</th><th>تماس</th><th>لوگوها</th>{may && <th />}</tr></thead>
         <tbody>{data.companies.map((c) => (
           <tr key={c.id}><td className="mono">{c.code}</td><td>{c.name}{c.name_en && <div className="sm muted" dir="ltr">{c.name_en}</div>}</td>
@@ -83,7 +84,7 @@ function Companies({ data, may, post, projectId, setMsg, setOk, reload }) {
               </span>))}{!c.logos.length && <span className="muted sm">—</span>}</div></td>
             {may && <td><button className="btn ghost sm" type="button" onClick={() => setF({ id: c.id, code: c.code, name: c.name, nameEn: c.name_en || "", nationalId: c.national_id || "", taxCode: c.tax_code || "",
               phone: c.phone || "", email: c.email || "", address: c.address || "" })}>ویرایش</button></td>}</tr>
-        ))}</tbody></table></div>
+        ))}</tbody></table></TableKit></div>
       {may && data.companies.length > 0 && (
         <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}>
           <div className="field"><label htmlFor="lg-co">شرکت</label><select id="lg-co" value={logo.companyId} onChange={(e) => setLogo({ ...logo, companyId: e.target.value })}>
@@ -116,12 +117,12 @@ function Stakeholders({ data, may, post }) {
           {f.id && <button className="btn ghost" type="button" onClick={() => setF(BLANK)}>انصراف</button>}
         </form>))}
       {data.stakeholders.length === 0 ? <p className="empty-note">هنوز ذی‌نفعی ثبت نشده.</p> : (
-        <table className="dtable"><thead><tr><th>نقش</th><th>شرکت</th><th>توضیح</th>{may && <th />}</tr></thead>
+        <TableKit name="organization-2"><table className="dtable"><thead><tr><th>نقش</th><th>شرکت</th><th>توضیح</th>{may && <th />}</tr></thead>
           <tbody>{data.stakeholders.map((s) => (
             <tr key={s.id}><td>{data.roles[s.role]}</td><td><span className="mono">{s.code}</span> — {s.name}</td><td className="sm">{s.note || "—"}</td>
               {may && <td><button className="btn ghost sm" type="button" onClick={() => setF({ id: s.id, companyId: s.company_id, role: s.role, note: s.note || "" })}>ویرایش</button>
                 <button className="btn ghost sm" type="button" onClick={() => post({ kind: "stakeholder-remove", id: s.id })}>حذف</button></td>}</tr>
-          ))}</tbody></table>)}
+          ))}</tbody></table></TableKit>)}
     </div>
   );
 }
@@ -143,9 +144,9 @@ function Money({ data, may, post }) {
           <div className="field"><label htmlFor="cu-rate">ارزش در واحد پایه</label><input id="cu-rate" dir="ltr" required inputMode="decimal" value={c.rate} onChange={(e) => setC({ ...c, rate: e.target.value })} /></div>
           <button className="btn" type="submit">ثبت ارز</button>
         </form>)}
-      <table className="dtable"><thead><tr><th>کد</th><th>نام</th><th>ارزش در واحد پایه</th>{may && <th />}</tr></thead>
+      <TableKit name="organization-3"><table className="dtable"><thead><tr><th>کد</th><th>نام</th><th>ارزش در واحد پایه</th>{may && <th />}</tr></thead>
         <tbody>{data.currencies.map((x) => <tr key={x.id}><td className="mono">{x.code}</td><td>{x.name}</td><td className="mono" dir="ltr">{Number(x.rate)}</td>
-          {may && <td><button className="btn ghost sm" type="button" onClick={() => setC({ code: x.code, name: x.name, rate: String(Number(x.rate)) })}>ویرایش</button></td>}</tr>)}</tbody></table>
+          {may && <td><button className="btn ghost sm" type="button" onClick={() => setC({ code: x.code, name: x.name, rate: String(Number(x.rate)) })}>ویرایش</button></td>}</tr>)}</tbody></table></TableKit>
       <h3 style={{ marginTop: 16 }}>بودجه‌ها</h3>
       {may && data.currencies.length > 0 && (
         <form className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}
@@ -159,14 +160,14 @@ function Money({ data, may, post }) {
           {b.id && <button className="btn ghost" type="button" onClick={() => setB({ id: null, title: "", currency: b.currency, amount: "", note: "" })}>انصراف</button>}
         </form>)}
       {data.budgets.length === 0 ? <p className="empty-note">هنوز بودجه‌ای ثبت نشده.</p> : (
-        <table className="dtable"><thead><tr><th>عنوان</th><th>ارز</th><th>مبلغ</th><th>به واحد پایه</th><th>توضیح</th>{may && <th />}</tr></thead>
+        <TableKit name="organization-4"><table className="dtable"><thead><tr><th>عنوان</th><th>ارز</th><th>مبلغ</th><th>به واحد پایه</th><th>توضیح</th>{may && <th />}</tr></thead>
           <tbody>{data.budgets.map((x) => (
             <tr key={x.id}><td>{x.title}</td><td className="mono">{x.currency}</td><td className="mono">{fmt(x.amount)}</td>
               <td className="mono">{fmt(Number(x.amount) * (rate.get(x.currency) || 0))}</td><td className="sm">{x.note || "—"}</td>
               {may && <td><button className="btn ghost sm" type="button" onClick={() => setB({ id: x.id, title: x.title, currency: x.currency, amount: String(Number(x.amount)), note: x.note || "" })}>ویرایش</button>
                 <button className="btn ghost sm" type="button" onClick={() => post({ kind: "budget-remove", id: x.id })}>حذف</button></td>}</tr>))}
             <tr><td colSpan={3}><b>جمع به واحد پایه</b></td><td className="mono"><b>{fmt(data.budgetInBase)}</b></td><td colSpan={may ? 2 : 1} /></tr>
-          </tbody></table>)}
+          </tbody></table></TableKit>)}
     </div>
   );
 }

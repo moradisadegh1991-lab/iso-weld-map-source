@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
+import { usePrefs } from "../../lib/client/prefs.mjs";
+import { LANGS } from "../../lib/i18n/index.mjs";
 
 /**
  * The sign-in screen.
@@ -12,6 +14,7 @@ import { usePlatform } from "../../lib/client/platform.mjs";
  */
 export default function SignIn() {
   const { reload } = usePlatform();
+  const { t, lang, setPref } = usePrefs();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState(null);
@@ -31,7 +34,7 @@ export default function SignIn() {
         body: JSON.stringify({ email, password }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `پاسخ ${res.status}`);
+      if (!res.ok) throw new Error(body.error || t("signin.status", { n: res.status }));
       await reload();
     } catch (e2) {
       setErr(e2.message);
@@ -46,7 +49,7 @@ export default function SignIn() {
       const res = await fetch("/api/auth/forgot", { method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify({ login: email }) });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `پاسخ ${res.status}`);
+      if (!res.ok) throw new Error(body.error || t("signin.status", { n: res.status }));
       setSent(body.message);
     } catch (e2) { setErr(e2.message); }
     setBusy(false);
@@ -54,39 +57,40 @@ export default function SignIn() {
 
   if (forgot) {
     return (
-      <div className="signin" dir="rtl">
+      <div className="signin">
         <form onSubmit={askReset}>
           <div className="mark">EPC&nbsp;PLATFORM</div>
-          <h1>بازیابی رمز عبور</h1>
-          <p className="muted sm">ایمیل یا نام کاربری خود را بنویسید. درخواست برای مدیر سامانه ثبت می‌شود و او پس از اطمینان از هویت شما یک لینک یک‌بارمصرف
-            برای تنظیم رمز تازه به شما می‌دهد.</p>
+          <LangPick lang={lang} setPref={setPref} />
+          <h1>{t("signin.forgotTitle")}</h1>
+          <p className="muted sm">{t("signin.forgotHelp")}</p>
           <div className="field">
-            <label htmlFor="forgot-login">ایمیل یا نام کاربری</label>
+            <label htmlFor="forgot-login">{t("signin.login")}</label>
             <input id="forgot-login" type="text" autoComplete="username" required value={email} onChange={(e) => { setEmail(e.target.value); setSent(null); }} dir="ltr" />
           </div>
           {err && <p className="err" role="alert">{err}</p>}
           {sent && <p className="okmsg" role="status">{sent}</p>}
-          <button className="btn" type="submit" disabled={busy || !email || !!sent}>{busy ? "در حال ثبت…" : "ثبت درخواست بازیابی"}</button>
-          <button className="btn ghost" type="button" onClick={() => { setForgot(false); setErr(null); setSent(null); }}>بازگشت به ورود</button>
+          <button className="btn" type="submit" disabled={busy || !email || !!sent}>{busy ? t("signin.sending") : t("signin.sendReset")}</button>
+          <button className="btn ghost" type="button" onClick={() => { setForgot(false); setErr(null); setSent(null); }}>{t("signin.back")}</button>
         </form>
       </div>
     );
   }
 
   return (
-    <div className="signin" dir="rtl">
+    <div className="signin">
       <form onSubmit={submit}>
         <div className="mark">EPC&nbsp;PLATFORM</div>
-        <h1>ورود به سامانه</h1>
+        <LangPick lang={lang} setPref={setPref} />
+        <h1>{t("signin.title")}</h1>
 
         <div className="field">
-          <label htmlFor="email">ایمیل یا نام کاربری</label>
+          <label htmlFor="email">{t("signin.login")}</label>
           <input id="email" type="text" autoComplete="username" required
                  value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" />
         </div>
 
         <div className="field">
-          <label htmlFor="password">رمز عبور</label>
+          <label htmlFor="password">{t("signin.password")}</label>
           <input id="password" type="password" autoComplete="current-password" required
                  value={password} onChange={(e) => setPassword(e.target.value)} dir="ltr" />
         </div>
@@ -94,15 +98,26 @@ export default function SignIn() {
         {err && <p className="err" role="alert">{err}</p>}
 
         <button className="btn" type="submit" disabled={busy || !email || !password}>
-          {busy ? "در حال بررسی…" : "ورود"}
+          {busy ? t("signin.submitting") : t("signin.submit")}
         </button>
 
-        <button className="btn ghost" type="button" onClick={() => { setForgot(true); setErr(null); setSent(null); setBusy(false); }}>رمز را فراموش کرده‌ام</button>
+        <button className="btn ghost" type="button" onClick={() => { setForgot(true); setErr(null); setSent(null); setBusy(false); }}>{t("signin.forgot")}</button>
 
         <p className="muted sm">
-          حساب ندارید؟ مدیر سامانه با دستور <code>npm run auth:admin</code> آن را می‌سازد.
+          {t("signin.noAccount", { cmd: "\u2068npm run auth:admin\u2069" })}
         </p>
       </form>
+    </div>
+  );
+}
+
+/** The language, before signing in: a visitor who does not read Persian can still find the way in. */
+function LangPick({ lang, setPref }) {
+  return (
+    <div className="lang-pick" role="group" aria-label="Language / زبان / اللغة">
+      {Object.entries(LANGS).map(([k, l]) => (
+        <button key={k} type="button" lang={k} className={k === lang ? "on" : ""} aria-pressed={k === lang} onClick={() => setPref("lang", k)}>{l.name}</button>
+      ))}
     </div>
   );
 }

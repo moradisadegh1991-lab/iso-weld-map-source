@@ -108,7 +108,7 @@ function Board({ data, post, may, onReinspect }) {
         </div>
       </div>
       {rows.length === 0 ? <p className="empty-note">درخواستی نیست.</p> : (
-        <TableKit name="inspection">
+        <TableKit name="inspection-1">
           <table className="dtable">
             <thead><tr><th>شماره</th><th>آیتم</th><th>فعالیت ITP</th><th>زمان بازرسی</th><th>طرف‌ها</th><th>وضعیت</th><th className="no-print" /></tr></thead>
             <tbody>
@@ -302,7 +302,7 @@ function ItpTab({ data, post, may }) {
       <div className="card">
         <h2>ITPها</h2>
         {data.itps.length === 0 ? <p className="empty-note">ITP تعریف نشده است. تا ITP تأییدشده‌ای نباشد، هیچ مرحله‌ای به بازرسی گره نمی‌خورد.</p> : (
-          <TableKit name="inspection"><table className="dtable">
+          <TableKit name="inspection-2"><table className="dtable">
             <thead><tr><th>شماره</th><th>رویژن</th><th>عنوان</th><th>نوع کار</th><th>ردیف</th><th>H/W</th><th>وضعیت</th><th>تهیه / تأیید</th></tr></thead>
             <tbody>{data.itps.map((i) => (
               <tr key={i.id} onClick={() => setSel(i.id)} style={{ cursor: "pointer", background: sel === i.id ? "var(--raise)" : undefined }}>
@@ -364,7 +364,7 @@ function ItpMatrix({ itp, data, post, may }) {
       </div>
       <p className="muted sm">{itp.status === "draft" ? "پیش‌نویس: تا تأیید، هیچ مرحله‌ای به آن گره نمی‌خورد. تأییدکننده نباید تهیه‌کننده باشد."
         : itp.status === "approved" ? "در حال اجرا و ثابت؛ برای تغییر، رویژن جدید بسازید." : "منسوخ؛ درخواست‌های قبلی همچنان به آن ارجاع دارند."}</p>
-      <TableKit name="inspection"
+      <TableKit name="inspection-3"
                 onEdit={(id) => { const a = itp.activities.find((x) => x.id === id);
                   setF({ ...a, seq: String(a.seq), stepCode: a.stepCode || "", reference: a.reference || "", criteria: a.criteria || "",
                     record: a.record || "", points: { contractor: a.points.contractor || "", company: a.points.company || "", tpi: a.points.tpi || "" } }); }}
@@ -439,7 +439,7 @@ function ItemTab({ data }) {
       {file && (file.activities.length === 0 ? <p className="empty-note">برای این نوع کار ITP تأییدشده‌ای نیست.</p> : <>
         <p className="sm">{file.activities.length - owed.length} از {file.activities.length} فعالیت آزاد شده
           {owed.length > 0 && <> · <span className="warn">مانده: {owed.map((a) => a.seq).join("، ")}</span></>}</p>
-        <TableKit name="inspection"><table className="dtable">
+        <TableKit name="inspection-4"><table className="dtable">
           <thead><tr><th>ITP · ردیف</th><th>فعالیت</th><th>نقاط</th><th>آخرین درخواست</th><th>وضعیت</th></tr></thead>
           <tbody>{file.activities.map((a) => {
             const st = a.latest?.state.state;

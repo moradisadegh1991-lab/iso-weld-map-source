@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { fmt } from "./ActivityDetail";
 
+import TableKit from "../ui/TableKit";
 /**
  * The link between a PMS activity (or a WBS node) and the platform's records
  * (lib/eps/scope.mjs): which equipment, welds, cables, instruments,
@@ -104,11 +105,11 @@ export function ScopeTab({ d, may, post, L }) {
       {!s.madeBy && <>
         <Pending pending={s.pending} firstApply={!r.applied_at} />
         {may && (s.pending?.any || !r.applied_at) && <button className="btn sm" type="button" onClick={() => post("/api/eps/activities", { kind: "scope-apply", ruleId: r.id }, (x) => `اعمال شد: +${x.row.added} / −${x.row.removed}.`)}>اعمال در PMS</button>}</>}
-      <div className="tablewrap" style={{ maxHeight: 260, marginTop: 6 }}><table className="dtable">
+      <div className="tablewrap" style={{ maxHeight: 260, marginTop: 6 }}><TableKit name="eps-scopepanel-1" min={8}><table className="dtable">
         <thead><tr><th>قلم</th><th>شرح</th><th>زیرسیستم</th><th>نقشه</th><th>نوع</th><th>{L.measures[r.measure]}</th><th>انجام‌شده</th></tr></thead>
         <tbody>{s.items.map((i) => (
           <tr key={i.key} data-scope-item={i.label}><td className="mono" dir="ltr">{i.label}</td><td className="sm">{i.name || ""}</td><td className="mono sm">{i.subsystem || "—"}</td>
-            <td className="mono sm">{i.docNo || "—"}</td><td className="sm">{i.kind || "—"}</td><td className="mono">{i.qty == null ? "؟" : fmt(i.qty)}</td><td>{i.done ? "✓" : ""}</td></tr>))}</tbody></table>
+            <td className="mono sm">{i.docNo || "—"}</td><td className="sm">{i.kind || "—"}</td><td className="mono">{i.qty == null ? "؟" : fmt(i.qty)}</td><td>{i.done ? "✓" : ""}</td></tr>))}</tbody></table></TableKit>
         {s.more > 0 && <p className="sm muted">و {s.more} قلم دیگر…</p>}</div>
       <History h={s.history} />
     </div>);
@@ -118,10 +119,10 @@ export function History({ h }) {
   if (!h?.length) return null;
   return (
     <details style={{ marginTop: 6 }}><summary className="sm">تاریخچهٔ اعمال ({h.length})</summary>
-      <table className="dtable sm"><thead><tr><th>زمان</th><th>توسط</th><th>تازه</th><th>حذف</th><th>تغییر مقدار</th></tr></thead>
+      <TableKit name="eps-scopepanel-2" min={8}><table className="dtable sm"><thead><tr><th>زمان</th><th>توسط</th><th>تازه</th><th>حذف</th><th>تغییر مقدار</th></tr></thead>
         <tbody>{h.map((c) => (
           <tr key={c.id}><td className="mono">{new Date(c.at).toLocaleString("fa-IR")}</td><td>{c.by_name || "—"}{c.auto ? " (خودکار)" : ""}</td>
-            <td>{c.added.map((x) => x.label).join("، ") || "—"}</td><td>{c.removed.map((x) => x.label).join("، ") || "—"}</td><td>{c.changed.length || "—"}</td></tr>))}</tbody></table></details>);
+            <td>{c.added.map((x) => x.label).join("، ") || "—"}</td><td>{c.removed.map((x) => x.label).join("، ") || "—"}</td><td>{c.changed.length || "—"}</td></tr>))}</tbody></table></TableKit></details>);
 }
 
 /** The per-item rule of a WBS node, on the activity page when a node is selected. */

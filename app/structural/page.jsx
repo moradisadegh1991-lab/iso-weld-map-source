@@ -85,7 +85,7 @@ function StructuralPageBody() {
       <div className="card">
         <h2>سازه‌ها</h2>
         {list.length === 0 ? <p className="empty-note">هنوز سازه‌ای ثبت نشده است.</p> : (
-          <TableKit name="structural">
+          <TableKit name="structural-1">
             <table className="dtable">
               <thead>
                 <tr><th>سازه</th><th>نوع</th><th>ساب‌سیستم</th><th>فونداسیون‌ها</th><th>پیشرفت</th>
@@ -211,7 +211,7 @@ function Survey({ s, survey, mayRecord, post, standard }) {
         {" · "}آخرین قرائت هر ستون حکم می‌گیرد؛ قرائت پیشین در سابقه می‌ماند.
       </p>
       {survey.columns.length > 0 && (
-        <TableKit name="structural">
+        <TableKit name="structural-2">
           <table className="dtable">
             <thead><tr><th>ستون</th><th>ارتفاع mm</th><th>ΔE mm</th><th>ΔN mm</th><th>مجاز mm</th><th>تاریخ</th><th>حکم</th></tr></thead>
             <tbody>
@@ -271,7 +271,7 @@ function Bolting({ s, bolting, mayRecord, post }) {
         {" · "}اتصال پیش‌تنیده بدون آزمون پیش از نصب روی کالیبراتور کشش پذیرفته نمی‌شود.
       </p>
       {bolting.records.length > 0 && (
-        <TableKit name="structural">
+        <TableKit name="structural-3">
           <table className="dtable">
             <thead><tr><th>تاریخ</th><th>نوع اتصال</th><th>پیچ</th><th>روش</th><th>تعداد</th><th>آزمون kN</th><th>لات</th><th>حکم</th></tr></thead>
             <tbody>
@@ -345,7 +345,7 @@ function PretensionTable() {
         ASTM: جدول J3.1M از AISC 360 — آزمون پیش از نصب ≥ ۱٫۰۵ برابر (RCSC). ·
         ISO/EN: Fp,C = 0.7·fub·As (EN 1090-2) — آزمون ≥ Fp,C. خانهٔ خالی یعنی استاندارد عددی نداده و سامانه هم فرض نمی‌کند.
       </p>
-      <TableKit name="structural">
+      <TableKit name="structural-4">
         <table className="dtable">
           <thead><tr><th>گرید</th>{sizes.map((z) => <th key={z}>{z}</th>)}</tr></thead>
           <tbody>

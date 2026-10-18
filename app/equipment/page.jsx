@@ -105,7 +105,7 @@ function EquipmentPageBody() {
             پارسر عمداً حدس نزده. یک ماشین دوّار الایمنت و کنترل تنش لوله دارد و
             یک تجهیز ثابت ندارد؛ حدسِ غلط یعنی برداشتن یک hold point واقعی.
           </p>
-          <TableKit name="equipment">
+          <TableKit name="equipment-1">
             <table className="dtable">
               <thead><tr><th>تگ</th><th>شرح</th><th>تعیین نوع</th></tr></thead>
               <tbody>
@@ -134,7 +134,7 @@ function EquipmentPageBody() {
             «بسته» ذخیره نمی‌شود — هر بار از روی پیش‌نیازها حساب می‌شود، پس لحظه‌ای
             که پیش‌نیاز تمام شود این فهرست خودش عوض می‌شود.
           </p>
-          <TableKit name="equipment">
+          <TableKit name="equipment-2">
             <table className="dtable">
               <thead><tr><th>تگ</th><th>پیشرفت</th><th>منتظرِ</th><th>رشته</th></tr></thead>
               <tbody>
@@ -163,7 +163,7 @@ function EquipmentPageBody() {
       {data?.tags?.length > 0 && (
         <div className="card">
           <h2>تگ‌ها</h2>
-          <TableKit name="equipment">
+          <TableKit name="equipment-3">
             <table className="dtable">
               <thead><tr><th>تگ</th><th>شرح</th><th>نوع</th><th>ساب‌سیستم</th><th /></tr></thead>
               <tbody>

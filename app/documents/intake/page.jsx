@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import Tabs from "../../../components/ui/Tabs";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * Reading received documents into the registers. An approved revision
  * (code 1 or 2) is read when the reply is sent, or here on demand; what it
@@ -60,7 +61,7 @@ export default function IntakePage() {
           <h2>مدارک</h2>
           <p className="sm muted">{data.ocr.engine ? `OCR روی سرور: ${data.ocr.version || data.ocr.engine} — اسکن‌ها در پس‌زمینه، یکی‌یکی خوانده می‌شوند.` : `OCR روی سرور در دسترس نیست: ${data.ocr.why}`}</p>
           {data.docs.length === 0 ? <p className="empty-note">هنوز مدرکی با فایل از طراح دریافت نشده است.</p> : (
-            <div className="tablewrap"><table className="dtable">
+            <div className="tablewrap"><TableKit name="documents-intake-1"><table className="dtable">
               <thead><tr><th>مدرک</th><th>رویژن</th><th>کد</th><th>خواندن</th><th>تازه</th><th>تکمیل</th><th>تناقض</th><th>منتظر</th><th /></tr></thead>
               <tbody>{data.docs.map((d) => {
                 const n = (a) => d.items.filter((i) => i.action === a).length;
@@ -83,7 +84,7 @@ export default function IntakePage() {
                   </tr>
                 );
               })}</tbody>
-            </table></div>
+            </table></TableKit></div>
           )}
           {doc && <Proposal doc={doc} kinds={data.kinds} may={may} post={post} />}
         </div>
@@ -126,7 +127,7 @@ function Proposal({ doc, kinds, may, post }) {
           <option value="todo">منتظر تصمیم</option><option value="same">بی‌تغییر (فقط ارجاع)</option><option value="all">همه</option></select></div>
         {may && <button className="btn ghost sm" type="button" onClick={() => setSel(new Set(pendingIds))}>انتخاب همه ({pendingIds.length})</button>}
       </div>
-      <div className="tablewrap"><table className="dtable">
+      <div className="tablewrap"><TableKit name="documents-intake-2"><table className="dtable">
         <thead><tr>{may && <th />}<th>نوع</th><th>شماره</th><th>وضعیت</th><th>تغییر</th><th>OCR</th><th>محل در فایل</th><th>تصمیم</th></tr></thead>
         <tbody>{items.map((i) => (
           <tr key={i.id}>
@@ -149,7 +150,7 @@ function Proposal({ doc, kinds, may, post }) {
             <td className="sm">{DECISION[i.decision]}{i.reason && <div className="muted">{i.reason}</div>}</td>
           </tr>
         ))}</tbody>
-      </table></div>
+      </table></TableKit></div>
       {may && sel.size > 0 && (
         <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}>
           <div className="field" style={{ flex: 1 }}><label htmlFor="ir">دلیل (برای رد، تناقض و ردیف‌های «بررسی شود» لازم است)</label>
@@ -178,7 +179,7 @@ function PatternsCard({ data, may, post }) {
         <div className="field"><label htmlFor="pe">نمونهٔ شماره</label><input id="pe" dir="ltr" value={f.example} onChange={(e) => setF({ ...f, example: e.target.value })} placeholder="30-E-1101A" /></div>
         <button className="btn" type="button" onClick={async () => { if (await post({ kind: "pattern", ...f }, (r) => `شکل ${r.pattern.shape} اضافه شد.`)) setF({ ...f, example: "" }); }}>افزودن</button>
       </div>}
-      <div className="tablewrap"><table className="dtable">
+      <div className="tablewrap"><TableKit name="documents-intake-3"><table className="dtable">
         <thead><tr><th>نوع</th><th>شکل</th><th>نمونه</th><th>منبع</th><th>وضعیت</th></tr></thead>
         <tbody>{byKind.flatMap(([k, ps]) => ps.map((p) => (
           <tr key={p.id} style={p.active ? undefined : { opacity: 0.5 }}>
@@ -186,7 +187,7 @@ function PatternsCard({ data, may, post }) {
             <td className="sm">{p.source === "learned" ? "از رجیستر" : "نمونهٔ شخص"}</td>
             <td>{may ? <button className="btn ghost sm" type="button" onClick={() => post({ kind: "pattern-active", id: p.id, active: !p.active })}>{p.active ? "فعال — خاموش کن" : "خاموش — فعال کن"}</button> : (p.active ? "فعال" : "خاموش")}</td>
           </tr>)))}</tbody>
-      </table></div>
+      </table></TableKit></div>
       {data.patterns.length === 0 && <p className="empty-note">هنوز قالبی نیست — «یادگیری از رجیسترها» را بزنید یا یک نمونه اضافه کنید.</p>}
     </div>
   );
@@ -229,12 +230,12 @@ function LegendCard({ data, may, post }) {
         </form>
       )}
       {L.codes.length === 0 ? <p className="empty-note">هنوز کدی ثبت نشده — تا ثبت نشود، کد سیال و عایق از نقشه پر نمی‌شود.</p> : (
-        <div className="tablewrap"><table className="dtable">
+        <div className="tablewrap"><TableKit name="documents-intake-4"><table className="dtable">
           <thead><tr><th>نوع</th><th>کد</th><th>شرح</th><th>منبع</th>{may && <th />}</tr></thead>
           <tbody>{L.codes.map((x) => (
             <tr key={x.id}><td className="sm">{L.codeKinds[x.kind]}</td><td className="mono">{x.code}</td><td className="sm" dir="ltr">{x.meaning}</td><td className="sm">{x.source || "—"}</td>
               {may && <td><button className="btn ghost sm" type="button" onClick={() => post({ kind: "code-remove", id: x.id })}>حذف</button></td>}</tr>
-          ))}</tbody></table></div>
+          ))}</tbody></table></TableKit></div>
       )}
     </div>
   );

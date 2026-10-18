@@ -66,7 +66,7 @@ export default function CompletionsPage() {
       <div className="card">
         <h2>ساب‌سیستم‌ها — آنچه MC را نگه داشته</h2>
         <p className="muted sm">امضای MC فقط وقتی ممکن است که این فهرست خالی باشد: همهٔ تگ‌ها آماده، همهٔ خطوط در پکیج با تست پذیرفته، همهٔ کابل‌ها و ابزارها تست‌شده، و هیچ Punch A و NCR بازی نمانده. امضاکننده و پذیرندهٔ کارفرما دو نفرند.</p>
-        <TableKit name="completions">
+        <TableKit name="completions-1">
           <table className="dtable">
             <thead><tr><th>ساب‌سیستم</th><th>MC هدف</th><th>محدوده</th><th>باز</th><th>وضعیت</th><th /></tr></thead>
             <tbody>
@@ -103,7 +103,7 @@ export default function CompletionsPage() {
         <h2>پکیج‌های تست فشار</h2>
         <p className="muted sm">فشار تست طبق ASME B31.3: هیدرو ۱٫۵ × P × Rr (§345.4.2)، پنوماتیک ۱٫۱ × P (§345.5.4)، نگه‌داشت حداقل ۱۰ دقیقه. P از کلاس لولهٔ هر خط؛ Rr = ST/S ورودی مهندسی پکیج است و پیش‌فرض ندارد.</p>
         {packs.length === 0 ? <p className="empty-note">پکیجی تعریف نشده است.</p> : (
-          <TableKit name="completions">
+          <TableKit name="completions-2">
             <table className="dtable">
               <thead><tr><th>پکیج</th><th>ساب‌سیستم</th><th>نوع</th><th>خطوط</th><th>فشار تست</th><th>وضعیت</th><th /></tr></thead>
               <tbody>
@@ -149,7 +149,7 @@ function PackDetail({ p, data, post, may }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {p.pressure.basis && <p className="mono sm">{p.pressure.basis} = {p.pressure.barg} barg</p>}
-      <TableKit name="completions" onDelete={may ? (lineId) => post({ kind: "line-remove", packageId: p.package.id, lineId }) : undefined}
+      <TableKit name="completions-3" onDelete={may ? (lineId) => post({ kind: "line-remove", packageId: p.package.id, lineId }) : undefined}
                 canDelete={() => (p.accepted ? "پکیج پذیرفته شده؛ خطوطش ثابت است" : true)} deleteLabel="برداشتن از پکیج">
         <table className="dtable">
           <thead><tr><th>خط</th><th>کلاس</th><th>P طراحی</th><th>جوش</th><th>انجام</th><th>NDT پذیرفته</th><th>PWHT</th><th>ساپورت</th></tr></thead>
@@ -174,7 +174,7 @@ function PackDetail({ p, data, post, may }) {
         </div>
       )}
       {p.tests.length > 0 && (
-        <TableKit name="completions"><table className="dtable">
+        <TableKit name="completions-4"><table className="dtable">
           <thead><tr><th>تاریخ</th><th>لازم</th><th>اعمال‌شده</th><th>نگه‌داشت</th><th>گیج</th><th>شاهد</th><th>نتیجه</th><th /></tr></thead>
           <tbody>{p.tests.map((r) => (
             <tr key={r.id}>

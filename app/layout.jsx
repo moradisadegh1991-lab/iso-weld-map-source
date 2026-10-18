@@ -1,5 +1,9 @@
+import "@fontsource-variable/vazirmatn";
+import "@fontsource-variable/inter";
 import "./globals.css";
+import "./design.css";
 import { PlatformProvider } from "../lib/client/platform.mjs";
+import { PrefsProvider } from "../lib/client/prefs.mjs";
 import Shell from "../components/platform/Shell";
 import ServiceWorker from "../components/platform/ServiceWorker";
 
@@ -28,6 +32,12 @@ export const viewport = {
   themeColor: "#0A1116",
 };
 
+const PREPAINT = `try{var e=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem('epc.prefs')||'{}')||{}}catch(x){}
+var o=localStorage.getItem('epc.theme');if(!p.theme&&(o==='light'||o==='dark'))p.theme=o;
+var l={fa:'rtl',ar:'rtl',en:'ltr'}[p.lang]?p.lang:'fa';e.lang=l;e.dir=l==='en'?'ltr':'rtl';
+var t=p.theme==='light'||p.theme==='dark'?p.theme:p.theme==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):'dark';
+e.dataset.theme=t;e.dataset.accent=p.accent||'teal';e.dataset.density=p.density||'comfortable';e.dataset.scale=p.scale||'m'}catch(x){}`;
+
 /**
  * The shell wraps everything, which makes it the single authentication gate:
  * a signed-out visitor gets the login form and no page has to remember to
@@ -38,15 +48,17 @@ export default function RootLayout({ children }) {
   return (
     <html lang="fa" dir="rtl" suppressHydrationWarning>
       <head>
-        {/* The theme, before the first paint: without this a light-theme user
-            sees the dark page flash on every load. */}
-        <script dangerouslySetInnerHTML={{ __html:
-          "try{var t=localStorage.getItem('epc.theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}" }} />
+        {/* The person's settings, before the first paint (lib/client/prefs.mjs
+            applyPrefs does the same after): without this an English or
+            light-theme user sees the dark Persian page flash on every load. */}
+        <script dangerouslySetInnerHTML={{ __html: PREPAINT }} />
       </head>
       <body>
         <ServiceWorker />
         <PlatformProvider>
-          <Shell>{children}</Shell>
+          <PrefsProvider>
+            <Shell>{children}</Shell>
+          </PrefsProvider>
         </PlatformProvider>
       </body>
     </html>

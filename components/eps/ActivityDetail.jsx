@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ScopeTab } from "./ScopePanel";
 
+import TableKit from "../ui/TableKit";
 /**
  * The detail sub-forms under the activity view, for the selected activity
  * (owner's «PMS» document: images 1–9 and 11–12). Every figure comes from the
@@ -105,20 +106,20 @@ function WorkFront({ wf, unit }) {
   return (
     <div>
       <p className="sm muted">برنامهٔ روزانه = حجم ÷ {fmt(wf.days)} روز = {fmt(wf.perDay, 4)} {unit || ""} در روز (یکنواخت). انجام‌شده از گزارش‌های روزانه.</p>
-      <div className="tablewrap" style={{ maxHeight: 320 }}><table className="dtable">
+      <div className="tablewrap" style={{ maxHeight: 320 }}><TableKit name="eps-activitydetail-1" min={8}><table className="dtable">
         <thead><tr><th>تاریخ</th><th>برنامهٔ روز</th><th>برنامهٔ تجمعی</th><th>٪ برنامه</th><th>انجام روز (This work)</th><th>انجام تجمعی (Total)</th>
           <th>٪ روز</th><th>٪ تجمعی</th><th>هزینهٔ روز</th><th>هزینهٔ تجمعی</th></tr></thead>
         <tbody>{wf.rows.map((r) => (
           <tr key={r.date} style={{ opacity: r.inPlan ? 1 : 0.7 }} data-wf-day={r.date}><td className="mono">{day(r.date)}{!r.inPlan && <span className="sm muted"> (خارج برنامه)</span>}</td>
             <td className="mono">{fmt(r.plan, 3)}</td><td className="mono">{fmt(r.planCum, 3)}</td><td className="mono">{fmt(r.planPct)}</td>
             <td className="mono">{r.done ? fmt(r.done, 3) : ""}</td><td className="mono">{fmt(r.doneCum, 3)}</td><td className="mono">{r.done ? fmt(r.donePct) : ""}</td>
-            <td className="mono">{fmt(r.doneCumPct)}</td><td className="mono">{r.done ? fmt(r.cost) : ""}</td><td className="mono">{fmt(r.costCum)}</td></tr>))}</tbody></table></div>
+            <td className="mono">{fmt(r.doneCumPct)}</td><td className="mono">{r.done ? fmt(r.cost) : ""}</td><td className="mono">{fmt(r.costCum)}</td></tr>))}</tbody></table></TableKit></div>
     </div>);
 }
 
 function Groups({ groups }) {
   return (
-    <div className="tablewrap"><table className="dtable">
+    <div className="tablewrap"><TableKit name="eps-activitydetail-2" min={8}><table className="dtable">
       <thead><tr><th>PMS</th><th>نسخه (Scheduling No.)</th><th>عنوان</th><th>شرح</th><th>تاریخ ثبت</th><th>شروع</th><th>مدت</th><th>پایان</th><th>آخرین کار</th>
         <th>حجم</th><th>W.V</th><th>انجام‌شده</th><th>باقیمانده</th><th>پیشرفت</th></tr></thead>
       <tbody>{groups.map((g) => (
@@ -127,7 +128,7 @@ function Groups({ groups }) {
           <td>{g.title}</td><td className="sm">{g.description || "—"}</td><td className="mono">{day(g.registered)}</td>
           <td className="mono">{day(g.plan_start)}</td><td className="mono">{fmt(g.planDays)}</td><td className="mono">{day(g.plan_end)}</td><td className="mono">{day(g.lastWork)}</td>
           <td className="mono">{fmt(g.volumeActual)}</td><td className="mono">{g.wv == null ? "—" : `${fmt(g.wv, 6)}٪`}</td><td className="mono">{fmt(g.done)}</td>
-          <td className="mono">{fmt(g.remain)}</td><td className="mono">{g.pct == null ? "—" : `${fmt(g.pct)}٪`}</td></tr>))}</tbody></table></div>);
+          <td className="mono">{fmt(g.remain)}</td><td className="mono">{g.pct == null ? "—" : `${fmt(g.pct)}٪`}</td></tr>))}</tbody></table></TableKit></div>);
 }
 
 function Relations({ d, may, post, acts }) {
@@ -135,12 +136,12 @@ function Relations({ d, may, post, acts }) {
   const table = (list, title, color, side) => (
     <div style={{ flex: 1, minWidth: 320 }}>
       <h3 style={{ background: color, color: "#fff", padding: "3px 8px", margin: 0, fontSize: 13 }}>— {title} —</h3>
-      <table className="dtable"><thead><tr><th>کد</th><th>نام فعالیت</th><th>WBS</th><th>نوع</th><th>Lag</th><th>شروع</th><th>مدت</th>{may && <th />}</tr></thead>
+      <TableKit name="eps-activitydetail-3" min={8}><table className="dtable"><thead><tr><th>کد</th><th>نام فعالیت</th><th>WBS</th><th>نوع</th><th>Lag</th><th>شروع</th><th>مدت</th>{may && <th />}</tr></thead>
         <tbody>{list.map((r) => (
           <tr key={r.id} data-rel={`${side}:${r.code}`}><td className="mono" dir="ltr">{r.code}</td><td>{r.name}</td><td className="mono sm" dir="ltr">{r.wbs}</td>
             <td className="mono">{r.rel_type}</td><td className="mono">{r.lag}</td><td className="mono">{day(r.plan_start)}</td><td className="mono">{fmt(r.planDays)}</td>
             {may && <td><button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "relation-remove", id: r.id }, () => "رابطه حذف شد.")}>حذف</button></td>}</tr>))}
-          {list.length === 0 && <tr><td colSpan={8} className="muted sm">—</td></tr>}</tbody></table></div>);
+          {list.length === 0 && <tr><td colSpan={8} className="muted sm">—</td></tr>}</tbody></table></TableKit></div>);
   return (
     <div>
       <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
@@ -167,14 +168,14 @@ function Relations({ d, may, post, acts }) {
 function Progress({ a, codes }) {
   const cats = codes[0]?.categories || [];
   return (
-    <div className="tablewrap"><table className="dtable">
+    <div className="tablewrap"><TableKit name="eps-activitydetail-4" min={8}><table className="dtable">
       <thead><tr>{["A", "B", "C", "D", "E", "F", "G", "H"].map((x) => <th key={x}>Category {x}</th>)}<th>Activity No.</th><th>Description</th><th>Unit</th>
         <th>W.F</th><th>W.V</th><th>Actual weight</th><th>Progress</th><th>Total work</th><th>Status</th><th>Original start</th><th>Orig. dur.</th><th>Original finish</th></tr></thead>
       <tbody><tr data-progress={a.code}>{Array.from({ length: 8 }, (_, i) => <td key={i} className="sm">{cats[i] || "—"}</td>)}
         <td className="mono" dir="ltr">{a.code}</td><td>{a.name}</td><td>{a.unit || "—"}</td><td className="mono">{a.wf == null ? "—" : `${fmt(a.wf, 4)}٪`}</td>
         <td className="mono">{a.wv == null ? "—" : `${fmt(a.wv, 6)}٪`}</td><td className="mono">{fmt(a.volumeActual)}</td>
         <td className="mono"><b>{a.pct == null ? "نامعلوم" : `${fmt(a.pct)}٪`}</b></td><td className="mono">{fmt(a.done)}</td><td>{statusOf(a)}</td>
-        <td className="mono">{day(a.plan_start)}</td><td className="mono">{fmt(a.planDays)}</td><td className="mono">{day(a.plan_end)}</td></tr></tbody></table>
+        <td className="mono">{day(a.plan_start)}</td><td className="mono">{fmt(a.planDays)}</td><td className="mono">{day(a.plan_end)}</td></tr></tbody></table></TableKit>
       <p className="sm muted">پیشرفت = جمع مقادیر انجام‌شده در گزارش‌های روزانه ÷ حجم واقعی فعالیت. بدون حجم واقعی، پیشرفت نامعلوم می‌ماند و حدس زده نمی‌شود. دسته‌ها از کد فعالیت اول آن.</p></div>);
 }
 
@@ -184,7 +185,7 @@ function Roles({ d, may, post, resources }) {
   const a = d.activity;
   return (
     <div>
-      <div className="tablewrap"><table className="dtable">
+      <div className="tablewrap"><TableKit name="eps-activitydetail-5" min={8}><table className="dtable">
         <thead><tr><th>Activity No.</th><th>نقش (منبع)</th><th>دسته</th><th>شروع</th><th>مدت</th><th>پایان</th><th>واحد بودجه</th><th>مقدار در روز</th><th>نرخ</th>
           <th>کل زمان</th><th>کل مبلغ</th><th>زمان واقعی</th><th>مبلغ واقعی</th><th>وضعیت</th><th>توضیح</th>{may && <th />}</tr></thead>
         <tbody>{d.roles.map((r) => (
@@ -197,7 +198,7 @@ function Roles({ d, may, post, resources }) {
               rate: r.rate ?? "", actualTime: r.actual_time ?? "", status: r.status, remark: r.remark || "" })}>ویرایش</button>
               <button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "role-remove", id: r.id }, () => "حذف شد.")}>حذف</button></td>}</tr>))}
           {d.roles.length > 0 && <tr><td colSpan={10}><b>جمع هزینهٔ نقش‌ها</b></td><td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.totalPrice || 0), 0))}</b></td><td />
-            <td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.actualPrice || 0), 0))}</b></td><td colSpan={may ? 3 : 2} /></tr>}</tbody></table></div>
+            <td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.actualPrice || 0), 0))}</b></td><td colSpan={may ? 3 : 2} /></tr>}</tbody></table></TableKit></div>
       {may && (
         <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}
           onSubmit={async (e) => { e.preventDefault(); if (await post("/api/eps/activities", { kind: "role", activityId: a.id, ...f }, () => "نقش ذخیره شد.")) setF(blank); }}>
@@ -252,13 +253,13 @@ function Codes({ d, may, post, codes }) {
   const have = new Set(d.codes.map((c) => c.id));
   return (
     <div>
-      <div className="tablewrap"><table className="dtable">
+      <div className="tablewrap"><TableKit name="eps-activitydetail-7" min={8}><table className="dtable">
         <thead><tr><th>Activity No.</th><th>Active Code</th><th>نوع فعالیت</th>{["A", "B", "C", "D", "E", "F"].map((x) => <th key={x}>Category {x}</th>)}<th>Unit</th><th>Valid</th><th>Remark</th>{may && <th />}</tr></thead>
         <tbody>{d.codes.map((c) => (
           <tr key={c.id} data-code={c.code}><td className="mono" dir="ltr">{d.activity.code}</td><td className="mono" dir="ltr">{c.code}</td><td>{c.name}</td>
             {Array.from({ length: 6 }, (_, i) => <td key={i} className="sm">{c.categories?.[i] || "—"}</td>)}<td>{c.unit || "—"}</td><td>{c.valid ? "✓" : "✗"}</td><td className="sm">{c.remark || ""}</td>
             {may && <td><button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "code-assign", codeId: c.id, activityIds: [d.activity.id], remove: true }, () => "کد برداشته شد.")}>برداشتن</button></td>}</tr>))}
-          {d.codes.length === 0 && <tr><td colSpan={13} className="muted sm">کدی داده نشده.</td></tr>}</tbody></table></div>
+          {d.codes.length === 0 && <tr><td colSpan={13} className="muted sm">کدی داده نشده.</td></tr>}</tbody></table></TableKit></div>
       {may && (
         <form className="row" style={{ gap: 6, alignItems: "end", marginTop: 8 }} onSubmit={async (e) => { e.preventDefault(); if (await post("/api/eps/activities", { kind: "code-assign", codeId: pick, activityIds: [d.activity.id] }, () => "کد داده شد.")) setPick(""); }}>
           <div className="field"><label htmlFor="cd-pick">کد فعالیت</label><select id="cd-pick" required value={pick} onChange={(e) => setPick(e.target.value)}>
@@ -276,7 +277,7 @@ function Overall({ d, may, post }) {
     <div>
       {!d.baseline && <p className="sm" style={{ color: "var(--warn)" }}>PMS این فعالیت «Master plan» ندارد یا فعالیت هم‌کد در آن نیست؛ تأخیرها محاسبه نمی‌شوند (EPS و PMS ◄ Master).</p>}
       {d.baseline && <p className="sm muted">مبنا: برنامهٔ اصلی <span className="mono">{d.baseline.version}</span> — {day(d.baseline.plan_start)} تا {day(d.baseline.plan_end)} ({fmt(d.baseline.planDays)} روز)</p>}
-      <div className="tablewrap"><table className="dtable">
+      <div className="tablewrap"><TableKit name="eps-activitydetail-8" min={8}><table className="dtable">
         <thead><tr><th>No.</th><th>Description</th><th>Delay code</th><th>WBS</th><th>Task name</th><th>Actual start</th><th>Act. dur.</th><th>Actual finish</th>
           <th>Start delay</th><th>Delay (day)</th><th>Finish delay</th><th>Baseline start</th><th>Base dur.</th><th>Baseline finish</th><th>Free float</th>
           <th>Accept start</th><th>Accp. delay</th><th>Accept finish</th><th>Critical</th><th>Remark</th>{may && <th />}</tr></thead>
@@ -290,7 +291,7 @@ function Overall({ d, may, post }) {
             {may && <td style={{ whiteSpace: "nowrap" }}><button className="btn ghost sm" type="button" onClick={() => setF({ id: x.id, description: x.description, delayCode: x.delay_code || "",
               acceptStart: x.acceptStart || "", acceptFinish: x.acceptFinish || "", critical: x.critical, remark: x.remark || "" })}>ویرایش</button>
               <button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "delay-remove", id: x.id }, () => "حذف شد.")}>حذف</button></td>}</tr>))}
-          {d.delays.length === 0 && <tr><td colSpan={21} className="muted sm">این فعالیت در لایحهٔ تأخیرات ردیفی ندارد.</td></tr>}</tbody></table></div>
+          {d.delays.length === 0 && <tr><td colSpan={21} className="muted sm">این فعالیت در لایحهٔ تأخیرات ردیفی ندارد.</td></tr>}</tbody></table></TableKit></div>
       {may && (
         <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}
           onSubmit={async (e) => { e.preventDefault(); if (await post("/api/eps/activities", { kind: "delay", activityId: a.id, ...f }, () => "ردیف لایحه ذخیره شد.")) setF(blank); }}>
@@ -308,8 +309,8 @@ function Overall({ d, may, post }) {
 function Docs({ d, projectId }) {
   if (!d.files.length) return <p className="empty-note">گزارش‌هایی که کار این فعالیت در آن‌هاست عکس یا پیوستی ندارند.</p>;
   return (
-    <table className="dtable"><thead><tr><th>گزارش</th><th>تاریخ</th><th>نوع</th><th>نام</th><th>شرح</th></tr></thead>
+    <TableKit name="eps-activitydetail-9" min={8}><table className="dtable"><thead><tr><th>گزارش</th><th>تاریخ</th><th>نوع</th><th>نام</th><th>شرح</th></tr></thead>
       <tbody>{d.files.map((f) => (
         <tr key={f.id}><td className="mono">{f.report_no}</td><td className="mono">{day(f.report_date)}</td><td>{f.kind === "photo" ? "عکس" : "پیوست"}</td>
-          <td><a href={`/api/contract-reports?projectId=${projectId}&file=${f.id}`} target="_blank" rel="noreferrer">{f.name}</a></td><td className="sm">{f.caption || ""}</td></tr>))}</tbody></table>);
+          <td><a href={`/api/contract-reports?projectId=${projectId}&file=${f.id}`} target="_blank" rel="noreferrer">{f.name}</a></td><td className="sm">{f.caption || ""}</td></tr>))}</tbody></table></TableKit>);
 }

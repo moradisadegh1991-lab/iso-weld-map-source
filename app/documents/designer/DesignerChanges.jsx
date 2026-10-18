@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { localToday } from "../../../components/ui/WorkDate";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * The designer's part of site changes: the TQs put to it, to answer; and the
  * approved site changes (site-run, field change, as-built) to put on the
@@ -21,7 +22,7 @@ export function DesignerTqs() {
       <h2>پرسش‌های فنی (TQ)</h2>
       {msg && <p className="err">{msg}</p>}
       {data.tqs.length === 0 ? <p className="empty-note">TQ به شما ارجاع نشده است.</p> : (
-        <table className="dtable" data-designer-tqs>
+        <TableKit name="documents-designer-designerchanges-1"><table className="dtable" data-designer-tqs>
           <thead><tr><th>شماره</th><th>پرسش</th><th>مدرک</th><th>مهلت</th><th>پاسخ</th></tr></thead>
           <tbody>{data.tqs.map((t) => (
             <tr key={t.id} data-tq={t.tq_no}>
@@ -38,7 +39,7 @@ export function DesignerTqs() {
               ) : <span className="sm">{t.answer} <span className="muted">· {fa(t.answered_on)} · {t.statusFa}</span></span>}</td>
             </tr>
           ))}</tbody>
-        </table>
+        </table></TableKit>
       )}
     </div>
   );
@@ -54,7 +55,7 @@ export function DesignerAsBuilt() {
       <p className="muted sm">تغییرهایی که پروژه تأیید کرده (سایت‌ران، تغییر در سایت، انحراف As-built): رویژن As-built نقشه را اعلام کنید و خود رویژن را با ترانسمیتال بفرستید.</p>
       {msg && <p className="err">{msg}</p>}
       {data.changes.length === 0 ? <p className="empty-note">تغییری منتظر As-built نیست.</p> : (
-        <table className="dtable" data-designer-changes>
+        <TableKit name="documents-designer-designerchanges-2"><table className="dtable" data-designer-changes>
           <thead><tr><th>شماره</th><th>نوع</th><th>تغییر</th><th>نقشه</th><th>As-built</th></tr></thead>
           <tbody>{data.changes.map((c) => (
             <tr key={c.id} data-fcr={c.fcr_no}>
@@ -69,7 +70,7 @@ export function DesignerAsBuilt() {
               ) : <span className="sm">Rev.{c.asbuilt_revision} · {fa(c.asbuilt_on)} · {c.statusFa}</span>}</td>
             </tr>
           ))}</tbody>
-        </table>
+        </table></TableKit>
       )}
     </div>
   );

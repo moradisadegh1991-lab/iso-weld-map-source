@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import Tabs from "../../components/ui/Tabs";
 
+import TableKit from "../../components/ui/TableKit";
 /**
  * Work the contractor hands over and the employer accepts.
  *
@@ -61,7 +62,7 @@ export default function WorkApprovalPage() {
           <h2>منتظر تأیید کارفرما</h2>
           {pending.length === 0 ? <p className="empty-note">موردی منتظر تأیید نیست.</p> : (
             <>
-              <table className="dtable" data-claims>
+              <TableKit name="work-approval-1"><table className="dtable" data-claims>
                 <thead><tr>{data.me.canDecide && <th><input type="checkbox" aria-label="انتخاب همه"
                   checked={chosen.length === pending.length} onChange={(e) => setPicked(e.target.checked ? new Set(pending.map(key)) : new Set())} /></th>}
                   <th>رشته</th><th>آیتم</th><th>مرحله</th><th>تاریخ اعلام انجام</th><th>مرجع</th><th>پیمانکار</th><th>اعلام‌کننده</th>
@@ -77,7 +78,7 @@ export default function WorkApprovalPage() {
                       : <button className="btn ghost" type="button" onClick={() => decide("approve", [x])}>تأیید</button>}</td>}
                   </tr>
                 ))}</tbody>
-              </table>
+              </table></TableKit>
               {data.me.canDecide ? (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
                   <button className="btn" type="button" disabled={!chosen.length} onClick={() => decide("approve", chosen)}>تأیید {chosen.length || ""} مورد انتخاب‌شده</button>
@@ -92,14 +93,14 @@ export default function WorkApprovalPage() {
         <div className="card">
           <h2>تصمیم‌های کارفرما</h2>
           {data.decided.length === 0 ? <p className="empty-note">هنوز تصمیمی ثبت نشده است.</p> : (
-            <table className="dtable">
+            <TableKit name="work-approval-2"><table className="dtable">
               <thead><tr><th>آیتم</th><th>مرحله</th><th>تصمیم</th><th>توسط</th><th>تاریخ کار</th><th>دلیل</th></tr></thead>
               <tbody>{data.decided.map((x) => (
                 <tr key={key(x)}><td className="mono">{x.item}</td><td>{x.step}</td>
                   <td>{x.approver ? <span className="pill ok">تأیید</span> : <span className="pill bad">رد</span>}</td>
                   <td className="sm">{x.approver || x.rejecter}</td><td className="mono sm">{fa(x.doneAt)}</td><td className="sm">{x.reason || ""}</td></tr>
               ))}</tbody>
-            </table>
+            </table></TableKit>
           )}
         </div>
       </Tabs>

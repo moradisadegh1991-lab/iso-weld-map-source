@@ -80,7 +80,7 @@ function Orders({ bar, goVendors }) {
       <div className="card">
         <h2>فهرست پیگیری — به ترتیب شناوری</h2>
         {ex.length === 0 ? <p className="empty-note">ردیف بازی نیست.</p> : (
-          <TableKit name="procurement">
+          <TableKit name="procurement-1">
             <table className="dtable">
               <thead><tr><th>PO / ردیف</th><th>چه چیزی</th><th>مقدار</th><th>حمل / رسید</th><th>تعهد</th><th>پیش‌بینی</th><th>نیاز سایت</th><th>تأخیر</th><th>شناوری</th><th>مرحله</th></tr></thead>
               <tbody>
@@ -130,7 +130,7 @@ function PoDetail({ o, data, post, may, role }) {
   const mayReceive = can({ role }, ACTIONS.ASSIGN_WELD);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-      <TableKit name="procurement">
+      <TableKit name="procurement-2">
         <table className="dtable">
           <thead><tr><th>ردیف</th><th>چه چیزی</th><th>مقدار</th><th>FAT</th><th>حمل / رسید</th><th>مرحله</th><th /></tr></thead>
           <tbody>
@@ -157,7 +157,7 @@ function PoDetail({ o, data, post, may, role }) {
       </TableKit>
 
       {o.shipments.length > 0 && (
-        <TableKit name="procurement"><table className="dtable">
+        <TableKit name="procurement-3"><table className="dtable">
           <thead><tr><th>محموله</th><th>حمل</th><th>ETA</th><th>ورود</th><th>ردیف‌ها</th><th /></tr></thead>
           <tbody>{o.shipments.map((s) => (
             <tr key={s.id}>
@@ -172,7 +172,7 @@ function PoDetail({ o, data, post, may, role }) {
       <div>
         <b className="sm">مدارک فروشنده (VDRL)</b>
         {o.docs.length === 0 ? <p className="muted sm">ثبت نشده</p> : (
-          <TableKit name="procurement"><table className="dtable">
+          <TableKit name="procurement-4"><table className="dtable">
             <thead><tr><th>کد</th><th>عنوان</th><th>موعد</th><th>آخرین ارسال</th><th>کد بررسی</th><th>وضعیت</th><th /></tr></thead>
             <tbody>{o.docs.map((d) => {
               const [tone, label] = DOC_STATE[d.state];

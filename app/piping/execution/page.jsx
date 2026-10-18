@@ -84,7 +84,7 @@ function PipingExecutionBody() {
             هنوز رجیستری ذخیره نشده است. اسپول‌ها از رجیستر جوش هر ایزومتریک ساخته می‌شوند.
           </p>
         ) : (
-          <TableKit name="execution">
+          <TableKit name="execution-1">
             <table className="dtable">
               <thead>
                 <tr><th>اسپول</th><th>خط</th><th>مرحلهٔ فعلی</th><th>پیشرفت</th><th>امروز می‌شود</th>
@@ -230,7 +230,7 @@ function Buried({ data }) {
         جوش زیرزمینی باید پیش از خاک‌ریزی تست و پوشش شود.
       </p>
       {rows.length === 0 ? <p className="empty-note">هنوز جوشی ثبت نشده است.</p> : (
-        <TableKit name="execution">
+        <TableKit name="execution-2">
           <table className="dtable">
             <thead><tr><th>خط</th><th>جوش</th><th>زیرزمینی</th><th>روزمینی</th>
                        <th>نامعلوم</th><th>گرید اعمال‌شده (mm)</th>
@@ -299,7 +299,7 @@ function Supports({ data, projectId, call, reload, mayRecord, setMsg }) {
       {data.supports.length === 0 ? (
         <p className="empty-note">هنوز ساپورتی ثبت نشده است.</p>
       ) : (
-        <TableKit name="execution">
+        <TableKit name="execution-3">
           <table className="dtable">
             <thead><tr><th>شماره</th><th>نوع</th><th>خط</th><th>اسپول</th><th>بار kN</th>
                        <th>نصب</th><th>بازرسی</th></tr></thead>

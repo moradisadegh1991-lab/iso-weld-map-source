@@ -6,6 +6,7 @@ import { localToday, DayHint } from "../../../components/ui/WorkDate";
 import EntityLog from "../../../components/ui/EntityLog";
 import { money } from "../../../components/contracts/ui";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * Contractors' payment statements (صورت وضعیت): measured to a period end,
  * prepared by the site, verified by the supervising engineer, approved by
@@ -51,7 +52,7 @@ export default function StatementsPage() {
             </select></div>
           {c && (
             <>
-              <table className="dtable">
+              <TableKit name="contracts-statements-1"><table className="dtable">
                 <thead><tr><th>شماره</th><th>تا تاریخ</th><th>کارکرد این دوره</th><th>خالص قابل پرداخت</th><th>وضعیت</th><th /></tr></thead>
                 <tbody>{c.statements.length === 0 ? <tr><td colSpan={6} className="muted">هنوز صورت وضعیتی نیست.</td></tr> : c.statements.map((s) => (
                   <tr key={s.id}>
@@ -61,7 +62,7 @@ export default function StatementsPage() {
                     <td><button className="btn ghost" onClick={() => setStatementId(statementId === s.id ? null : s.id)}>{statementId === s.id ? "بستن" : "باز کردن"}</button></td>
                   </tr>
                 ))}</tbody>
-              </table>
+              </table></TableKit>
               {mayPrepare && c.status === "signed" && (
                 <form onSubmit={create} style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}>
                   <div className="field"><label htmlFor="ps-to">پایان دوره</label>
@@ -108,7 +109,7 @@ function Statement({ id, onChange }) {
       <p><span className={`pill ${d.status === "paid" ? "ok" : d.status === "draft" ? "" : "warn"}`} data-status={d.status}>{d.statusFa}</span></p>
       {msg && <p className="err" role="alert">{msg}</p>}
 
-      <table className="dtable">
+      <TableKit name="contracts-statements-2"><table className="dtable">
         <thead><tr><th>ردیف</th><th>شرح</th><th>WBS</th><th>تا قبل</th><th>تجمعی</th><th>این دوره</th><th>بها</th><th>مبلغ تجمعی</th><th>از کجا</th></tr></thead>
         <tbody>{d.lines.map((l) => (
           <tr key={l.lineId}>
@@ -122,7 +123,7 @@ function Statement({ id, onChange }) {
             <td className="sm"><Evidence l={l} />{l.flags.map((f) => <div key={f.text} className={`pill ${f.level === "block" ? "bad" : "warn"} sm`} style={{ marginTop: 2 }}>{f.text}</div>)}</td>
           </tr>
         ))}</tbody>
-      </table>
+      </table></TableKit>
 
       <div className="moneyrow">
         <div><span>کارکرد تجمعی</span><b>{money(m.grossCum, cur)}</b></div>

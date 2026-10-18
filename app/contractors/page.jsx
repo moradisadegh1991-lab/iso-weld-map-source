@@ -52,7 +52,7 @@ export default function ContractorsPage() {
             این شرکت‌ها هم‌اکنون پکیج کاری در دست دارند و تأییدیهٔ صلاحیت‌شان
             منقضی شده است. همین ترکیب است که در ممیزی یافته می‌شود.
           </p>
-          <TableKit name="contractors">
+          <TableKit name="contractors-1">
             <table className="dtable">
               <thead><tr><th>کد</th><th>نام</th><th>انقضا</th><th>پکیج‌ها</th></tr></thead>
               <tbody>
@@ -76,7 +76,7 @@ export default function ContractorsPage() {
         {contractors.length === 0 ? (
           <p className="empty-note">هنوز پیمانکاری ثبت نشده است.</p>
         ) : (
-          <TableKit name="contractors"
+          <TableKit name="contractors-2"
                     onEdit={mayEdit ? (id) => setEditing(contractors.find((c) => c.id === id)) : undefined}
                     {...(mayEdit ? removal : {})}>
             <table className="dtable">

@@ -90,7 +90,7 @@ function CivilPageBody() {
         {data.foundations.length === 0 ? (
           <p className="empty-note">هنوز فونداسیونی ثبت نشده است.</p>
         ) : (
-          <TableKit name="civil">
+          <TableKit name="civil-1">
             <table className="dtable">
               <thead>
                 <tr><th>فونداسیون</th><th>تجهیز / سازه</th><th>ساب‌سیستم</th><th>بتن مشخصات</th>
@@ -209,7 +209,7 @@ function Pours({ f, pours, mayRecord, post, contractors = [] }) {
     <div className="card" style={{ padding: 12 }}>
       <h2>بتن‌ریزی و نتایج</h2>
       {pours.length === 0 ? <p className="empty-note">هنوز بتن‌ریزی ثبت نشده است.</p> : (
-        <TableKit name="civil">
+        <TableKit name="civil-2">
           <table className="dtable">
             <thead><tr><th>پور کارت</th><th>تاریخ</th><th>حجم m³</th><th>کلاس تحویلی</th><th>نمونه‌ها</th></tr></thead>
             <tbody>
@@ -319,7 +319,7 @@ function Classes({ classes }) {
             {c.satisfactory === false && <span className="pill bad">سطح مقاومت کلاس رضایت‌بخش نیست</span>}
             {c.satisfactory === null && <span className="pill">کمتر از سه آزمون — هنوز قابل قضاوت نیست</span>}
           </div>
-          <TableKit name="civil">
+          <TableKit name="civil-3">
             <table className="dtable">
               <thead><tr><th>پور / نمونه</th><th>تاریخ</th><th>آزمون MPa</th><th>میانگین سه‌تایی</th><th>حکم</th></tr></thead>
               <tbody>

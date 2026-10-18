@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePrefs } from "../../lib/client/prefs.mjs";
 
 /**
  * A form behind a button at the top of its section.
@@ -23,6 +24,7 @@ import { createPortal } from "react-dom";
 const useIso = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export default function Fold({ title, hint = null, defaultOpen = false, open: shown, onClose, button: withButton = true, children }) {
+  const { t } = usePrefs();
   const [own, setOwn] = useState(defaultOpen);
   const controlled = shown !== undefined;
   const open = controlled ? !!shown : own;
@@ -74,7 +76,7 @@ export default function Fold({ title, hint = null, defaultOpen = false, open: sh
 
   const button = (
     <button type="button" className={`fold-btn ${open ? "open" : ""}`} aria-expanded={open} onClick={() => setOpen(!open)}
-            aria-label={`${open ? "بستن" : "باز کردن"} فرم ${title}`}
+            aria-label={t(open ? "fold.closeForm" : "fold.openForm", { title })}
             title={hint || undefined}>
       <span className="plus" aria-hidden>+</span><span>{title}</span>
     </button>
@@ -83,7 +85,7 @@ export default function Fold({ title, hint = null, defaultOpen = false, open: sh
     <section className="fold-panel" aria-label={title}>
       <div className="fold-panel-head">
         <b>{title}</b>{hint && <span className="hint">{hint}</span>}
-        <button type="button" className="x" onClick={() => setOpen(false)} aria-label="بستن فرم">✕ بستن</button>
+        <button type="button" className="x" onClick={() => setOpen(false)} aria-label={t("fold.closeForm", { title })}>✕ {t("fold.close")}</button>
       </div>
       <div className="fold-body">{children}</div>
     </section>
@@ -106,7 +108,7 @@ export default function Fold({ title, hint = null, defaultOpen = false, open: sh
         <span className="plus" aria-hidden>+</span>
         <span>{title}</span>
         {hint && <span className="hint">{hint}</span>}
-        <span className="x">{open ? "بستن" : "باز کردن"}</span>
+        <span className="x">{open ? t("fold.close") : t("fold.open")}</span>
       </button>
       {open && <div className="fold-body">{children}</div>}
     </section>

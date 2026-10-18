@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import Fold from "../../components/ui/Fold";
 
+import TableKit from "../../components/ui/TableKit";
 /**
  * The workflow of each report type: stages in order, the review groups of
  * each stage in priority order, and who sits in each group with which
@@ -93,7 +94,7 @@ export default function ReportSetupPage() {
                 <div className="groupbox" key={g.id}>
                   <b>{g.seq}. {g.name}</b>{g.title && <span className="muted sm"> — {g.title}</span>}
                   {g.description && <div className="muted sm">{g.description}</div>}
-                  <table className="dtable" style={{ marginTop: 6 }}>
+                  <TableKit name="report-setup-1"><table className="dtable" style={{ marginTop: 6 }}>
                     <thead><tr><th>عضو</th><th>دسترسی‌ها</th><th /></tr></thead>
                     <tbody>
                       {g.members.length === 0 && <tr><td colSpan={3} className="muted sm">عضوی ندارد.</td></tr>}
@@ -105,7 +106,7 @@ export default function ReportSetupPage() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </table></TableKit>
                   <details className="inlinefold"><summary>افزودن یا تغییر دسترسی عضو</summary>
                     <form onSubmit={async (e) => {
                       e.preventDefault(); const f = mform(g.id);
