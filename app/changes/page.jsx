@@ -6,6 +6,7 @@ import Fold from "../../components/ui/Fold";
 import FormNo from "../../components/ui/FormNo";
 import { localToday, DayHint } from "../../components/ui/WorkDate";
 
+import TableKit from "../../components/ui/TableKit";
 /**
  * Work outside the contract, and the changes behind it.
  *
@@ -77,7 +78,7 @@ function TqCard({ data, post }) {
         </Fold>
       )}
       {data.tqs.length === 0 ? <p className="empty-note">TQ ثبت نشده است.</p> : (
-        <table className="dtable" data-tqs>
+        <TableKit name="changes-1"><table className="dtable" data-tqs>
           <thead><tr><th>شماره</th><th>موضوع</th><th>مدرک</th><th>وضعیت</th><th>پاسخ طراح</th><th>نتیجه</th>{data.may.decide && <th />}</tr></thead>
           <tbody>{data.tqs.map((t) => (
             <tr key={t.id} data-tq={t.tq_no}>
@@ -92,7 +93,7 @@ function TqCard({ data, post }) {
               </span>}</td>}
             </tr>
           ))}</tbody>
-        </table>
+        </table></TableKit>
       )}
     </div>
   );
@@ -130,7 +131,7 @@ function ChangeCard({ data, post }) {
         </Fold>
       )}
       {data.changes.length === 0 ? <p className="empty-note">تغییری ثبت نشده است.</p> : (
-        <table className="dtable" data-changes>
+        <TableKit name="changes-2"><table className="dtable" data-changes>
           <thead><tr><th>شماره</th><th>نوع</th><th>عنوان</th><th>نقشه</th><th>وضعیت</th><th>As-built طراح</th>{data.may.decide && <th />}</tr></thead>
           <tbody>{data.changes.map((c) => (
             <tr key={c.id} data-fcr={c.fcr_no}>
@@ -148,7 +149,7 @@ function ChangeCard({ data, post }) {
               </td>}
             </tr>
           ))}</tbody>
-        </table>
+        </table></TableKit>
       )}
     </div>
   );
@@ -192,7 +193,7 @@ function WoCard({ data, post }) {
         <>
           {(data.may.issueWo || data.may.prepareWo) && <div className="field" style={{ maxWidth: 220 }}><label htmlFor="wo-when">تاریخ ابلاغ / انجام</label>
             <input id="wo-when" type="date" dir="ltr" max={localToday()} value={when} onChange={(e) => setWhen(e.target.value)} /><DayHint date={when} /></div>}
-          <table className="dtable" data-wos>
+          <TableKit name="changes-3"><table className="dtable" data-wos>
             <thead><tr><th>شماره</th><th>قرارداد</th><th>کار</th><th>منشأ</th><th>مقدار × بها</th><th>WBS</th><th>تأییدشده در صورت وضعیت</th><th>وضعیت</th><th /></tr></thead>
             <tbody>{data.workOrders.map((w) => (
               <tr key={w.id} data-wo={w.wo_no}>
@@ -206,7 +207,7 @@ function WoCard({ data, post }) {
                   {w.status === "issued" && data.may.prepareWo && <button className="btn ghost" type="button" onClick={() => post({ kind: "wo-complete", workOrderId: w.id, completedOn: when })}>انجام شد</button>}</td>
               </tr>
             ))}</tbody>
-          </table>
+          </table></TableKit>
           <p className="muted sm">ابلاغ یک دستور کار، ردیف پرداخت «{`WO-…`}» با روش صورت‌جلسه و روی همان WBS به قرارداد اضافه می‌کند؛ صورت وضعیت بعدی آن را اندازه می‌گیرد و پرداخت می‌کند.</p>
         </>
       )}

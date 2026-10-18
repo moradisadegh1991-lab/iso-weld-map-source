@@ -71,7 +71,7 @@ export default function QualityPage() {
         <NcrTab data={data} post={post} may={may} role={role} />
       <div className="card">
         <h2>آنچه هر ساب‌سیستم را نگه داشته</h2>
-        <TableKit name="quality">
+        <TableKit name="quality-1">
           <table className="dtable">
             <thead><tr><th>ساب‌سیستم</th><th>Punch A (مانع MC)</th><th>A+B (مانع RFSU)</th><th>C (به تحویل)</th><th>NCR باز</th></tr></thead>
             <tbody>
@@ -114,7 +114,7 @@ function PunchTab({ data, post, may }) {
         </div>
       </div>
       {rows.length === 0 ? <p className="empty-note">آیتمی نیست.</p> : (
-        <TableKit name="quality">
+        <TableKit name="quality-2">
           <table className="dtable">
             <thead><tr><th>شماره</th><th>دسته</th><th>شرح</th><th>تگ</th><th>پیمانکار</th><th>مهلت</th><th>وضعیت</th><th /></tr></thead>
             <tbody>
@@ -245,7 +245,7 @@ function NcrTab({ data, post, may, role }) {
     <div className="card">
       <h2>عدم انطباق (NCR)</h2>
       {data.ncrs.length === 0 ? <p className="empty-note">NCR ثبت نشده است.</p> : (
-        <TableKit name="quality">
+        <TableKit name="quality-3">
           <table className="dtable">
             <thead><tr><th>شماره</th><th>عنوان</th><th>شدت</th><th>ساب‌سیستم / تگ</th><th>پیمانکار</th><th>دیسپوزیشن</th><th>مهلت پاسخ</th><th>وضعیت</th><th /></tr></thead>
             <tbody>

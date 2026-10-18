@@ -84,7 +84,7 @@ function InstrumentationPageBody() {
                  style={{ maxWidth: 260 }} aria-label="جستجو" />
         </div>
         {list.length === 0 ? <p className="empty-note">هنوز لیست ابزاری وارد نشده است.</p> : (
-          <TableKit name="instrumentation">
+          <TableKit name="instrumentation-1">
             <table className="dtable">
               <thead>
                 <tr><th>تگ</th><th>نوع (ISA 5.1)</th><th>سرویس</th><th>لوپ</th><th>تجهیز</th><th>رنج</th>
@@ -116,7 +116,7 @@ function Loops({ loops, mayRecord, post }) {
     <div className="card">
       <h2>لوپ‌ها</h2>
       <p className="muted sm">لوپ چک یک‌بار برای کل لوپ امضا می‌شود و فقط وقتی همهٔ ابزارهای لوپ کالیبره، نصب، هوک‌آپ و سیم‌بندی شده باشند.</p>
-      <TableKit name="instrumentation">
+      <TableKit name="instrumentation-2">
         <table className="dtable">
           <thead><tr><th>لوپ</th><th>ابزارها</th><th>وضعیت</th><th /></tr></thead>
           <tbody>{loops.map((l) => <LoopRow key={l.loopNo} l={l} mayRecord={mayRecord} post={post} />)}</tbody>
@@ -235,7 +235,7 @@ function Detail({ i, s, mayRecord, mayRegister, post, tags }) {
             {req.reason || `رنج ${req.lo}–${req.hi} · خروجی ${req.output === "mA" ? "4–20 mA" : "واحد مهندسی"} · تلورانس ±${req.tolerancePct}% اسپن · دست‌کم ۵ نقطه تا دو سر رنج. آخرین کالیبراسیون حکم می‌گیرد.`}
           </p>
           {v?.points && (
-            <TableKit name="instrumentation">
+            <TableKit name="instrumentation-3">
               <table className="dtable">
                 <thead><tr><th>اعمالی</th><th>انتظار</th><th>خروجی</th><th>خطا % اسپن</th></tr></thead>
                 <tbody>

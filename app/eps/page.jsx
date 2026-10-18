@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { useTreeDrag } from "../../components/ui/treeDrag";
 
+import TableKit from "../../components/ui/TableKit";
 /**
  * The contract's EPS: its PMSs, and under each the versions of its
  * schedule. A version is dragged onto another PMS to move there, or above
@@ -120,9 +121,9 @@ export default function EpsPage() {
       <div className="card">
         <h2>EPS قرارداد</h2>
         {data.pms.length === 0 ? <p className="empty-note">هنوز PMSی تعریف نشده است.</p> : (
-          <div className="tablewrap"><table className="dtable">
+          <div className="tablewrap"><TableKit name="eps-1"><table className="dtable">
             <thead><tr><th>کد</th><th>عنوان</th><th>تاریخ ثبت</th><th>برنامه‌ای (شروع — پایان)</th><th>مدت</th><th>واقعی (شروع — پایان)</th><th>مدت واقعی</th><th>نسخه / گره</th><th /></tr></thead>
-            <tbody>{data.pms.flatMap((p) => [pmsRow(p), ...p.versions.map((v) => versionRow(p, v))])}</tbody></table></div>)}
+            <tbody>{data.pms.flatMap((p) => [pmsRow(p), ...p.versions.map((v) => versionRow(p, v))])}</tbody></table></TableKit></div>)}
         {may && data.pms.length > 0 && <p className="sm muted">نسخه را روی یک PMS رها کنید تا به آن برود؛ بالا یا پایین یک نسخه یا PMS رها کنید تا ترتیب عوض شود.
           از نسخه‌های هر PMS فقط یکی «Master plan» است؛ انتخاب نسخهٔ دیگر آن را جابه‌جا می‌کند.</p>}
       </div>

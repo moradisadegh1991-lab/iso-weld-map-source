@@ -95,7 +95,7 @@ function Register({ bar }) {
       <div className="card">
         <h2>رجیستر مدارک (MDR)</h2>
         {docs.length === 0 ? <p className="empty-note">مدرکی ثبت نشده است.</p> : (
-          <TableKit name="documents" {...(may ? removeDoc : {})}
+          <TableKit name="documents-1" {...(may ? removeDoc : {})}
                     onEdit={may ? (id) => setEditing(docs.find((d) => d.id === id)) : undefined}>
             <table className="dtable">
               <thead><tr><th>شماره</th><th>عنوان</th><th>رشته</th><th>رویژن جاری</th><th>رویژن ساخت</th><th>IFC برنامه</th><th /></tr></thead>
@@ -131,7 +131,7 @@ function Register({ bar }) {
         {data.transmittals.length === 0 ? <p className="empty-note">ترانسمیتالی ارسال نشده است.</p> : data.transmittals.map((t) => (
           <div key={t.id} style={{ marginBottom: 10 }}>
             <p className="sm"><b className="mono">{t.transmittalNo}</b> به {t.toParty} · {t.purpose} · {fa(t.sentOn)}{t.responseDue && ` · مهلت پاسخ ${fa(t.responseDue)}`}</p>
-            <TableKit name="documents"><table className="dtable">
+            <TableKit name="documents-2"><table className="dtable">
               <thead><tr><th>مدرک</th><th>رویژن</th><th>وضعیت</th><th>پاسخ</th><th /></tr></thead>
               <tbody>{t.items.map((i) => {
                 const [tone, label] = ITEM_STATE[i.state];

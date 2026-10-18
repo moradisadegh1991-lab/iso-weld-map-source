@@ -95,7 +95,7 @@ function ElectricalPageBody() {
           </label>
         </div>
         {cables.length === 0 ? <p className="empty-note">هنوز لیست کابلی وارد نشده است.</p> : (
-          <TableKit name="electrical">
+          <TableKit name="electrical-1">
             <table className="dtable">
               <thead>
                 <tr><th>کابل</th><th>از → به</th><th>تجهیز</th><th>مشخصات</th><th>رده</th><th>طول m</th>
@@ -195,7 +195,7 @@ function Detail({ c, s, mayRecord, mayRegister, post, tags }) {
             : `ولتاژ تست ≥ ${req.testV} V DC · حداقل ${req.minMohm} MΩ · ${c.cores ?? "?"} قرائت (هر رشته). آخرین تست حکم می‌گیرد.`}
         </p>
         {s.ir.tests.length > 0 && (
-          <TableKit name="electrical">
+          <TableKit name="electrical-2">
             <table className="dtable">
               <thead><tr><th>تاریخ</th><th>ولتاژ تست V</th><th>قرائت‌ها MΩ</th><th>دستگاه</th></tr></thead>
               <tbody>

@@ -4,6 +4,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import Tabs from "../../../components/ui/Tabs";
 import TreeEditor, { flatten } from "../../../components/ui/TreeEditor";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * Step 2 of the organisation's process: one contract's currencies (at the
  * contract's own rate) and budget, its stakeholders, its addenda and
@@ -66,7 +67,7 @@ function Budget({ data, C, may, post }) {
           <button className="btn" type="submit">ثبت</button>
         </form>)}
       {data.currencies.length === 0 && <p className="empty-note">ارزها را اول در «تعریف پروژه» ثبت کنید.</p>}
-      <div className="tablewrap"><table className="dtable">
+      <div className="tablewrap"><TableKit name="contracts-setup-1"><table className="dtable">
         <thead><tr><th>ارز</th><th>نرخ</th><th>بودجهٔ پیش‌بینی</th><th>وزن</th><th>انجام‌شده</th><th>باقی‌مانده</th><th>کاهش</th><th>افزایش</th><th>آیتم‌های جدید</th><th>کل بودجهٔ مورد نیاز</th><th>به واحد پایه</th>{may && <th />}</tr></thead>
         <tbody>{C.budget.rows.map((r) => (
           <tr key={r.currency}><td className="mono">{r.currency}</td><td className="mono" dir="ltr">{r.rate}</td><td className="mono">{fmt(r.forecast)}</td>
@@ -78,7 +79,7 @@ function Budget({ data, C, may, post }) {
               doneTyped: r.doneSource === "typed" ? String(r.done) : "" })}>ویرایش</button></td>}</tr>))}
           {C.budget.rows.length > 0 && <tr><td colSpan={2}><b>جمع (واحد پایه)</b></td><td className="mono">{fmt(C.budget.total.forecast)}</td><td /><td className="mono">{fmt(C.budget.total.done)}</td>
             <td colSpan={4} /><td /><td className="mono"><b>{fmt(C.budget.total.needed)}</b></td></tr>}
-        </tbody></table></div>
+        </tbody></table></TableKit></div>
       <p className="sm">مدت قرارداد: {C.contract.start_on ? String(C.contract.start_on).slice(0, 10) : "—"} تا {C.contract.end_on ? String(C.contract.end_on).slice(0, 10) : "—"}
         {C.revised && C.revised.days !== 0 && <> · پس از تمدیدها: <b>{C.revised.endOn}</b> ({C.revised.days > 0 ? "+" : ""}{C.revised.days} روز)</>}</p>
     </div>
@@ -117,10 +118,10 @@ function Parties({ data, C, may, post }) {
           {f.id && <button className="btn ghost" type="button" onClick={() => setF(BLANK)}>انصراف</button>}
         </form>)}
       {C.stakeholders.length === 0 ? <p className="empty-note">ثبت نشده.</p> : (
-        <table className="dtable"><thead><tr><th>نقش</th><th>شرکت</th><th>توضیح</th>{may && <th />}</tr></thead>
+        <TableKit name="contracts-setup-2"><table className="dtable"><thead><tr><th>نقش</th><th>شرکت</th><th>توضیح</th>{may && <th />}</tr></thead>
           <tbody>{C.stakeholders.map((s) => <tr key={s.id}><td>{R[s.role]}</td><td><span className="mono">{s.code}</span> — {s.name}</td><td className="sm">{s.note || "—"}</td>
             {may && <td><button className="btn ghost sm" type="button" onClick={() => setF({ id: s.id, companyId: s.company_id, role: s.role, note: s.note || "" })}>ویرایش</button>
-              <button className="btn ghost sm" type="button" onClick={() => post({ kind: "contract-stakeholder-remove", id: s.id })}>حذف</button></td>}</tr>)}</tbody></table>)}
+              <button className="btn ghost sm" type="button" onClick={() => post({ kind: "contract-stakeholder-remove", id: s.id })}>حذف</button></td>}</tr>)}</tbody></table></TableKit>)}
     </div>
   );
 }
@@ -162,14 +163,14 @@ function Amendments({ data, C, may, post }) {
           {f.id && <button className="btn ghost" type="button" onClick={() => setF(BLANK)}>انصراف</button>}
         </form>)}
       {C.amendments.length === 0 ? <p className="empty-note">الحاقیه‌ای ثبت نشده.</p> : (
-        <table className="dtable"><thead><tr><th>شماره</th><th>نوع</th><th>عنوان</th><th>تاریخ</th><th>مدت</th><th>مبالغ</th>{may && <th />}</tr></thead>
+        <TableKit name="contracts-setup-3"><table className="dtable"><thead><tr><th>شماره</th><th>نوع</th><th>عنوان</th><th>تاریخ</th><th>مدت</th><th>مبالغ</th>{may && <th />}</tr></thead>
           <tbody>{C.amendments.map((a) => (
             <tr key={a.id}><td className="mono">{a.amendment_no}</td><td>{K[a.kind]}</td><td>{a.title}</td><td className="mono">{a.signed_on ? String(a.signed_on).slice(0, 10) : "—"}</td>
               <td className="mono">{a.days ? `${a.days > 0 ? "+" : ""}${a.days} روز` : "—"}</td>
               <td className="sm">{a.lines.length ? a.lines.map((l) => <div key={l.id}>{l.kind === "new_items" ? "آیتم جدید" : Number(l.amount) > 0 ? "افزایش" : "کاهش"} {fmt(Math.abs(Number(l.amount)))} {l.currency}</div>) : "—"}</td>
               {may && <td><button className="btn ghost sm" type="button" onClick={() => setF({ id: a.id, amendmentNo: a.amendment_no, amendmentKind: a.kind, title: a.title,
                 signedOn: a.signed_on ? String(a.signed_on).slice(0, 10) : "", days: a.days ? String(a.days) : "", note: a.note || "",
-                lines: a.lines.map((l) => ({ currency: l.currency, kind: l.kind, amount: String(Number(l.amount)) })) })}>ویرایش</button></td>}</tr>))}</tbody></table>)}
+                lines: a.lines.map((l) => ({ currency: l.currency, kind: l.kind, amount: String(Number(l.amount)) })) })}>ویرایش</button></td>}</tr>))}</tbody></table></TableKit>)}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { localToday } from "../../../components/ui/WorkDate";
 import { Workflow, Actions, History } from "../../../components/reports/WorkflowPanel";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * One handover form: its reports, a new one for a day — its rows typed, or
  * taken from the work the employer accepted that day in the form's section
@@ -52,12 +53,12 @@ export default function FormReportsPage() {
           <div className="card">
             <h2>گزارش‌ها</h2>
             {data.reports.length === 0 ? <p className="empty-note">گزارشی نیست.</p> : (
-              <table className="dtable"><thead><tr><th>شماره</th><th>تاریخ</th><th>عنوان</th><th>مرحله</th><th>وضعیت</th><th>نسخه</th><th /></tr></thead>
+              <TableKit name="forms-code-1"><table className="dtable"><thead><tr><th>شماره</th><th>تاریخ</th><th>عنوان</th><th>مرحله</th><th>وضعیت</th><th>نسخه</th><th /></tr></thead>
                 <tbody>{data.reports.map((r) => (
                   <tr key={r.id}><td className="mono">{r.report_no}</td><td className="mono">{String(r.report_date).slice(0, 10)}</td><td>{r.title}</td><td>{r.stage_name}</td>
                     <td><span className={`pill ${r.status === "approved" ? "ok" : r.status === "cancelled" ? "bad" : ""}`}>{r.status_fa}</span></td><td className="mono">{r.version_no}</td>
                     <td><button className="btn ghost sm" type="button" onClick={() => setOpenId(r.id)}>باز کردن</button>
-                      <Link className="btn ghost sm" href={`/forms/${code}/print?id=${r.id}`}>چاپ / PDF</Link></td></tr>))}</tbody></table>)}
+                      <Link className="btn ghost sm" href={`/forms/${code}/print?id=${r.id}`}>چاپ / PDF</Link></td></tr>))}</tbody></table></TableKit>)}
           </div>
         </>}
     </div>
@@ -146,7 +147,7 @@ function ReportView({ projectId, id, call, users, close }) {
                   <Input id={`eh-${h.key}`} f={h} value={c.header[h.key]} on={(val) => setDraft({ ...c, header: { ...c.header, [h.key]: val } })} /></div>
                 : <span key={h.key}>{h.label}: <b>{shown(h, c.header[h.key])}</b></span>)}
             </div>)}
-          <div className="tablewrap"><table className="dtable">
+          <div className="tablewrap"><TableKit name="forms-code-2"><table className="dtable">
             <thead><tr><th>ردیف</th>{def.columns.map((x) => <th key={x.key}>{x.label}{x.bind && <span className="sm muted" title="از کار تحویل‌گرفته"> ⇄</span>}</th>)}{editing && <th />}</tr></thead>
             <tbody>{c.rows.map((r, i) => (
               <tr key={r.id} data-form-row={i}>
@@ -156,7 +157,7 @@ function ReportView({ projectId, id, call, users, close }) {
               </tr>))}</tbody>
             {nums.length > 0 && c.rows.length > 0 && (
               <tfoot><tr><td><b>جمع</b></td>{def.columns.map((x) => <td key={x.key} className="mono">{x.type === "number" ? <b>{sum(x.key).toLocaleString("fa-IR")}</b> : ""}</td>)}{editing && <td />}</tr></tfoot>)}
-          </table></div>
+          </table></TableKit></div>
           {c.rows.length === 0 && <p className="empty-note">ردیفی ثبت نشده.</p>}
           {v.may.edit && !editing && <button className="btn" type="button" onClick={() => setDraft(structuredClone(v.content))}>ویرایش</button>}
           {editing && (

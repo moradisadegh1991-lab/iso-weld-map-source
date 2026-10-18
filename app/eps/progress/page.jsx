@@ -7,6 +7,7 @@ import ActivityDetail, { fmt } from "../../../components/eps/ActivityDetail";
 import { COLUMNS, useVersion } from "../../../components/eps/shared";
 import { codeSummary } from "../../../lib/eps/activities.mjs";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * The work done each day, entered against the WBS activities (owner's «PMS»
  * document, images 10–12). The activity's own figures are not edited here.
@@ -104,7 +105,7 @@ export default function ProgressPage() {
         <div className="p6-tabs" role="tablist">{Object.entries(TABS).map(([k, t]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : undefined} onClick={() => setTab(k)}>{t}</button>)}</div>
         {tab === "codes" ? (
           <div className="row" style={{ gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-            <div className="tablewrap" style={{ flex: 2, minWidth: 420 }}><table className="dtable">
+            <div className="tablewrap" style={{ flex: 2, minWidth: 420 }}><TableKit name="eps-progress-1"><table className="dtable">
               <thead><tr><th>Active Code</th><th>نوع فعالیت</th><th>Category A</th><th>Category B</th><th>Category C</th><th>Category D</th><th>Unit</th>
                 <th>فعالیت‌ها</th><th>Original weight</th><th>Actual weight</th><th>Work weight</th><th>Remain</th><th>Progress ٪</th></tr></thead>
               <tbody>{summary.filter((c) => c.activities > 0).map((c) => (
@@ -112,14 +113,14 @@ export default function ProgressPage() {
                   <td className="mono" dir="ltr">{c.code}</td><td>{c.name}</td>{[0, 1, 2, 3].map((i) => <td key={i} className="sm">{c.categories[i] || "—"}</td>)}<td>{c.unit || "—"}</td>
                   <td className="mono">{c.activities}</td><td className="mono">{fmt(c.plan)}</td><td className="mono">{fmt(c.actual)}</td><td className="mono"><b>{fmt(c.done)}</b></td>
                   <td className="mono">{fmt(c.remain)}</td><td className="mono"><b>{c.pct == null ? "—" : `${fmt(c.pct)}٪`}</b></td></tr>))}
-                {summary.every((c) => !c.activities) && <tr><td colSpan={13} className="muted sm">فعالیت‌های فیلترشده کد فعالیتی ندارند (فعالیت‌ها ◄ Activity Code).</td></tr>}</tbody></table>
+                {summary.every((c) => !c.activities) && <tr><td colSpan={13} className="muted sm">فعالیت‌های فیلترشده کد فعالیتی ندارند (فعالیت‌ها ◄ Activity Code).</td></tr>}</tbody></table></TableKit>
               <p className="sm muted">برای فعالیت‌هایی که فیلتر بالا نشان می‌دهد؛ حجم برنامه، واقعی و انجام‌شده به تفکیک کد فعالیت.</p></div>
             <div style={{ flex: 1, minWidth: 260 }}>
               <h3 className="sm">انجام‌شده به تفکیک ناحیه / پیمانکار{picked ? ` — ${picked.code}` : ""}</h3>
               {!picked ? <p className="sm muted">یک کد را در جدول انتخاب کنید.</p> : (
-                <table className="dtable"><thead><tr><th>Area / Contract name</th><th>Work weight</th></tr></thead>
+                <TableKit name="eps-progress-2"><table className="dtable"><thead><tr><th>Area / Contract name</th><th>Work weight</th></tr></thead>
                   <tbody>{Object.entries(picked.byArea).map(([k, v]) => <tr key={k}><td>{k ? companyName.get(k) || "—" : "بدون ناحیه"}</td><td className="mono">{fmt(v)}</td></tr>)}
-                    <tr><td><b>جمع</b></td><td className="mono"><b>{fmt(picked.done)}</b></td></tr></tbody></table>)}
+                    <tr><td><b>جمع</b></td><td className="mono"><b>{fmt(picked.done)}</b></td></tr></tbody></table></TableKit>)}
             </div>
           </div>
         ) : sel?.kind !== "act" ? <p className="empty-note">یک فعالیت را انتخاب کنید.</p>

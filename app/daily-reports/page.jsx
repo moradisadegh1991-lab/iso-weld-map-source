@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { localToday, DayHint } from "../../components/ui/WorkDate";
 
+import TableKit from "../../components/ui/TableKit";
 /**
  * The daily site report: written by the contractor, reviewed, signed and
  * approved stage by stage (lib/reports/workflow.mjs decides who may do
@@ -45,7 +46,7 @@ function Rows({ list, rows, setRows, labels, readOnly, catalog = [] }) {
   if (readOnly && !rows.length) return <p className="muted sm">ثبت نشده.</p>;
   return (
     <div className="tablewrap">
-      <table className="dtable">
+      <TableKit name="daily-reports-1"><table className="dtable">
         <thead><tr>{cols.map(([k, l]) => <th key={k}>{l}</th>)}<th>منبع</th>{!readOnly && <th />}</tr></thead>
         <tbody>{rows.map((r, i) => (
           <tr key={i}>
@@ -59,7 +60,7 @@ function Rows({ list, rows, setRows, labels, readOnly, catalog = [] }) {
             {!readOnly && <td><button className="btn ghost sm" type="button" aria-label={`حذف ردیف ${i + 1}`} onClick={() => setRows(rows.filter((_, j) => j !== i))}>×</button></td>}
           </tr>
         ))}</tbody>
-      </table>
+      </table></TableKit>
       {!readOnly && <button className="btn ghost sm" type="button" onClick={() => setRows([...rows, { source: "manual" }])}>+ ردیف</button>}
     </div>
   );
@@ -179,7 +180,7 @@ export default function DailyReportsPage() {
           <p><button className="btn" type="button" onClick={() => { setDraft(fromContent({})); setOpenId(null); setView(null); }}>گزارش روزانهٔ تازه</button></p>
         )}
         {data.reports.length === 0 ? <p className="empty-note">گزارشی نیست.</p> : (
-          <div className="tablewrap"><table className="dtable">
+          <div className="tablewrap"><TableKit name="daily-reports-2"><table className="dtable">
             <thead><tr><th>شماره</th><th>تاریخ</th><th>عنوان</th><th>مرحله</th><th>وضعیت</th><th>نسخه</th><th /></tr></thead>
             <tbody>{data.reports.map((r) => (
               <tr key={r.id} className={openId === r.id ? "sel" : ""}>
@@ -190,7 +191,7 @@ export default function DailyReportsPage() {
                 <td><button className="btn ghost sm" type="button" onClick={() => { setDraft(null); open(r.id); }}>باز کردن</button></td>
               </tr>
             ))}</tbody>
-          </table></div>
+          </table></TableKit></div>
         )}
       </div>
 
@@ -291,20 +292,20 @@ export default function DailyReportsPage() {
           </details>
 
           <details className="inlinefold"><summary>سابقه: {v.versions.length} نسخه، {v.decisions.length} تصمیم</summary>
-            <table className="dtable">
+            <TableKit name="daily-reports-3"><table className="dtable">
               <thead><tr><th>نسخه</th><th>مرحله</th><th>ویرایشگر</th><th>زمان</th><th>هش</th></tr></thead>
               <tbody>{v.versions.map((x) => (
                 <tr key={x.version_no}><td className="mono">{x.version_no}</td><td>{x.stage_seq}</td><td>{x.edited_by || "—"}</td>
                   <td className="mono sm">{new Date(x.edited_at).toLocaleString("fa-IR")}</td><td className="mono sm">{x.content_hash.slice(0, 12)}…</td></tr>
               ))}</tbody>
-            </table>
-            <table className="dtable">
+            </table></TableKit>
+            <TableKit name="daily-reports-4"><table className="dtable">
               <thead><tr><th>مرحله</th><th>تصمیم</th><th>نسخه</th><th>توسط</th><th>توضیح</th><th>زمان</th></tr></thead>
               <tbody>{v.decisions.map((d, i) => (
                 <tr key={i}><td>{d.stageSeq}</td><td>{{ approved: "تأیید", returned: "برگشت", cancelled: "لغو" }[d.action]}</td><td className="mono">{d.versionNo}</td>
                   <td>{d.by || "—"}</td><td className="sm">{d.comment || "—"}</td><td className="mono sm">{new Date(d.at).toLocaleString("fa-IR")}</td></tr>
               ))}</tbody>
-            </table>
+            </table></TableKit>
           </details>
         </div>
       )}

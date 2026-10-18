@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 
+import TableKit from "../../../components/ui/TableKit";
 /**
  * The contract's activity codes: each code names an activity type (e.g.
  * Excavation) and places it in up to eight categories (A–H), with its unit.
@@ -51,14 +52,14 @@ export default function CodesPage() {
         </form>)}
       <div className="card">
         {data.codes.length === 0 ? <p className="empty-note">هنوز کدی تعریف نشده است.</p> : (
-          <div className="tablewrap"><table className="dtable">
+          <div className="tablewrap"><TableKit name="eps-codes-1"><table className="dtable">
             <thead><tr><th>Active Code</th><th>نوع فعالیت</th>{CATS.map((c) => <th key={c}>Category {c}</th>)}<th>واحد</th><th>Valid</th><th>فعالیت‌ها</th><th>توضیح</th>{may && <th />}</tr></thead>
             <tbody>{data.codes.map((c) => (
               <tr key={c.id} data-code={c.code}><td className="mono" dir="ltr">{c.code}</td><td>{c.name}</td>{CATS.map((x, i) => <td key={x} className="sm">{c.categories[i] || "—"}</td>)}
                 <td>{c.unit || "—"}</td><td>{c.valid ? "✓" : "✗"}</td><td className="mono">{c.used}</td><td className="sm">{c.remark || ""}</td>
                 {may && <td style={{ whiteSpace: "nowrap" }}>
                   <button className="btn ghost sm" type="button" onClick={() => setF({ id: c.id, code: c.code, name: c.name, categories: [...c.categories, ...Array(8).fill("")].slice(0, 8), unit: c.unit || "", valid: c.valid, remark: c.remark || "" })}>ویرایش</button>
-                  <button className="btn ghost sm" type="button" onClick={() => post({ kind: "code-remove", id: c.id }, () => "حذف شد.")}>حذف</button></td>}</tr>))}</tbody></table></div>)}
+                  <button className="btn ghost sm" type="button" onClick={() => post({ kind: "code-remove", id: c.id }, () => "حذف شد.")}>حذف</button></td>}</tr>))}</tbody></table></TableKit></div>)}
       </div>
     </div>
   );

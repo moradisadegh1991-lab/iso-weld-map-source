@@ -43,7 +43,7 @@ export default function SubsystemsPage() {
             شکست کار ناقص‌تر باشد بالاتر می‌رود</b> — و همان عدد است که در جلسه
             خوانده می‌شود.
           </p>
-          <TableKit name="subsystems">
+          <TableKit name="subsystems-1">
             <table className="dtable">
               <thead><tr><th>رشته</th><th>اقلام</th></tr></thead>
               <tbody>
@@ -67,7 +67,7 @@ export default function SubsystemsPage() {
             لیست تجهیزات وارد می‌شود.
           </p>
         ) : (
-          <TableKit name="subsystems">
+          <TableKit name="subsystems-2">
             <table className="dtable">
               <thead>
                 <tr>

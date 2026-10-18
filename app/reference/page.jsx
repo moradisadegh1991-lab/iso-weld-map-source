@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import Tabs from "../../components/ui/Tabs";
 
+import TableKit from "../../components/ui/TableKit";
 /**
  * How an EPC project for a petrochemical plant or refinery runs, and where
  * the platform carries each part: phases and gates, deliverables, handover
@@ -57,11 +58,11 @@ export default function ReferencePage() {
           {data.deliverables.map((d) => (
             <section key={d.discipline}>
               <h3>{d.discipline}</h3>
-              <table className="dtable"><thead><tr><th>مدرک</th><th>فاز صدور</th><th>در پلتفرم / آنچه خوانده می‌شود</th></tr></thead>
+              <TableKit name="reference-1"><table className="dtable"><thead><tr><th>مدرک</th><th>فاز صدور</th><th>در پلتفرم / آنچه خوانده می‌شود</th></tr></thead>
                 <tbody>{d.docs.map(([t, ph, where]) => (
                   <tr key={t}><td>{t}</td><td className="sm mono">{ph}</td>
                     <td className="sm">{where ? (where.startsWith("/") ? <Link href={where.split(" ")[0]}>{where}</Link> : where) : <span className="muted">—</span>}</td></tr>
-                ))}</tbody></table>
+                ))}</tbody></table></TableKit>
             </section>
           ))}
           <p className="sm">مدارکی که ستون آخرشان شماره‌هایی را نام می‌برد، پس از کد ۱/۲ در <Link href="/documents/intake">خواندن مدارک</Link> خوانده می‌شوند.</p>
@@ -69,12 +70,12 @@ export default function ReferencePage() {
 
         <div className="card">
           <h2>گواهی‌های تحویل</h2>
-          <table className="dtable"><thead><tr><th>گواهی</th><th>شرط</th><th>در پلتفرم</th></tr></thead>
+          <TableKit name="reference-2"><table className="dtable"><thead><tr><th>گواهی</th><th>شرط</th><th>در پلتفرم</th></tr></thead>
             <tbody>{data.certificates.map((c) => (
               <tr key={c.code}><td><b className="mono">{c.code}</b><div className="sm">{c.title}</div></td>
                 <td className="sm"><ul style={{ margin: 0 }}>{c.requires.map((r) => <li key={r}>{r}</li>)}</ul></td>
                 <td className="sm"><Link href={c.href}>{c.href}</Link><div className="muted">{c.platform}</div></td></tr>
-            ))}</tbody></table>
+            ))}</tbody></table></TableKit>
         </div>
 
         <div className="card">
@@ -110,13 +111,13 @@ function StandardsCard({ data, may, post }) {
       <h3>رجیستر استانداردهای این پروژه</h3>
       <p className="sm">ویرایش هر استاندارد واقعیتی از قرارداد پروژه است و حدس زده نمی‌شود؛ استانداردی بدون ویرایش در «اطلاعات ناقص» می‌آید.</p>
       {data.projectStandards.length === 0 ? <p className="empty-note">هنوز استانداردی برای پروژه ثبت نشده.</p> : (
-        <table className="dtable"><thead><tr><th>کد</th><th>عنوان</th><th>ویرایش</th><th>دامنه</th><th>منبع</th>{may && <th />}</tr></thead>
+        <TableKit name="reference-3"><table className="dtable"><thead><tr><th>کد</th><th>عنوان</th><th>ویرایش</th><th>دامنه</th><th>منبع</th>{may && <th />}</tr></thead>
           <tbody>{data.projectStandards.map((s) => (
             <tr key={s.id}><td className="mono"><bdi>{s.code}</bdi></td><td className="sm">{s.title || "—"}</td>
               <td className="mono">{s.edition || <span className="err sm">ثبت نشده</span>}</td><td className="sm">{s.scope || "—"}</td><td className="sm">{s.source || "—"}</td>
               {may && <td style={{ whiteSpace: "nowrap" }}><button className="btn ghost sm" type="button" onClick={() => setF({ code: s.code, title: s.title || "", edition: s.edition || "", scope: s.scope || "", source: s.source || "" })}>ویرایش</button>
                 <button className="btn ghost sm" type="button" onClick={() => post({ kind: "standard-remove", id: s.id })}>حذف</button></td>}</tr>
-          ))}</tbody></table>
+          ))}</tbody></table></TableKit>
       )}
       {may && (
         <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "standard", ...f }, (r) => `${r.row.code} ثبت شد.`)) setF(BLANK); }}>
@@ -133,12 +134,12 @@ function StandardsCard({ data, may, post }) {
       {data.standards.map((g) => (
         <section key={g.group}>
           <h4>{g.group}</h4>
-          <table className="dtable"><thead><tr><th>کد</th><th>موضوع</th><th>در پلتفرم</th>{may && <th />}</tr></thead>
+          <TableKit name="reference-4"><table className="dtable"><thead><tr><th>کد</th><th>موضوع</th><th>در پلتفرم</th>{may && <th />}</tr></thead>
             <tbody>{g.items.map(([code, title, engine]) => (
               <tr key={code}><td className="mono"><bdi>{code}</bdi></td><td className="sm">{title}</td><td className="sm">{engine || <span className="muted">—</span>}</td>
                 {may && <td>{mine.has(code.toUpperCase()) ? <span className="pill ok">در رجیستر</span>
                   : <button className="btn ghost sm" type="button" onClick={() => setF({ ...BLANK, code, title })}>افزودن به پروژه</button>}</td>}</tr>
-            ))}</tbody></table>
+            ))}</tbody></table></TableKit>
         </section>
       ))}
     </div>

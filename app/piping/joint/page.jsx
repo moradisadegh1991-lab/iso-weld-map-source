@@ -65,7 +65,7 @@ function Finder({ q, setQ, list, open }) {
         <button className="btn" type="submit">جست‌وجو</button>
       </form>
       {!list ? <p className="muted">در حال بارگذاری…</p> : welds.length === 0 ? <p className="empty-note">جوشی پیدا نشد.</p> : (
-        <TableKit name="joint">
+        <TableKit name="joint-1">
           <table className="dtable">
             <thead><tr><th>جوش</th><th>خط</th><th>اسپول</th><th>نقشه</th><th>Shop/Field</th><th>سایز</th><th>جوشکار</th><th>وضعیت</th><th /></tr></thead>
             <tbody>
@@ -181,7 +181,7 @@ function History({ h }) {
 
       <div className="card">
         <h2>رویژن‌های نقشه</h2>
-        <TableKit name="joint">
+        <TableKit name="joint-2">
           <table className="dtable">
             <thead><tr><th>نقشه</th><th>رویژن</th><th>صدور</th><th>رجیستر</th><th>شمارهٔ جوش</th><th>Shop/Field</th><th>اسپول</th><th>تغییر نسبت به قبل</th></tr></thead>
             <tbody>{h.revisions.map((r, i) => (

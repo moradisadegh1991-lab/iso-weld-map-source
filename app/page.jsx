@@ -3,6 +3,8 @@ import Link from "next/link";
 import { usePlatform, useProjectData } from "../lib/client/platform.mjs";
 import { navigationFor, narrowed } from "../lib/platform/navigation.mjs";
 import { can } from "../lib/authz.mjs";
+import { usePrefs } from "../lib/client/prefs.mjs";
+import { localizeNav } from "../lib/i18n/nav.mjs";
 
 /**
  * The launchpad.
@@ -17,7 +19,8 @@ import { can } from "../lib/authz.mjs";
 export default function Home() {
   const { project, role, projectId } = usePlatform();
   const membership = { role, areas: project?.areas || [], tiles: project?.tiles || [], party: project?.inspection_party || null };
-  const nav = navigationFor(membership, can, { forms: project?.forms || [] });
+  const { lang } = usePrefs();
+  const nav = localizeNav(navigationFor(membership, can, { forms: project?.forms || [] }), lang);
   // a member narrowed to tiles sees their tiles, not the project's numbers
   const mine = narrowed(membership);
 
@@ -94,8 +97,8 @@ export default function Home() {
         const tiles = g.items.flatMap((sec) => sec.tabs.filter((t) => !t.log && t.href !== "/").map((t) => ({ ...t, sec })));
         if (!tiles.length) return null;
         return (
-          <section key={g.group} className="lp-group" aria-label={g.group}>
-            <h2 className="lp-title">{g.group}</h2>
+          <section key={g.group} className="lp-group" aria-label={g.label}>
+            <h2 className="lp-title">{g.label}</h2>
             <div className="lp-tiles">
               {tiles.map((t) => (
                 <Link key={t.href} href={t.href} className="lp-tile" data-tile={t.href}>

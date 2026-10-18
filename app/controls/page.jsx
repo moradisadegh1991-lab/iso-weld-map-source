@@ -93,7 +93,7 @@ function ControlsPageBody() {
       <div className="card">
         <h2>حساب‌های کنترلی</h2>
         {data.accounts.length === 0 ? <p className="empty-note">حساب کنترلی تعریف نشده است.</p> : (
-          <TableKit name="controls" {...(may ? removeAccount : {})}
+          <TableKit name="controls-1" {...(may ? removeAccount : {})}
                     onEdit={may ? (id) => setEditing(data.accounts.find((a) => a.id === id)) : undefined}>
             <table className="dtable">
               <thead><tr><th>کد</th><th>عنوان</th><th>منبع EV</th><th>PV %</th><th>EV %</th><th>SPI</th><th>CPI</th><th>AC</th><th>EAC</th><th>خط مبنا</th><th /></tr></thead>
@@ -184,7 +184,7 @@ function AccountDetail({ a, data, post, may, call, projectId }) {
         </div>
       )}
       {more?.costs?.length > 0 && (
-        <TableKit name="controls"><table className="dtable">
+        <TableKit name="controls-2"><table className="dtable">
           <thead><tr><th>تاریخ</th><th>سند</th><th>مبلغ</th><th>شرح</th></tr></thead>
           <tbody>{more.costs.map((c) => <tr key={c.id}><td className="mono sm">{fa(c.posted_on)}</td><td className="mono">{c.ref_no}</td>
             <td className={`mono ${Number(c.amount) < 0 ? "bad" : ""}`}>{money(Number(c.amount), cur)}</td><td className="sm">{c.note || ""}</td></tr>)}</tbody>
@@ -357,7 +357,7 @@ function Risks({ data, post, may }) {
         <Heat title="باقیمانده" g={data.heat.residual} />
       </div>
       {data.risks.length > 0 && (
-        <TableKit name="controls">
+        <TableKit name="controls-3">
           <table className="dtable">
             <thead><tr><th>کد</th><th>ریسک</th><th>مالک</th><th>P×I</th><th>پاسخ</th><th>مهلت</th><th>باقیمانده</th><th>وضعیت</th><th /></tr></thead>
             <tbody>

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 
+import TableKit from "../ui/TableKit";
 /**
  * A staged report's workflow on screen, shared by every report kind (the
  * contract's daily report, handover forms): the stages side by side with
@@ -73,14 +74,14 @@ export function History({ v }) {
     <div className="card">
       <h2>تاریخچه</h2>
       <p className="sm muted">هر ذخیره یک نسخه است و همهٔ نسخه‌ها می‌مانند. {v.record ? `نسخهٔ ${v.record.versionNo} که در آخرین مرحله تأیید شد، سند مرجع گزارش است.` : "گزارش هنوز تأیید نهایی نشده است."}</p>
-      <table className="dtable"><thead><tr><th>نسخه</th><th>مرحله</th><th>ویرایشگر</th><th>زمان</th></tr></thead>
+      <TableKit name="reports-workflowpanel-1" min={8}><table className="dtable"><thead><tr><th>نسخه</th><th>مرحله</th><th>ویرایشگر</th><th>زمان</th></tr></thead>
         <tbody>{v.versions.map((x) => <tr key={x.version_no} style={v.record?.versionNo === x.version_no ? { fontWeight: 700 } : undefined}>
           <td className="mono">{x.version_no}{v.record?.versionNo === x.version_no && " (مرجع)"}</td><td>{v.stages.find((s) => s.seq === x.stage_seq)?.name}</td>
-          <td>{x.edited_by || "—"}</td><td className="mono sm">{new Date(x.edited_at).toLocaleString("fa-IR")}</td></tr>)}</tbody></table>
+          <td>{x.edited_by || "—"}</td><td className="mono sm">{new Date(x.edited_at).toLocaleString("fa-IR")}</td></tr>)}</tbody></table></TableKit>
       <h3>تصمیم‌ها</h3>
-      {v.decisions.length === 0 ? <p className="empty-note">—</p> : <table className="dtable"><thead><tr><th>مرحله</th><th>تصمیم</th><th>نسخه</th><th>توسط</th><th>توضیح</th><th>زمان</th></tr></thead>
+      {v.decisions.length === 0 ? <p className="empty-note">—</p> : <TableKit name="reports-workflowpanel-2" min={8}><table className="dtable"><thead><tr><th>مرحله</th><th>تصمیم</th><th>نسخه</th><th>توسط</th><th>توضیح</th><th>زمان</th></tr></thead>
         <tbody>{v.decisions.map((d, i) => <tr key={i}><td>{v.stages.find((s) => s.seq === d.stageSeq)?.name}</td><td>{ACT[d.action]}</td><td className="mono">{d.versionNo}</td>
-          <td>{d.by}</td><td className="sm">{d.comment || "—"}</td><td className="mono sm">{new Date(d.at).toLocaleString("fa-IR")}</td></tr>)}</tbody></table>}
+          <td>{d.by}</td><td className="sm">{d.comment || "—"}</td><td className="mono sm">{new Date(d.at).toLocaleString("fa-IR")}</td></tr>)}</tbody></table></TableKit>}
     </div>
   );
 }

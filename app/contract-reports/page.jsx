@@ -5,6 +5,7 @@ import { localToday } from "../../components/ui/WorkDate";
 import { flatten } from "../../components/ui/TreeEditor";
 import { Workflow, Actions, History } from "../../components/reports/WorkflowPanel";
 
+import TableKit from "../../components/ui/TableKit";
 /**
  * The contract's daily report (owner's spec 2026-10-15, steps 5–6).
  * A report belongs to a contract. The first stage writes its rows; a later
@@ -86,11 +87,11 @@ function ReportList({ data, contractId, post, open }) {
       <div className="card">
         <h2>گزارش‌های این قرارداد</h2>
         {data.reports.length === 0 ? <p className="empty-note">گزارشی نیست.</p> : (
-          <table className="dtable"><thead><tr><th>شماره</th><th>تاریخ کار</th><th>نام</th><th>مرحله</th><th>وضعیت</th><th>نسخه</th><th /></tr></thead>
+          <TableKit name="contract-reports-1"><table className="dtable"><thead><tr><th>شماره</th><th>تاریخ کار</th><th>نام</th><th>مرحله</th><th>وضعیت</th><th>نسخه</th><th /></tr></thead>
             <tbody>{data.reports.map((r) => (
               <tr key={r.id}><td className="mono">{r.report_no}</td><td className="mono">{String(r.report_date).slice(0, 10)}</td><td>{r.title}</td><td>{r.stage_name}</td>
                 <td><span className={`pill ${r.status === "approved" ? "ok" : r.status === "cancelled" ? "bad" : ""}`}>{r.status_fa}</span></td><td className="mono">{r.version_no}</td>
-                <td><button className="btn ghost sm" type="button" onClick={() => open(r.id)}>باز کردن</button></td></tr>))}</tbody></table>)}
+                <td><button className="btn ghost sm" type="button" onClick={() => open(r.id)}>باز کردن</button></td></tr>))}</tbody></table></TableKit>)}
       </div>
     </>
   );
@@ -171,14 +172,14 @@ function ReportView({ projectId, id, call, labels, users, close }) {
           <h2>فعالیت‌های انجام‌شده</h2>
           <p className="sm muted">کار انجام‌شده روی فعالیت‌های WBS قرارداد؛ از صفحهٔ <a href="/eps/progress">ثبت کار روزانه</a> اضافه، ویرایش یا حذف می‌شود و همین گردش کار را دارد.</p>
           {(v.lines.activities || []).length === 0 ? <p className="empty-note">ردیفی نیست.</p> : (
-            <table className="dtable"><thead><tr><th>#</th><th>فعالیت</th><th>ناحیه / پیمانکار</th><th>Mark</th><th>مقدار</th><th>واحد</th><th>توضیح</th><th>تغییر مرحله‌ها</th></tr></thead>
+            <TableKit name="contract-reports-2"><table className="dtable"><thead><tr><th>#</th><th>فعالیت</th><th>ناحیه / پیمانکار</th><th>Mark</th><th>مقدار</th><th>واحد</th><th>توضیح</th><th>تغییر مرحله‌ها</th></tr></thead>
               <tbody>{v.lines.activities.map((l, i) => {
                 const e = l.effective || {}, a = v.activityInfo?.[e.activityId] || {};
                 return (
                   <tr key={l.id} style={{ textDecoration: e.removed ? "line-through" : undefined }}><td>{i + 1}</td><td><span className="mono" dir="ltr">{a.code || "—"}</span> {a.name || ""}</td>
                     <td>{v.companies?.find((c) => c.id === e.areaId)?.name || "—"}</td><td>{e.mark || "—"}</td><td className="mono">{e.qty ?? "—"}</td><td>{a.unit || "—"}</td><td className="sm">{e.notes || ""}</td>
                     <td className="sm">{l.lines.map((x) => <div key={x.seq} style={{ color: x.color || undefined }}>{x.stage}: {x.removed ? "حذف" : x.values.qty}</div>)}</td></tr>);
-              })}</tbody></table>)}
+              })}</tbody></table></TableKit>)}
         </div>)}
       {tab === "resources" && <Resources v={v} projectId={projectId} call={call} labels={labels} editable={editable} first={first} ops={ops} />}
       {(tab === "photos" || tab === "files") && <Files kind={tab === "photos" ? "photo" : "file"} v={v} projectId={projectId} editable={editable} post={post} setMsg={setMsg} reload={load} />}
@@ -252,7 +253,7 @@ function Section({ kind, v, labels, editable, first, ops, filter = null }) {
   const S = String(v.report.stage_seq);
   return (
     <div className="tablewrap">
-      <table className="dtable">
+      <TableKit name="contract-reports-3"><table className="dtable">
         <thead><tr><th>ردیف</th><th>مرحله</th>{cols.map(([k, l]) => <th key={k}>{l}</th>)}<th /></tr></thead>
         <tbody>{shown.map(({ line, i }) => {
           const raw = v.content[kind].find((r) => r.id === line.id);
@@ -282,7 +283,7 @@ function Section({ kind, v, labels, editable, first, ops, filter = null }) {
         {kind === "resources" && shown.length > 0 && (
           <tfoot><tr><td colSpan={2}><b>جمع کل ردیف‌ها</b></td>
             {cols.map(([k, , t]) => <td key={k} className="mono">{t === "num" || t === "calc" ? <b>{fmt(sumOf(k))}</b> : ""}</td>)}<td /></tr></tfoot>)}
-      </table>
+      </table></TableKit>
       {shown.length === 0 && <p className="empty-note">ردیفی ثبت نشده.</p>}
       {editable && <div style={{ marginTop: 8 }}><b className="sm">ردیف تازه{first ? "" : ` (مرحلهٔ ${stageName})`}</b>
         <RowForm key={`${v.versionNo}-${filter || ""}`} kind={kind} v={v} label="افزودن" initial={filter ? { resourceId: filter } : null} onSave={(f) => ops.add(kind, f)} /></div>}
@@ -309,7 +310,7 @@ function Resources({ v, projectId, call, labels, editable, first, ops }) {
         <h2>منابع — خلاصه بر اساس درخت منابع</h2>
         <ResourceSummary v={v} projectId={projectId} call={call} labels={labels} />
         <p className="sm muted">روی یک منبع بزنید تا ردیف‌های آن (به تفکیک گروه اجرایی) در بخش پایین نمایش داده شود؛ افزودن و تغییر منابع در بخش پایین است.</p>
-        <div className="tablewrap"><table className="dtable">
+        <div className="tablewrap"><TableKit name="contract-reports-4"><table className="dtable">
           <thead><tr><th>دسته منبع</th><th>نام منبع</th><th>نوع منبع</th><th>واحد</th><th>روز</th><th>شب</th><th>مرخصی</th><th>خرابی / استعلاجی</th><th>جمع کل</th><th>بومی</th><th>غیربومی</th></tr></thead>
           <tbody>{B.items.map((x) => x.type === "branch" ? (
             <tr key={`b-${x.id}`} style={{ background: "var(--surf2, #f5f7f9)" }}><td colSpan={11} style={{ paddingInlineStart: 8 + x.depth * 18 }}><b>▾ {x.name}</b></td></tr>
@@ -323,7 +324,7 @@ function Resources({ v, projectId, call, labels, editable, first, ops }) {
           <tfoot>{Object.entries(B.byUnit).map(([u, t]) => (
             <tr key={u}><td colSpan={3}><b>جمع کل — {u}</b></td><td className="sm">{u}</td>
               {["day", "night", "leave", "sick", "total", "local", "nonLocal"].map((k) => <td key={k} className="mono"><b>{fmt(t[k])}</b></td>)}</tr>))}</tfoot>
-        </table></div>
+        </table></TableKit></div>
         {v.resources.length === 0 && <p className="sm muted">این قرارداد هنوز منبعی ندارد (قراردادها ◄ منابع قرارداد).</p>}
       </div>
       <div className="card">
@@ -367,9 +368,9 @@ function ResourceSummary({ v, projectId, call, labels }) {
         {range && <>
           <p className="sm">{range.reports} گزارش · روز {fmt(range.summary.day)} · شب {fmt(range.summary.night)} · مرخصی {fmt(range.summary.leave)} · کل نفرات {fmt(range.summary.total)}
             {" "}· {Object.entries(range.summary.byUnit).map(([u, n]) => `${fmt(n)} ${u}`).join(" · ")}</p>
-          {range.byResource.length > 0 && <table className="dtable"><thead><tr><th>منبع</th><th>روز</th><th>شب</th><th>مرخصی</th><th>خرابی / استعلاجی</th><th>کل</th></tr></thead>
+          {range.byResource.length > 0 && <TableKit name="contract-reports-5"><table className="dtable"><thead><tr><th>منبع</th><th>روز</th><th>شب</th><th>مرخصی</th><th>خرابی / استعلاجی</th><th>کل</th></tr></thead>
             <tbody>{range.byResource.map((r) => <tr key={r.resourceId}><td>{name(r.resourceId)}</td><td className="mono">{fmt(r.day)}</td><td className="mono">{fmt(r.night)}</td>
-              <td className="mono">{fmt(r.leave)}</td><td className="mono">{fmt(r.sick)}</td><td className="mono"><b>{fmt(r.total)}</b></td></tr>)}</tbody></table>}
+              <td className="mono">{fmt(r.leave)}</td><td className="mono">{fmt(r.sick)}</td><td className="mono"><b>{fmt(r.total)}</b></td></tr>)}</tbody></table></TableKit>}
         </>}
       </details>
     </div>
@@ -416,10 +417,10 @@ function Files({ kind, v, projectId, editable, post, setMsg, reload }) {
             </figure>))}
         </div>
       ) : (
-        <table className="dtable"><thead><tr><th>فایل</th><th>حجم</th><th>بارگذاری</th><th /></tr></thead>
+        <TableKit name="contract-reports-6"><table className="dtable"><thead><tr><th>فایل</th><th>حجم</th><th>بارگذاری</th><th /></tr></thead>
           <tbody>{list.map((x) => <tr key={x.id} style={{ opacity: x.removed_at ? 0.4 : 1 }}><td><a href={url(x.id)}>{x.name}</a>{x.removed_at && " (حذف‌شده)"}</td>
             <td className="mono">{Math.ceil(x.byte_size / 1024)} KB</td><td className="sm">{x.uploaded_name} · {new Date(x.uploaded_at).toLocaleString("fa-IR")}</td>
-            <td>{editable && !x.removed_at && <button className="btn ghost sm" type="button" onClick={() => post({ kind: "file-remove", fileId: x.id })}>حذف</button>}</td></tr>)}</tbody></table>)}
+            <td>{editable && !x.removed_at && <button className="btn ghost sm" type="button" onClick={() => post({ kind: "file-remove", fileId: x.id })}>حذف</button>}</td></tr>)}</tbody></table></TableKit>)}
     </div>
   );
 }

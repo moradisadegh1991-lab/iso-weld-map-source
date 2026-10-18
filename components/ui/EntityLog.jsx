@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
+import { usePrefs } from "../../lib/client/prefs.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { STATUS, CONTRACT_STATUS } from "../../lib/contracts/statement.mjs";
 
@@ -12,6 +13,7 @@ import { STATUS, CONTRACT_STATUS } from "../../lib/contracts/statement.mjs";
  *   <EntityLog section="contracts" entityType="statement" entityId={id} label="صورت وضعیت 1 — SC-01" />
  */
 export default function EntityLog({ section, entityType, entityId, label, refreshKey = 0 }) {
+  const { t } = usePrefs();
   const { projectId, role, call } = usePlatform();
   const { data, error, reload } = useProjectData(
     (id) => `/api/log?projectId=${id}&section=${section}&entityId=${entityId}`, [section, entityId, refreshKey]);
@@ -28,15 +30,15 @@ export default function EntityLog({ section, entityType, entityId, label, refres
   }
 
   if (error) return <p className="err">{error}</p>;
-  if (!data) return <p className="muted sm">در حال بارگذاری گردش…</p>;
+  if (!data) return <p className="muted sm">{t("log.loading")}</p>;
   return (
     <div className="entitylog">
       <LogList log={data.log} />
       {may && (
         <form onSubmit={send} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-          <input aria-label={`کامنت روی ${label}`} dir="auto" value={text} onChange={(e) => setText(e.target.value)}
-                 placeholder="کامنت بنویسید…" style={{ flex: 1, minWidth: 220 }} />
-          <button className="btn ghost" type="submit" disabled={!text.trim()}>ثبت کامنت</button>
+          <input aria-label={t("log.commentOn", { label })} dir="auto" value={text} onChange={(e) => setText(e.target.value)}
+                 placeholder={t("log.placeholder")} style={{ flex: 1, minWidth: 220 }} />
+          <button className="btn ghost" type="submit" disabled={!text.trim()}>{t("log.submit")}</button>
         </form>
       )}
       {msg && <p className="err">{msg}</p>}
@@ -48,7 +50,8 @@ const TONE = { approved: "ok", accepted: "ok", signed: "ok", paid: "ok", verifie
 
 /** A log as a timeline, newest first. */
 export function LogList({ log, showSection = false }) {
-  if (!log.length) return <p className="empty-note">هنوز چیزی ثبت نشده است.</p>;
+  const { t } = usePrefs();
+  if (!log.length) return <p className="empty-note">{t("log.empty")}</p>;
   return (
     <ol className="loglist">
       {log.map((e, i) => (

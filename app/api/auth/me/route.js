@@ -6,6 +6,7 @@ import { listProjectsForUser } from "../../../../lib/db/repos/projects.mjs";
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { visibleContracts } from "../../../../lib/db/repos/users.mjs";
 import { formTypes } from "../../../../lib/db/repos/forms.mjs";
+import { cleanPrefs } from "../../../../lib/prefs.mjs";
 
 /**
  * Who is signed in, and what they may open: their projects, and in each the
@@ -23,8 +24,10 @@ export async function GET(request) {
         p.forms = (await formTypes(db, { projectId: p.id })).filter((f) => f.active).map((f) => ({ code: f.code, name: f.name, section: f.section }));
       });
     }
+    // the person's own settings (078): the header login path does not load them with the user
+    const prefs = user.prefs ?? (await db.query("SELECT prefs FROM app_user WHERE id = $1", [user.id])).rows[0]?.prefs;
     return Response.json({
-      user: { id: user.id, email: user.email, displayName: user.display_name, isDeveloper: !!user.is_developer },
+      user: { id: user.id, email: user.email, displayName: user.display_name, isDeveloper: !!user.is_developer, prefs: cleanPrefs(prefs) },
       projects,
       authMode,
     });

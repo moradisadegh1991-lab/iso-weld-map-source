@@ -65,7 +65,7 @@ export default function PrecomPage() {
       <Tabs name="precom">
       <div className="card">
         <h2>ساب‌سیستم‌ها</h2>
-        <TableKit name="precom"><table className="dtable">
+        <TableKit name="precom-1"><table className="dtable">
           <thead><tr><th>ساب‌سیستم</th><th>MC</th><th>پیش‌راه‌اندازی</th><th>RFC</th><th>راه‌اندازی</th><th>RFSU</th><th /></tr></thead>
           <tbody>{b.map((s) => [
             <tr key={s.id}>
@@ -118,7 +118,7 @@ function SubsystemPanel({ id, row, data, post, may, stamp }) {
       <div>
         <h3 className="sm" style={{ margin: "6px 0" }}>{title}{note[phase] && <span className="muted"> — {note[phase]}</span>}</h3>
         {list.length === 0 ? <p className="empty-note">چیزی از این مرحله به آیتم‌های این ساب‌سیستم اعمال نمی‌شود.</p> : (
-          <TableKit name="precom"><table className="dtable">
+          <TableKit name="precom-2"><table className="dtable">
             <thead><tr><th>چک‌لیست</th><th>آیتم</th><th>وضعیت</th><th>آخرین رکورد</th><th /></tr></thead>
             <tbody>{list.map((c) => (
               <CheckRow key={`${c.templateId}:${c.itemRef}`} c={c} subsystemId={id} post={post} may={may} canRecord={open[phase]} me={user?.id} />
@@ -200,7 +200,7 @@ function Templates({ data, post, may, reload }) {
         بدون چک‌لیست پیش‌راه‌اندازی RFC، و بدون روال راه‌اندازی RFSU امضا نمی‌شود — مرحلهٔ تعریف‌نشده «کامل» نیست.
         چک‌لیستی که ثبت دارد حذف نمی‌شود؛ غیرفعالش کنید.</p>
       {data.templates.length > 0 && (
-        <TableKit name="precom" {...(may.sign ? removal : {})}
+        <TableKit name="precom-3" {...(may.sign ? removal : {})}
                   onEdit={may.sign ? (id) => setEditing(data.templates.find((t) => t.id === id)) : undefined}>
           <table className="dtable">
             <thead><tr><th>کد</th><th>عنوان</th><th>مرحله</th><th>اعمال به</th><th>معیار</th><th>فعال</th></tr></thead>

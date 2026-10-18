@@ -66,7 +66,7 @@ export default function AssumptionsPage() {
           از همان داده‌ای حساب می‌شود که موتورها با آن حکم می‌دهند؛ هر ردیف یعنی سامانه به‌جای حدس زدن، منتظر این عدد مانده است.
         </p>
         {data.missing.length === 0 ? <p className="empty-note">چیزی منتظر اطلاعات نیست.</p> : (
-          <TableKit name="assumptions">
+          <TableKit name="assumptions-1">
             <table className="dtable">
               <thead><tr><th>اطلاعات لازم</th><th>رشتهٔ مسئول</th><th>اثر</th><th>منتظر</th><th>چرا</th><th /></tr></thead>
               <tbody>
@@ -98,7 +98,7 @@ export default function AssumptionsPage() {
           فرض، دادهٔ تأییدشدهٔ پروژه نیست. تغییر هر فرض یک رویژن جدید است و تأیید قبلی را به «در دست بررسی» برمی‌گرداند.
         </p>
         {data.assumptions.length === 0 ? <p className="empty-note">هنوز فرضی ثبت نشده است.</p> : (
-          <TableKit name="assumptions">
+          <TableKit name="assumptions-2">
             <table className="dtable">
               <thead><tr><th>کد</th><th>دسته</th><th>شرح</th><th>مقدار</th><th>مالک</th><th>اثر</th><th>وضعیت</th><th>Rev</th><th /></tr></thead>
               <tbody>
@@ -181,7 +181,7 @@ function Detail({ a, history, mayEdit, mayDecide, post }) {
         </form>
       )}
       {history && history.length > 0 && (
-        <TableKit name="assumptions">
+        <TableKit name="assumptions-3">
           <table className="dtable">
             <thead><tr><th>Rev</th><th>وضعیت</th><th>مقدار</th><th>دلیل تغییر بعدی</th><th>توسط</th><th>زمان</th></tr></thead>
             <tbody>

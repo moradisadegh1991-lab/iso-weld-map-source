@@ -70,7 +70,7 @@ function CoatingPageBody() {
       <div className="card">
         <h2>آیتم‌ها</h2>
         {items.length === 0 ? <p className="empty-note">هنوز به هیچ اسپول یا سازه‌ای سیستم رنگ داده نشده است.</p> : (
-          <TableKit name="coating">
+          <TableKit name="coating-1">
             <table className="dtable">
               <thead>
                 <tr><th>آیتم</th><th>سیستم</th><th>عایق</th><th>مساحت m²</th><th>پیشرفت</th><th>امروز می‌شود</th>
@@ -107,7 +107,7 @@ function Systems({ systems, mayRegister, post, spec, reload }) {
         DFT طبق ISO 19840 (قاعدهٔ ۸۰/۲۰) و روی قرائت تجمعی پس از هر لایه. سیستمی که به آیتمی داده شده حذف نمی‌شود.
       </p>
       {systems.length > 0 && (
-        <TableKit name="coating" {...(mayRegister ? removal : {})}
+        <TableKit name="coating-2" {...(mayRegister ? removal : {})}
                   onEdit={mayRegister ? (id) => setEditing(systems.find((x) => x.id === id)) : undefined}>
           <table className="dtable">
             <thead><tr><th>کد</th><th>شرح</th><th>آماده‌سازی</th><th>پروفیل µm</th><th>لایه‌ها (DFT اسمی µm)</th><th>حداکثر DFT</th></tr></thead>
@@ -274,7 +274,7 @@ function Coats({ i, s, mayRecord, post, spec, need }) {
   return (
     <div className="card" style={{ padding: 12 }}>
       <h2>لایه‌ها — DFT و شرایط اعمال</h2>
-      <TableKit name="coating">
+      <TableKit name="coating-3">
         <table className="dtable">
           <thead><tr><th>لایه</th><th>DFT اسمی تجمعی</th><th>نقطهٔ شبنم / فاصلهٔ فولاد</th><th>میانگین / کمینه / بیشینه</th><th>قرائت</th><th>حکم</th></tr></thead>
           <tbody>
