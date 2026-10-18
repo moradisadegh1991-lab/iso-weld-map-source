@@ -57,14 +57,17 @@ test("the upper resources part: every resource in its tree order, the report's r
 test("a later stage writes only its own values; the first stage's stay; a row is marked removed, never dropped", async () => {
   const prev = { header: { base: {}, stages: {} }, narrative: [], problems: [], resources: [{ id: "r1", base: { resourceId: "a", day: 5 }, stages: {} }] };
   const mine = structuredClone(prev); mine.resources[0].stages["2"] = { resourceId: "a", day: 4 };
-  equal(cd.diffContent(prev, mine, { stageSeq: 2, firstSeq: 1 }), { added: 0, changed: 1, removed: 0, illegal: [] });
+  const d = cd.diffContent(prev, mine, { stageSeq: 2, firstSeq: 1 });
+  equal({ ...d, touched: d.touched.map((t) => [t.section, t.row.id]) }, { added: 0, changed: 1, removed: 0, illegal: [], touched: [["resources", "r1"]] },
+    "and it says which rows it reaches, for a duty limited to some rows");
   const base = structuredClone(prev); base.resources[0].base.day = 4;
   assert(cd.diffContent(prev, base, { stageSeq: 2, firstSeq: 1 }).illegal.length, "stage 2 does not rewrite stage 1's number");
   const drop = structuredClone(prev); drop.resources = [];
   assert(cd.diffContent(prev, drop, { stageSeq: 2, firstSeq: 1 }).illegal.length, "a later stage does not delete a row");
   const mark = structuredClone(prev); mark.resources[0].stages["2"] = { removed: true };
   equal(cd.diffContent(prev, mark, { stageSeq: 2, firstSeq: 1 }).removed, 1);
-  equal(cd.diffContent(prev, drop, { stageSeq: 1, firstSeq: 1 }), { added: 0, changed: 0, removed: 1, illegal: [] }, "the first stage writes its own rows");
+  const dd = cd.diffContent(prev, drop, { stageSeq: 1, firstSeq: 1 });
+  equal([dd.added, dd.changed, dd.removed, dd.illegal], [0, 0, 1, []], "the first stage writes its own rows");
   const add = structuredClone(prev); add.resources.push({ id: "r2", base: null, addedAt: 2, stages: { 2: { resourceId: "a", day: 2 } } });
   equal(cd.diffContent(prev, add, { stageSeq: 2, firstSeq: 1 }).added, 1);
 });

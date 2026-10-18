@@ -825,6 +825,8 @@ ol.timeline li.bad::before{background:var(--bad)}
 .seg label{display:flex;gap:6px;align-items:center;font-size:13px}
 .okmsg{margin:10px 12px;padding:9px 11px;border:1px solid rgba(63,178,127,.45);border-radius:4px;color:var(--ok)}
 .permgrid{display:flex;flex-wrap:wrap;gap:4px 12px}
+.linkbtn{background:none;border:0;padding:0;color:inherit;cursor:pointer;text-align:start;font:inherit}
+.linkbtn:hover{color:var(--cy)}
 .permgrid label{display:flex;gap:4px;align-items:center;font-size:12px}
 .stagebox{border:1px solid var(--rule);border-radius:8px;padding:10px 12px;margin:10px 0}
 .stagebox h3{margin:0 0 6px;font-size:14px}

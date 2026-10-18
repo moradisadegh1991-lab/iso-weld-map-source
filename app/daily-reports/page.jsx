@@ -139,6 +139,7 @@ export default function DailyReportsPage() {
   const [edit, setEdit] = useState(null);            // content being edited on an open report
   const [comment, setComment] = useState("");
   const [send, setSend] = useState({ userIds: [], note: "" });
+  const [accept, setAccept] = useState(false);          // the signature stands through the stage's later changes
 
   async function open(id) {
     setMsg(null); setOpenId(id); setEdit(null); setComment("");
@@ -272,9 +273,12 @@ export default function DailyReportsPage() {
             <div className="actions">
               {v.may.signFor.map((gid) => {
                 const g = v.signatureBoxes.flatMap((s) => s.groups).find((x) => x.groupId === gid);
-                return <button key={gid} className="btn" type="button" onClick={() => post({ kind: "sign", reportId: v.report.id, groupId: gid }, () => open(v.report.id))}>
+                return <button key={gid} className="btn" type="button" onClick={() => post({ kind: "sign", reportId: v.report.id, groupId: gid, acceptChanges: accept }, () => open(v.report.id))}>
                   {t("dl.sign")}{v.may.signFor.length > 1 ? t("dl.signFor", { name: g?.name }) : ""}</button>;
               })}
+              {v.may.signFor.length > 0 && (
+                <label className="sm" style={{ display: "flex", gap: 6, alignItems: "center", flexBasis: "100%" }}>
+                  <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} /> {t("wf.acceptBox")}</label>)}
               {v.may.withdraw && <button className="btn ghost" type="button" onClick={() => post({ kind: "withdraw", reportId: v.report.id }, () => open(v.report.id))}>{t("dl.withdraw")}</button>}
               {v.may.approve && <button className="btn" type="button" onClick={() => post({ kind: "approve", reportId: v.report.id, comment }, () => open(v.report.id))}>{t("wf.approve")}</button>}
               {(v.may.return || v.may.cancel) && (

@@ -14,7 +14,7 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
 /** 6.5: the stages side by side — title (green once approved), the current one marked; under each, its groups and their signatures. */
 export function Workflow({ v }) {
   const boxes = new Map(v.signatureBoxes.map((b) => [b.stageSeq, b]));
-  const { t } = usePrefs();
+  const { t, date } = usePrefs();
   return (
     <div style={{ display: "flex", gap: 8, overflowX: "auto", margin: "8px 0" }} aria-label={t("wf.label")}>
       {v.stages.map((s) => (
@@ -29,8 +29,11 @@ export function Workflow({ v }) {
             {(boxes.get(s.seq)?.groups || []).map((g) => (
               <div key={g.groupId} style={{ flex: "1 0 90px", border: "1px solid var(--rule, #ccd)", borderRadius: 6, padding: 4 }}>
                 <div className="sm"><b>{g.name}</b></div>
+                {g.due && <div className="sm" data-due={g.overdue ? "overdue" : "open"} style={{ color: g.overdue ? "var(--bad)" : "var(--muted, #667)" }}>
+                  {g.overdue ? t("wf.overdue", { date: date(g.due) }) : t("wf.due", { date: date(g.due), n: g.reviewDays })}</div>}
                 {g.signatures.length === 0 ? <div className="sm muted">—</div> : g.signatures.map((x) => (
-                  <div key={x.userId} className="sm" style={{ opacity: x.current ? 1 : 0.5 }}>✓ {x.onBehalfOf ? t("wf.onBehalf", { name: x.onBehalfOf }) : ""}{x.name}</div>))}
+                  <div key={x.userId} className="sm" style={{ opacity: x.current ? 1 : 0.5 }} title={x.acceptChanges ? t("wf.acceptsTip") : undefined}>
+                    ✓ {x.onBehalfOf ? t("wf.onBehalf", { name: x.onBehalfOf }) : ""}{x.name}{x.acceptChanges && <span className="muted" data-accepts> {t("wf.accepts")}</span>}</div>))}
               </div>))}
           </div>
         </div>))}
@@ -42,6 +45,8 @@ export function Actions({ v, users, post }) {
   const [comment, setComment] = useState("");
   const [to, setTo] = useState([]);
   const [note, setNote] = useState("");
+  // «if my stage changes the content, my signature stands» (owner's requirements 2026-10-18, item 3)
+  const [accept, setAccept] = useState(false);
   const m = v.may;
   const { t } = usePrefs();
   const groupName = (gid) => v.signatureBoxes.flatMap((s) => s.groups).find((g) => g.groupId === gid)?.name;
@@ -49,10 +54,13 @@ export function Actions({ v, users, post }) {
     <div className="card">
       <h2>{t("wf.actions")}</h2>
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        {m.signFor.map((g) => <button key={g} className="btn" type="button" onClick={() => post({ kind: "sign", groupId: g }, () => t("wf.signed"))}>{t("wf.signFor", { group: groupName(g) })}</button>)}
+        {m.signFor.map((g) => <button key={g} className="btn" type="button" onClick={() => post({ kind: "sign", groupId: g, acceptChanges: accept }, () => t("wf.signed"))}>{t("wf.signFor", { group: groupName(g) })}</button>)}
         {m.withdraw && <button className="btn ghost" type="button" onClick={() => post({ kind: "withdraw" }, () => t("wf.withdrawn"))}>{t("wf.withdraw")}</button>}
         {m.approve && <button className="btn" type="button" onClick={() => post({ kind: "approve", comment }, () => t("wf.approved"))}>{t("wf.approve")}</button>}
       </div>
+      {m.signFor.length > 0 && (
+        <label className="sm" style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+          <input type="checkbox" id="wf-accept" checked={accept} onChange={(e) => setAccept(e.target.checked)} /> {t("wf.acceptBox")}</label>)}
       {!m.signFor.length && !m.withdraw && !m.approve && <p className="sm muted">{t("wf.nothing")}</p>}
       {(m.return || m.cancel) && (
         <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}>

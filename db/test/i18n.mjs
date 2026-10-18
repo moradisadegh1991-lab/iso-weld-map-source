@@ -42,6 +42,7 @@ import { PERMISSIONS } from "../../lib/reports/workflow.mjs";
 import { SIGNATURE_KIND } from "../../lib/db/repos/signatures.mjs";
 import { ORIENTATION, ALIGN, FOOTER_ELEMENTS, PLACEHOLDERS } from "../../lib/reports/print.mjs";
 import { SOURCE as DAILY_SOURCE, SHIFT as DAILY_SHIFT, WEATHER as DAILY_WEATHER } from "../../lib/reports/daily.mjs";
+import { FORM_PARTS } from "../../lib/db/repos/workflows.mjs";
 import { NAV_I18N, localizeNav } from "../../lib/i18n/nav.mjs";
 import { SECTIONS } from "../../lib/platform/navigation.mjs";
 import { cleanPrefs, withDefaults, PREFS } from "../../lib/prefs.mjs";
@@ -131,6 +132,7 @@ test("every domain label a translated page shows is in English and Arabic", () =
     ...Object.keys(ALIGN).map((k) => `print.align.${k}`), ...Object.keys(FOOTER_ELEMENTS).map((k) => `print.element.${k}`),
     ...Object.keys(PLACEHOLDERS).map((k) => `print.placeholder.${k}`), ...Object.keys(DAILY_SOURCE).map((k) => `daily.source.${k}`),
     ...Object.keys(DAILY_SHIFT).map((k) => `daily.shift.${k}`),
+    ...[...new Set(Object.values(FORM_PARTS).flatMap((x) => Object.keys(x)))].map((k) => `report.part.${k}`),
   ];
   equal(want.filter((k) => !LABELS[k]?.en || !LABELS[k]?.ar), [], "labels missing a translation");
   equal(Object.keys(LABELS).filter((k) => !want.includes(k)), [], "labels for nothing the platform declares");

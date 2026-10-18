@@ -122,7 +122,7 @@ test("a section's employer supervision designs its forms; another section's, a c
     equal(T.code, "HO-ELE");
     const w = await rp.workflowOf(db, { projectId: P, reportTypeId: T.id });
     equal(w.map((s) => s.name), ["پیمانکار", "نظارت کارفرما"], "a new form starts with the hand-over → take-over workflow");
-    equal((await forms.typeOf(db, { projectId: P, groupId: w[1].groups[0].id })).code, "HO-ELE", "a group leads to its form, for the designer's workflow rights");
+    equal((await forms.typesOf(db, { projectId: P, groupId: w[1].groups[0].id })).map((t) => t.code), ["HO-ELE"], "a group leads to the forms of its workflow, for the designer's workflow rights");
     const pl = await import("../../lib/db/repos/print-layout.mjs");
     const lay = (await pl.currentLayout(db, { projectId: P, reportTypeId: T.id })).layout;
     assert(JSON.stringify(lay).includes("تحویل روزانهٔ کابل‌کشی") && !JSON.stringify(lay).includes("گزارش روزانهٔ کارگاه"), "the default print header names the form");
