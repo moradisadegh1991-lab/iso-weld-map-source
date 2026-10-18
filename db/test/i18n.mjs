@@ -24,6 +24,7 @@ import contracts from "../../lib/i18n/sections/contracts.mjs";
 import reports from "../../lib/i18n/sections/reports.mjs";
 import grid from "../../lib/i18n/sections/grid.mjs";
 import eps from "../../lib/i18n/sections/eps.mjs";
+import supply from "../../lib/i18n/sections/supply.mjs";
 import { translate, dirOf, num, dateIn, keys as keysOf } from "../../lib/i18n/index.mjs";
 import { LABELS, label } from "../../lib/i18n/labels.mjs";
 import { INSPECTABLE } from "../../lib/platform/precedence.mjs";
@@ -48,6 +49,10 @@ import { FORM_PARTS } from "../../lib/db/repos/workflows.mjs";
 import { REL_TYPES, BUDGET_UNITS, ROLE_STATUS, QTY_MODES } from "../../lib/eps/activities.mjs";
 import { DISCIPLINES as SCOPE_DISC, MEASURES as SCOPE_MEASURES, MODES as SCOPE_MODES } from "../../lib/eps/scope.mjs";
 import { BUDGET_MODES, SEPARATORS, SEPARATOR_NAMES } from "../../lib/eps/wbs.mjs";
+import { REVIEW_CODES, FAT_RESULTS, STAGE_FA as PO_STAGES } from "../../lib/procurement/procurement.mjs";
+import { TECH_STATUS } from "../../lib/procurement/tender.mjs";
+import { CATEGORIES as STOCK_CATEGORIES } from "../../lib/warehouse/stock.mjs";
+import { DEST_FA } from "../../lib/warehouse/reserve.mjs";
 import { NAV_I18N, localizeNav } from "../../lib/i18n/nav.mjs";
 import { SECTIONS } from "../../lib/platform/navigation.mjs";
 import { cleanPrefs, withDefaults, PREFS } from "../../lib/prefs.mjs";
@@ -73,7 +78,7 @@ test("the three dictionaries hold the same keys, none empty", () => {
     equal(K.filter((k) => !String(d[k]).trim()), [], `${name}: empty strings`);
   }
   assert(F.length > 150, `${F.length} keys`);
-  const sections = [quality, contracts, reports, grid, eps];
+  const sections = [quality, contracts, reports, grid, eps, supply];
   const seen = new Set(Object.keys(base));
   const twice = [];
   for (const x of sections) for (const k of Object.keys(x.fa)) { if (seen.has(k)) twice.push(k); seen.add(k); }
@@ -144,6 +149,9 @@ test("every domain label a translated page shows is in English and Arabic", () =
       ...Object.keys(d.milestones).map((m) => `eps.scope.ms.${k}.${m}`)]),
     ...Object.keys(SCOPE_MEASURES).map((k) => `eps.scope.measure.${k}`), ...Object.keys(SCOPE_MODES).map((k) => `eps.scope.mode.${k}`),
     ...Object.keys(BUDGET_MODES).map((k) => `eps.budgetMode.${k}`), ...Object.keys(SEPARATORS).map((k) => `eps.separator.${SEPARATOR_NAMES[k]}`),
+    ...Object.keys(REVIEW_CODES).map((k) => `proc.review.${k}`), ...Object.keys(FAT_RESULTS).map((k) => `proc.fat.${k}`),
+    ...Object.keys(PO_STAGES).map((k) => `proc.stage.${k}`), ...Object.keys(TECH_STATUS).map((k) => `proc.tech.${k}`),
+    ...Object.keys(STOCK_CATEGORIES).map((k) => `wh.cat.${k}`), ...Object.keys(DEST_FA).map((k) => `wh.dest.${k}`),
   ];
   equal(want.filter((k) => !LABELS[k]?.en || !LABELS[k]?.ar), [], "labels missing a translation");
   equal(Object.keys(LABELS).filter((k) => !want.includes(k)), [], "labels for nothing the platform declares");
@@ -166,7 +174,9 @@ const TRANSLATED = ["app/quality/page.jsx", "app/inspection/page.jsx", "app/ndt-
   "app/signature/page.jsx", "app/daily-reports/page.jsx",
   "app/eps/page.jsx", "app/eps/wbs/page.jsx", "app/eps/templates/page.jsx", "app/eps/codes/page.jsx", "app/eps/activities/page.jsx",
   "app/eps/progress/page.jsx", "app/eps/progress/days/page.jsx", "app/eps/scope/page.jsx",
-  "components/eps/ActivityDetail.jsx", "components/eps/ActivityGrid.jsx", "components/eps/ScopePanel.jsx", "components/eps/shared.jsx"];
+  "components/eps/ActivityDetail.jsx", "components/eps/ActivityGrid.jsx", "components/eps/ScopePanel.jsx", "components/eps/shared.jsx",
+  "app/procurement/page.jsx", "app/procurement/Tender.jsx", "app/procurement/Vendors.jsx",
+  "app/warehouse/page.jsx", "app/warehouse/Stores.jsx", "app/warehouse/Mesc.jsx"];
 
 test("a translated page keeps no Persian of its own", async () => {
   const left = [];
