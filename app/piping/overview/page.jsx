@@ -160,23 +160,26 @@ function PipingClasses({ may }) {
   const [f, setF] = useState(blank);
   const [msg, setMsg] = useState(null);
   const num = (v) => (v === "" ? null : Number(v));
+  const write = (v) => call("/api/piping-classes", { method: "POST", body: JSON.stringify({ projectId, ...v,
+    corrosionAllowMm: num(v.corrosionAllowMm), designTempC: num(v.designTempC), designPressBarg: num(v.designPressBarg), pwhtAboveMm: num(v.pwhtAboveMm) }) });
   async function save(e) {
     e.preventDefault(); setMsg(null);
-    try {
-      await call("/api/piping-classes", { method: "POST", body: JSON.stringify({ projectId, ...f,
-        corrosionAllowMm: num(f.corrosionAllowMm), designTempC: num(f.designTempC), designPressBarg: num(f.designPressBarg), pwhtAboveMm: num(f.pwhtAboveMm) }) });
-      setF(blank); reload();
-    } catch (err) { setMsg(err.message); }
+    try { await write(f); setF(blank); reload(); } catch (err) { setMsg(err.message); }
   }
+  const classOf = (c) => ({ code: c.code, description: c.description || "", serviceCategory: c.service_category, materialSpec: c.material_spec || "",
+    corrosionAllowMm: c.corrosion_allow_mm ?? "", designTempC: c.design_temp_c ?? "", designPressBarg: c.design_press_barg ?? "", pwhtAboveMm: c.pwht_above_mm ?? "" });
   const on = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const classes = data?.classes || [];
   return (
     <div className="card">
       <h2>کلاس‌های لوله (Piping Class)</h2>
       {classes.length === 0 ? <p className="empty-note">کلاس لوله‌ای تعریف نشده — فشار تست پکیج‌ها و کف NDT خطوط از کلاس خوانده می‌شوند.</p> : (
-        <TableKit name="piping-class" onEdit={may ? (id) => { const c = classes.find((x) => x.id === id);
-          setF({ code: c.code, description: c.description || "", serviceCategory: c.service_category, materialSpec: c.material_spec || "",
-            corrosionAllowMm: c.corrosion_allow_mm ?? "", designTempC: c.design_temp_c ?? "", designPressBarg: c.design_press_barg ?? "", pwhtAboveMm: c.pwht_above_mm ?? "" }); } : undefined}>
+        <TableKit name="piping-class" onEdit={may ? (id) => setF(classOf(classes.find((x) => x.id === id))) : undefined}
+          rowEdit={may ? { fields: [{ col: "شرح", name: "description" }, { col: "سرویس B31.3", name: "serviceCategory", type: "select", options: Object.entries(SERVICE_FA) },
+            { col: "مواد", name: "materialSpec" }, { col: "CA mm", name: "corrosionAllowMm", type: "number" }, { col: "T طراحی °C", name: "designTempC", type: "number" },
+            { col: "P طراحی barg", name: "designPressBarg", type: "number" }, { col: "PWHT بالای mm", name: "pwhtAboveMm", type: "number" }],
+            value: (id) => classOf(classes.find((x) => x.id === id)),
+            onSave: async (id, v) => { setMsg(null); try { await write(v); reload(); return true; } catch (err) { setMsg(err.message); return false; } } } : undefined}>
           <table className="dtable">
             <thead><tr><th>کلاس</th><th>شرح</th><th>سرویس B31.3</th><th>مواد</th><th>CA mm</th><th>T طراحی °C</th><th>P طراحی barg</th><th>PWHT بالای mm</th></tr></thead>
             <tbody>{classes.map((c) => (

@@ -108,7 +108,10 @@ function Systems({ systems, mayRegister, post, spec, reload }) {
       </p>
       {systems.length > 0 && (
         <TableKit name="coating-2" {...(mayRegister ? removal : {})}
-                  onEdit={mayRegister ? (id) => setEditing(systems.find((x) => x.id === id)) : undefined}>
+                  onEdit={mayRegister ? (id) => setEditing(systems.find((x) => x.id === id)) : undefined}
+                  rowEdit={mayRegister ? { fields: [{ col: "شرح", name: "title" }, { col: "آماده‌سازی", name: "prepGrade", type: "select", options: PREP_GRADES.map((g) => [g, g]) },
+                    { col: "حداکثر DFT", name: "maxDftUm", type: "number" }],
+                    value: (id) => systemOf(systems.find((x) => x.id === id)), onSave: (id, v) => post({ kind: "system", ...v, coats: coatsOf(v.coats) }) } : undefined}>
           <table className="dtable">
             <thead><tr><th>کد</th><th>شرح</th><th>آماده‌سازی</th><th>پروفیل µm</th><th>لایه‌ها (DFT اسمی µm)</th><th>حداکثر DFT</th></tr></thead>
             <tbody>
@@ -138,21 +141,25 @@ function Systems({ systems, mayRegister, post, spec, reload }) {
 }
 
 /** New, or the same form filled with a system to amend (its code is the key and stays). */
+/** A system as its form holds it — the whole form, and the row edited in place. */
+const s0 = (v) => (v === null || v === undefined ? "" : String(Number(v)));
+const systemOf = (x) => ({ code: x.code, title: x.title || "", prepGrade: x.prep_grade,
+  profileMinUm: s0(x.profile_min_um), profileMaxUm: s0(x.profile_max_um), maxDftUm: s0(x.max_dft_um),
+  coats: x.coats.map((c) => `${c.name}: ${Number(c.ndft_um)}`).join("\n") });
+/** «نام: DFT اسمی», one coat a line, as the server takes them. */
+const coatsOf = (text) => text.split(/\n|؛|;/).map((l) => l.trim()).filter(Boolean).map((l) => {
+  const m = l.match(/^(.*?)[:：]\s*(\d+(?:\.\d+)?)$/);
+  return m ? { name: m[1].trim(), ndftUm: Number(m[2]) } : { name: l, ndftUm: NaN };
+});
+
 function SystemForm({ post, initial = null, onDone }) {
   const blank = { code: "", title: "", prepGrade: "Sa 2½", profileMinUm: "", profileMaxUm: "", coats: "", maxDftUm: "" };
-  const s0 = (v) => (v === null || v === undefined ? "" : String(Number(v)));
-  const [f, setF] = useState(initial ? { code: initial.code, title: initial.title || "", prepGrade: initial.prep_grade,
-    profileMinUm: s0(initial.profile_min_um), profileMaxUm: s0(initial.profile_max_um), maxDftUm: s0(initial.max_dft_um),
-    coats: initial.coats.map((c) => `${c.name}: ${Number(c.ndft_um)}`).join("\n") } : blank);
+  const [f, setF] = useState(initial ? systemOf(initial) : blank);
   const x = initial ? "ce" : "cs";
   return (
         <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
           e.preventDefault();
-          const coats = f.coats.split(/\n|؛|;/).map((l) => l.trim()).filter(Boolean).map((l) => {
-            const m = l.match(/^(.*?)[:：]\s*(\d+(?:\.\d+)?)$/);
-            return m ? { name: m[1].trim(), ndftUm: Number(m[2]) } : { name: l, ndftUm: NaN };
-          });
-          if (await post({ kind: "system", ...f, coats })) { if (initial) onDone?.(); else setF(blank); }
+          if (await post({ kind: "system", ...f, coats: coatsOf(f.coats) })) { if (initial) onDone?.(); else setF(blank); }
         }}>
           <Field id={`${x}-code`} label="کد سیستم" value={f.code} on={(v) => setF({ ...f, code: v })} required readOnly={!!initial} />
           <Field id={`${x}-title`} label="شرح" value={f.title} on={(v) => setF({ ...f, title: v })} />

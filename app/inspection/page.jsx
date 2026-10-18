@@ -361,6 +361,10 @@ function ItpTab({ data, post, may }) {
   );
 }
 
+/** An ITP line as its form holds it — the whole form, and the row edited in place. */
+const activityOf = (a) => ({ ...a, seq: String(a.seq), stepCode: a.stepCode || "", reference: a.reference || "", criteria: a.criteria || "",
+  record: a.record || "", points: { contractor: a.points.contractor || "", company: a.points.company || "", tpi: a.points.tpi || "" } });
+
 function ItpMatrix({ itp, data, post, may }) {
   const { t, L } = usePrefs();
   const party = (p) => L(`itp.party.${p}`, data.parties[p]);
@@ -379,9 +383,14 @@ function ItpMatrix({ itp, data, post, may }) {
       </div>
       <p className="muted sm">{t(`insp.itp.${itp.status}Note`)}</p>
       <TableKit name="inspection-3"
-                onEdit={(id) => { const a = itp.activities.find((x) => x.id === id);
-                  setF({ ...a, seq: String(a.seq), stepCode: a.stepCode || "", reference: a.reference || "", criteria: a.criteria || "",
-                    record: a.record || "", points: { contractor: a.points.contractor || "", company: a.points.company || "", tpi: a.points.tpi || "" } }); }}
+                onEdit={(id) => setF(activityOf(itp.activities.find((x) => x.id === id)))}
+                rowEdit={may.itp ? { fields: [{ col: t("c.activity"), name: "title" }, { col: t("c.reference"), name: "reference" },
+                    { col: t("c.criteria"), name: "criteria" }, { col: t("c.record"), name: "record" },
+                    ...Object.keys(data.parties).map((p) => ({ col: party(p), name: `pt_${p}`, type: "select", options: Object.keys(data.points).map((k) => [k, k]) }))],
+                  value: (id) => { const a = activityOf(itp.activities.find((x) => x.id === id));
+                    return { ...a, ...Object.fromEntries(Object.entries(a.points).map(([p, v]) => [`pt_${p}`, v])) }; },
+                  onSave: (id, v) => post({ kind: "activity", itpId: itp.id, ...v, seq: Number(v.seq),
+                    points: Object.fromEntries(Object.keys(v.points).map((p) => [p, v[`pt_${p}`] || ""])) }) } : undefined}
                 onDelete={(id) => post({ kind: "activity-remove", itpId: itp.id, id })}
                 canEdit={() => (draft ? true : t("insp.itp.fixed"))} canDelete={() => (draft ? true : t("insp.itp.fixed"))}>
       <table className="dtable">

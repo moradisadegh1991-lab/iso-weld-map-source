@@ -29,12 +29,20 @@ export default function Vendors({ bar }) {
       setF(BLANK); setEditing(false); reload();
     } catch (err) { setMsg(err.message); }
   }
-  function edit(id) {
-    const v = data.vendors.find((x) => x.id === id);
-    setF({ code: v.code, name: v.name, scope: v.scope || "", contactName: v.contact_name || "", email: v.email || "", phone: v.phone || "",
+  const asForm = (v) => ({ code: v.code, name: v.name, scope: v.scope || "", contactName: v.contact_name || "", email: v.email || "", phone: v.phone || "",
       country: v.country || "", city: v.city || "", address: v.address || "", website: v.website || "", notes: v.notes || "" });
-    setEditing(true);
-  }
+  function edit(id) { setF(asForm(data.vendors.find((x) => x.id === id))); setEditing(true); }
+  // a click on a row edits the columns it shows in place; «ویرایش» still opens the whole form
+  const rowEdit = may ? {
+    fields: [{ col: "نام", name: "name" }, { col: "کالا / خدمات", name: "scope" }, { col: "شخص رابط", name: "contactName" },
+      { col: "ایمیل", name: "email" }, { col: "تلفن", name: "phone" }],
+    value: (id) => asForm(data.vendors.find((x) => x.id === id)),
+    onSave: async (id, v) => {
+      setMsg(null);
+      try { await call("/api/procurement", { method: "POST", body: JSON.stringify({ projectId, kind: "vendor", ...v }) }); reload(); return true; }
+      catch (err) { setMsg(err.message); return false; }
+    },
+  } : undefined;
 
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
@@ -62,7 +70,7 @@ export default function Vendors({ bar }) {
           </div>
         )}
         {data.vendors.length === 0 ? <p className="empty-note">فروشنده‌ای ثبت نشده است.</p> : (
-          <TableKit name="vendors" onEdit={may ? edit : undefined}>
+          <TableKit name="vendors" onEdit={may ? edit : undefined} rowEdit={rowEdit}>
             <table className="dtable">
               <thead><tr><th>کد</th><th>نام</th><th>کالا / خدمات</th><th>شخص رابط</th><th>ایمیل</th><th>تلفن</th><th>محل</th><th>PO / پیشنهاد</th></tr></thead>
               <tbody>{list.map((v) => (

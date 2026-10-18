@@ -118,7 +118,9 @@ function People({ s, data, post, reload, mayRecord }) {
       <p className="muted sm">کارت بدون تاریخ انقضا فقط وقتی معتبر است که «بدون انقضا» روی خود کارت آمده باشد. کارت پاک نمی‌شود؛ ابطال با دلیل ثبت می‌شود.</p>
       {s.people.length === 0 ? <p className="empty-note">کسی ثبت نشده است.</p> : (
         <TableKit name="hse-people" {...(mayRecord ? removal : {})}
-                  onEdit={mayRecord ? (id) => setEditing(s.people.find((p) => p.id === id)) : undefined}>
+                  onEdit={mayRecord ? (id) => setEditing(s.people.find((p) => p.id === id)) : undefined}
+                  rowEdit={mayRecord ? { fields: [{ col: "نام", name: "fullName" }], value: (id) => personOf(s.people.find((p) => p.id === id)),
+                    onSave: (id, v) => post({ kind: "person", ...v }) } : undefined}>
           <table className="dtable">
             <thead><tr><th>نام</th><th>شمارهٔ شناسایی</th><th>پیمانکار / حرفه</th><th>کارت‌ها</th></tr></thead>
             <tbody>
@@ -149,9 +151,11 @@ function People({ s, data, post, reload, mayRecord }) {
 }
 
 /** New, or the same form filled with a person to amend (the ID number is the key and stays). */
+const personOf = (p) => ({ idNo: p.id_no, fullName: p.full_name, contractorId: p.contractor_id || "", trade: p.trade || "" });
+
 function PersonForm({ data, post, initial = null, onDone }) {
   const blank = { idNo: "", fullName: "", contractorId: "", trade: "" };
-  const [f, setF] = useState(initial ? { idNo: initial.id_no, fullName: initial.full_name, contractorId: initial.contractor_id || "", trade: initial.trade || "" } : blank);
+  const [f, setF] = useState(initial ? personOf(initial) : blank);
   const x = initial ? "pe" : "ps";
   return (
     <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {
@@ -317,6 +321,8 @@ function JsaCard({ j, post, reload, mayRecord, mayIssue }) {
       {j.steps.length > 0 && (
         <TableKit name={`jsa-${j.jsa_no}`} min={4}
                   onEdit={mayRecord ? (seq) => setEditing(j.steps.find((x) => String(x.seq) === seq)) : undefined} canEdit={() => locked}
+                  rowEdit={mayRecord ? { fields: [{ col: "گام", name: "step" }, { col: "خطر", name: "hazard" }, { col: "کنترل", name: "controls" }],
+                    value: (seq) => stepOf(j.steps.find((x) => String(x.seq) === seq)), onSave: (seq, v) => post({ kind: "jsa-step", jsaId: j.id, ...v }) } : undefined}
                   onDelete={mayRecord ? (seq) => post({ kind: "jsa-step-remove", jsaId: j.id, seq }) : undefined} canDelete={() => locked}>
         <table className="dtable" style={{ marginTop: 6 }}>
           <thead><tr><th>#</th><th>گام</th><th>خطر</th><th>کنترل</th><th>ریسک اولیه</th><th>باقیمانده</th></tr></thead>
@@ -355,12 +361,14 @@ function JsaCard({ j, post, reload, mayRecord, mayIssue }) {
   );
 }
 
+const s0 = (v) => (v === null || v === undefined ? "" : String(v));
+const stepOf = (x) => ({ seq: String(x.seq), step: x.step, hazard: x.hazard, controls: s0(x.controls),
+  likelihood: s0(x.likelihood), severity: s0(x.severity), residualLikelihood: s0(x.residualLikelihood), residualSeverity: s0(x.residualSeverity) });
+
 function StepForm({ j, post, initial = null, onDone }) {
   const next = (j.steps.at(-1)?.seq || 0) + 10;
   const blank = { seq: String(next), step: "", hazard: "", controls: "", likelihood: "", severity: "", residualLikelihood: "", residualSeverity: "" };
-  const s0 = (v) => (v === null || v === undefined ? "" : String(v));
-  const [f, setF] = useState(initial ? { seq: String(initial.seq), step: initial.step, hazard: initial.hazard, controls: s0(initial.controls),
-    likelihood: s0(initial.likelihood), severity: s0(initial.severity), residualLikelihood: s0(initial.residualLikelihood), residualSeverity: s0(initial.residualSeverity) } : blank);
+  const [f, setF] = useState(initial ? stepOf(initial) : blank);
   const k = initial ? `e-${j.id}` : j.id;
   return (
     <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {

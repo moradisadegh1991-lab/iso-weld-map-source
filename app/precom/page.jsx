@@ -201,7 +201,11 @@ function Templates({ data, post, may, reload }) {
         چک‌لیستی که ثبت دارد حذف نمی‌شود؛ غیرفعالش کنید.</p>
       {data.templates.length > 0 && (
         <TableKit name="precom-3" {...(may.sign ? removal : {})}
-                  onEdit={may.sign ? (id) => setEditing(data.templates.find((t) => t.id === id)) : undefined}>
+                  onEdit={may.sign ? (id) => setEditing(data.templates.find((t) => t.id === id)) : undefined}
+                  rowEdit={may.sign ? { fields: [{ col: "عنوان", name: "title" }, { col: "معیار", name: "criteria" },
+                    { col: "فعال", name: "active", type: "select", options: [["1", "✓ فعال"], ["0", "غیرفعال"]] }],
+                    value: (id) => { const t = templateOf(data.templates.find((x) => x.id === id)); return { ...t, active: t.active ? "1" : "0" }; },
+                    onSave: (id, v) => post({ kind: "template", ...v, active: v.active !== "0" }) } : undefined}>
           <table className="dtable">
             <thead><tr><th>کد</th><th>عنوان</th><th>مرحله</th><th>اعمال به</th><th>معیار</th><th>فعال</th></tr></thead>
             <tbody>{data.templates.map((t) => (
@@ -223,10 +227,11 @@ function Templates({ data, post, may, reload }) {
 }
 
 /** New, or the same form filled with a checklist to amend (its code is the key and stays). */
+const templateOf = (t) => ({ code: t.code, title: t.title, appliesTo: t.appliesTo, phase: t.phase, criteria: t.criteria || "", active: t.active });
+
 function TemplateForm({ data, post, initial = null, onDone }) {
   const blank = { code: "", title: "", appliesTo: "subsystem", phase: "precom", criteria: "" };
-  const [f, setF] = useState(initial ? { code: initial.code, title: initial.title, appliesTo: initial.appliesTo, phase: initial.phase,
-    criteria: initial.criteria || "", active: initial.active } : blank);
+  const [f, setF] = useState(initial ? templateOf(initial) : blank);
   const x = initial ? "te" : "t";
   return (
     <form style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }} onSubmit={async (e) => {

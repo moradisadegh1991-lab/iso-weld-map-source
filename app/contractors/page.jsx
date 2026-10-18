@@ -37,6 +37,18 @@ export default function ContractorsPage() {
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
 
   const { contractors, packages, lapsed, companies = [] } = data;
+  // a click on a row edits its status and prequalification in place; «ویرایش» opens the whole form
+  const rowEdit = mayEdit ? {
+    fields: [{ col: "وضعیت", name: "status", type: "select", options: Object.entries(STATUS_FA) },
+      { col: "صلاحیت تا", name: "prequalifiedUntil", type: "date" }],
+    value: (id) => { const c = contractors.find((x) => x.id === id);
+      return { companyId: c.companyId, code: c.code, status: c.status, disciplines: c.disciplines || [],
+        prequalifiedUntil: c.prequalifiedUntil ? String(c.prequalifiedUntil).slice(0, 10) : "" }; },
+    onSave: async (id, v) => {
+      await call("/api/contractors", { method: "POST", body: JSON.stringify({ ...v, prequalifiedUntil: v.prequalifiedUntil || null, projectId }) });
+      reload(); return true;
+    },
+  } : undefined;
 
   return (
     <div className="page">
@@ -77,7 +89,7 @@ export default function ContractorsPage() {
           <p className="empty-note">هنوز پیمانکاری ثبت نشده است.</p>
         ) : (
           <TableKit name="contractors-2"
-                    onEdit={mayEdit ? (id) => setEditing(contractors.find((c) => c.id === id)) : undefined}
+                    onEdit={mayEdit ? (id) => setEditing(contractors.find((c) => c.id === id)) : undefined} rowEdit={rowEdit}
                     {...(mayEdit ? removal : {})}>
             <table className="dtable">
               <thead>

@@ -421,7 +421,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
       togglePick(row, e.shiftKey);
       return;
     }
-    if (rowEdit && e.type === "click") { guard(() => openEdit(row)); }
+    if (rowEdit && e.type === "click" && mayEditRow(row)) { guard(() => openEdit(row)); }
     const cur = st.current.selRow;
     if (cur && cur !== row) delete cur.dataset.tkSel;
     if (cur === row && e.type === "click" && e.detail === 1) { delete row.dataset.tkSel; st.current.selRow = null; setSel(null); return; }
@@ -488,6 +488,8 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     s.editTr = null; s.editFor = null;
     setEd(null);
   }
+  // a row a page says is not open for editing (signed, evidence, no right) only selects
+  const mayEditRow = (row) => { const k = row?.dataset.key; return !!k && (!canEdit || canEdit(k) === true); };
   function openEdit(row) {
     closeEdit();
     const key = row ? row.dataset.key : null;
@@ -708,7 +710,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
             const done = () => setRowMenu(null);
             return <>
               <button type="button" role="menuitem" onClick={() => { done(); pick({ target: r.cells[0] || r, type: "dblclick" }); }}>{t("tk.view")}</button>
-              {rowEdit && k && <button type="button" role="menuitem" onClick={() => { done(); guard(() => openEdit(r)); }}>{t("tk.edit")}</button>}
+              {rowEdit && k && mayEditRow(r) && <button type="button" role="menuitem" onClick={() => { done(); guard(() => openEdit(r)); }}>{t("tk.edit")}</button>}
               {!rowEdit && onEdit && k && <button type="button" role="menuitem" onClick={() => { done(); onEdit(k); }}>{editLabel}</button>}
               {rowEdit?.onAdd && <button type="button" role="menuitem" onClick={() => { done(); guard(() => openEdit(null)); }}>{t("tk.add")}</button>}
               <button type="button" role="menuitem" onClick={() => { done(); copyRows(many); }}>{t("tk.copy")}</button>

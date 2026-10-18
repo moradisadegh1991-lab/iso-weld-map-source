@@ -31,7 +31,9 @@ export default function Performance({ data, post, may, reload }) {
       <p className="muted sm">تضمین‌ها از قرارداد، با بند مرجع؛ رواداری‌ای که قرارداد نگفته اعمال نمی‌شود. تضمینی که با آن حکم داده شده، شرایطش ثابت است و حذف نمی‌شود.</p>
       {p.guarantees.length === 0 ? <p className="empty-note">تضمینی تعریف نشده است.</p> : (
         <TableKit name="perf-g" {...(may.sign ? removeGuarantee : {})}
-                  onEdit={may.sign ? (id) => setEditing(p.guarantees.find((g) => g.id === id)) : undefined}><table className="dtable">
+                  onEdit={may.sign ? (id) => setEditing(p.guarantees.find((g) => g.id === id)) : undefined}
+                  rowEdit={may.sign ? { fields: [{ col: "پارامتر", name: "parameter" }, { col: "حداقل مدت", name: "minDurationH", type: "number" }, { col: "بند قرارداد", name: "basis" }],
+                    value: (id) => guaranteeOf(p.guarantees.find((g) => g.id === id)), onSave: (id, v) => post({ kind: "guarantee", ...v }) } : undefined}><table className="dtable">
           <thead><tr><th>کد</th><th>پارامتر</th><th>محدوده</th><th>تضمین</th><th>حداقل مدت</th><th>بند قرارداد</th><th>وضعیت</th></tr></thead>
           <tbody>{p.guarantees.map((g) => {
             const st = p.status.find((x) => x.guaranteeId === g.id);
@@ -135,11 +137,13 @@ function TestCard({ t, p, post, may, unitName, removal }) {
 }
 
 /** New, or the same form filled with a guarantee to amend (its code is the key and stays). */
+const s0 = (v) => (v === null || v === undefined ? "" : String(v));
+const guaranteeOf = (g) => ({ code: g.code, parameter: g.parameter, unitId: g.unitId || "", uom: g.uom,
+  direction: g.direction, guaranteedValue: s0(g.guaranteedValue), minDurationH: s0(g.minDurationH), basis: g.basis });
+
 function GuaranteeForm({ p, post, initial = null, onDone }) {
   const blank = { code: "", parameter: "", unitId: "", uom: "", direction: "min", guaranteedValue: "", minDurationH: "", basis: "" };
-  const s0 = (v) => (v === null || v === undefined ? "" : String(v));
-  const [f, setF] = useState(initial ? { code: initial.code, parameter: initial.parameter, unitId: initial.unitId || "", uom: initial.uom,
-    direction: initial.direction, guaranteedValue: s0(initial.guaranteedValue), minDurationH: s0(initial.minDurationH), basis: initial.basis } : blank);
+  const [f, setF] = useState(initial ? guaranteeOf(initial) : blank);
   const x = initial ? "ge" : "gu";
   return (
     <form className="grid2" style={{ alignItems: "end" }} onSubmit={async (e) => {

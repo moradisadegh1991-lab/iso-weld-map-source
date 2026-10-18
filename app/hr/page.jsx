@@ -34,12 +34,16 @@ export default function HrPage() {
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
   const on = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const ot = (k) => (e) => setT({ ...t, [k]: e.target.value });
-  function edit(id) {
-    const p = data.people.find((x) => x.id === id);
-    setF({ idNo: p.idNo, fullName: p.fullName, employer: p.employer, contractorId: p.contractorId || "", position: p.position || "", department: p.department || "",
+  const asForm = (p) => ({ idNo: p.idNo, fullName: p.fullName, employer: p.employer, contractorId: p.contractorId || "", position: p.position || "", department: p.department || "",
       trade: p.trade || "", mobilizedOn: p.mobilizedOn || "", demobilizedOn: p.demobilizedOn || "", phone: p.phone || "", email: p.email || "" });
-    setEditing(true);
-  }
+  function edit(id) { setF(asForm(data.people.find((x) => x.id === id))); setEditing(true); }
+  // a click on a row edits the columns it shows in place; «ویرایش» still opens the whole form
+  const rowEdit = may ? {
+    fields: [{ col: "نام", name: "fullName" }, { col: "سمت", name: "position" }, { col: "واحد", name: "department" },
+      { col: "ورود", name: "mobilizedOn", type: "date" }, { col: "خروج", name: "demobilizedOn", type: "date" }],
+    value: (id) => asForm(data.people.find((x) => x.id === id)),
+    onSave: (id, v) => post({ kind: "person", ...v, contractorId: v.contractorId || null }),
+  } : undefined;
 
   return (
     <div className="page">
@@ -54,7 +58,7 @@ export default function HrPage() {
         <div className="card">
           <h2>پرسنل</h2>
           {data.people.length === 0 ? <p className="empty-note">کسی ثبت نشده است.</p> : (
-            <TableKit name="hr-people" onEdit={may ? edit : undefined}>
+            <TableKit name="hr-people" onEdit={may ? edit : undefined} rowEdit={rowEdit}>
               <table className="dtable">
                 <thead><tr><th>نام</th><th>کد ملی / پرسنلی</th><th>کارفرما</th><th>سمت</th><th>واحد</th><th>ورود</th><th>خروج</th><th>کارکرد (ساعت)</th><th>وضعیت</th></tr></thead>
                 <tbody>{data.people.map((p) => (
