@@ -25,6 +25,7 @@ import reports from "../../lib/i18n/sections/reports.mjs";
 import grid from "../../lib/i18n/sections/grid.mjs";
 import eps from "../../lib/i18n/sections/eps.mjs";
 import supply from "../../lib/i18n/sections/supply.mjs";
+import hseSection from "../../lib/i18n/sections/hse.mjs";
 import { translate, dirOf, num, dateIn, keys as keysOf } from "../../lib/i18n/index.mjs";
 import { LABELS, label } from "../../lib/i18n/labels.mjs";
 import { INSPECTABLE } from "../../lib/platform/precedence.mjs";
@@ -53,6 +54,8 @@ import { REVIEW_CODES, FAT_RESULTS, STAGE_FA as PO_STAGES } from "../../lib/proc
 import { TECH_STATUS } from "../../lib/procurement/tender.mjs";
 import { CATEGORIES as STOCK_CATEGORIES } from "../../lib/warehouse/stock.mjs";
 import { DEST_FA } from "../../lib/warehouse/reserve.mjs";
+import { CLASSES as HSE_CLASSES, TREATMENTS, PERMIT_TYPES, GAS_LIMITS, OBSERVATION_KINDS, SEVERITIES as OBS_SEVERITIES } from "../../lib/hse/hse.mjs";
+import { COMPETENCES, EQUIPMENT_KINDS as HSE_EQUIPMENT } from "../../lib/hse/safework.mjs";
 import { NAV_I18N, localizeNav } from "../../lib/i18n/nav.mjs";
 import { SECTIONS } from "../../lib/platform/navigation.mjs";
 import { cleanPrefs, withDefaults, PREFS } from "../../lib/prefs.mjs";
@@ -78,7 +81,7 @@ test("the three dictionaries hold the same keys, none empty", () => {
     equal(K.filter((k) => !String(d[k]).trim()), [], `${name}: empty strings`);
   }
   assert(F.length > 150, `${F.length} keys`);
-  const sections = [quality, contracts, reports, grid, eps, supply];
+  const sections = [quality, contracts, reports, grid, eps, supply, hseSection];
   const seen = new Set(Object.keys(base));
   const twice = [];
   for (const x of sections) for (const k of Object.keys(x.fa)) { if (seen.has(k)) twice.push(k); seen.add(k); }
@@ -152,6 +155,10 @@ test("every domain label a translated page shows is in English and Arabic", () =
     ...Object.keys(REVIEW_CODES).map((k) => `proc.review.${k}`), ...Object.keys(FAT_RESULTS).map((k) => `proc.fat.${k}`),
     ...Object.keys(PO_STAGES).map((k) => `proc.stage.${k}`), ...Object.keys(TECH_STATUS).map((k) => `proc.tech.${k}`),
     ...Object.keys(STOCK_CATEGORIES).map((k) => `wh.cat.${k}`), ...Object.keys(DEST_FA).map((k) => `wh.dest.${k}`),
+    ...Object.keys(HSE_CLASSES).map((k) => `hse.cls.${k}`), ...Object.keys(TREATMENTS).map((k) => `hse.treat.${k}`),
+    ...Object.keys(PERMIT_TYPES).map((k) => `hse.permit.${k}`), ...[...Object.keys(GAS_LIMITS), "hse_permit_max_hours"].map((k) => `hse.limit.${k}`),
+    ...Object.keys(OBSERVATION_KINDS).map((k) => `hse.obs.${k}`), ...Object.keys(OBS_SEVERITIES).map((k) => `hse.sev.${k}`),
+    ...Object.keys(COMPETENCES).map((k) => `hse.comp.${k}`), ...Object.keys(HSE_EQUIPMENT).map((k) => `hse.eq.${k}`),
   ];
   equal(want.filter((k) => !LABELS[k]?.en || !LABELS[k]?.ar), [], "labels missing a translation");
   equal(Object.keys(LABELS).filter((k) => !want.includes(k)), [], "labels for nothing the platform declares");
@@ -176,7 +183,8 @@ const TRANSLATED = ["app/quality/page.jsx", "app/inspection/page.jsx", "app/ndt-
   "app/eps/progress/page.jsx", "app/eps/progress/days/page.jsx", "app/eps/scope/page.jsx",
   "components/eps/ActivityDetail.jsx", "components/eps/ActivityGrid.jsx", "components/eps/ScopePanel.jsx", "components/eps/shared.jsx",
   "app/procurement/page.jsx", "app/procurement/Tender.jsx", "app/procurement/Vendors.jsx",
-  "app/warehouse/page.jsx", "app/warehouse/Stores.jsx", "app/warehouse/Mesc.jsx"];
+  "app/warehouse/page.jsx", "app/warehouse/Stores.jsx", "app/warehouse/Mesc.jsx", "app/hse/page.jsx", "app/hse/SafeWork.jsx",
+  "components/ui/Tabs.jsx"];
 
 test("a translated page keeps no Persian of its own", async () => {
   const left = [];

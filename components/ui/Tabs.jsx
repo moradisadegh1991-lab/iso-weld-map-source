@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePrefs } from "../../lib/client/prefs.mjs";
 
 /**
  * The parts of one page, one at a time.
@@ -23,6 +24,7 @@ export default function Tabs({ name = "tabs", children }) {
   const box = useRef(null);
   const [tabs, setTabs] = useState([]);
   const [active, setActive] = useState(null);
+  const { t: tr, num } = usePrefs();
   const current = tabs.some((t) => t.key === active) ? active : tabs[0]?.key;
 
   const scan = useCallback(() => {
@@ -31,8 +33,9 @@ export default function Tabs({ name = "tabs", children }) {
     const cards = [...el.children].filter((c) => c.classList.contains("card") && !("keep" in c.dataset));
     const next = cards.map((c, i) => {
       const h = c.querySelector("h2");
-      const title = c.dataset.tabTitle || (h ? h.textContent.replace(/\s+/g, " ").trim() : "") || `بخش ${i + 1}`;
-      return { key: c.dataset.tab || keyOf(title), title, badge: Number(c.dataset.badge) || 0, tone: c.dataset.tone || "", el: c };
+      // a card with no heading is named by its place, in the reader's language when drawn
+      const title = c.dataset.tabTitle || (h ? h.textContent.replace(/\s+/g, " ").trim() : "");
+      return { key: c.dataset.tab || (title ? keyOf(title) : `part-${i + 1}`), title, n: i + 1, badge: Number(c.dataset.badge) || 0, tone: c.dataset.tone || "", el: c };
     });
     setTabs((prev) => (prev.length === next.length && prev.every((p, i) => p.key === next[i].key && p.title === next[i].title
       && p.badge === next[i].badge && p.tone === next[i].tone && p.el === next[i].el) ? prev : next));
@@ -87,8 +90,8 @@ export default function Tabs({ name = "tabs", children }) {
           {tabs.map((t) => (
             <button key={t.key} data-tabkey={t.key} type="button" role="tab" aria-selected={t.key === current}
                     aria-controls={t.el.id || undefined} tabIndex={t.key === current ? 0 : -1} onClick={() => open(t.key)}>
-              {t.title}
-              {t.badge ? <span className={`badge ${t.tone}`}>{t.badge.toLocaleString("fa-IR")}</span> : null}
+              {t.title || tr("ui.tab.part", { n: num(t.n) })}
+              {t.badge ? <span className={`badge ${t.tone}`}>{num(t.badge)}</span> : null}
             </button>
           ))}
         </div>
