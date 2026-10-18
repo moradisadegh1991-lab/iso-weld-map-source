@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useContext, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
+import { usePrefs } from "../../lib/client/prefs.mjs";
 
 /**
  * The day the work was done, for every one-click record on a page — a chain
@@ -50,13 +51,14 @@ export function dateOfDay(start, n) {
  */
 export function DayHint({ date }) {
   const { project } = usePlatform();
+  const { t } = usePrefs();
   if (!date) return null;
   const n = projectDay(project?.start_date, date);
   const future = date > localToday();
   if (n === null && !future) return null;
   return (
     <span className={`hint${future ? " bad" : ""}`} data-day={n ?? ""}>
-      {n !== null && `روز ${n} پروژه`}{n !== null && future && " — "}{future && "هنوز نرسیده؛ تاریخ آینده ثبت نمی‌شود"}
+      {n !== null && t("ui.day.n", { n })}{n !== null && future && " — "}{future && t("ui.day.future")}
     </span>
   );
 }
@@ -73,8 +75,10 @@ export function useWorkDate() {
   return c.on;
 }
 
-export function WorkDateField({ note = "ثبت‌های یک‌کلیکی این صفحه با این تاریخ ثبت می‌شوند — کار دیروز را با تاریخ دیروز ثبت کنید." }) {
+export function WorkDateField({ note }) {
   const c = useContext(Ctx);
+  const { t } = usePrefs();
+  note = note || t("ui.day.note");
   if (!c) throw new Error("WorkDateField outside <WorkDateScope>");
   const { project } = usePlatform();
   const [typed, setTyped] = useState(null);
@@ -90,19 +94,19 @@ export function WorkDateField({ note = "ثبت‌های یک‌کلیکی این
   }
   return (
     <div className="workdate no-print" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "6px 0" }}>
-      <label htmlFor="work-date" className="sm"><b>تاریخ انجام کار</b></label>
+      <label htmlFor="work-date" className="sm"><b>{t("ui.day.workDate")}</b></label>
       <input id="work-date" type="date" dir="ltr" value={c.on} max={today} onChange={(e) => { setTyped(null); c.setOn(e.target.value || today); }} />
       {start && last >= 0 && (
         <>
-          <label htmlFor="work-day" className="sm">روز پروژه</label>
+          <label htmlFor="work-day" className="sm">{t("ui.day.projectDay")}</label>
           <input id="work-day" type="number" inputMode="numeric" dir="ltr" min={0} max={last} style={{ width: 90 }}
                  value={n} onChange={(e) => onDay(e.target.value)} onBlur={() => setTyped(null)}
-                 title={`روز 0 = ${start} (تاریخ شروع پروژه) · امروز روز ${last} است`} />
+                 title={t("ui.day.title", { start, last })} />
         </>
       )}
-      {c.on !== today && <button type="button" className="btn ghost" onClick={() => { setTyped(null); c.setOn(today); }}>امروز</button>}
+      {c.on !== today && <button type="button" className="btn ghost" onClick={() => { setTyped(null); c.setOn(today); }}>{t("ui.day.today")}</button>}
       {wanted !== null && wanted > last
-        ? <span className="err sm" role="alert">روز {wanted} هنوز نرسیده — امروز روز {last} پروژه است (روز 0 = {start}).</span>
+        ? <span className="err sm" role="alert">{t("ui.day.notYet", { wanted, last, start })}</span>
         : <span className="muted sm">{note}</span>}
     </div>
   );

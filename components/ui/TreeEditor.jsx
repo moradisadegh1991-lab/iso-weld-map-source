@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { usePrefs } from "../../lib/client/prefs.mjs";
 
 /**
  * A tree whose branches are moved by drag and drop: drop a node on another
@@ -7,7 +8,9 @@ import { useState } from "react";
  * to `onMove(id, parentId)`; the server refuses a move under itself. Each
  * node may render extra content (`render(node)`) and actions (`actions(node)`).
  */
-export default function TreeEditor({ nodes, onMove, render, actions, editable = true, label = "شاخه" }) {
+export default function TreeEditor({ nodes, onMove, render, actions, editable = true, label }) {
+  const { t } = usePrefs();
+  label = label || t("ui.tree.branch");
   const [drag, setDrag] = useState(null);
   const [over, setOver] = useState(null);
   const drop = (parentId) => (e) => {
@@ -25,10 +28,10 @@ export default function TreeEditor({ nodes, onMove, render, actions, editable = 
       {editable && (
         <div onDragOver={(e) => { e.preventDefault(); setOver("root"); }} onDragLeave={() => setOver(null)} onDrop={drop(null)} data-drop-root=""
           className="sm muted" style={{ padding: 6, marginBottom: 4, borderRadius: 6, border: `1px dashed ${over === "root" ? "var(--cy, #1b7f99)" : "var(--line, #ccd)"}` }}>
-          برای بردن یک {label} به بالاترین سطح، آن را اینجا رها کنید؛ برای بردن زیر {label} دیگر، روی آن رها کنید.
+          {t("ui.tree.dropTop", { label })}
         </div>
       )}
-      {nodes.length === 0 ? <p className="empty-note">خالی است.</p> : <ul style={{ margin: 0, padding: 0 }}>{nodes.map((n) => <TreeNode key={n.id} n={n} depth={0} ctx={ctx} />)}</ul>}
+      {nodes.length === 0 ? <p className="empty-note">{t("ui.tree.empty")}</p> : <ul style={{ margin: 0, padding: 0 }}>{nodes.map((n) => <TreeNode key={n.id} n={n} depth={0} ctx={ctx} />)}</ul>}
     </div>
   );
 }
