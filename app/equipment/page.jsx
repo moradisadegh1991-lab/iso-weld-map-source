@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import TemplateButton from "../../components/ui/TemplateButton";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
 import { parseEquipmentList, summarise } from "../../lib/equipment/parse.mjs";
@@ -202,6 +203,7 @@ function EquipmentPageBody() {
             <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm" hidden
                    onChange={(e) => onFile(e.target.files?.[0])} />
           </label>
+          <TemplateButton kind="equipment" className="btn ghost" />
           <button className="btn ghost" onClick={() => read(text)} disabled={!text.trim()}>
             خواندن متن
           </button>

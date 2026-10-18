@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import TemplateButton from "./ui/TemplateButton";
 import { parseDelimited, guessMapping, toRegister, scopeRows } from "../lib/truth/parse.mjs";
 import { compareRegister, toGoldenExpect } from "../lib/truth/compare.mjs";
 
@@ -114,6 +115,7 @@ export default function TruthBar({ model, data, computed: given = null }) {
           <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm"
                  onChange={(e) => onFile(e.target.files?.[0])} />
         </label>
+        <TemplateButton kind="truth" className="ghost" />
         <button className="ghost" onClick={() => read(text)} disabled={!text.trim()}>
           خواندن متن
         </button>

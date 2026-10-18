@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import TemplateButton from "../../components/ui/TemplateButton";
 import { useProjectData } from "../../lib/client/platform.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
@@ -107,15 +108,21 @@ function Catalogue({ post, imports }) {
   const [f, setF] = useState({ edition: "", text: "" });
   async function file(e) {
     const fl = e.target.files?.[0];
-    if (fl) setF({ ...f, text: await fl.text() });
+    if (!fl) return;
+    if (/\.(xlsx?|xlsm)$/i.test(fl.name)) {        // the first sheet, as CSV: code, description, unit
+      const XLSX = await import("xlsx");
+      const wb = XLSX.read(await fl.arrayBuffer(), { type: "array" });
+      setF({ ...f, text: XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]) });
+    } else setF({ ...f, text: await fl.text() });
   }
   return (
     <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "catalogue", ...f })) setF({ edition: "", text: "" }); }}>
-      <p className="muted sm">CSV با سه ستون: کد، شرح، واحد (جداکننده ویرگول، ; یا Tab). کد ۲، ۴ یا ۶ رقمی عنوان گروه است و ۱۰ رقمی کالا.
+      <p className="muted sm">Excel یا CSV با سه ستون: کد، شرح، واحد (جداکننده ویرگول، ; یا Tab). کد ۲، ۴ یا ۶ رقمی عنوان گروه است و ۱۰ رقمی کالا.
         شرحی که ویرگول دارد داخل "…" بیاید. فایلی که حتی یک خط نامعتبر داشته باشد کامل رد می‌شود.</p>
       <div className="field"><label htmlFor="mesc-ed">ویرایش کاتالوگ</label>
         <input id="mesc-ed" dir="auto" value={f.edition} onChange={(e) => setF({ ...f, edition: e.target.value })} /></div>
-      <div className="field"><label htmlFor="mesc-file">فایل CSV</label><input id="mesc-file" type="file" accept=".csv,.txt,.tsv" onChange={file} /></div>
+      <div className="field"><label htmlFor="mesc-file">فایل Excel یا CSV</label><input id="mesc-file" type="file" accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv" onChange={file} />
+        <TemplateButton kind="mesc" /></div>
       <div className="field"><label htmlFor="mesc-text">یا متن کاتالوگ</label>
         <textarea id="mesc-text" dir="ltr" rows={5} value={f.text} onChange={(e) => setF({ ...f, text: e.target.value })} /></div>
       <button className="btn">بارگذاری</button>

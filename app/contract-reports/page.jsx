@@ -6,6 +6,7 @@ import { flatten } from "../../components/ui/TreeEditor";
 import { Workflow, Actions, History } from "../../components/reports/WorkflowPanel";
 
 import TableKit from "../../components/ui/TableKit";
+import { filterBoard } from "../../lib/reports/contract-daily.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 /**
  * The contract's daily report (owner's spec 2026-10-15, steps 5–6).
@@ -257,13 +258,15 @@ function RowForm({ kind, v, initial, onSave, onCancel, label }) {
 }
 
 /** One section: each row as first written, the stages' changes under it (latest first, in their colour), and the row's buttons. */
-function Section({ kind, v, labels, editable, first, ops, filter = null }) {
+function Section({ kind, v, labels, editable, first, ops, filter = null, only = null }) {
   const [editing, setEditing] = useState(null);
   const { t } = usePrefs();
   const fmt = useFmt();
   const cols = FIELDS[kind];
   // the lower resources part shows the rows of the resource picked above (all, when none is)
-  const shown = v.lines[kind].map((line, i) => ({ line, i })).filter(({ line }) => !filter || line.effective.resourceId === filter);
+  // …and, while the board above is filtered, only the rows of the resources it still shows
+  const shown = v.lines[kind].map((line, i) => ({ line, i }))
+    .filter(({ line }) => (!filter || line.effective.resourceId === filter) && (!only || only.has(line.effective.resourceId)));
   const sumOf = (field) => shown.filter(({ line }) => !line.effective.removed).reduce((s, { line }) => s + (field.startsWith("_") ? calc(field, line.effective) : Number(line.effective[field]) || 0), 0);
   const stageName = v.report.stage_name;
   const S = String(v.report.stage_seq);
@@ -317,20 +320,32 @@ function Section({ kind, v, labels, editable, first, ops, filter = null }) {
  */
 function Resources({ v, projectId, call, labels, editable, first, ops }) {
   const [pick, setPick] = useState(null);
+  const [q, setQ] = useState("");
+  const [used, setUsed] = useState(false);
   const B = v.board;
   const picked = B.items.find((x) => x.type === "resource" && x.id === pick) || null;
   const { t, L, num: n } = usePrefs();
   const fmt = useFmt();
   const num = (x) => <td className="mono">{x ? fmt(x) : <span className="muted">{n(0)}</span>}</td>;
+  const items = useMemo(() => filterBoard(B.items, { q, used, kindLabel: (k) => L(`resource.kind.${k}`, labels.kinds[k] || k) }), [B.items, q, used, L, labels]);
+  const filtered = items !== B.items;
+  const only = filtered ? new Set(items.filter((x) => x.type === "resource").map((x) => x.id)) : null;
+  const count = (xs) => xs.filter((x) => x.type === "resource").length;
   return (
     <>
       <div className="card">
         <h2>{t("dr.resSummary")}</h2>
         <ResourceSummary v={v} projectId={projectId} call={call} labels={labels} />
         <p className="sm muted">{t("dr.resPickHint")}</p>
+        <div className="toolbar-left" data-res-filter>
+          <input type="search" className="tree-q" dir="auto" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("dr.resFilter")} aria-label={t("dr.resFilter")} />
+          <label className="sm"><input type="checkbox" checked={used} onChange={(e) => setUsed(e.target.checked)} /> {t("dr.resUsedOnly")}</label>
+          {filtered && <span className="sm muted" data-res-count>{t("dr.resShown", { n: n(count(items)), m: n(count(B.items)) })}</span>}
+          {filtered && <button type="button" className="btn ghost sm" onClick={() => { setQ(""); setUsed(false); }}>{t("dr.resClear")}</button>}
+        </div>
         <div className="tablewrap"><TableKit name="contract-reports-4"><table className="dtable">
           <thead><tr><th>{t("dr.h.resCategory")}</th><th>{t("dr.f.resource")}</th><th>{t("dr.h.resKind")}</th><th>{t("dr.f.unit")}</th>{["day", "night", "leave", "sick", "total", "local", "nonLocal"].map((k) => <th key={k}>{t(`dr.f.${k}`)}</th>)}</tr></thead>
-          <tbody>{B.items.map((x) => x.type === "branch" ? (
+          <tbody>{items.map((x) => x.type === "branch" ? (
             <tr key={`b-${x.id}`} style={{ background: "var(--surf2, #f5f7f9)" }}><td colSpan={11} style={{ paddingInlineStart: 8 + x.depth * 18 }}><b>▾ {x.name}</b></td></tr>
           ) : (
             <tr key={x.id} data-board-resource={x.id} onClick={() => setPick(pick === x.id ? null : x.id)}
@@ -339,9 +354,9 @@ function Resources({ v, projectId, call, labels, editable, first, ops }) {
               <td className="sm">{L(`resource.kind.${x.kind}`, labels.kinds[x.kind] || x.kind)}</td><td className="sm">{x.unit}</td>
               {num(x.day)}{num(x.night)}{num(x.leave)}{num(x.sick)}<td className="mono"><b>{fmt(x.total)}</b></td>{num(x.local)}{num(x.nonLocal)}
             </tr>))}</tbody>
-          <tfoot>{Object.entries(B.byUnit).map(([u, t]) => (
+          <tfoot>{Object.entries(B.byUnit).map(([u, sum]) => (
             <tr key={u}><td colSpan={3}><b>{t("dr.totalUnit", { u })}</b></td><td className="sm">{u}</td>
-              {["day", "night", "leave", "sick", "total", "local", "nonLocal"].map((k) => <td key={k} className="mono"><b>{fmt(t[k])}</b></td>)}</tr>))}</tfoot>
+              {["day", "night", "leave", "sick", "total", "local", "nonLocal"].map((k) => <td key={k} className="mono"><b>{fmt(sum[k])}</b></td>)}</tr>))}</tfoot>
         </table></TableKit></div>
         {v.resources.length === 0 && <p className="sm muted">{t("dr.noResources")}</p>}
       </div>
@@ -349,7 +364,7 @@ function Resources({ v, projectId, call, labels, editable, first, ops }) {
         <h2>{picked ? t("dr.rowsOf", { name: picked.name }) : t("dr.allRows")}
           {picked && <button className="btn ghost sm" type="button" onClick={() => setPick(null)} style={{ marginInlineStart: 8 }}>{t("dr.showAll")}</button>}</h2>
         {(v.workGroupTree || []).length === 0 && <p className="sm muted">{t("dr.noWorkGroups")}</p>}
-        <Section kind="resources" v={v} labels={labels} editable={editable} first={first} ops={ops} filter={pick} />
+        <Section kind="resources" v={v} labels={labels} editable={editable} first={first} ops={ops} filter={pick} only={only} />
       </div>
     </>
   );

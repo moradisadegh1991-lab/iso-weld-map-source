@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import TemplateButton from "../../components/ui/TemplateButton";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { useTreeDrag } from "../../components/ui/treeDrag";
@@ -181,9 +182,11 @@ function ImportPlan({ data, imp, setImp, projectId, done, fail }) {
         <div className="field"><label htmlFor="im-kind">نوع فایل</label>
           <select id="im-kind" value={imp.fileKind} onChange={(e) => setImp({ ...imp, fileKind: e.target.value })}>
             <option value="mspdi">MS Project (XML — Save As ◄ XML Format)</option>
-            <option value="pms">PMS اکسل (گام‌ها با ستون CC)</option></select></div>
+            <option value="pms">PMS اکسل (گام‌ها با ستون CC)</option>
+            <option value="sheet">EPS اکسل (گره‌ها و فعالیت‌ها با کد والد)</option></select></div>
         <div className="field"><label htmlFor="im-file">فایل</label>
-          <input id="im-file" type="file" required accept={imp.fileKind === "mspdi" ? ".xml" : ".xlsx,.xls"} onChange={(e) => setImp({ ...imp, file: e.target.files?.[0] || null })} /></div>
+          <input id="im-file" type="file" required accept={imp.fileKind === "mspdi" ? ".xml" : ".xlsx,.xls"} onChange={(e) => setImp({ ...imp, file: e.target.files?.[0] || null })} />
+          {imp.fileKind !== "mspdi" && <TemplateButton kind={imp.fileKind === "sheet" ? "eps" : "pms"} />}</div>
       </div>
       <button className="btn" type="submit" disabled={busy || !imp.file || !imp.versionCode}>{busy ? "در حال ورود…" : "ورود به‌عنوان نسخهٔ تازه"}</button>{" "}
       <button className="btn ghost" type="button" onClick={() => setImp(null)}>انصراف</button>

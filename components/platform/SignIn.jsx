@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 import { LANGS } from "../../lib/i18n/index.mjs";
@@ -21,6 +21,11 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(false);
   const [sent, setSent] = useState(null);
+  const [via, setVia] = useState(null);        // "email" when the server mails the reset link
+  useEffect(() => {
+    if (!forgot || via) return;
+    fetch("/api/auth/forgot", { credentials: "same-origin" }).then((r) => r.json()).then((b) => setVia(b.via)).catch(() => {});
+  }, [forgot, via]);
 
   async function submit(e) {
     e.preventDefault();
@@ -50,7 +55,7 @@ export default function SignIn() {
         headers: { "Content-Type": "application/json" }, body: JSON.stringify({ login: email }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || t("signin.status", { n: res.status }));
-      setSent(body.message);
+      setSent(t(body.via === "email" ? "signin.sentMail" : "signin.sentAdmin"));
     } catch (e2) { setErr(e2.message); }
     setBusy(false);
   }
@@ -62,7 +67,7 @@ export default function SignIn() {
           <div className="mark">EPC&nbsp;PLATFORM</div>
           <LangPick lang={lang} setPref={setPref} />
           <h1>{t("signin.forgotTitle")}</h1>
-          <p className="muted sm">{t("signin.forgotHelp")}</p>
+          <p className="muted sm">{t(via === "email" ? "signin.forgotHelpMail" : "signin.forgotHelp")}</p>
           <div className="field">
             <label htmlFor="forgot-login">{t("signin.login")}</label>
             <input id="forgot-login" type="text" autoComplete="username" required value={email} onChange={(e) => { setEmail(e.target.value); setSent(null); }} dir="ltr" />

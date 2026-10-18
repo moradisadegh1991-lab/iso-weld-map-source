@@ -28,6 +28,17 @@ export default function ScopePage() {
       setOk(`اعمال شد: +${r.row.added} / −${r.row.removed}${r.row.made ? `، ${r.row.made} فعالیت ساخته شد` : ""}.`); v.reload(); u.reload(); }
     catch (e) { setMsg(e.message); }
   }
+  // the link alone (its activity stays, as planned), or the linked activity with it
+  async function remove(rule, withActivity, asked = false) {
+    const what = withActivity ? "این فعالیت و پیوندش به داده‌های پلتفرم" : "پیوند این ردیف به داده‌های پلتفرم (فعالیت می‌ماند)";
+    if (!asked && !confirm(`${what} حذف شود؟`)) return false;
+    setMsg(null); setOk(null);
+    try {
+      await call(withActivity ? "/api/eps" : "/api/eps/activities", { method: "POST", body: JSON.stringify(withActivity
+        ? { projectId, kind: "activity-remove", id: rule.activity_id } : { projectId, kind: "scope-rule-remove", id: rule.id }) });
+      setOk(withActivity ? "فعالیت حذف شد." : "پیوند حذف شد."); v.reload(); u.reload(); return true;
+    } catch (e) { setMsg(e.message); return false; }
+  }
   const head = (
     <div className="pagehead"><h1>محدودهٔ پلتفرم در PMS</h1>
       <span className="sub">{picker} <Link href="/eps/activities">فعالیت‌ها</Link></span></div>);
@@ -47,17 +58,20 @@ export default function ScopePage() {
       <div className="card">
         <h2>پیوندهای این نسخه</h2>
         {v.data.scope.length === 0 ? <p className="empty-note">هنوز فعالیت یا گره‌ای به داده‌های پلتفرم پیوند نشده است (فعالیت‌ها ◄ زبانهٔ Scope، یا انتخاب یک گره).</p> : (
-          <TableKit name="eps-scope-1"><table className="dtable"><thead><tr><th>فعالیت / گره</th><th>نوع</th><th>محدوده</th><th>اقلام</th><th>حجم</th><th>پیشرفت</th><th>تغییرات اعمال‌نشده</th><th /></tr></thead>
+          <TableKit name="eps-scope-1" canDelete={() => v.data.may.edit || "دسترسی ویرایش ندارید."} deleteLabel="حذف پیوند"
+            onDelete={async (id) => { const s = v.data.scope.find((x) => x.rule.id === id); return s ? remove(s.rule, false, true) : false; }}><table className="dtable"><thead><tr><th>فعالیت / گره</th><th>نوع</th><th>محدوده</th><th>اقلام</th><th>حجم</th><th>پیشرفت</th><th>تغییرات اعمال‌نشده</th><th /></tr></thead>
             <tbody>{v.data.scope.map((s) => {
               const w = where(s.rule);
               return (
-                <tr key={s.rule.id} data-rule={w?.code}><td><span className="mono" dir="ltr">{w?.code}</span> {w?.name}</td>
+                <tr key={s.rule.id} data-key={s.rule.id} data-rule={w?.code}><td><span className="mono" dir="ltr">{w?.code}</span> {w?.name}</td>
                   <td className="sm">{s.rule.mode === "per_item" ? "هر قلم یک فعالیت" : "یک فعالیت"}{s.rule.auto_apply ? " · خودکار" : ""}</td>
                   <td className="sm">{describeRule(s.rule, L, v.data.scopeChoices)}</td><td className="mono">{fmt(s.summary.items)}</td>
                   <td className="mono">{fmt(s.summary.qty)} {s.summary.unknown ? <span className="sm" style={{ color: "var(--warn)" }}>(+{s.summary.unknown} نامعلوم)</span> : ""}</td>
                   <td className="mono">{s.summary.pct == null ? "—" : `${fmt(s.summary.pct)}٪`}</td>
                   <td><Pending pending={s.pending} firstApply={s.firstApply} /></td>
-                  <td>{v.data.may.edit && (s.pending.any || s.firstApply) && <button className="btn sm" type="button" onClick={() => apply(s.rule.id)}>اعمال</button>}</td></tr>);
+                  <td style={{ whiteSpace: "nowrap" }}>{v.data.may.edit && (s.pending.any || s.firstApply) && <button className="btn sm" type="button" onClick={() => apply(s.rule.id)}>اعمال</button>}
+                    {v.data.may.edit && <button className="btn ghost sm" type="button" data-unlink onClick={() => remove(s.rule, false)}>حذف پیوند</button>}
+                    {v.data.may.edit && s.rule.activity_id && <button className="btn danger sm" type="button" data-remove-activity onClick={() => remove(s.rule, true)}>حذف فعالیت</button>}</td></tr>);
             })}</tbody></table></TableKit>)}
       </div>
       <div className="card">

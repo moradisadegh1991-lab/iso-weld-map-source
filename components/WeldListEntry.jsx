@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import TemplateButton from "./ui/TemplateButton";
 import SaveBar from "./SaveBar";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
@@ -27,8 +28,6 @@ const COLS = [
 ];
 const BLANK_ROW = { no: "", spool: "", loc: "", kind: "", nps: "", ref: "" };
 const BLANK_META = { drawingNo: "", rev: "", sheet: "1/1", lineNo: "", unit: "", pipingClass: "", nps: "", schedule: "" };
-const TEMPLATE_HEAD = ["Weld No", "Spool No", "Shop/Field", "Weld Type", "NPS", "Tie-in Ref"];
-
 export default function WeldListEntry({ session, initial = null, run = null, onSaved, onClose }) {
   const [meta, setMeta] = useState({ ...BLANK_META, ...(initial?.meta || {}) });
   const [rows, setRows] = useState(initial?.weldList?.length ? initial.weldList.map((r) => ({ ...BLANK_ROW, ...r })) : [{ ...BLANK_ROW }, { ...BLANK_ROW }, { ...BLANK_ROW }]);
@@ -74,15 +73,6 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     } catch (e) { setRead({ error: `«${f.name}»: ${e.message}` }); }
   }
 
-  async function template() {
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEAD,
-      ["W-01", "", "Field", "Tie-in", 3, "P-7001 discharge N2"], ["W-02", "SP-01", "Shop", "BW", 3, ""]]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Weld list");
-    XLSX.writeFile(wb, "weld-list-template.xlsx");
-  }
-
   async function approve() {
     setApproval({ phase: "busy" });
     try {
@@ -124,7 +114,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         <summary>خواندن از فایل (Excel / CSV) یا چسباندن از Excel</summary>
         <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
           <input id="wl-file" type="file" accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt" onChange={(e) => onSheet(e.target.files?.[0])} />
-          <button className="ghost" type="button" onClick={template}>دانلود قالب Excel</button>
+          <TemplateButton kind="weldList" className="ghost" />
         </div>
         <textarea id="wl-paste" rows={4} dir="ltr" value={paste} onChange={(e) => setPaste(e.target.value)}
           placeholder={"Weld No\tSpool No\tShop/Field\tWeld Type\tNPS\nW-01\t\tField\tTie-in\t3"} style={{ width: "100%", minHeight: 0, height: 90 }} />

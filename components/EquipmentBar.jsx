@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import TemplateButton from "./ui/TemplateButton";
 import { parseEquipmentList, summarise } from "../lib/equipment/parse.mjs";
 import { EQUIPMENT_KINDS } from "../lib/platform/precedence.mjs";
 
@@ -81,6 +82,7 @@ export default function EquipmentBar() {
           <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm"
                  onChange={(e) => onFile(e.target.files?.[0])} />
         </label>
+        <TemplateButton kind="equipment" className="ghost" />
         <button className="ghost" onClick={() => read(text)} disabled={!text.trim()}>
           خواندن متن
         </button>

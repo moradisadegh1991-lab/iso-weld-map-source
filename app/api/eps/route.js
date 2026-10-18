@@ -24,7 +24,7 @@ import { logEvent } from "../../../lib/db/repos/log.mjs";
  *   POST {kind: pms | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
  *         attach | activity | activity-remove | template | template-move | template-copy | template-remove |
  *         template-activity | template-activity-remove | template-sync | convert-legacy}
- *   POST multipart {kind: import-plan, pmsId, versionCode, fileKind: mspdi | pms, file}
+ *   POST multipart {kind: import-plan, pmsId, versionCode, fileKind: mspdi | pms | sheet, file}
  *        a plan file (MS Project XML or the PMS workbook) as a new version of a PMS
  */
 const LABELS = { budgetModes: BUDGET_MODES, separators: SEPARATORS, pmsTypes: PMS_TYPES };

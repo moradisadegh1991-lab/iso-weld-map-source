@@ -460,10 +460,10 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .grid2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 .field{display:flex;flex-direction:column;gap:5px}
 .field > label{font-size:11px;color:var(--dim)}
-.field input,.field select,.field textarea,input.search{
+.field input,.field select,.field textarea,input.search,input.tree-q{
   background:var(--surf2);border:1px solid var(--rule);border-radius:4px;color:var(--ink);
   padding:8px 10px;font:inherit;font-size:13px;outline:none;width:100%}
-.field input:focus,.field select:focus,.field textarea:focus,input.search:focus{border-color:var(--cy)}
+.field input:focus,.field select:focus,.field textarea:focus,input.search:focus,input.tree-q:focus{border-color:var(--cy)}
 .field textarea{min-height:76px;resize:vertical}
 /* position:static is not decoration. The original single-page stylesheet has
    `.hint{position:absolute;bottom:12px;left:12px}` for the caption over the
@@ -854,6 +854,7 @@ ol.timeline li.bad::before{background:var(--bad)}
 .toolbar-left{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;justify-content:left;margin:6px 0 10px}
 .toolbar-left .field{margin:0}
 .tree-q{width:100%;max-width:340px;margin-bottom:6px}
+.toolbar-left .tree-q{margin-bottom:0}
 .linkbtn{background:none;border:0;padding:0;color:inherit;cursor:pointer;text-align:start;font:inherit}
 .linkbtn:hover{color:var(--cy)}
 .permgrid label{display:flex;gap:4px;align-items:center;font-size:12px}

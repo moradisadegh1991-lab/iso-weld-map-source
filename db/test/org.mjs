@@ -252,6 +252,53 @@ test("passwords: a user changes their own; «forgot» files a request an admin a
   await throws(() => inP(() => users.dismissResetRequest(db, { id: r.id, byUser: alice.id })), "not found");
 });
 
+test("forgot password by mail: a link to the account's own address, once in a while, and the admins' request when the mail fails", async () => {
+  const users = await import("../../lib/db/repos/users.mjs");
+  const cred = await import("../../lib/db/repos/credentials.mjs");
+  const { rows: [dan] } = await db.query("SELECT id FROM app_user WHERE email = 'dan@x.test'");
+  const sent = [];
+  const mailer = { async sendResetLink(m) { if (m.to === "fail@x.test") throw new Error("smtp down"); sent.push(m); } };
+  const mailLink = (user) => users.mailResetLink(db, { user, mailer });
+  const known = await cred.requestPasswordReset(db, { login: "dan@x.test", source: "10.0.1.1", mailLink });
+  const unknown = await cred.requestPasswordReset(db, { login: "nobody@x.test", source: "10.0.1.1", mailLink });
+  equal([known.message, known.via], [unknown.message, "email"], "by mail too, the answer never says whether the account exists");
+  equal(sent.map((m) => [m.to, m.purpose, m.hours]), [["dan@x.test", "reset", users.SETUP_HOURS]], "mailed to the address on the account");
+  const who = await users.peekSetupToken(db, { token: sent[0].token });
+  equal(who.email, "dan@x.test", "the mailed token is a live reset link");
+  equal((await inP(() => users.resetRequests(db, { projectId: P, byUser: alice.id }))).length, 0, "nothing left for the admins to answer");
+  const { rows: [logged] } = await db.query("SELECT outcome FROM password_reset_request WHERE source = '10.0.1.1' AND user_id = $1", [dan.id]);
+  equal(logged.outcome, "mail", "the request is written down, answered by mail");
+  await cred.requestPasswordReset(db, { login: "dan@x.test", source: "10.0.1.1", mailLink });
+  equal(sent.length, 1, "a second ask within minutes mails nothing more");
+  // the link it mailed still works, and setting the password spends it
+  await users.consumeSetupToken(db, { token: sent[0].token, password: "Dan-mailed-password-3" });
+  equal((await cred.authenticatePassword(db, { email: "dan@x.test", password: "Dan-mailed-password-3" })).id, dan.id);
+
+  // the mail fails: its link is retired and the request goes to the admins
+  const fay = await projects.ensureUser(db, { subject: "kc|fay" });
+  await db.query("UPDATE app_user SET email = 'fail@x.test' WHERE id = $1", [fay.id]);
+  await projects.addMember(db, { projectId: P, userId: fay.id, role: "qc" });
+  await cred.requestPasswordReset(db, { login: "fail@x.test", source: "10.0.1.2", mailLink });
+  equal((await inP(() => users.resetRequests(db, { projectId: P, byUser: alice.id }))).map((r) => r.email), ["fail@x.test"], "a failed mail leaves the request with the admins");
+  const { rows: [live] } = await db.query("SELECT count(*)::int AS n FROM user_setup_token WHERE user_id = $1 AND used_at IS NULL", [fay.id]);
+  equal(live.n, 0, "the unsent link is retired");
+  await db.query("UPDATE password_reset_request SET resolved_at = clock_timestamp(), outcome = 'dismissed' WHERE user_id = $1", [fay.id]);
+
+  // a developer's account is reset only by a developer: the request goes to the admins, nothing is mailed
+  await db.query("UPDATE app_user SET is_developer = true WHERE id = $1", [fay.id]);
+  await db.query("UPDATE app_user SET email = 'fay@x.test' WHERE id = $1", [fay.id]);
+  await cred.requestPasswordReset(db, { login: "fay@x.test", source: "10.0.1.3", mailLink });
+  equal(sent.length, 1, "nothing mailed for a developer's account");
+  await db.query("DELETE FROM password_reset_request WHERE user_id = $1", [fay.id]);
+
+  // mail is on only with a server to send through AND the platform's own address for the link
+  const { mailConfig } = await import("../../lib/server/mail.mjs");
+  equal(mailConfig({ SMTP_HOST: "mail.x", SMTP_FROM: "epc@x.test" }), null, "no APP_URL: the link would have to come from the request's Host — off");
+  equal(mailConfig({ SMTP_HOST: "mail.x", APP_URL: "https://epc.x" }), null, "no sender: off");
+  const c = mailConfig({ SMTP_HOST: "mail.x", SMTP_FROM: "epc@x.test", APP_URL: "https://epc.x/", SMTP_PORT: "465" });
+  equal([c.appUrl, c.secure, c.auth], ["https://epc.x", true, undefined]);
+});
+
 // ── step 4: resources in the contract's tree ─────────────────────────────
 
 test("a contract's resources sit in its resource tree, move between branches, and a branch holding resources stays", async () => {
