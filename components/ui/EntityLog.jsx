@@ -50,18 +50,18 @@ const TONE = { approved: "ok", accepted: "ok", signed: "ok", paid: "ok", verifie
 
 /** A log as a timeline, newest first. */
 export function LogList({ log, showSection = false }) {
-  const { t } = usePrefs();
+  const { t, L, dateTime } = usePrefs();
   if (!log.length) return <p className="empty-note">{t("log.empty")}</p>;
   return (
     <ol className="loglist">
       {log.map((e, i) => (
         <li key={i} data-action={e.action}>
-          <span className={`pill ${TONE[e.action] || ""}`}>{e.actionFa}</span>
+          <span className={`pill ${TONE[e.action] || ""}`}>{L(`log.action.${e.action}`, e.actionFa)}</span>
           <b>{e.user}</b>
           <span className="sm">{e.label}</span>
           {showSection && e.sectionFa && <span className="muted sm">[{e.sectionFa}]</span>}
-          {(e.from || e.to) && <span className="muted sm">{e.from ? `از «${state(e.from)}» ` : ""}{e.to ? `به «${state(e.to)}»` : ""}</span>}
-          <span className="muted sm mono">{fa(e.at)}</span>
+          {(e.from || e.to) && <span className="muted sm">{e.from ? t("log.from", { x: state(e.from) }) : ""}{e.to ? t("log.to", { x: state(e.to) }) : ""}</span>}
+          <span className="muted sm mono">{dateTime(e.at)}</span>
           {e.comment && <div className="logcomment" dir="auto">{e.comment}</div>}
         </li>
       ))}
@@ -71,4 +71,3 @@ export function LogList({ log, showSection = false }) {
 
 // States in words: a statement's and a contract's share some names (draft); either reads the same.
 const state = (k) => STATUS[k]?.split(" — ")[0] || CONTRACT_STATUS[k] || k;
-const fa = (d) => (d ? new Date(d).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" }) : "—");

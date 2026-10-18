@@ -6,6 +6,7 @@ import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import { useRemove } from "../../lib/client/remove.mjs";
 import Tabs from "../../components/ui/Tabs";
+import { usePrefs } from "../../lib/client/prefs.mjs";
 
 /**
  * NDT of support, structural and equipment welds, as the project's NDT
@@ -16,6 +17,7 @@ const TONE = { accepted: "ok", accepted_by_sample: "ok", not_welded: "", awaitin
 
 export default function NdtJointsPage() {
   const { projectId, role, call } = usePlatform();
+  const { t, L } = usePrefs();
   const { data, error, reload } = useProjectData((id) => `/api/ndt-joints?projectId=${id}`, []);
   const [msg, setMsg] = useState(null);
   const [open, setOpen] = useState(null);
@@ -34,80 +36,84 @@ export default function NdtJointsPage() {
   }
 
   if (error) return <p className="err">{error}</p>;
-  if (!data) return <p className="muted">در حال بارگذاری…</p>;
+  if (!data) return <p className="muted">{t("common.loading")}</p>;
   const c = data.counts;
   const methodsText = (r) => r.methods.map((m) => `${m.method} ${m.percent}%`).join(" + ");
+  const scope = (k) => L(`ndt.scope.${k}`, data.scopes[k]);
+  const jt = (k) => L(`ndt.joint.${k}`, data.jointTypes[k]);
+  const status = (k) => L(`ndt.status.${k}`, data.statusText[k]);
+  const list = (xs) => xs.join(t("c.sep"));
 
   return (
     <div className="page">
       <div className="pagehead">
-        <h1>NDT جوش‌های سازه، ساپورت و تجهیزات</h1>
-        <span className="sub">{c.total} جوش · {c.welded} زده‌شده · {c.done} NDT کامل · {c.unknown} بدون قاعده</span>
+        <h1>{t("ndtj.title")}</h1>
+        <span className="sub">{t("ndtj.sub", { total: c.total, welded: c.welded, done: c.done, unknown: c.unknown })}</span>
       </div>
       {msg && <p className={msg.ok ? "muted" : "err"}>{msg.text}</p>}
 
       <Tabs name="ndt-joints">
       <div className="card">
-        <h2>ماتریس NDT پروژه</h2>
-        <p className="muted sm">روش و درصد هر نوع جوش از مشخصات فنی پروژه می‌آید (کد جوشکاری سازه، آزمون غیرچشمی را به مدارک قرارداد می‌سپارد) — پلتفرم درصد پیش‌فرض ندارد. RT و UT روی جوش گوشه پذیرفته نمی‌شود. «گسترش» یعنی اگر نمونهٔ تصادفی رد شد چه باید کرد؛ اگر تعیین نشود، لات پذیرفته نمی‌شود.</p>
-        {data.matrix.length === 0 ? <p className="empty-note">قاعده‌ای ثبت نشده — همهٔ جوش‌ها «بدون قاعده» می‌مانند.</p> : (
+        <h2>{t("ndtj.matrix")}</h2>
+        <p className="muted sm">{t("ndtj.matrixNote")}</p>
+        {data.matrix.length === 0 ? <p className="empty-note">{t("ndtj.noRules")}</p> : (
           <TableKit name="ndt-matrix" onDelete={may.eng ? (ruleId) => post({ kind: "rule-remove", ruleId }) : undefined}>
           <table className="dtable">
-            <thead><tr><th>دامنه</th><th>نوع اتصال</th><th>روش</th><th>درصد</th><th>گسترش در صورت رد</th><th>مرجع</th></tr></thead>
+            <thead><tr><th>{t("ndtj.h.scope")}</th><th>{t("ndtj.h.jointType")}</th><th>{t("c.method")}</th><th>{t("ndtj.h.percent")}</th><th>{t("ndtj.h.extension")}</th><th>{t("c.reference")}</th></tr></thead>
             <tbody>{data.matrix.map((r) => (
-              <tr key={r.id} data-key={r.id}><td>{data.scopes[r.scope]}</td><td>{data.jointTypes[r.joint_type]}</td><td className="mono">{r.method}</td>
-                <td className="mono">{r.percent}%</td><td className="sm">{r.percent < 100 ? (data.extensions[r.extension] || "تعیین نشده") : "—"}</td>
+              <tr key={r.id} data-key={r.id}><td>{scope(r.scope)}</td><td>{jt(r.joint_type)}</td><td className="mono">{r.method}</td>
+                <td className="mono">{r.percent}%</td><td className="sm">{r.percent < 100 ? (data.extensions[r.extension] ? L(`ndt.ext.${r.extension}`, data.extensions[r.extension]) : t("ndtj.unset")) : "—"}</td>
                 <td className="sm">{r.basis}</td></tr>
             ))}</tbody>
           </table>
           </TableKit>
         )}
-        {may.eng && <Fold title="قاعدهٔ جدید"><RuleForm data={data} post={post} /></Fold>}
+        {may.eng && <Fold title={t("ndtj.newRule")}><RuleForm data={data} post={post} /></Fold>}
       </div>
 
       {(data.needSample.length > 0 || data.lots.length > 0) && (
         <div className="card">
-          <h2>نمونه‌گیری و گسترش بازرسی</h2>
+          <h2>{t("ndtj.sampling")}</h2>
           {data.needSample.map((g) => (
             <p key={`${g.group}|${g.jointType}|${g.method}`} className="sm">
-              <b>{g.groupLabel}</b> — {data.jointTypes[g.jointType]} — {g.method} {g.percent}٪: نمونه کشیده نشده{" "}
+              <b>{g.groupLabel}</b> — {jt(g.jointType)} — {g.method} {g.percent}%: {t("ndtj.notDrawn")}{" "}
               {may.draw && <button className="btn" onClick={() => post({ kind: "sample", group: g.group, jointType: g.jointType, method: g.method },
-                (r) => `قرعه: ${r.jointNos.join("، ")} — seed ${r.seed}`)}>قرعه</button>}</p>
+                (r) => t("ndtj.drawn", { list: list(r.jointNos), seed: r.seed }))}>{t("ndtj.draw")}</button>}</p>
           ))}
           {data.lots.map((l) => (
             <p key={`${l.group}|${l.jointType}|${l.method}|${l.welderId}`} className="sm">
-              <b>{l.groupLabel}</b> — {l.method} — جوشکار {l.stamp}: <span className={`pill ${TONE[l.status]}`}>{data.statusText[l.status]}</span>
-              {l.defects.length > 0 && ` — معیوب: ${l.defects.join("، ")}`}
-              {l.drawn.length > 0 && ` — قرعه: ${l.drawn.join("، ")}`}
-              {l.waiting.length > 0 && ` — منتظر NDT: ${l.waiting.join("، ")}`}
+              <b>{l.groupLabel}</b> — {l.method} — {t("ndtj.welderStamp", { stamp: l.stamp })}: <span className={`pill ${TONE[l.status]}`}>{status(l.status)}</span>
+              {l.defects.length > 0 && t("ndtj.defects", { list: list(l.defects) })}
+              {l.drawn.length > 0 && t("ndtj.drawnList", { list: list(l.drawn) })}
+              {l.waiting.length > 0 && t("ndtj.waiting", { list: list(l.waiting) })}
               {l.drawNeeded !== null && may.draw && <> {" "}<button className="btn" onClick={() => post({ kind: "progressive", group: l.group, jointType: l.jointType, method: l.method, welderId: l.welderId },
-                (r) => `قرعهٔ تدریجی: ${r.jointNos.join("، ")}`)}>قرعهٔ {l.drawNeeded} جوش</button></>}</p>
+                (r) => t("ndtj.progressiveDrawn", { list: list(r.jointNos) }))}>{t("ndtj.drawN", { n: l.drawNeeded })}</button></>}</p>
           ))}
         </div>
       )}
 
       <div className="card">
-        <h2>رجیستر جوش‌ها</h2>
-        {data.joints.length === 0 ? <p className="empty-note">جوشی ثبت نشده.</p> : (
+        <h2>{t("ndtj.register")}</h2>
+        {data.joints.length === 0 ? <p className="empty-note">{t("ndtj.noJoints")}</p> : (
           <TableKit name="ndt-joints" {...(may.eng ? removeJoint : {})}>
             <table className="dtable">
-              <thead><tr><th>جوش</th><th>دامنه</th><th>تگ / ساپورت</th><th>نوع</th><th>الزام</th><th>جوشکار</th><th>وضعیت</th><th /></tr></thead>
+              <thead><tr><th>{t("ndtj.h.joint")}</th><th>{t("ndtj.h.scope")}</th><th>{t("ndtj.h.parent")}</th><th>{t("ndtj.h.type")}</th><th>{t("ndtj.h.requirement")}</th><th>{t("c.welder")}</th><th>{t("c.status")}</th><th /></tr></thead>
               <tbody>{data.joints.map((j) => (
                 <tr key={j.id} data-key={j.id}>
-                  <td className="mono">{j.jointNo}</td><td className="sm">{data.scopes[j.scope]}</td><td className="mono">{j.parent}</td>
-                  <td className="sm">{data.jointTypes[j.jointType]}{j.thicknessMm && ` · ${j.thicknessMm} mm`}</td>
+                  <td className="mono">{j.jointNo}</td><td className="sm">{scope(j.scope)}</td><td className="mono">{j.parent}</td>
+                  <td className="sm">{jt(j.jointType)}{j.thicknessMm && ` · ${j.thicknessMm} mm`}</td>
                   <td className="mono sm">{methodsText(j) || "—"}</td>
                   <td className="mono">{j.stamp || "—"}{j.weldedOn && <div className="muted sm">{j.weldedOn}</div>}</td>
-                  <td><span className={`pill ${TONE[j.status]}`}>{data.statusText[j.status]}</span>
+                  <td><span className={`pill ${TONE[j.status]}`}>{status(j.status)}</span>
                     {j.methods.length > 1 && <div className="muted sm">{j.methods.map((m) => `${m.method}: ${m.text}`).join(" · ")}</div>}</td>
-                  <td><button className="btn ghost" onClick={() => setOpen(open === j.id ? null : j.id)}>{open === j.id ? "بستن" : "ثبت"}</button></td>
+                  <td><button className="btn ghost" onClick={() => setOpen(open === j.id ? null : j.id)}>{open === j.id ? t("common.close") : t("ndtj.record")}</button></td>
                 </tr>
               ))}</tbody>
             </table>
           </TableKit>
         )}
         {data.joints.filter((j) => j.id === open).map((j) => <JointActions key={j.id} j={j} data={data} post={post} may={may} />)}
-        {may.eng && <Fold title="جوش جدید"><JointForm data={data} post={post} /></Fold>}
+        {may.eng && <Fold title={t("ndtj.newJoint")}><JointForm data={data} post={post} /></Fold>}
       </div>
       </Tabs>
     </div>
@@ -115,25 +121,28 @@ export default function NdtJointsPage() {
 }
 
 function RuleForm({ data, post }) {
+  const { t, L } = usePrefs();
   const blank = { scope: "structural", jointType: "cjp", method: "VT", percent: "100", extension: "", basis: "" };
   const [f, setF] = useState(blank);
   const on = (k) => (v) => setF({ ...f, [k]: v });
   return (
     <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "rule", ...f, extension: f.extension || null })) setF({ ...blank, scope: f.scope }); }}>
       <div className="grid2">
-        <Select id="r-s" label="دامنه" value={f.scope} on={on("scope")} opts={Object.entries(data.scopes)} />
-        <Select id="r-j" label="نوع اتصال" value={f.jointType} on={on("jointType")} opts={Object.entries(data.jointTypes)} />
-        <Select id="r-m" label="روش" value={f.method} on={on("method")} opts={data.methods.map((m) => [m, m])} />
-        <Field id="r-p" label="درصد" type="number" value={f.percent} on={on("percent")} />
-        {Number(f.percent) < 100 && <Select id="r-e" label="گسترش در صورت رد نمونه" value={f.extension} on={on("extension")} opts={Object.entries(data.extensions)} blank="— تعیین نشده —" />}
-        <Field id="r-b" label="مرجع (بند مشخصات یا کد)" value={f.basis} on={on("basis")} />
+        <Select id="r-s" label={t("ndtj.h.scope")} value={f.scope} on={on("scope")} opts={Object.entries(data.scopes).map(([k, v]) => [k, L(`ndt.scope.${k}`, v)])} />
+        <Select id="r-j" label={t("ndtj.h.jointType")} value={f.jointType} on={on("jointType")} opts={Object.entries(data.jointTypes).map(([k, v]) => [k, L(`ndt.joint.${k}`, v)])} />
+        <Select id="r-m" label={t("c.method")} value={f.method} on={on("method")} opts={data.methods.map((m) => [m, m])} />
+        <Field id="r-p" label={t("ndtj.h.percent")} type="number" value={f.percent} on={on("percent")} />
+        {Number(f.percent) < 100 && <Select id="r-e" label={t("ndtj.extensionOnSample")} value={f.extension} on={on("extension")}
+          opts={Object.entries(data.extensions).map(([k, v]) => [k, L(`ndt.ext.${k}`, v)])} blank={t("ndtj.unsetLong")} />}
+        <Field id="r-b" label={t("ndtj.basis")} value={f.basis} on={on("basis")} />
       </div>
-      <button className="btn">ثبت قاعده</button>
+      <button className="btn">{t("ndtj.saveRule")}</button>
     </form>
   );
 }
 
 function JointForm({ data, post }) {
+  const { t, L } = usePrefs();
   const blank = { scope: "structural", jointNo: "", parent: "", jointType: "cjp", thicknessMm: "", drawingRef: "" };
   const [f, setF] = useState(blank);
   const on = (k) => (v) => setF({ ...f, [k]: v });
@@ -146,19 +155,20 @@ function JointForm({ data, post }) {
       if (await post({ kind: "joint", ...rest, tagId: f.scope === "support" ? null : parent, supportId: f.scope === "support" ? parent : null })) setF({ ...blank, scope: f.scope, parent: f.parent });
     }}>
       <div className="grid2">
-        <Select id="j-s" label="دامنه" value={f.scope} on={(v) => setF({ ...f, scope: v, parent: "" })} opts={Object.entries(data.scopes)} />
-        <Select id="j-p" label={f.scope === "support" ? "ساپورت" : "تگ"} value={f.parent} on={on("parent")} opts={parents} blank="—" />
-        <Field id="j-n" label="شمارهٔ جوش" value={f.jointNo} on={on("jointNo")} />
-        <Select id="j-t" label="نوع اتصال" value={f.jointType} on={on("jointType")} opts={Object.entries(data.jointTypes)} />
-        <Field id="j-th" label="ضخامت (mm)" type="number" value={f.thicknessMm} on={on("thicknessMm")} />
-        <Field id="j-d" label="نقشه / جزئیات" value={f.drawingRef} on={on("drawingRef")} />
+        <Select id="j-s" label={t("ndtj.h.scope")} value={f.scope} on={(v) => setF({ ...f, scope: v, parent: "" })} opts={Object.entries(data.scopes).map(([k, v]) => [k, L(`ndt.scope.${k}`, v)])} />
+        <Select id="j-p" label={f.scope === "support" ? t("ndtj.support") : t("c.tag")} value={f.parent} on={on("parent")} opts={parents} blank="—" />
+        <Field id="j-n" label={t("ndtj.jointNo")} value={f.jointNo} on={on("jointNo")} />
+        <Select id="j-t" label={t("ndtj.h.jointType")} value={f.jointType} on={on("jointType")} opts={Object.entries(data.jointTypes).map(([k, v]) => [k, L(`ndt.joint.${k}`, v)])} />
+        <Field id="j-th" label={t("ndtj.thickness")} type="number" value={f.thicknessMm} on={on("thicknessMm")} />
+        <Field id="j-d" label={t("ndtj.drawing")} value={f.drawingRef} on={on("drawingRef")} />
       </div>
-      <button className="btn">ثبت جوش</button>
+      <button className="btn">{t("ndtj.saveJoint")}</button>
     </form>
   );
 }
 
 function JointActions({ j, data, post, may }) {
+  const { t } = usePrefs();
   const today = new Date().toISOString().slice(0, 10);
   const [w, setW] = useState({ welderId: "", weldedOn: today });
   const [n, setN] = useState({ method: j.methods[0]?.method || "VT", result: "accept", reportNo: "", defectType: "", inspectedOn: today, inspector: "" });
@@ -167,22 +177,23 @@ function JointActions({ j, data, post, may }) {
       <h3>{j.jointNo}</h3>
       {may.weld && (
         <form style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }} onSubmit={async (e) => { e.preventDefault(); await post({ kind: "weld", jointId: j.id, ...w }); }}>
-          <Select id={`w-${j.id}`} label="جوشکار" value={w.welderId} on={(v) => setW({ ...w, welderId: v })} opts={data.welders.map((x) => [x.id, `${x.stamp_no} — ${x.name}`])} blank="—" />
-          <Field id={`wd-${j.id}`} label="تاریخ جوشکاری" type="date" value={w.weldedOn} on={(v) => setW({ ...w, weldedOn: v })} />
-          <button className="btn ghost">ثبت جوشکاری</button>
+          <Select id={`w-${j.id}`} label={t("c.welder")} value={w.welderId} on={(v) => setW({ ...w, welderId: v })} opts={data.welders.map((x) => [x.id, `${x.stamp_no} — ${x.name}`])} blank="—" />
+          <Field id={`wd-${j.id}`} label={t("ndtj.weldedOn")} type="date" value={w.weldedOn} on={(v) => setW({ ...w, weldedOn: v })} />
+          <button className="btn ghost">{t("ndtj.saveWeld")}</button>
         </form>
       )}
       {may.ndt && j.weldedOn && (
         <form style={{ marginTop: 8 }} onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "ndt", jointId: j.id, ...n })) setN({ ...n, reportNo: "", defectType: "" }); }}>
           <div className="grid2">
-            <Select id={`nm-${j.id}`} label="روش" value={n.method} on={(v) => setN({ ...n, method: v })} opts={data.methods.map((m) => [m, m])} />
-            <Select id={`nr-${j.id}`} label="نتیجه" value={n.result} on={(v) => setN({ ...n, result: v })} opts={[["accept", "پذیرفته"], ["reject", "رد"], ["pending", "در انتظار"]]} />
-            {n.result === "reject" && <Field id={`nd-${j.id}`} label="نوع عیب" value={n.defectType} on={(v) => setN({ ...n, defectType: v })} />}
-            <Field id={`nn-${j.id}`} label="شمارهٔ گزارش" value={n.reportNo} on={(v) => setN({ ...n, reportNo: v })} />
-            <Field id={`no-${j.id}`} label="تاریخ" type="date" value={n.inspectedOn} on={(v) => setN({ ...n, inspectedOn: v })} />
-            <Field id={`ni-${j.id}`} label="بازرس" value={n.inspector} on={(v) => setN({ ...n, inspector: v })} />
+            <Select id={`nm-${j.id}`} label={t("c.method")} value={n.method} on={(v) => setN({ ...n, method: v })} opts={data.methods.map((m) => [m, m])} />
+            <Select id={`nr-${j.id}`} label={t("c.result")} value={n.result} on={(v) => setN({ ...n, result: v })}
+                    opts={[["accept", t("ndtj.accept")], ["reject", t("ndtj.reject")], ["pending", t("ndtj.pending")]]} />
+            {n.result === "reject" && <Field id={`nd-${j.id}`} label={t("ndtj.defectType")} value={n.defectType} on={(v) => setN({ ...n, defectType: v })} />}
+            <Field id={`nn-${j.id}`} label={t("ndtj.reportNo")} value={n.reportNo} on={(v) => setN({ ...n, reportNo: v })} />
+            <Field id={`no-${j.id}`} label={t("c.date")} type="date" value={n.inspectedOn} on={(v) => setN({ ...n, inspectedOn: v })} />
+            <Field id={`ni-${j.id}`} label={t("c.inspector")} value={n.inspector} on={(v) => setN({ ...n, inspector: v })} />
           </div>
-          <button className="btn">ثبت NDT</button>
+          <button className="btn">{t("ndtj.saveNdt")}</button>
         </form>
       )}
     </div>

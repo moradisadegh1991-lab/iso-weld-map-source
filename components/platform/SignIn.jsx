@@ -114,7 +114,7 @@ export default function SignIn() {
 /** The language, before signing in: a visitor who does not read Persian can still find the way in. */
 function LangPick({ lang, setPref }) {
   return (
-    <div className="lang-pick" role="group" aria-label="Language / زبان / اللغة">
+    <div className="lang-pick" role="group" aria-label="Language / زبان / اللغة">   // i18n: the picker's name in all three languages
       {Object.entries(LANGS).map(([k, l]) => (
         <button key={k} type="button" lang={k} className={k === lang ? "on" : ""} aria-pressed={k === lang} onClick={() => setPref("lang", k)}>{l.name}</button>
       ))}
