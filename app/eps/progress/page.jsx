@@ -5,7 +5,8 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
 import ActivityDetail, { fmt } from "../../../components/eps/ActivityDetail";
 import { COLUMNS, useVersion } from "../../../components/eps/shared";
-import { codeSummary } from "../../../lib/eps/activities.mjs";
+import { codeSummary, periodColumns } from "../../../lib/eps/activities.mjs";
+import { usePrefs } from "../../../lib/client/prefs.mjs";
 
 import TableKit from "../../../components/ui/TableKit";
 /**
@@ -47,6 +48,13 @@ export default function ProgressPage() {
   const add = (ids) => post("/api/eps/activities", { kind: "progress-add", reportId: f.reportId, activityIds: ids, mode: f.mode, value: f.value, areaId: f.areaId || null, mark: f.mark, notes: f.notes },
     () => `${ids.length} ردیف در گزارش ${(reports.data?.reports || []).find((r) => r.id === f.reportId)?.report_no || ""} ثبت شد.`);
   const summary = useMemo(() => (data && lines.data ? codeSummary(data.codes, visible, lines.data.lines) : []), [data, lines.data, visible]);
+  // planned and actual progress up to the chosen day, from the volumes recorded so far (owner's requirements 2026-10-18, item 5)
+  const { t, num } = usePrefs();
+  const toDay = useMemo(() => (data && lines.data && f.day ? periodColumns([{ id: "__all", activities: [], children: data.roots }], lines.data.lines, [f.day]) : new Map()),
+    [data, lines.data, f.day]);
+  const columns = useMemo(() => [...COLUMNS,
+    { key: "dayPlan", title: t("pg.planPct"), tip: t("pg.planPctTip"), width: 90, mono: true, get: (r) => { const v = toDay.get(r.id)?.TPP; return v === undefined ? "" : fmt(v); } },
+    { key: "dayActual", title: t("pg.actualPct"), tip: t("pg.actualPctTip"), width: 90, mono: true, get: (r) => { const v = toDay.get(r.id)?.TPA; return v === undefined ? "" : fmt(v); } }], [toDay, t]);
   const [codePick, setCodePick] = useState(null);
 
   const head = (
@@ -66,6 +74,17 @@ export default function ProgressPage() {
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg" role="status">{ok}</p>}
+      <div className="toolbar-left" data-entry-bar>
+        <span className="field"><label htmlFor="pg-day" className="sm">{t("pg.day")}</label><input id="pg-day" type="date" value={f.day} max={today()} onChange={(e) => setF({ ...f, day: e.target.value })} /></span>
+        <span className="field"><label htmlFor="pg-rep" className="sm">{t("pg.reportNo")}</label>
+          <select id="pg-rep" value={f.reportId} onChange={(e) => setF({ ...f, reportId: e.target.value })}>
+            {(reports.data?.reports || []).length === 0 && <option value="">{t("pg.noReport")}</option>}
+            {(reports.data?.reports || []).map((r) => <option key={r.id} value={r.id}>{r.report_no} — {r.stage || r.status}{r.may.edit ? "" : t("pg.viewOnly")}</option>)}</select></span>
+        <button className="btn" type="button" disabled={!canAdd || sel?.kind !== "act"} data-add="single" onClick={() => add([sel.id])}>{t("pg.addSingle")}</button>
+        <button className="btn" type="button" disabled={!canAdd || visible.length === 0} data-add="multi"
+          onClick={() => { if (window.confirm(t("pg.addMultiAsk", { n: visible.length }))) add(visible.map((a) => a.id)); }}>{t("pg.addMulti", { n: visible.length })}</button>
+        <span className="sm" data-day-progress>{t("pg.dayProgress", { day: f.day, plan: num(toDay.get("__all")?.TPP ?? null, { maximumFractionDigits: 2 }), actual: num(toDay.get("__all")?.TPA ?? null, { maximumFractionDigits: 2 }) })}</span>
+      </div>
       <div className="card row" style={{ gap: 18, flexWrap: "wrap", alignItems: "flex-start" }} data-entry-box>
         <fieldset style={{ border: "1px solid var(--rule)", borderRadius: 4, padding: "6px 10px" }}>
           <legend className="sm">مقدار انجام‌شده (Input weight)</legend>
@@ -76,11 +95,6 @@ export default function ProgressPage() {
             </label>))}
         </fieldset>
         <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "6px 8px", alignItems: "center" }}>
-          <label htmlFor="pg-day" className="sm">روز</label><input id="pg-day" type="date" value={f.day} max={today()} onChange={(e) => setF({ ...f, day: e.target.value })} />
-          <label htmlFor="pg-rep" className="sm">شمارهٔ گزارش</label>
-          <select id="pg-rep" value={f.reportId} onChange={(e) => setF({ ...f, reportId: e.target.value })}>
-            {(reports.data?.reports || []).length === 0 && <option value="">— گزارشی در این روز نیست —</option>}
-            {(reports.data?.reports || []).map((r) => <option key={r.id} value={r.id}>{r.report_no} — {r.stage || r.status}{r.may.edit ? "" : " (فقط نمایش)"}</option>)}</select>
           <label htmlFor="pg-area" className="sm">ناحیه / پیمانکار</label>
           <select id="pg-area" value={f.areaId} onChange={(e) => setF({ ...f, areaId: e.target.value })}><option value="">—</option>
             {data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
@@ -89,15 +103,12 @@ export default function ProgressPage() {
             <input aria-label="توضیح" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="توضیح" /></span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <button className="btn" type="button" disabled={!canAdd || sel?.kind !== "act"} data-add="single" onClick={() => add([sel.id])}>add item single — فعالیت انتخاب‌شده</button>
-          <button className="btn" type="button" disabled={!canAdd || visible.length === 0} data-add="multi"
-            onClick={() => { if (window.confirm(`برای ${visible.length} فعالیتی که فیلتر نشان می‌دهد ردیف ثبت شود؟`)) add(visible.map((a) => a.id)); }}>add item multi — {visible.length} فعالیت فیلترشده</button>
           {rep && !rep.may.edit && <span className="sm" style={{ color: "var(--warn)" }}>{rep.may.editWhy || "در این مرحلهٔ گزارش حق نوشتن ندارید."}</span>}
           {(reports.data?.reports || []).length === 0 && <Link className="sm" href="/contract-reports">ساخت گزارش روزانه برای این روز</Link>}
         </div>
       </div>
       <div style={{ height }}>
-        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "name", "unit", "volActual", "done", "pct", "remain", "start", "finish"]}
+        <ActivityGrid data={data} columns={columns} defaultCols={["code", "name", "unit", "volActual", "done", "pct", "dayPlan", "dayActual", "remain", "start", "finish"]}
           storeKey="p6-progress" selected={sel?.id} onSelect={(r) => setSel(r)} onVisible={setVisible} />
       </div>
       {grip}

@@ -5,14 +5,27 @@ import { usePlatform, useProjectData } from "../../../../lib/client/platform.mjs
 import ActivityGrid from "../../../../components/eps/ActivityGrid";
 import { fmt, day } from "../../../../components/eps/ActivityDetail";
 import { COLUMNS, useVersion } from "../../../../components/eps/shared";
+import { usePrefs } from "../../../../lib/client/prefs.mjs";
 
 /**
  * Several days side by side (owner's «PMS» document, last page): the days
  * are picked from a list like Excel's filter (search, select all, clear);
- * only the activities with work on one of them are shown, under their WBS
- * nodes, with one column per day — the quantity done that day — and the
- * total over the chosen days.
+ * only the activities with work, or planned work, on one of them are shown,
+ * under their WBS nodes.
+ *
+ * Columns (owner's requirements 2026-10-18, item 6; the figures are
+ * lib/eps/activities.mjs `periodColumns`): fifteen of what was planned and
+ * done before, to date and in the chosen days — quantity and percentage —
+ * with SPI (done ÷ planned) and VAR (planned − done); then for each chosen
+ * day two columns, P what the plan puts on it and AC what was recorded.
  */
+// [key, heading, what it is] — the headings are the owner's own abbreviations
+const PERIOD_COLS = [
+  ["LWP", "L.W.P", "pd.LWP"], ["LWA", "L.W.A", "pd.LWA"], ["TWP", "T.W.P", "pd.TWP"], ["TWA", "T.W.A", "pd.TWA"],
+  ["LPP", "L.P.P%", "pd.LPP"], ["LPA", "L.P.A%", "pd.LPA"], ["TPP", "T.P.P%", "pd.TPP"], ["TPA", "T.P.A%", "pd.TPA"],
+  ["TSPI", "T.SPI%", "pd.TSPI"], ["VAR", "VAR%", "pd.VAR"], ["CPP", "C.P.P%", "pd.CPP"], ["CPA", "C.P.A%", "pd.CPA"],
+  ["CWP", "C.W.P", "pd.CWP"], ["CWA", "C.W.A", "pd.CWA"], ["CSPI", "C.SPI%", "pd.CSPI"],
+];
 export default function DaysPage() {
   const { contractId } = usePlatform();
   const { versionId, picker } = useVersion(contractId);
@@ -22,13 +35,19 @@ export default function DaysPage() {
   const [find, setFind] = useState("");
   const { data, error } = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}&days=${days.join(",")}` : null), [versionId, days.join(",")]);
   const [sel, setSel] = useState(null);
-  const keep = useCallback((a) => !!data?.matrix?.[a.id], [data]);
+  const { t } = usePrefs();
+  // the activities with work on a chosen day, or with work planned on one
+  const keep = useCallback((a) => !!data?.matrix?.[a.id] || (data?.period?.[a.id]?.CWP || 0) > 0, [data]);
   const columns = useMemo(() => {
-    const base = COLUMNS.filter((c) => ["code", "name", "unit", "volActual", "done", "pct"].includes(c.key));
-    const per = (data?.days || []).map((d) => ({ key: `d:${d}`, title: day(d), width: 90, mono: true,
-      get: (r) => (r.kind === "act" ? fmt(data.matrix[r.id]?.byDay[d]) : "") }));
-    return [...base, ...per, { key: "total", title: "جمع روزهای انتخابی", width: 110, mono: true, get: (r) => (r.kind === "act" ? fmt(data.matrix[r.id]?.total) : "") }];
-  }, [data]);
+    const base = COLUMNS.filter((c) => ["code", "name", "unit", "volActual"].includes(c.key));
+    const P = data?.period || {};
+    const period = PERIOD_COLS.map(([k, title, tip]) => ({ key: `p:${k}`, title, tip: t(tip), width: 74, mono: true,
+      get: (r) => { const v = P[r.id]?.[k]; return v === undefined ? "" : fmt(v); } }));
+    const per = (data?.days || []).flatMap((d) => [
+      { key: `d:${d}:p`, title: `${day(d)} P`, tip: t("pd.P"), width: 84, mono: true, get: (r) => (r.kind === "act" ? fmt(P[r.id]?.byDay?.[d]?.p) : "") },
+      { key: `d:${d}:ac`, title: `${day(d)} AC`, tip: t("pd.AC"), width: 84, mono: true, get: (r) => (r.kind === "act" ? fmt(P[r.id]?.byDay?.[d]?.ac) : "") }]);
+    return [...base, ...period, ...per];
+  }, [data, t]);
   const head = (
     <div className="pagehead"><h1>کار انجام‌شده در چند روز</h1>
       <span className="sub">{picker} <Link href="/eps/progress">ثبت کار روزانه</Link> · <Link href="/eps/activities">فعالیت‌ها</Link></span></div>);

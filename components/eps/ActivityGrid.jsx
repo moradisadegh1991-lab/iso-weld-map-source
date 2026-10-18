@@ -187,7 +187,7 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
           <table className="p6-table" style={{ width: shown.reduce((s, c) => s + width(c), 0) }}>
             <colgroup>{shown.map((c) => <col key={c.key} style={{ width: width(c) }} />)}</colgroup>
             <thead><tr>{shown.map((c) => (
-              <th key={c.key} dir="rtl" title={c.title}>{c.title}
+              <th key={c.key} dir="auto" title={c.tip || c.title}>{c.title}
                 <span className="p6-colgrip" onMouseDown={(e) => dragFrom(e, width(c), (w) => setWidths((x) => ({ ...x, [c.key]: Math.max(40, Math.round(w)) })))} /></th>))}</tr></thead>
             <tbody>{rows.map((r) => {
               const isSel = r.id === selected;

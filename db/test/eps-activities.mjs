@@ -71,6 +71,28 @@ test("roles, delays, the tree filter and the code summary", async () => {
   equal(m.get("a"), { byDay: { "2026-01-01": 2, "2026-01-02": 3 }, total: 5 });
 });
 
+test("the multi-day columns: before, to date and current, planned and done, SPI as done ÷ planned and VAR as planned − done", () => {
+  // worked by hand from the owner's definitions (requirements 2026-10-18, item 6), not from this code:
+  //   a: plan 1–10 Jan, 100 units, 10 a day, W.F 60 · done 12 on the 3rd, 8 on the 4th, 5 on the 6th
+  //   b: plan 1–5 Jan, 50 units, 10 a day, W.F 40 · done 20 on the 4th
+  //   chosen days: the 4th and 5th → to date = up to the 5th; current = the 4th and 5th; before = the rest
+  const a = { id: "a", wf: 60, plan_start: "2026-01-01", plan_end: "2026-01-10", volumePlan: 100, volumeActual: 100 };
+  const b = { id: "b", wf: 40, plan_start: "2026-01-01", plan_end: "2026-01-05", volumePlan: 50, volumeActual: 50 };
+  const c = { id: "c", wf: 0, plan_start: "2026-01-01", plan_end: "2026-01-05", volumePlan: 5, volumeActual: 5, scope: { discipline: "piping" } };
+  const lines = [{ activityId: "a", date: "2026-01-03", qty: 12 }, { activityId: "a", date: "2026-01-04", qty: 8 }, { activityId: "a", date: "2026-01-06", qty: 5 },
+    { activityId: "b", date: "2026-01-04", qty: 20 }];
+  const p = ea.periodColumns([{ id: "n", activities: [a, b, c], children: [] }], lines, ["2026-01-05", "2026-01-04"]);
+  const pick = (x, ks) => ks.map((k) => x[k]);
+  const K = ["LWP", "LWA", "TWP", "TWA", "LPP", "LPA", "TPP", "TPA", "TSPI", "VAR", "CPP", "CPA", "CWP", "CWA", "CSPI"];
+  equal(pick(p.get("a"), K), [30, 12, 50, 20, 30, 12, 50, 20, 40, 30, 20, 8, 20, 8, 40]);
+  equal(p.get("a").byDay, { "2026-01-04": { p: 10, ac: 8 }, "2026-01-05": { p: 10, ac: 0 } }, "the plan puts 10 on each day; 8 done on the 4th, none on the 5th");
+  equal(pick(p.get("b"), K), [30, 0, 50, 20, 60, 0, 100, 40, 40, 60, 40, 40, 20, 20, 100]);
+  equal(pick(p.get("n"), ["LPP", "LPA", "TPP", "TPA", "TSPI", "VAR", "CPP", "CPA", "CSPI"]), [42, 7.2, 70, 28, 40, 42, 28, 20.8, 74.29],
+    "the node rolls the percentages up by W.F; quantities in different units are not added");
+  equal(pick(p.get("c"), ["TWP", "TWA", "TPA", "TSPI"]), [5, null, null, null], "done from the platform's records has no day: unknown, not zero");
+  equal(ea.periodColumns([{ id: "n", activities: [{ id: "d", wf: 100 }], children: [] }], [], ["2026-01-04"]).get("d").TSPI, null, "no planned dates: no SPI");
+});
+
 test("the daily report's work-done section: an activity of the contract, a company of the contract, a quantity above zero", async () => {
   const cd = await import("../../lib/reports/contract-daily.mjs");
   const ok = { activityIds: new Set(["a1"]), areaIds: new Set(["k1"]) };
