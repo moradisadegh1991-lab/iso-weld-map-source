@@ -24,7 +24,7 @@ import SignIn from "./SignIn";
  * The menu searches every tab (Ctrl+K), its groups fold and remember it, it
  * narrows to icons, and on a phone it is a drawer.
  */
-export const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", designer: "طراح", contracts: "امور قراردادها", finance: "مالی", hr: "منابع انسانی", developer: "توسعه‌دهنده" };
+export const ROLE_FA = { viewer: "بیننده", qc: "کنترل کیفیت", engineer: "مهندس", admin: "مدیر پروژه", designer: "طراح", contracts: "امور قراردادها", finance: "مالی", hr: "منابع انسانی", developer: "توسعه‌دهنده" };   // i18n: kept for /admin until that page is translated
 const store = {
   get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -149,7 +149,7 @@ function Frame({ p, pathname, children }) {
               <div className="head">
                 <b style={{ fontSize: 13 }}>{name}</b>
                 <span className="e">{p.user?.email}</span>
-                <span className="sm muted">{roleName(p.role)} · {areas.length ? areas.map((a) => AREAS[a]).join(lang === "en" ? ", " : "، ") : t("shell.allAreas")}</span>
+                <span className="sm muted">{roleName(p.role)} · {areas.length ? areas.map((a) => AREAS[a]).join(t("c.sep")) : t("shell.allAreas")}</span>
               </div>
               <button role="menuitem" onClick={toggleTheme}>{theme === "light" ? `☾ ${t("shell.themeDark")}` : `☀ ${t("shell.themeLight")}`}</button>
               {can(membership, "project:members") && <Link role="menuitem" href="/admin">⚿ {t("shell.users")}</Link>}

@@ -97,7 +97,7 @@ check(/Inter/.test(await page.evaluate(() => getComputedStyle(document.body).fon
 
 // ── a table as a grid ──
 await page.goto(`${BASE}/quality`, { waitUntil: "networkidle" });
-const kit = page.locator(".card", { has: page.locator("h2", { hasText: "Punch list" }) }).locator(".tk");
+const kit = page.locator(".card", { has: page.locator("h2", { hasText: /Punch list|قائمة النواقص/ }) }).locator(".tk");
 await kit.locator(".tk-bar").waitFor();
 const rowsText = async () => flat(await kit.locator(".tk-n").innerText());
 console.log("punch rows:", await rowsText());

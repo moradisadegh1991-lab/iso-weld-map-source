@@ -799,17 +799,17 @@ const own = (r) => !r.classList?.contains("tk-grp");
 const isDetail = (r) => r.cells.length === 1 && r.cells[0].colSpan > 1;
 const cellOf = (r, i) => (r.cells[i]?.textContent || "").replace(/\s+/g, " ").trim();
 const flag = (el, k, on) => { if (on) { if (!(k in el.dataset)) el.dataset[k] = ""; } else if (k in el.dataset) delete el.dataset[k]; };
-const DIGITS = { "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4", "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
-  "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };
-const latin = (t) => String(t).replace(/[۰-۹٠-٩]/g, (d) => DIGITS[d]);
+const DIGITS = { "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4", "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",   // i18n: letters and digits the search and sort normalise, not text shown
+  "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };   // i18n: letters and digits the search and sort normalise, not text shown
+const latin = (t) => String(t).replace(/[۰-۹٠-٩]/g, (d) => DIGITS[d]);   // i18n: letters and digits the search and sort normalise, not text shown
 function norm(t) {
-  return latin(t).replace(/ي/g, "ی").replace(/ك/g, "ک").replace(/[‌‏‎]/g, "").replace(/\s+/g, " ").toLowerCase().trim();
+  return latin(t).replace(/ي/g, "ی").replace(/ك/g, "ک").replace(/[‌‏‎]/g, "").replace(/\s+/g, " ").toLowerCase().trim();   // i18n: letters and digits the search and sort normalise, not text shown
 }
 const isBlank = (t) => /^[—–\-]?$/.test(String(t).trim());
 function compare(a, b) {
   // "—" and "-" are how the pages print "nothing": they sort with the empties, last.
   const blank = (t) => (isBlank(t) ? "" : t);
-  const x = blank(latin(a).replace(/[,٬]/g, "")), y = blank(latin(b).replace(/[,٬]/g, ""));
+  const x = blank(latin(a).replace(/[,٬]/g, "")), y = blank(latin(b).replace(/[,٬]/g, ""));   // i18n: letters and digits the search and sort normalise, not text shown
   const nx = /^-?\d+(\.\d+)?%?$/.test(x.trim()) ? parseFloat(x) : NaN;
   const ny = /^-?\d+(\.\d+)?%?$/.test(y.trim()) ? parseFloat(y) : NaN;
   if (Number.isFinite(nx) && Number.isFinite(ny)) return nx - ny;
@@ -819,7 +819,7 @@ function compare(a, b) {
 }
 /** A cell as a number, when it is one ("1,234.5", "۱۲٫۵", "40%"); otherwise NaN. */
 function toNum(v) {
-  const x = latin(v).replace(/٫/g, ".").replace(/[,٬\s]/g, "").replace(/%$/, "");
+  const x = latin(v).replace(/٫/g, ".").replace(/[,٬\s]/g, "").replace(/%$/, "");   // i18n: letters and digits the search and sort normalise, not text shown
   return /^-?\d+(\.\d+)?$/.test(x) ? parseFloat(x) : NaN;
 }
 const active = (f) => !!f && (f.vals !== undefined || !!f.text || !!f.from || !!f.to);
