@@ -96,7 +96,9 @@ function Register({ bar }) {
         <h2>رجیستر مدارک (MDR)</h2>
         {docs.length === 0 ? <p className="empty-note">مدرکی ثبت نشده است.</p> : (
           <TableKit name="documents-1" {...(may ? removeDoc : {})}
-                    onEdit={may ? (id) => setEditing(docs.find((d) => d.id === id)) : undefined}>
+                    onEdit={may ? (id) => setEditing(docs.find((d) => d.id === id)) : undefined}
+                    rowEdit={may ? { fields: [{ col: "عنوان", name: "title" }, { col: "رشته", name: "discipline" }, { col: "IFC برنامه", name: "plannedIfcOn", type: "date" }],
+                      value: (id) => mdrOf(docs.find((d) => d.id === id)), onSave: (id, v) => post({ kind: "document", ...v }) } : undefined}>
             <table className="dtable">
               <thead><tr><th>شماره</th><th>عنوان</th><th>رشته</th><th>رویژن جاری</th><th>رویژن ساخت</th><th>IFC برنامه</th><th /></tr></thead>
               <tbody>
@@ -189,11 +191,14 @@ function Revisions({ d, data, post, may }) {
  * document describes — the asset master and the handover find a tag's
  * documents through it.
  */
+/** A register row as the document form holds it — the whole form, and the row edited in place. */
+const mdrOf = (d) => ({ docNo: d.doc_no, title: d.title, discipline: d.discipline || "", docType: d.doc_type || "",
+  originator: d.originator || "EPC", subsystemId: d.subsystem_id || "", approvalRequired: !!d.approval_required,
+  plannedIfcOn: d.planned_ifc_on ? String(d.planned_ifc_on).slice(0, 10) : "", tagId: d.tag_id || "" });
+
 function MdrForm({ data, post, initial = null, onDone }) {
   const blank = { docNo: "", title: "", discipline: "", docType: "", originator: "EPC", subsystemId: "", approvalRequired: false, plannedIfcOn: "", tagId: "" };
-  const [f, setF] = useState(initial ? { docNo: initial.doc_no, title: initial.title, discipline: initial.discipline || "", docType: initial.doc_type || "",
-    originator: initial.originator || "EPC", subsystemId: initial.subsystem_id || "", approvalRequired: !!initial.approval_required,
-    plannedIfcOn: initial.planned_ifc_on ? String(initial.planned_ifc_on).slice(0, 10) : "", tagId: initial.tag_id || "" } : blank);
+  const [f, setF] = useState(initial ? mdrOf(initial) : blank);
   const x = initial ? "me" : "md";
   return (
     <form style={{ marginTop: 10 }} onSubmit={async (e) => {

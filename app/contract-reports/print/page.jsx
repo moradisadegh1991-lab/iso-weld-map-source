@@ -7,6 +7,10 @@ import PrintSheet from "../../../components/reports/PrintSheet";
  * A contract report on paper, with its type's print layout (header with the
  * logos, signature boxes by stage and group). The browser prints it, or saves
  * it as PDF; once the last stage has approved, what prints is the record.
+ *
+ * When its workflow has pages (owner's requirements 2026-10-18, item 2), each
+ * page is a sheet of its own: the parts of the report it holds, and in its
+ * footer only the groups whose duties reach that page.
  */
 const COLS = {
   narrative: [["categoryId", "دسته"], ["title", "عنوان"], ["description", "شرح"], ["unit", "واحد"], ["qty", "مقدار"], ["notes", "توضیحات"]],
@@ -49,14 +53,20 @@ export default function ContractReportPrint() {
         {r.status !== "approved" && <span className="muted sm">این گزارش هنوز تأیید نهایی نشده است؛ چاپ آن سند مرجع نیست.</span>}
       </p>
       <div className="rp-printhost">
-        <PrintSheet mode="print" layout={p.layout} values={values} boxes={boxes}
+        {((v.pages || []).length ? v.pages : [null]).map((pg) => {
+          const has = (part) => !pg || !pg.sections.length || pg.sections.includes(part);
+          const sheetBoxes = pg ? boxes.filter((b) => b.allPages || (b.pages || []).includes(pg.id)) : boxes;
+          return (
+        <div key={pg?.id || "all"} data-print-page={pg?.pageNo || ""} style={{ breakAfter: "page" }}>
+        {pg && <p className="sm no-print" style={{ margin: "8px 0 2px" }}><b>صفحهٔ {pg.pageNo} — {pg.name}</b></p>}
+        <PrintSheet mode="print" layout={p.layout} values={{ ...values, title: pg ? `${values.title} — ${pg.name} (${pg.pageNo})` : values.title }} boxes={sheetBoxes}
           logoUrl={(id) => `/api/report-print?projectId=${projectId}&logo=${id}`} signatureUrl={(id) => `/api/signature?projectId=${projectId}&id=${id}`}>
-          <div className="sm" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+          {has("header") && <div className="sm" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
             <span>قرارداد: <b>{v.contract.contract_no}</b> — {v.contract.title}</span><span>ساعت: {h.startTime || "—"} تا {h.endTime || "—"}</span>
             <span>وضعیت روز: {v.labels?.dayStatus?.[h.dayStatus] || h.dayStatus || "—"}</span><span>دما: {h.tempMin ?? "—"} تا {h.tempMax ?? "—"} °C</span>
             <span>هوا: {v.labels?.weather?.[h.weather] || "—"}</span><span>رطوبت: {h.humidity ?? "—"}٪</span>
-          </div>
-          {Object.entries(COLS).map(([kind, cols]) => (
+          </div>}
+          {Object.entries(COLS).filter(([kind]) => has(kind)).map(([kind, cols]) => (
             <section key={kind} style={{ marginBottom: 6 }}>
               <b>{({ narrative: "شرح کار", problems: "مشکلات", resources: "منابع" })[kind]}</b>
               <table className="cr-pt" style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt" }}>
@@ -69,8 +79,10 @@ export default function ContractReportPrint() {
                 ])}</tbody>
               </table>
             </section>))}
-          <p className="sm">کل نفرات: <b>{v.summary.total}</b> (روز {v.summary.day} · شب {v.summary.night} · مرخصی {v.summary.leave}) — {Object.entries(v.summary.byUnit).map(([u, n]) => `${n} ${u}`).join(" · ")}</p>
+          {has("resources") && <p className="sm">کل نفرات: <b>{v.summary.total}</b> (روز {v.summary.day} · شب {v.summary.night} · مرخصی {v.summary.leave}) — {Object.entries(v.summary.byUnit).map(([u, n]) => `${n} ${u}`).join(" · ")}</p>}
         </PrintSheet>
+        </div>);
+        })}
       </div>
     </div>
   );

@@ -69,7 +69,7 @@ test("a report is created only by a first-stage member with the right, numbered 
   });
 });
 
-test("a signature attests to one version: once signed, the stage only shows it; withdrawn, it is edited again and the signature lapses", async () => {
+test("a signature attests to one version; its signer withdraws to edit; the stage edits on, and a signature lapses unless it accepted the stage's changes", async () => {
   await as(async () => {
     await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(5), userId: planner.id });           // v2, nobody signed yet
     await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(5), userId: planner.id }), "تغییری نکرده");
@@ -77,15 +77,21 @@ test("a signature attests to one version: once signed, the stage only shows it; 
     await throws(() => rp.signReport(db, { projectId: P, reportId: r1.id, userId: planner.id }), "امضا کرده‌اید");
     await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: planner.id }), "امضای خود را لغو کنید",
       "the signer does not edit what they signed: they withdraw first (owner's spec 2026-10-15)");
-    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: siteMgr.id }), "فقط قابل نمایش",
-      "signed content is read-only for everyone at the stage, even a member holding the retired edit_after_sign (owner's review, item 4)");
-    const shown = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: siteMgr.id });
-    equal(shown.may.edit, false, "and the page shows it without edit controls");
-    await rp.withdrawSignature(db, { projectId: P, reportId: r1.id, userId: planner.id });
+    // owner's requirements 2026-10-18, item 3 (replacing review item 4): the others at the stage edit on, and a plain signature lapses
     const e = await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(6), userId: siteMgr.id });  // v3
-    equal(e.versionNo, 3);
-    const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: planner.id });
-    assert(v.may.signFor.includes(G.plan.id), "the planner may sign the new content");
+    equal([e.versionNo, e.lapsed], [3, 1], "the planner's signature lapses with the site manager's change");
+    const box = async () => (await rp.reportView(db, { projectId: P, reportId: r1.id, userId: siteMgr.id }))
+      .signatureBoxes[0].groups.find((g) => g.groupId === G.plan.id).signatures.find((x) => x.userId === planner.id);
+    equal((await box()).current, false, "a signature on v2 does not count for v3");
+    assert((await rp.reportView(db, { projectId: P, reportId: r1.id, userId: planner.id })).may.signFor.includes(G.plan.id), "the planner may sign the new content");
+    // signed accepting the stage's changes: it stands through the next change at the stage
+    await rp.signReport(db, { projectId: P, reportId: r1.id, userId: planner.id, acceptChanges: true });
+    const e2 = await rp.editReport(db, { projectId: P, reportId: r1.id, content: content(7), userId: siteMgr.id });  // v4
+    equal([e2.versionNo, e2.lapsed], [4, 0], "nothing lapses: the only signature accepted the stage's changes");
+    const b = await box();
+    equal([b.current, b.acceptChanges, b.versionNo], [true, true, 3], "signed on v3, it still counts for v4");
+    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(8), userId: planner.id }), "امضای خود را لغو کنید",
+      "accepting others' changes is not editing one's own signed content");
   });
 });
 
@@ -96,7 +102,7 @@ test("final approval needs the approver's own signature on the current content; 
     await rp.signReport(db, { projectId: P, reportId: r1.id, userId: siteMgr.id });
     const r = await rp.approveStage(db, { projectId: P, reportId: r1.id, userId: siteMgr.id });
     equal(r.stage_seq, 2);
-    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(7), userId: siteMgr.id }), "حق ویرایش",
+    await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(9), userId: siteMgr.id }), "حق ویرایش",
       "past its stage, the contractor cannot touch it");
     await throws(() => rp.withdrawSignature(db, { projectId: P, reportId: r1.id, userId: siteMgr.id }), "پس گرفته نمی‌شود",
       "a signature the stage approved stands");
@@ -134,10 +140,10 @@ test("the last stage's approval makes its version the record: hash kept, report 
     await rp.approveStage(db, { projectId: P, reportId: r1.id, userId: sup.id });
     await rp.signReport(db, { projectId: P, reportId: r1.id, userId: client.id });
     const r = await rp.approveStage(db, { projectId: P, reportId: r1.id, comment: "تأیید", userId: client.id });
-    equal([r.status, r.approved_version], ["approved", 4]);
+    equal([r.status, r.approved_version], ["approved", 5]);
     const v = await rp.reportView(db, { projectId: P, reportId: r1.id, userId: client.id });
     equal(v.record.hash, v.contentHash);
-    equal(v.versions.map((x) => x.version_no), [1, 2, 3, 4]);
+    equal(v.versions.map((x) => x.version_no), [1, 2, 3, 4, 5]);
     equal(v.decisions.map((d) => [d.stageSeq, d.action]),
       [[1, "approved"], [2, "returned"], [1, "approved"], [2, "approved"], [3, "approved"]]);
     await throws(() => rp.editReport(db, { projectId: P, reportId: r1.id, content: content(9), userId: client.id }), "قفل");

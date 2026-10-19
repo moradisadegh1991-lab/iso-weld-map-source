@@ -54,17 +54,34 @@ test("the upper resources part: every resource in its tree order, the report's r
   equal([b.byUnit["نفر"].total, b.byUnit["دستگاه"].total], [7, 1], "people and machines are summed apart");
 });
 
+test("the resources board filtered: by name, branch, kind or unit, or to what the report books — a branch stays while something under it does", () => {
+  const tree = [{ id: "c1", name: "نیرو", children: [{ id: "c2", name: "جوشکاری", children: [], resources: [{ id: "a", name: "جوشکار", kind: "person", unit: "نفر", seq: 1 }] }],
+    resources: [{ id: "b", name: "فیتر", kind: "person", unit: "نفر", seq: 1 }] }];
+  const loose = [{ id: "m", name: "جرثقيل", kind: "machine", unit: "دستگاه", seq: 1 }];
+  const { items } = cd.resourceBoard([row({ resourceId: "m", day: 1 })], tree, loose);
+  const names = (xs) => xs.map((x) => (x.type === "branch" ? `[${x.name}]` : x.name));
+  equal(names(cd.filterBoard(items, { q: "جوش" })), ["[نیرو]", "[جوشکاری]", "جوشکار"], "a resource deep in the tree keeps the branches above it, not its siblings");
+  equal(names(cd.filterBoard(items, { q: "جرثقیل" })), ["[بدون دسته]", "جرثقيل"], "Arabic ي and Persian ی are one letter");
+  equal(names(cd.filterBoard(items, { q: "نیرو" })), ["[نیرو]", "فیتر", "[جوشکاری]", "جوشکار"], "a branch's name finds what is under it");
+  equal(names(cd.filterBoard(items, { q: "machine", kindLabel: (k) => k })), ["[بدون دسته]", "جرثقيل"], "by kind");
+  equal(names(cd.filterBoard(items, { used: true })), ["[بدون دسته]", "جرثقيل"], "only what this report books");
+  equal(cd.filterBoard(items, {}), items, "no filter: the board as it is");
+});
+
 test("a later stage writes only its own values; the first stage's stay; a row is marked removed, never dropped", async () => {
   const prev = { header: { base: {}, stages: {} }, narrative: [], problems: [], resources: [{ id: "r1", base: { resourceId: "a", day: 5 }, stages: {} }] };
   const mine = structuredClone(prev); mine.resources[0].stages["2"] = { resourceId: "a", day: 4 };
-  equal(cd.diffContent(prev, mine, { stageSeq: 2, firstSeq: 1 }), { added: 0, changed: 1, removed: 0, illegal: [] });
+  const d = cd.diffContent(prev, mine, { stageSeq: 2, firstSeq: 1 });
+  equal({ ...d, touched: d.touched.map((t) => [t.section, t.row.id]) }, { added: 0, changed: 1, removed: 0, illegal: [], touched: [["resources", "r1"]] },
+    "and it says which rows it reaches, for a duty limited to some rows");
   const base = structuredClone(prev); base.resources[0].base.day = 4;
   assert(cd.diffContent(prev, base, { stageSeq: 2, firstSeq: 1 }).illegal.length, "stage 2 does not rewrite stage 1's number");
   const drop = structuredClone(prev); drop.resources = [];
   assert(cd.diffContent(prev, drop, { stageSeq: 2, firstSeq: 1 }).illegal.length, "a later stage does not delete a row");
   const mark = structuredClone(prev); mark.resources[0].stages["2"] = { removed: true };
   equal(cd.diffContent(prev, mark, { stageSeq: 2, firstSeq: 1 }).removed, 1);
-  equal(cd.diffContent(prev, drop, { stageSeq: 1, firstSeq: 1 }), { added: 0, changed: 0, removed: 1, illegal: [] }, "the first stage writes its own rows");
+  const dd = cd.diffContent(prev, drop, { stageSeq: 1, firstSeq: 1 });
+  equal([dd.added, dd.changed, dd.removed, dd.illegal], [0, 0, 1, []], "the first stage writes its own rows");
   const add = structuredClone(prev); add.resources.push({ id: "r2", base: null, addedAt: 2, stages: { 2: { resourceId: "a", day: 2 } } });
   equal(cd.diffContent(prev, add, { stageSeq: 2, firstSeq: 1 }).added, 1);
 });

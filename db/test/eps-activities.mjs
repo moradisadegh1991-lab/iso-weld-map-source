@@ -63,12 +63,37 @@ test("roles, delays, the tree filter and the code summary", async () => {
   equal([ea.delayRow({}, { actual_start: "2026-01-05" }, null).startDelay], [null], "no master plan: no baseline, no delay figure");
   const f = ea.filterTree([{ id: "r", text: "PM01" }, { id: "n", parentId: "r", text: "Civil" }, { id: "a", parentId: "n", text: "Excavation" }, { id: "b", parentId: "r", text: "Piping" }], "exca");
   equal([[...f.matches], [...f.visible].sort()], [["a"], ["a", "n", "r"]], "a match keeps every row above it");
+  const g = ea.filterTree([{ id: "r", text: "PM01" }, { id: "n", parentId: "r", text: "Civil" }, { id: "a", parentId: "n", text: "Excavation" },
+    { id: "a2", parentId: "a", text: "Trench" }, { id: "b", parentId: "r", text: "Piping" }], "civil");
+  equal([...g.visible].sort(), ["a", "a2", "n", "r"], "and every row under it: a matched branch shows whole (owner's requirements 2026-10-18, item 10)");
   equal(ea.splitHits("Excavation & excavation", "exca").filter((x) => x.hit).length, 2);
   const s = ea.codeSummary([{ id: "c1", code: "EX" }], [{ id: "a", codeIds: ["c1"], volumePlan: 100, volumeActual: 120 }, { id: "b", codeIds: [], volumeActual: 5 }],
     [{ activityId: "a", qty: 30, areaId: "k1" }, { activityId: "a", qty: 6, areaId: "k2" }, { activityId: "b", qty: 5, areaId: "k1" }]);
   equal([s[0].plan, s[0].actual, s[0].done, s[0].remain, s[0].pct, s[0].byArea], [100, 120, 36, 84, 30, { k1: 30, k2: 6 }]);
   const m = ea.daysMatrix([{ activityId: "a", date: "2026-01-01", qty: 2 }, { activityId: "a", date: "2026-01-02", qty: 3 }, { activityId: "a", date: "2026-01-03", qty: 9 }], ["2026-01-01", "2026-01-02"]);
   equal(m.get("a"), { byDay: { "2026-01-01": 2, "2026-01-02": 3 }, total: 5 });
+});
+
+test("the multi-day columns: before, to date and current, planned and done, SPI as done ÷ planned and VAR as planned − done", () => {
+  // worked by hand from the owner's definitions (requirements 2026-10-18, item 6), not from this code:
+  //   a: plan 1–10 Jan, 100 units, 10 a day, W.F 60 · done 12 on the 3rd, 8 on the 4th, 5 on the 6th
+  //   b: plan 1–5 Jan, 50 units, 10 a day, W.F 40 · done 20 on the 4th
+  //   chosen days: the 4th and 5th → to date = up to the 5th; current = the 4th and 5th; before = the rest
+  const a = { id: "a", wf: 60, plan_start: "2026-01-01", plan_end: "2026-01-10", volumePlan: 100, volumeActual: 100 };
+  const b = { id: "b", wf: 40, plan_start: "2026-01-01", plan_end: "2026-01-05", volumePlan: 50, volumeActual: 50 };
+  const c = { id: "c", wf: 0, plan_start: "2026-01-01", plan_end: "2026-01-05", volumePlan: 5, volumeActual: 5, scope: { discipline: "piping" } };
+  const lines = [{ activityId: "a", date: "2026-01-03", qty: 12 }, { activityId: "a", date: "2026-01-04", qty: 8 }, { activityId: "a", date: "2026-01-06", qty: 5 },
+    { activityId: "b", date: "2026-01-04", qty: 20 }];
+  const p = ea.periodColumns([{ id: "n", activities: [a, b, c], children: [] }], lines, ["2026-01-05", "2026-01-04"]);
+  const pick = (x, ks) => ks.map((k) => x[k]);
+  const K = ["LWP", "LWA", "TWP", "TWA", "LPP", "LPA", "TPP", "TPA", "TSPI", "VAR", "CPP", "CPA", "CWP", "CWA", "CSPI"];
+  equal(pick(p.get("a"), K), [30, 12, 50, 20, 30, 12, 50, 20, 40, 30, 20, 8, 20, 8, 40]);
+  equal(p.get("a").byDay, { "2026-01-04": { p: 10, ac: 8 }, "2026-01-05": { p: 10, ac: 0 } }, "the plan puts 10 on each day; 8 done on the 4th, none on the 5th");
+  equal(pick(p.get("b"), K), [30, 0, 50, 20, 60, 0, 100, 40, 40, 60, 40, 40, 20, 20, 100]);
+  equal(pick(p.get("n"), ["LPP", "LPA", "TPP", "TPA", "TSPI", "VAR", "CPP", "CPA", "CSPI"]), [42, 7.2, 70, 28, 40, 42, 28, 20.8, 74.29],
+    "the node rolls the percentages up by W.F; quantities in different units are not added");
+  equal(pick(p.get("c"), ["TWP", "TWA", "TPA", "TSPI"]), [5, null, null, null], "done from the platform's records has no day: unknown, not zero");
+  equal(ea.periodColumns([{ id: "n", activities: [{ id: "d", wf: 100 }], children: [] }], [], ["2026-01-04"]).get("d").TSPI, null, "no planned dates: no SPI");
 });
 
 test("the daily report's work-done section: an activity of the contract, a company of the contract, a quantity above zero", async () => {

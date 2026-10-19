@@ -125,6 +125,13 @@ STORAGE_ROOT=$DATA/files
 BACKUP_DIR=$DATA/backups
 # Model features (drawing extraction). Without a key the rest of the platform works.
 # ANTHROPIC_API_KEY=
+# «فراموشی رمز» با ایمیل: با این‌ها لینک بازیابی به ایمیل خود کاربر فرستاده می‌شود؛
+# بدون آن‌ها درخواست برای مدیر سامانه ثبت می‌شود.
+# SMTP_HOST=
+# SMTP_PORT=587
+# SMTP_USER=
+# SMTP_PASS=
+# SMTP_FROM=
 ENV
   ok "ساخته شد؛ SESSION_SECRET تازه"
 else

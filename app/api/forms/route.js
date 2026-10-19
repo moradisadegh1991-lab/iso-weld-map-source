@@ -97,7 +97,7 @@ export async function POST(request) {
         create: () => forms.createFormReport(db, { projectId, code, reportDate: body.reportDate, title: body.title, header: body.header || {},
           rows: body.rows || null, fromWork: !!body.fromWork, userId: user.id }),
         edit: () => forms.editFormReport(db, { ...a, header: body.header || {}, rows: body.rows || [] }),
-        sign: () => rp.signReport(db, { ...a, groupId: body.groupId || null }),
+        sign: () => rp.signReport(db, { ...a, groupId: body.groupId || null, acceptChanges: body.acceptChanges === true }),
         withdraw: () => rp.withdrawSignature(db, { ...a, groupId: body.groupId || null }),
         approve: () => rp.approveStage(db, { ...a, comment: body.comment }),
         return: () => rp.returnReport(db, { ...a, comment: body.comment }),

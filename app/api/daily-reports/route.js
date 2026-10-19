@@ -86,7 +86,7 @@ export async function POST(request) {
           return rp.createReport(db, { ...a, reportTypeId: type.id, reportDate: body.reportDate, title: body.title, content: content() });
         },
         edit: () => rp.editReport(db, { ...a, content: content() }),
-        sign: () => rp.signReport(db, { ...a, groupId: body.groupId || null }),
+        sign: () => rp.signReport(db, { ...a, groupId: body.groupId || null, acceptChanges: body.acceptChanges === true }),
         withdraw: () => rp.withdrawSignature(db, { ...a, groupId: body.groupId || null }),
         approve: () => rp.approveStage(db, { ...a, comment: body.comment }),
         return: () => rp.returnReport(db, { ...a, comment: body.comment }),

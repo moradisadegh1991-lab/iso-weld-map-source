@@ -118,7 +118,7 @@ export async function POST(request) {
         "setup-type": async () => { if (!["admin", "developer"].includes(membership.role)) throw Object.assign(new Error("تنظیم گردش کار با مدیر پروژه است."), { status: 403 }); return cr.ensureType(db, { projectId }); },
         create: () => cr.createContractReport(db, { ...a, contractId: body.contractId, reportDate: body.reportDate, title: body.title, header: body.header || {}, copyFromId: body.copyFromId || null }),
         edit: () => cr.editContractReport(db, { ...a, content: body.content }),
-        sign: () => rp.signReport(db, { ...a, groupId: body.groupId || null }),
+        sign: () => rp.signReport(db, { ...a, groupId: body.groupId || null, acceptChanges: body.acceptChanges === true }),
         withdraw: () => rp.withdrawSignature(db, { ...a, groupId: body.groupId || null }),
         approve: () => rp.approveStage(db, { ...a, comment: body.comment }),
         return: () => rp.returnReport(db, { ...a, comment: body.comment }),

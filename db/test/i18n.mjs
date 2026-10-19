@@ -21,9 +21,16 @@ import { readFile } from "node:fs/promises";
 import base from "../../lib/i18n/fa.mjs";
 import quality from "../../lib/i18n/sections/quality.mjs";
 import contracts from "../../lib/i18n/sections/contracts.mjs";
+import reports from "../../lib/i18n/sections/reports.mjs";
+import grid from "../../lib/i18n/sections/grid.mjs";
+import eps from "../../lib/i18n/sections/eps.mjs";
+import supply from "../../lib/i18n/sections/supply.mjs";
+import hseSection from "../../lib/i18n/sections/hse.mjs";
+import mechanical from "../../lib/i18n/sections/mechanical.mjs";
 import { translate, dirOf, num, dateIn, keys as keysOf } from "../../lib/i18n/index.mjs";
 import { LABELS, label } from "../../lib/i18n/labels.mjs";
-import { INSPECTABLE } from "../../lib/platform/precedence.mjs";
+import { INSPECTABLE, EQUIPMENT_KINDS as TAG_KINDS } from "../../lib/platform/precedence.mjs";
+import { INSULATION } from "../../lib/coating/coating.mjs";
 import { SCOPES as ITP_SCOPES, PARTIES, POINTS, OUTCOMES } from "../../lib/inspection/itp.mjs";
 import { PUNCH_CATEGORIES, DISPOSITIONS, NCR_SEVERITY } from "../../lib/quality/quality.mjs";
 import { PHOTO_STAGES } from "../../lib/quality/photo.mjs";
@@ -35,6 +42,22 @@ import { METRICS } from "../../lib/contracts/metrics.mjs";
 import { CONTRACT_ROLES, AMENDMENT_KINDS, TREES } from "../../lib/db/repos/org.mjs";
 import { STATUS as RESOURCE_STATUS } from "../../lib/db/repos/resources.mjs";
 import { KIND as RESOURCE_KIND } from "../../lib/reports/catalog.mjs";
+import { STATUS_FA as REPORT_STATUS } from "../../lib/db/repos/reports.mjs";
+import { DAY_STATUS, WEATHER, SECTIONS as REPORT_SECTIONS } from "../../lib/reports/contract-daily.mjs";
+import { PERMISSIONS } from "../../lib/reports/workflow.mjs";
+import { SIGNATURE_KIND } from "../../lib/db/repos/signatures.mjs";
+import { ORIENTATION, ALIGN, FOOTER_ELEMENTS, PLACEHOLDERS } from "../../lib/reports/print.mjs";
+import { SOURCE as DAILY_SOURCE, SHIFT as DAILY_SHIFT, WEATHER as DAILY_WEATHER } from "../../lib/reports/daily.mjs";
+import { FORM_PARTS } from "../../lib/db/repos/workflows.mjs";
+import { REL_TYPES, BUDGET_UNITS, ROLE_STATUS, QTY_MODES } from "../../lib/eps/activities.mjs";
+import { DISCIPLINES as SCOPE_DISC, MEASURES as SCOPE_MEASURES, MODES as SCOPE_MODES } from "../../lib/eps/scope.mjs";
+import { BUDGET_MODES, SEPARATORS, SEPARATOR_NAMES } from "../../lib/eps/wbs.mjs";
+import { REVIEW_CODES, FAT_RESULTS, STAGE_FA as PO_STAGES } from "../../lib/procurement/procurement.mjs";
+import { TECH_STATUS } from "../../lib/procurement/tender.mjs";
+import { CATEGORIES as STOCK_CATEGORIES } from "../../lib/warehouse/stock.mjs";
+import { DEST_FA } from "../../lib/warehouse/reserve.mjs";
+import { CLASSES as HSE_CLASSES, TREATMENTS, PERMIT_TYPES, GAS_LIMITS, OBSERVATION_KINDS, SEVERITIES as OBS_SEVERITIES } from "../../lib/hse/hse.mjs";
+import { COMPETENCES, EQUIPMENT_KINDS as HSE_EQUIPMENT } from "../../lib/hse/safework.mjs";
 import { NAV_I18N, localizeNav } from "../../lib/i18n/nav.mjs";
 import { SECTIONS } from "../../lib/platform/navigation.mjs";
 import { cleanPrefs, withDefaults, PREFS } from "../../lib/prefs.mjs";
@@ -60,7 +83,7 @@ test("the three dictionaries hold the same keys, none empty", () => {
     equal(K.filter((k) => !String(d[k]).trim()), [], `${name}: empty strings`);
   }
   assert(F.length > 150, `${F.length} keys`);
-  const sections = [quality, contracts];
+  const sections = [quality, contracts, reports, grid, eps, supply, hseSection, mechanical];
   const seen = new Set(Object.keys(base));
   const twice = [];
   for (const x of sections) for (const k of Object.keys(x.fa)) { if (seen.has(k)) twice.push(k); seen.add(k); }
@@ -117,6 +140,28 @@ test("every domain label a translated page shows is in English and Arabic", () =
     ...Object.keys(METRICS).map((k) => `metric.${k}`), ...Object.keys(CONTRACT_ROLES).map((k) => `contract.role.${k}`),
     ...Object.keys(AMENDMENT_KINDS).map((k) => `amendment.kind.${k}`), ...Object.keys(TREES).map((k) => `tree.${k}`),
     ...Object.keys(RESOURCE_KIND).map((k) => `resource.kind.${k}`), ...Object.keys(RESOURCE_STATUS).map((k) => `resource.status.${k}`),
+    ...Object.keys(REPORT_STATUS).map((k) => `report.status.${k}`), ...Object.keys(DAY_STATUS).map((k) => `report.day.${k}`),
+    ...Object.keys(REPORT_SECTIONS).map((k) => `report.section.${k}`), ...Object.keys(PERMISSIONS).map((k) => `report.perm.${k}`),
+    ...[...new Set([...Object.keys(WEATHER), ...Object.keys(DAILY_WEATHER)])].map((k) => `weather.${k}`),
+    ...Object.keys(SIGNATURE_KIND).map((k) => `signature.kind.${k}`), ...Object.keys(ORIENTATION).map((k) => `print.orientation.${k}`),
+    ...Object.keys(ALIGN).map((k) => `print.align.${k}`), ...Object.keys(FOOTER_ELEMENTS).map((k) => `print.element.${k}`),
+    ...Object.keys(PLACEHOLDERS).map((k) => `print.placeholder.${k}`), ...Object.keys(DAILY_SOURCE).map((k) => `daily.source.${k}`),
+    ...Object.keys(DAILY_SHIFT).map((k) => `daily.shift.${k}`),
+    ...[...new Set(Object.values(FORM_PARTS).flatMap((x) => Object.keys(x)))].map((k) => `report.part.${k}`),
+    ...Object.keys(REL_TYPES).map((k) => `eps.relType.${k}`), ...Object.keys(BUDGET_UNITS).map((k) => `eps.budgetUnit.${k}`),
+    ...Object.keys(ROLE_STATUS).map((k) => `eps.roleStatus.${k}`), ...Object.keys(QTY_MODES).map((k) => `eps.qtyMode.${k}`),
+    ...Object.entries(SCOPE_DISC).flatMap(([k, d]) => [`eps.scope.disc.${k}`, ...(d.kindLabel ? [`eps.scope.kind.${k}`] : []),
+      ...Object.keys(d.milestones).map((m) => `eps.scope.ms.${k}.${m}`)]),
+    ...Object.keys(SCOPE_MEASURES).map((k) => `eps.scope.measure.${k}`), ...Object.keys(SCOPE_MODES).map((k) => `eps.scope.mode.${k}`),
+    ...Object.keys(BUDGET_MODES).map((k) => `eps.budgetMode.${k}`), ...Object.keys(SEPARATORS).map((k) => `eps.separator.${SEPARATOR_NAMES[k]}`),
+    ...Object.keys(REVIEW_CODES).map((k) => `proc.review.${k}`), ...Object.keys(FAT_RESULTS).map((k) => `proc.fat.${k}`),
+    ...Object.keys(PO_STAGES).map((k) => `proc.stage.${k}`), ...Object.keys(TECH_STATUS).map((k) => `proc.tech.${k}`),
+    ...Object.keys(STOCK_CATEGORIES).map((k) => `wh.cat.${k}`), ...Object.keys(DEST_FA).map((k) => `wh.dest.${k}`),
+    ...Object.keys(HSE_CLASSES).map((k) => `hse.cls.${k}`), ...Object.keys(TREATMENTS).map((k) => `hse.treat.${k}`),
+    ...Object.keys(PERMIT_TYPES).map((k) => `hse.permit.${k}`), ...[...Object.keys(GAS_LIMITS), "hse_permit_max_hours"].map((k) => `hse.limit.${k}`),
+    ...Object.keys(OBSERVATION_KINDS).map((k) => `hse.obs.${k}`), ...Object.keys(OBS_SEVERITIES).map((k) => `hse.sev.${k}`),
+    ...Object.keys(COMPETENCES).map((k) => `hse.comp.${k}`), ...Object.keys(HSE_EQUIPMENT).map((k) => `hse.eq.${k}`),
+    ...Object.keys(TAG_KINDS).map((k) => `equip.kind.${k}`), ...Object.keys(INSULATION).map((k) => `coat.ins.${k}`),
   ];
   equal(want.filter((k) => !LABELS[k]?.en || !LABELS[k]?.ar), [], "labels missing a translation");
   equal(Object.keys(LABELS).filter((k) => !want.includes(k)), [], "labels for nothing the platform declares");
@@ -134,7 +179,15 @@ const TRANSLATED = ["app/quality/page.jsx", "app/inspection/page.jsx", "app/ndt-
   "app/contracts/page.jsx", "app/contracts/setup/page.jsx", "app/contracts/resources/page.jsx", "app/contracts/statements/page.jsx",
   "app/contracts/design/page.jsx", "components/ui/TreeEditor.jsx", "components/contracts/ui.jsx", "components/ui/FormNo.jsx", "components/ui/WorkDate.jsx",
   "components/ui/EntityLog.jsx", "components/ui/Fold.jsx", "components/ui/TableKit.jsx", "components/platform/Shell.jsx",
-  "components/platform/SignIn.jsx", "app/account/page.jsx"];
+  "components/platform/SignIn.jsx", "app/account/page.jsx",
+  "app/contract-reports/page.jsx", "components/reports/WorkflowPanel.jsx", "app/report-setup/page.jsx", "app/report-print-setup/page.jsx",
+  "app/signature/page.jsx", "app/daily-reports/page.jsx",
+  "app/eps/page.jsx", "app/eps/wbs/page.jsx", "app/eps/templates/page.jsx", "app/eps/codes/page.jsx", "app/eps/activities/page.jsx",
+  "app/eps/progress/page.jsx", "app/eps/progress/days/page.jsx", "app/eps/scope/page.jsx",
+  "components/eps/ActivityDetail.jsx", "components/eps/ActivityGrid.jsx", "components/eps/ScopePanel.jsx", "components/eps/shared.jsx",
+  "app/procurement/page.jsx", "app/procurement/Tender.jsx", "app/procurement/Vendors.jsx",
+  "app/warehouse/page.jsx", "app/warehouse/Stores.jsx", "app/warehouse/Mesc.jsx", "app/hse/page.jsx", "app/hse/SafeWork.jsx",
+  "components/ui/Tabs.jsx", "app/equipment/page.jsx", "app/coating/page.jsx"];
 
 test("a translated page keeps no Persian of its own", async () => {
   const left = [];

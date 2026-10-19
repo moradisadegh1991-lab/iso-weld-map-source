@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
+import TemplateButton from "../../../components/ui/TemplateButton";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { parseDelimited, guessMapping } from "../../../lib/truth/parse.mjs";
+import { DESIGN_PATTERNS as PATTERNS } from "../../../lib/contracts/design-import.mjs";
 import TableKit from "../../../components/ui/TableKit";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 
@@ -13,15 +15,6 @@ import { usePrefs } from "../../../lib/client/prefs.mjs";
  * their header names; a WBS code that is not a control account is named,
  * never guessed.
  */
-const S = "[\\s_.\\-]*";
-const PATTERNS = {
-  code: [new RegExp(`\\b(item${S}code|commodity${S}code|code|ident|item)\\b`, "i"), /کد/],   // i18n: a Persian header a file may carry
-  description: [/\b(description|desc|name)\b/i, /شرح/],   // i18n: a Persian header a file may carry
-  unit: [/\b(unit|uom)\b/i, /واحد/],   // i18n: a Persian header a file may carry
-  qty: [/\b(qty|quantity|total|amount)\b/i, /مقدار|تعداد/],   // i18n: a Persian header a file may carry
-  wbs: [/\bwbs\b/i, /\b(cbs|control${S}account)\b/i],
-  area: [/\b(area|zone|site)\b/i, /ناحیه|محدوده/],   // i18n: a Persian header a file may carry
-};
 
 export default function DesignQuantitiesPage() {
   const { projectId, role, call } = usePlatform();
@@ -73,7 +66,8 @@ export default function DesignQuantitiesPage() {
           <div className="grid2">
             <div className="field"><label htmlFor="dq-rev">{t("dq.rev")}</label><input id="dq-rev" dir="ltr" value={rev} onChange={(e) => setRev(e.target.value)} /></div>
             <div className="field"><label htmlFor="dq-src">{t("dq.source")}</label><input id="dq-src" dir="ltr" value={source} onChange={(e) => setSource(e.target.value)} /></div>
-            <div className="field"><label htmlFor="dq-file">{t("dq.file")}</label><input id="dq-file" type="file" accept=".xlsx,.xls,.csv,.txt" onChange={(e) => e.target.files?.[0] && read(e.target.files[0])} /></div>
+            <div className="field"><label htmlFor="dq-file">{t("dq.file")}</label><input id="dq-file" type="file" accept=".xlsx,.xls,.csv,.txt" onChange={(e) => e.target.files?.[0] && read(e.target.files[0])} />
+              <TemplateButton kind="design" /></div>
           </div>
           {rows && (
             <div>
