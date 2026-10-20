@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
+import { readerMissing, readerMissingText } from "../../../lib/server/reader-deps.mjs";
 
 const run = promisify(execFile);
 
@@ -24,8 +25,9 @@ const run = promisify(execFile);
  * register are decided in the page by lib/register/weld-marks.mjs, exactly
  * as for a model's reading, and a person completes what was not printed.
  *
- * A server without python3, OpenCV, tesseract or poppler says so; it does
- * not fall back to anything.
+ * A server without python3, OpenCV, NumPy, tesseract or poppler says which
+ * of them is missing and the package to install (lib/server/reader-deps.mjs);
+ * it does not fall back to anything.
  */
 export async function POST(request) {
   let dir = null;
@@ -49,10 +51,10 @@ export async function POST(request) {
       ({ stdout: out } = await run("python3", ["-I", path.join(process.cwd(), "tools/iso-read.py"), file, "--page", String(page)],
         { timeout: 110_000, maxBuffer: 1 << 24, env: { ...process.env, OMP_THREAD_LIMIT: "1" } }));
     } catch (e) {
-      const missing = /ENOENT|No module named|not found/i.test(`${e.code} ${e.stderr || ""} ${e.message}`);
-      return Response.json({ error: missing
-        ? "خواندن بدون مدل روی این سرور نصب نیست (python3، OpenCV، tesseract و poppler لازم است — deploy/vps/install.sh)."
-        : `خواندن بدون مدل ناموفق بود: ${String(e.stderr || e.message).trim().split("\n").pop()}` }, { status: missing ? 501 : 500 });
+      // name what is missing, with the package that brings it, rather than guess from the error text
+      const missing = await readerMissing().catch(() => []);
+      if (missing.length) return Response.json({ error: readerMissingText(missing), missing: missing.map((m) => m.pkg) }, { status: 501 });
+      return Response.json({ error: `خواندن بدون مدل ناموفق بود: ${String(e.stderr || e.message).trim().split("\n").pop()}` }, { status: 500 });
     }
     const r = JSON.parse(out);
     // in weld-number order (1, 2, … 4, 4-1, 5), not the order they were found on the page

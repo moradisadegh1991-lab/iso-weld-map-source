@@ -18,6 +18,7 @@ import { createClient } from "../lib/db/client.mjs";
 import { createLlmClient } from "../lib/llm/index.mjs";
 import { access, constants } from "node:fs/promises";
 import { storageConfig, s3Client } from "../lib/storage/index.mjs";
+import { readerMissing } from "../lib/server/reader-deps.mjs";
 
 const C = process.stdout.isTTY && !process.env.NO_COLOR
   ? { g: "\x1b[32m", y: "\x1b[33m", r: "\x1b[31m", d: "\x1b[2m", b: "\x1b[1m", o: "\x1b[0m" }
@@ -67,6 +68,14 @@ const db = await createClient({ dataDir: process.env.PGLITE_DIR || ".pglite" });
         : "LLM_PROVIDER شناخته نشد",
     llm?.configured ? null
       : llm?.id === "anthropic" ? "ANTHROPIC_API_KEY=…" : "LLM_BASE_URL=http://vllm:8000/v1");
+
+  // ── 4b · the no-model reader ───────────────────────────────────────────
+  // Not needed for a model's reading; needed for «بدون مدل». A server
+  // installed before the reader existed has none of it.
+  const missing = await readerMissing().catch(() => null);
+  step("4b", "خواندن نقشه بدون مدل", missing === null ? "warn" : missing.length ? "warn" : "ok",
+    missing === null ? "بررسی نشد" : missing.length ? `نیست: ${missing.map((m) => m.what).join("، ")}` : "python3، OpenCV، NumPy، tesseract، poppler",
+    missing?.length ? `sudo apt-get install -y ${missing.map((m) => m.pkg).join(" ")}   (یا sudo epc deps)` : null);
 
   // ── 5 · blob storage ───────────────────────────────────────────────────
   // Drawings, documents and site photos. On S3/MinIO the bucket is asked,

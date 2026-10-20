@@ -360,6 +360,8 @@ export default function Page() {
         (conv.problems.length ? ` · ${conv.problems.join(" ")}` : "") + (conv.notes.length ? ` · ${conv.notes.join(" · ")}` : ""));
     } catch (e) {
       setErr(e.message);
+      // session.call already put the same message in the model box above; once is enough
+      session.setError(null);
     } finally {
       setBusy("");
     }

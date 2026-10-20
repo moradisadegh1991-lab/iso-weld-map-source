@@ -1,0 +1,14 @@
+# Ubuntu packages the platform needs on its server. install.sh installs
+# them, and `epc deps` (which `epc update` runs) installs any added later —
+# so a feature that needs a new package arrives with the update that brings it.
+git
+curl
+ca-certificates
+xz-utils
+caddy
+# the no-model drawing reader (tools/iso-read.py)
+python3
+python3-opencv
+python3-numpy
+tesseract-ocr
+poppler-utils

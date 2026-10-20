@@ -43,6 +43,20 @@ sudo runuser -u epc -- git -C /opt/epc/app checkout -B master
 sudo epc update
 ```
 
+**سروری که پیش از «خواندن نقشه بدون مدل» نصب شده** (پیش از ۲۹ مهر ۱۴۰۵) بستهٔ سیستمی
+آن را ندارد — tesseract، poppler و OpenCV — و صفحهٔ ایزومتریک برای روش «بدون مدل» می‌گوید
+کدام نیست. `epc update`ِ قدیمی بستهٔ سیستم نصب نمی‌کرد؛ یک بار:
+
+```bash
+sudo epc update
+sudo bash /opt/epc/app/deploy/vps/epc deps
+```
+
+دستور دوم بسته‌های فهرست `deploy/vps/packages.txt` را که نصب نیست نصب می‌کند و خود `epc` را
+هم از نسخهٔ تازه جایگزین می‌کند. از آن به بعد `epc update` همین کار را خودش می‌کند: قابلیتی
+که بستهٔ سیستمی تازه بخواهد با همان به‌روزرسانی می‌رسد. `sudo epc doctor` در ردیف «خواندن نقشه
+بدون مدل» می‌گوید چیزی کم است یا نه.
+
 نصب ۵ تا ۱۵ دقیقه طول می‌کشد (بیشترش `npm ci` و `build`). در پایان:
 
 ```
@@ -86,7 +100,8 @@ epc demo <email>            پر کردن پروژهٔ DEMO آن مدیر با �
 epc backup                  پشتیبان وارسی‌شده — هر شب ۰۲:۴۰ به وقت تهران خودکار هم گرفته می‌شود
 epc backups                 فهرست پشتیبان‌ها (در /var/lib/epc/backups، ۱۴ تای آخر)
 epc save-token              ذخیرهٔ توکن GitHub تا update هر بار نپرسد
-epc update                  آخرین نسخه از GitHub، build، migration
+epc update                  آخرین نسخه از GitHub، بسته‌های سیستمِ تازه، build، migration
+epc deps                    فقط نصب بسته‌های سیستمی که نسخهٔ فعلی می‌خواهد و نصب نیست
 epc doctor                  بررسی پیکربندی
 epc run <script> [args]     اجرای اسکریپت بارگذاری، مثلاً: epc run furnace:load you@example.com
 ```

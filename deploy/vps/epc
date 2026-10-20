@@ -46,10 +46,32 @@ git_epc() {
   runuser -u epc -- env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
     GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" git -C "$APP_DIR" "$@"
 }
+# The system packages the checkout lists (deploy/vps/packages.txt) that are
+# not installed yet, and this helper itself from the checkout: an update that
+# brings a feature needing a new package (the no-model reader needed
+# tesseract, poppler and OpenCV) or a new epc command takes effect with it.
+deps() {
+  local list="$APP_DIR/deploy/vps/packages.txt"
+  [ -f "$list" ] || { echo "[ !! ] $list نیست — اول sudo epc update" >&2; return 1; }
+  local need=() p
+  for p in $(grep -v '^#' "$list" | xargs); do dpkg -s "$p" >/dev/null 2>&1 || need+=("$p"); done
+  if [ ${#need[@]} -gt 0 ]; then
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}" >/dev/null
+    echo "[ ok ] نصب شد: ${need[*]}"
+  else
+    echo "[ ok ] همهٔ بسته‌های سیستم نصب است"
+  fi
+  # a rename, not an overwrite: this running copy keeps reading its own file
+  install -m 755 "$APP_DIR/deploy/vps/epc" /usr/local/bin/epc.new
+  sed -i "s#^APP_DIR=.*#APP_DIR=$APP_DIR#" /usr/local/bin/epc.new
+  mv /usr/local/bin/epc.new /usr/local/bin/epc
+}
 update() {
   local branch; branch=$(runuser -u epc -- git -C "$APP_DIR" rev-parse --abbrev-ref HEAD)
   git_epc fetch --depth 1 origin "$branch"
   runuser -u epc -- git -C "$APP_DIR" reset --hard FETCH_HEAD
+  deps
   build
   run npm run db:migrate
 }
@@ -68,6 +90,7 @@ case "$cmd" in
   backup)  offline backup ;;
   backups) run npm run db:backup -- list ;;
   update)  offline update ;;
+  deps)    deps ;;
   doctor)  offline run npm run doctor ;;
   run)     [ -n "${1:-}" ] || { echo "epc run <npm-script> [args…]   e.g. epc run furnace:load you@example.com" >&2; exit 1; }
            s="$1"; shift; offline run npm run "$s" -- "$@" ;;
@@ -86,6 +109,7 @@ epc demo <email>            پر کردن پروژهٔ DEMO آن مدیر با �
 epc backup                  پشتیبان وارسی‌شده (هر شب ۰۲:۴۰ خودکار هم گرفته می‌شود)
 epc backups                 فهرست پشتیبان‌ها
 epc update                  دریافت آخرین نسخه از GitHub، build و migration
+epc deps                    نصب بسته‌های سیستمِ تازه (tesseract، OpenCV…) — update خودش اجرا می‌کند
 epc save-token              ذخیرهٔ توکن GitHub تا update دوباره نپرسد
 epc doctor                  بررسی پیکربندی
 epc run <script> [args]     اجرای یک اسکریپت بارگذاری (مثلاً furnace:load you@example.com)

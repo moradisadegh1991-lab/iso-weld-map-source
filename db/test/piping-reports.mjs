@@ -5,6 +5,9 @@
  * out as the Piping.Tools exports — and the spool loads they ship on.
  */
 import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
+import { readerMissing, readerMissingText } from "../../lib/server/reader-deps.mjs";
+import { symlink } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import * as XLSX from "xlsx";
 import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
@@ -255,6 +258,26 @@ test("the delivered load shows in the weld log, the packing list and the progres
     const labels = await rep.drawingLabels(db, { projectId: P, loadId: L1.id });
     equal(labels, [{ header: "Load 1", drawingNo: "ISO-1", sheet: "1/1", rev: "0" }]);
   });
+});
+
+// ── what the no-model reader needs on the server ────────────────────────
+
+test("reader dependencies: a server with python and OpenCV but no tesseract or poppler is told exactly those two packages", async () => {
+  // only meaningful where the reader is installed (this machine); elsewhere every piece is missing
+  const here = await readerMissing();
+  if (here.length) { console.log("   (skipped: the reader is not installed here —", here.map((m) => m.pkg).join(" "), ")"); return; }
+  const dir = await scratchDir("reader-path-");
+  await symlink(execFileSync("which", ["python3"]).toString().trim(), `${dir}/python3`);
+  const path = process.env.PATH;
+  process.env.PATH = dir;          // python3 alone: no tesseract, no pdftoppm
+  try {
+    const missing = await readerMissing();
+    equal(missing.map((m) => m.pkg), ["tesseract-ocr", "poppler-utils"]);
+    const text = readerMissingText(missing);
+    assert(text.includes("sudo apt-get install -y tesseract-ocr poppler-utils"), text);
+    process.env.PATH = "/nonexistent";   // nothing at all: python3 and both its modules too
+    equal((await readerMissing()).map((m) => m.pkg), ["python3", "python3-opencv", "python3-numpy", "tesseract-ocr", "poppler-utils"]);
+  } finally { process.env.PATH = path; }
 });
 
 await run();
