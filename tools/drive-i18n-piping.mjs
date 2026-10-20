@@ -49,7 +49,7 @@ const weldUid = (welds.find((w) => w.is_welded) || welds[0])?.weld_uid;
 const chrome = () => page.evaluate(() => {
   const s = ".page h1, .page h2, .page h3, .page legend, .page th, .page label, .page button, .page summary, .page .empty-note,"
     + " .page .pagehead .sub, .page p.muted, .page .pill, .page [role=tab], .page option, .page .card > span.sm, .page .hint, .page .kpi .l, .page .kpi .b,"
-    + " .page .timeline .pill, .page .kv .muted, .page li.sm, .page input[placeholder]";
+    + " .page .joint-history__title, .page .weld-status, .page .ndt-status, .page .ndt-method, .page .kv .muted, .page li.sm, .page input[placeholder]";
   return [...document.querySelectorAll(s)].filter((n) => n.offsetParent !== null || n.tagName === "OPTION")
     .map((n) => (n.tagName === "INPUT" ? n.placeholder : (n.innerText || n.textContent || "")).replace(/\s+/g, " ").trim()).filter(Boolean);
 });

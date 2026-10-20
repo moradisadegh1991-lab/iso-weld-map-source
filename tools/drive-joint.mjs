@@ -40,12 +40,12 @@ let pick = texts.findIndex((t) => /NDT باز/.test(t));
 if (pick < 0) pick = texts.findIndex((t) => /پذیرفته/.test(t));
 if (pick < 0) pick = 0;
 await rows.nth(pick).getByRole("button", { name: "سابقه" }).click();
-await page.waitForSelector("ol.timeline, .empty-note");
+await page.waitForSelector("ol.joint-history, .empty-note");
 console.log("address:", new URL(page.url()).search);
 console.log("header:", flat(await page.locator(".card h2").first().innerText()));
 const attn = page.locator(".card", { has: page.locator("h2", { hasText: "نیاز به توجه" }) });
 console.log("attention:", (await attn.count()) ? (await attn.locator("li").allInnerTexts()).map(flat) : "none");
-console.log("timeline:", (await page.locator("ol.timeline li").allInnerTexts()).map((t) => flat(t).slice(0, 100)));
+console.log("timeline:", (await page.locator("ol.joint-history > li").allInnerTexts()).map((t) => flat(t).slice(0, 100)));
 for (const h of ["جوشکاری", "NDT و تعمیر", "رویژن‌های نقشه", "مواد و ردیابی ذوب", "اسپول، فیت‌آپ و تست"]) {
   const c = page.locator(".card", { has: page.locator("h2", { hasText: h }) });
   console.log(`· ${h}:`, flat(await c.innerText()).slice(h.length, h.length + 150));
@@ -58,7 +58,7 @@ const link = page.locator(".tk tbody a[href^='/piping/joint']").first();
 if (await link.count()) {
   const no = flat(await link.innerText());
   await link.click();
-  await page.waitForSelector("ol.timeline, .empty-note");
+  await page.waitForSelector("ol.joint-history, .empty-note");
   console.log("from the QC gap:", no, "→", flat(await page.locator(".card h2").first().innerText()));
 } else console.log("from the QC gap: no weld awaiting NDT in the demo");
 
@@ -67,7 +67,7 @@ const phone = await open({ width: 412, height: 915 });
 await phone.goto(`${BASE}/piping/joint`, { waitUntil: "networkidle" });
 await phone.locator(".tk tbody tr").first().waitFor();
 await phone.locator(".tk tbody tr").first().getByRole("button", { name: "سابقه" }).click();
-await phone.waitForSelector("ol.timeline, .empty-note");
+await phone.waitForSelector("ol.joint-history, .empty-note");
 console.log("phone scrolls sideways:", await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth));
 await phone.screenshot({ path: `${SHOT}/171-joint-phone.png`, fullPage: true });
 

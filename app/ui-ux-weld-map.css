@@ -273,3 +273,26 @@
     box-shadow: none;
   }
 }
+
+/* ---------- On the joint history page (app/piping/joint) ----------
+   Added here, not in the owner's file: each event of a weld's history
+   carries the tone the server gave it (ok, bad) — the old timeline drew it
+   as the dot's colour, and an item without it would lose what went wrong. */
+
+ol.joint-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.joint-history__item[data-tone="ok"] {
+  border-inline-start: 3px solid var(--ok);
+}
+
+.joint-history__item[data-tone="bad"] {
+  border-inline-start: 3px solid var(--bad);
+}
+
+.joint-history__header {
+  margin-bottom: 0;
+}
