@@ -18,8 +18,9 @@ const run = promisify(execFile);
  * token: OpenCV finds the frames, a local tesseract reads their numbers
  * (tools/iso-read.py; measured on the golden sheets by eval/reader-report.mjs).
  *
- * Only what is printed at each marker comes back — number, frame shape and
- * outline, the label beside it. Shop or field, the joint type and the
+ * Only what is printed comes back: at each marker its number, frame shape
+ * and outline and the label beside it; from the title block the isometric
+ * number, sheet and revision, each null when it was not read for certain. Shop or field, the joint type and the
  * register are decided in the page by lib/register/weld-marks.mjs, exactly
  * as for a model's reading, and a person completes what was not printed.
  *
@@ -58,7 +59,9 @@ export async function POST(request) {
     const key = (no) => String(no).split("-").map(Number);
     const marks = r.marks.map(({ no, shape, outline, label }) => ({ no, shape, outline, label }))
       .sort((a, b) => { const [x, y] = [key(a.no), key(b.no)]; return x[0] - y[0] || (x[1] || 0) - (y[1] || 0); });
-    return Response.json({ marks,
+    // the title block: a field not read for certain is null, and stays for the person
+    const meta = { drawingNo: r.meta?.drawingNo ?? null, sheet: r.meta?.sheet ?? null, rev: r.meta?.rev ?? null };
+    return Response.json({ marks, meta,
       orientation: r.orientation, ms: Date.now() - t0, reader: "tools/iso-read.py (OpenCV + tesseract, no model)" });
   } catch (e) { return errorResponse(e); }
   finally { if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {}); }

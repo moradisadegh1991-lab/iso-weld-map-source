@@ -329,8 +329,9 @@ export default function Page() {
    * their numbers (OpenCV + tesseract). What comes back is what a model's
    * `welds` pass returns — number, frame shape, outline, label — and goes
    * through the same rules (lib/register/weld-marks.mjs) into the weld-list
-   * form, where a person types the drawing number and completes size, type
-   * and spool. Nothing on the title block or the BOM is read here.
+   * form, where a person completes size, type and spool. The title block's
+   * isometric number, sheet and revision prefill the form when they were
+   * read for certain; the BOM is not read here.
    */
   async function readLocal(index, source) {
     try {
@@ -341,9 +342,11 @@ export default function Page() {
       const pdfBase64 = base64FromBuffer(new Uint8Array(await source.file.arrayBuffer()));
       const r = await session.call("/api/read-local", { method: "POST",
         body: JSON.stringify({ projectId: session.projectId, pdfBase64, page: index }) });
-      const meta = { drawingNo: "", rev: "", sheet: "", lineNo: "", unit: "", pipingClass: "", nps: null, schedule: "" };
-      // which reader produced the markers travels with them: the review says so, and the saved run keeps it
-      const weldMarks = { marks: r.marks, reader: "local", readerVersion: r.reader };
+      const title = r.meta || {};
+      const meta = { drawingNo: title.drawingNo || "", rev: title.rev || "", sheet: title.sheet || "", lineNo: "", unit: "", pipingClass: "", nps: null, schedule: "" };
+      // which reader produced the markers travels with them: the review says so, and the saved run keeps
+      // it, with what the title block read (OCR, for a person to check — not verified data)
+      const weldMarks = { marks: r.marks, reader: "local", readerVersion: r.reader, titleRead: title };
       const conv = weldListFromMarks({ meta, bom: [], weldMarks },
         { shop: profile.data?.project?.weld_symbol_shop, field: profile.data?.project?.weld_symbol_field,
           thdLabelled: Boolean(profile.data?.project?.weld_thd_labelled) });
@@ -559,12 +562,16 @@ export default function Page() {
         <section className="stage">
           {data.weldMarks && marksInfo && (
             <div className="pane" data-weld-marks>
-              {data.weldMarks.reader === "local" ? (
+              {data.weldMarks.reader === "local" ? (<>
                 <p className="note mono" data-reader="local">
                   رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — خوانده‌شده بدون مدل و بدون توکن (OCR روی سرور):
-                  شماره، شکل قاب و برچسب کنار آن؛ محل از نماد اعلام‌شدهٔ پروژه تعیین شد. شمارهٔ نقشه، قطر، نوع اتصال و اسپول را تکمیل کنید.
+                  شماره، شکل قاب و برچسب کنار آن؛ محل از نماد اعلام‌شدهٔ پروژه تعیین شد. قطر، نوع اتصال و اسپول را تکمیل کنید.
                 </p>
-              ) : (
+                <p className="note mono" data-title-read>
+                  جدول عنوان (OCR، پیش از ذخیره بررسی کنید): {[["drawingNo", "شمارهٔ نقشه"], ["sheet", "شیت"], ["rev", "رویژن"]].map(([k, l]) =>
+                    `${l} ${data.weldMarks.titleRead?.[k] || "خوانده نشد"}`).join(" · ")}
+                </p>
+              </>) : (
                 <p className="note mono">
                   رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — مدل فقط شماره و شکل قاب را خواند؛
                   محل از نماد اعلام‌شدهٔ پروژه و نوع از BOM همین برگ تعیین شد. جای خالی را تکمیل کنید.

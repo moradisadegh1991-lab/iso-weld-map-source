@@ -12,6 +12,11 @@
  *             contractor's register): markers found, missed and invented,
  *             and of those found, the frame's shape and the label beside it.
  *
+ *   TITLE     the title block (meta: drawing number, sheet, revision)
+ *             against the sheet's golden `input.meta`: right, wrong and
+ *             left unknown are counted apart — unknown is not wrong, a
+ *             wrong value is the failure that matters.
+ *
  *   REGISTER  what the platform's own rules make of the reader's markers
  *             (lib/register/weld-marks.mjs, the sheet's BOM from the MTO,
  *             the project's declared legend) against the contractor's
@@ -65,10 +70,19 @@ for (let i = 0; i < cases.length; i += JOBS) {
 const marksOf = (def) => (Array.isArray(def.input.weldMarks) ? def.input.weldMarks : def.input.weldMarks.marks);
 const T = { printed: 0, found: 0, missed: 0, invented: 0, shapeOk: 0, labelOk: 0, labelPrinted: 0, labelFound: 0,
   regExpected: 0, regMade: 0, regMatched: 0, locOk: 0, locBlank: 0, kindOk: 0, kindBad: 0, kindBlank: 0, sheetsExact: 0 };
+const META = ["drawingNo", "sheet", "rev"];
+const TB = Object.fromEntries(META.map((k) => [k, { right: 0, wrong: [], unknown: [] }]));
 const rows = [];
 for (const def of cases) {
   const gold = marksOf(def).filter((m) => m.outline !== "dashed");
   const got = reads.get(def.id).marks;
+  const meta = reads.get(def.id).meta || {};
+  for (const k of META) {
+    const v = meta[k], e = def.input.meta?.[k];
+    if (v == null) TB[k].unknown.push(path.basename(def.drawing, ".pdf"));
+    else if (v === e) TB[k].right++;
+    else TB[k].wrong.push(`${path.basename(def.drawing, ".pdf")}: ${v} (printed ${e})`);
+  }
   const byNo = new Map(got.map((m) => [m.no, m]));
   const gotNos = new Set(got.map((m) => m.no));
   const goldNos = new Set(gold.map((m) => m.no));
@@ -115,6 +129,8 @@ for (const r of rows) {
 }
 console.log(`\n${cases.length} sheets · ${T.sheetsExact} read exactly (every marker, nothing invented)`);
 console.log(`MARKS     found ${T.found}/${T.printed} (${pct(T.found, T.printed)}) · invented ${T.invented} · shape ${pct(T.shapeOk, T.found)} · label ${pct(T.labelOk, T.found)} (printed labels found ${T.labelFound}/${T.labelPrinted})`);
+console.log(`TITLE     ${META.map((k) => `${k} right ${TB[k].right}/${cases.length}, wrong ${TB[k].wrong.length}, unknown ${TB[k].unknown.length}`).join(" · ")}`);
+for (const k of META) if (TB[k].wrong.length) console.log(`          ${k} wrong: ${TB[k].wrong.join("; ")}`);
 console.log(`JOINT     type set by the rules on ${T.kindOk + T.kindBad} welds, right on ${pct(T.kindOk, T.kindOk + T.kindBad)} · ${T.kindBlank} left for a person (no size is read off the drawing)`);
 console.log(`REGISTER  welds ${T.regMade} made for ${T.regExpected} in the contractor's register · matched by number ${T.regMatched} (${pct(T.regMatched, T.regExpected)}) · shop/field right ${pct(T.locOk, T.regMatched - T.locBlank)} (${T.locBlank} left blank)`);
-await writeFile(path.join(CACHE, "summary.json"), JSON.stringify({ totals: T, rows }, null, 2));
+await writeFile(path.join(CACHE, "summary.json"), JSON.stringify({ totals: T, title: TB, rows }, null, 2));

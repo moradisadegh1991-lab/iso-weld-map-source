@@ -2,8 +2,10 @@
 
     python3 -I tools/iso-read.py <sheet.pdf|.png|.jpg> [--page 1] [--dpi 200] [--debug out.png]
 
-Prints one JSON object: { "orientation", "marks": [ {no, shape, outline,
-label, box} ], "rejected": [...] }. The same `marks` a model's `welds` pass
+Prints one JSON object: { "orientation", "meta": {drawingNo, sheet, rev},
+"marks": [ {no, shape, outline, label, box} ], "rejected": [...] }. `meta` is
+the title block (read_title; any part not read for certain is null). The
+same `marks` a model's `welds` pass
 reports (lib/register/weld-marks.mjs), and nothing more: shop or field, the
 joint type and the register are decided there, by the project's declared
 symbol convention and the sheet's BOM.
@@ -330,6 +332,137 @@ def detect(g):
     return marks, rejected, tables
 
 
+def cell_vote(cell, whitelist, valid, key=lambda o: o):
+    """One line of a title-block cell read four ways (grey and two-level, 3x
+    and 4x, white margin round it). An answer only when every reading that
+    fits the pattern says the same thing; none, or two that disagree, is
+    unknown."""
+    outs = []
+    for k in (3, 4):
+        big = cv2.resize(cell, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC)
+        _, bw = cv2.threshold(big, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        for im in (big, bw):
+            im = cv2.copyMakeBorder(im, 30, 30, 30, 30, cv2.BORDER_CONSTANT, value=255)
+            outs.append(tess(im, 7, ["-c", f"tessedit_char_whitelist={whitelist}"]).strip().replace(" ", ""))
+    got = {key(o) for o in outs if valid(o)}
+    return got.pop() if len(got) == 1 else None
+
+
+def runs(mask):
+    """Start and end of each run of True."""
+    out = []
+    for i in np.flatnonzero(mask):
+        if out and i - out[-1][1] <= 2:
+            out[-1][1] = i
+        else:
+            out.append([i, i])
+    return out
+
+
+def read_title(g):
+    """The title block: isometric number, sheet "n/m" and revision. Each is
+    found by where it is printed — the cell right of the isometric number for
+    the sheet, the column above the REV. header for the revision — and read
+    on its own; what is not read for certain is None, never a near guess.
+
+      drawing  the "ISO-aa-nnnn" cell, located by a loose match of the page's
+               words (OCR prints ISO as 1S0, TSO, 180) and read again on its
+               own for the digits; the file label at the sheet's corner,
+               "(ISO-aa-nnnn)/<line>", must agree when it is read.
+      sheet    the next cell to the right, "n/m" with n <= m.
+      rev      the topmost written row of the revision column. A row written
+               by hand above the printed ones is the current revision and is
+               not read: the row's date must be a printed dd.mm.yyyy, or the
+               revision is unknown (25-1001's "0A" is handwritten).
+    """
+    H = g.shape[0]
+    strip = g[int(H * 0.82):, :]
+    ink = (strip < 150).astype(np.uint8) * 255
+    vert = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, int(25 * S))))
+    horz = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (int(60 * S), 1)))
+
+    def vlines(y0, y1, x0, x1):
+        x0, x1 = max(0, x0), min(strip.shape[1], x1)
+        return [(x0 + a, x0 + b) for a, b in runs((vert[y0:y1, x0:x1] > 0).sum(0) >= (y1 - y0) * 0.8)]
+
+    def hlines(x0, x1, y0, y1):
+        y0 = max(0, y0)
+        return [(y0 + a, y0 + b) for a, b in runs((horz[y0:y1, x0:x1] > 0).sum(1) >= (x1 - x0) * 0.8)]
+
+    words = []
+    for line in tess(strip, 11, ["tsv"]).splitlines()[1:]:
+        f = line.split("\t")
+        if len(f) >= 12 and f[11].strip():
+            words.append({"t": f[11].strip().upper(), "x": int(f[6]), "y": int(f[7]), "w": int(f[8]), "h": int(f[9])})
+
+    loose = re.compile(r"^(?:[ITL1|][S5][O0Q]{1,2}|1?8?0)-(\d{2})-(\d{3,5})$")
+    cell_no, label = None, None
+    for w in words:
+        is_label = w["t"].lstrip("{[").startswith("(")
+        m = loose.match(re.sub(r"^[{\[]*\(|\).*$", "", w["t"]))
+        if not m:
+            continue
+        if is_label:
+            label = label or f"ISO-{m.group(1)}-{m.group(2)}"
+        elif cell_no is None:
+            cell_no = w
+    out = {"drawingNo": None, "sheet": None, "rev": None}
+    if cell_no:
+        x, y, w, h = cell_no["x"], cell_no["y"], cell_no["w"], cell_no["h"]
+        num = re.compile(r"^[I1T]?[S5]?[O0]{0,2}-?(\d{2}-\d{3,5})$")
+        digits = cell_vote(strip[y - 4:y + h + 4, max(0, x - 6):x + w + 6], "ISO-0123456789",
+                           lambda o: num.match(o), key=lambda o: num.match(o).group(1))
+        if digits and (label is None or label == f"ISO-{digits}"):
+            out["drawingNo"] = f"ISO-{digits}"
+        borders = vlines(y - 4, y + h + 4, x + w, x + w + int(400 * S))
+        if len(borders) >= 2:
+            def sheet_ok(o):
+                m = re.fullmatch(r"(\d{1,2})/(\d{1,2})", o)
+                return m and 0 < int(m.group(1)) <= int(m.group(2))
+            # the value's own line only: the "SHT NO." header above it spoils the read
+            s = cell_vote(strip[y - 3:y + h + 3, borders[0][1] + 3:borders[1][0] - 2], "0123456789/", sheet_ok)
+            if s:
+                a, b = s.split("/")
+                out["sheet"] = f"{int(a)}/{int(b)}"
+
+    col = None
+    rev_hdr = [w for w in words if re.fullmatch(r"REV\.?", w["t"])]
+    date_hdr = [w for w in words if w["t"] == "DATE"]
+    if rev_hdr:
+        R = rev_hdr[0]
+        bs = vlines(R["y"], R["y"] + R["h"], R["x"] - int(60 * S), R["x"] + R["w"] + int(60 * S))
+        left = [b for b in bs if b[1] < R["x"]]
+        right = [b for b in bs if b[0] > R["x"] + R["w"]]
+        if left and right:
+            col = (left[-1][1] + 3, right[0][0] - 2, R["y"])
+    elif date_hdr:
+        # no REV. read: the revision column is the cell left of the lowest DATE header
+        D = max(date_hdr, key=lambda w: w["y"])
+        bs = vlines(D["y"], D["y"] + D["h"], D["x"] - int(160 * S), D["x"])
+        if len(bs) >= 2:
+            col = (bs[-2][1] + 3, bs[-1][0] - 2, D["y"])
+    if col:
+        xl, xr, top = col
+        hl = hlines(xl, xr, top - int(900 * S), top)
+        rows = [(hl[i][1] + 2, hl[i + 1][0] - 1) for i in range(len(hl) - 1)]
+
+        def written(r):
+            # a character-sized blob, not a stub of a rule
+            n, _, st, _ = cv2.connectedComponentsWithStats(ink[r[0] + 1:r[1] - 1, xl + 2:xr - 2])
+            return any(6 * S <= st[i][3] <= max(8 * S, (r[1] - r[0]) * 0.9) and st[i][2] <= st[i][3] * 2 for i in range(1, n))
+        filled = [r for r in rows if r[1] - r[0] > 12 * S and written(r)]
+        if filled:
+            r = filled[0]
+            rev = cell_vote(strip[r[0]:r[1], xl:xr], "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                            lambda o: re.fullmatch(r"\d{1,2}[A-Z]?|[A-Z]\d?", o))
+            nxt = vlines(r[0] + 2, r[1] - 2, xr + 6, xr + int(260 * S))
+            date = rev and nxt and cell_vote(strip[r[0]:r[1], xr + 5:nxt[0][0] - 2], "0123456789.",
+                                             lambda o: re.fullmatch(r"\d{2}\.\d{2}\.\d{4}", o))
+            if date:
+                out["rev"] = rev
+    return out
+
+
 def main():
     g0 = load(src)
     # Which way up: the turn in which the most frames hold a weld number.
@@ -363,7 +496,7 @@ def main():
             cv2.rectangle(dbg, (b[0], b[1]), (b[2], b[3]), (0, 0, 255) if m["shape"] == "square" else (0, 160, 0), 3)
             cv2.putText(dbg, m["no"] + (" " + m["label"] if m["label"] else ""), (b[2] + 4, b[1] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
         cv2.imwrite(debug, dbg)
-    print(json.dumps({"orientation": rot, "marks": out, "rejected": rejected}))
+    print(json.dumps({"orientation": rot, "meta": read_title(g), "marks": out, "rejected": rejected}))
 
 
 main()

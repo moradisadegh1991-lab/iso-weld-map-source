@@ -3,8 +3,9 @@
  * project's weld symbols declared (circle shop, square field), "بدون مدل"
  * chosen, a golden sheet's PDF dropped in — and the weld-list form opens
  * with the printed joint numbers, shop/field from the frames and THD from
- * the label, while the model endpoint (/api/extract) is never called. An
- * image is refused for this method, by name.
+ * the label, the title block's isometric number, sheet and revision in the
+ * form's fields — while the model endpoint (/api/extract) is never called.
+ * An image is refused for this method, by name.
  *   DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-iso-read-local.mjs
  */
 import { chromium } from "playwright";
@@ -15,7 +16,8 @@ const SHOT = process.env.SHOT_DIR || "/tmp/shots";
 const { DRIVE_EMAIL: EMAIL, DRIVE_PASSWORD: PASSWORD } = process.env;
 if (!EMAIL || !PASSWORD) { console.error("set DRIVE_EMAIL and DRIVE_PASSWORD"); process.exit(1); }
 const SHEET = "eval/cases/golden/drawings/25-1004-SH1-0.pdf";
-const GOLD = JSON.parse(readFileSync("eval/cases/golden/HDPE-25-1004-SH1.json", "utf8")).expect.register;
+const CASE = JSON.parse(readFileSync("eval/cases/golden/HDPE-25-1004-SH1.json", "utf8"));
+const GOLD = CASE.expect.register;
 const b = await chromium.launch({ executablePath: CHROME });
 const problems = [];
 let failed = 0;
@@ -57,7 +59,7 @@ await page.waitForFunction(() => document.querySelector("[data-weld-marks] [data
   throw e;
 });
 const secs = ((Date.now() - t0) / 1000).toFixed(1);
-check(/بدون مدل و بدون توکن/.test(await page.locator("[data-weld-marks] p.note").innerText()), "the review says the sheet was read with no model and no token");
+check(/بدون مدل و بدون توکن/.test(await page.locator("[data-weld-marks] [data-reader=local]").innerText()), "the review says the sheet was read with no model and no token");
 check(calls.includes("/api/read-local") && !calls.some((c) => c.startsWith("/api/extract")), `read on the server with no model: /api/read-local, never /api/extract (${secs}s)`);
 await settle();
 const rows = await page.locator(".wl-table tbody tr").evaluateAll((trs) => trs.map((tr) =>
@@ -67,8 +69,13 @@ check(rows.length === GOLD.length && GOLD.every((g) => got.has(g.no)), `every pr
 const locOk = GOLD.filter((g) => got.get(g.no)?.[2] === g.loc).length;
 check(locOk === GOLD.length, `shop/field from the frames under the project's convention: ${locOk}/${GOLD.length} as the contractor's register`);
 check(got.get("10")?.[3] === "THD", `joint 10: THD from the label printed beside it (${got.get("10")?.[3]})`);
+const field = (k) => page.locator(`#wl-${k}`).inputValue();
+const title = { drawingNo: await field("drawingNo"), sheet: await field("sheet"), rev: await field("rev") };
+check(title.drawingNo === CASE.input.meta.drawingNo && title.sheet === CASE.input.meta.sheet && title.rev === CASE.input.meta.rev,
+  `title block read into the form: ${title.drawingNo} sheet ${title.sheet} rev ${title.rev} (printed ${CASE.input.meta.drawingNo} ${CASE.input.meta.sheet} ${CASE.input.meta.rev})`);
+check(/جدول عنوان \(OCR/.test(await page.locator("[data-title-read]").innerText()), "the review labels the title block as an OCR reading to check");
 check(await page.locator(".weldlist .savebar button", { hasText: "ذخیره در سامانه" }).isDisabled(),
-  "not saved as it stands: the drawing number and what the drawing did not say are for a person");
+  "not saved as it stands: what the drawing did not say (size, joint type, spool) is for a person");
 await page.screenshot({ path: `${SHOT}/iso-read-local.png`, fullPage: false });
 console.log(problems.length ? problems.join("\n") : "no page errors");
 await b.close();
