@@ -1,10 +1,10 @@
 {
  "id": "HDPE-25-1071-SH1",
  "kind": "golden",
- "title": "ISO-25-1071 sheet 1/1 rev 0 — 10 joints printed on the sheet",
+ "title": "ISO-25-1071 sheet 1/2 rev 0 — 10 joints printed on the sheet",
  "source": {
   "drawingNo": "ISO-25-1071",
-  "sheet": "1/1",
+  "sheet": "1/2",
   "revision": "0",
   "project": "HDPE plant, unit 25",
   "register": "contractor's joint history (S/F, Type, Size per joint)",
@@ -21,7 +21,7 @@
  "input": {
   "meta": {
    "drawingNo": "ISO-25-1071",
-   "sheet": "1/1",
+   "sheet": "1/2",
    "rev": "0"
   },
   "bom": [
