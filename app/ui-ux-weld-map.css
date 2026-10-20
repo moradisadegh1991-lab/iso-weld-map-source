@@ -1,0 +1,275 @@
+/*
+ * ISO Weld Map — Weld Map & Joint History UI
+ * Presentation only. No business logic or data changes.
+ *
+ * Component classes (.weld-map__*, .joint-history__*, .weld-status--*): no
+ * page carries them yet; a component opts in by taking the class names.
+ */
+
+/* ---------- Weld map workspace ---------- */
+
+.weld-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+.weld-map__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+}
+
+.weld-map__toolbar > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.weld-map__viewport {
+  position: relative;
+  min-width: 0;
+  min-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.weld-map__canvas {
+  min-width: 100%;
+  min-height: 320px;
+}
+
+/* ---------- Weld details ---------- */
+
+.weld-map__details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.weld-map__detail {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--surf);
+}
+
+.weld-map__label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink);
+  opacity: .72;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.weld-map__value {
+  display: block;
+  min-width: 0;
+  font-weight: 650;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Joint history ---------- */
+
+.joint-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.joint-history__item {
+  position: relative;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--surf);
+}
+
+.joint-history__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.joint-history__title {
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.joint-history__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  line-height: 1.8;
+  opacity: .8;
+}
+
+.joint-history__description {
+  margin: 8px 0 0;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Status display ---------- */
+
+/*
+ * Status classes control appearance only.
+ * Assign them according to the application's existing status values.
+ */
+
+.weld-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.weld-status--pending {
+  border-color: #b88628;
+  background: #b8862815;
+}
+
+.weld-status--approved {
+  border-color: #25845c;
+  background: #25845c15;
+}
+
+.weld-status--rejected {
+  border-color: #c94b4b;
+  background: #c94b4b15;
+}
+
+.weld-status--repair {
+  border-color: #c07828;
+  background: #c0782815;
+}
+
+/* ---------- Filters ---------- */
+
+.weld-map__filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.weld-map__filters > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* ---------- Focus and interaction ---------- */
+
+.weld-map :where(button, a, input, select):focus-visible,
+.joint-history :where(button, a, input, select):focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 3px;
+}
+
+.joint-history__item:focus-within {
+  border-color: var(--cy);
+}
+
+/* ---------- Tablet ---------- */
+
+@media (max-width: 820px) {
+  .weld-map__filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .weld-map__viewport,
+  .weld-map__canvas {
+    min-height: 280px;
+  }
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 520px) {
+  .weld-map__toolbar {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .weld-map__filters,
+  .weld-map__details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .weld-map__viewport,
+  .weld-map__canvas {
+    min-height: 240px;
+  }
+
+  .joint-history__item {
+    padding: 11px;
+  }
+
+  .joint-history__header {
+    flex-direction: column;
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .weld-map *,
+  .joint-history * {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------- Print ---------- */
+
+@media print {
+  .weld-map__toolbar,
+  .weld-map__filters {
+    display: none !important;
+  }
+
+  .weld-map__viewport {
+    overflow: visible;
+    border-color: #999;
+  }
+
+  .joint-history__item,
+  .weld-map__detail {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}

@@ -1,0 +1,577 @@
+/*
+ * EPC Platform — Shell navigation refinement
+ * Targets existing Shell.jsx and design.css classes.
+ * No routing, permissions, authentication, or project-selection changes.
+ */
+
+/* ---------- Top navigation ---------- */
+
+.topbar {
+  gap: 10px;
+  min-height: var(--bar-h, 52px);
+  padding-inline: clamp(10px, 1.5vw, 22px);
+}
+
+.topbar .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.topbar .brand .logo {
+  display: inline-grid;
+  place-items: center;
+  min-width: 36px;
+  min-height: 32px;
+  padding: 4px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--cy-soft);
+  color: var(--cy);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.topbar .brand .t {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+.topbar .grow {
+  flex: 1 1 auto;
+  min-width: 6px;
+}
+
+.topbar .hamb,
+.topbar .iconbtn {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 38px;
+  min-height: 38px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--surf);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.topbar .hamb:hover,
+.topbar .iconbtn:hover {
+  border-color: var(--cy);
+  background: var(--cy-soft);
+}
+
+.topbar .hamb:focus-visible,
+.topbar .iconbtn:focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 3px;
+}
+
+/* ---------- Project and contract picker ---------- */
+
+.topbar > select {
+  box-sizing: border-box;
+  flex: 0 1 300px;
+  min-width: 120px;
+  max-width: 300px;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  background: var(--surf);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.topbar > select:focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 2px;
+}
+
+.topbar .crumb {
+  min-width: 0;
+  max-width: 260px;
+  font-size: 11px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- User menu ---------- */
+
+.usermenu {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.usermenu > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.usermenu > button:hover,
+.usermenu > button[aria-expanded="true"] {
+  border-color: var(--rule);
+  background: var(--surf2);
+}
+
+.usermenu .avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--cy-soft);
+  color: var(--cy);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.usermenu .role-pill {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usermenu .menu {
+  z-index: 100;
+  min-width: 230px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 8px;
+  border: 1px solid var(--rule);
+  background: var(--surf);
+  color: var(--ink);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .22);
+}
+
+.usermenu .menu .head {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.usermenu .menu .head .e {
+  overflow-wrap: anywhere;
+}
+
+.usermenu .menu > button,
+.usermenu .menu > a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.usermenu .menu > button:hover,
+.usermenu .menu > a:hover {
+  background: var(--surf2);
+}
+
+.usermenu .menu > .danger {
+  color: var(--bad, #c44);
+}
+
+/* ---------- Sidebar search ---------- */
+
+.sidenav .nav-top {
+  padding: 10px;
+}
+
+.sidenav .nav-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-inline: 9px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--surf2);
+}
+
+.sidenav .nav-search:focus-within {
+  border-color: var(--cy);
+  box-shadow: var(--focus);
+}
+
+.sidenav .nav-search input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.sidenav .nav-search input:focus {
+  box-shadow: none;
+}
+
+.sidenav .nav-search input::placeholder {
+  color: var(--dim);
+  opacity: .9;
+}
+
+.sidenav .nav-search .k {
+  flex: 0 0 auto;
+  padding: 3px 5px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  color: var(--dim);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* ---------- Navigation groups ---------- */
+
+.sidenav .nav-groups {
+  min-width: 0;
+  padding-block: 4px 12px;
+}
+
+.sidenav .nav-grp {
+  min-width: 0;
+  margin-block: 4px 10px;
+}
+
+.sidenav .nav-grp > button.grp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: calc(100% - 16px);
+  min-height: 38px;
+  margin-inline: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 11px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.sidenav .nav-grp > button.grp:hover {
+  border-color: var(--rule);
+  background: var(--surf2);
+  color: var(--ink);
+}
+
+.sidenav .nav-grp > button.grp .chev {
+  flex: 0 0 auto;
+  transition: transform .15s ease;
+}
+
+.sidenav .nav-grp.closed > button.grp .chev {
+  transform: rotate(-90deg);
+}
+
+.sidenav .nav-grp .items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sidenav .nav-grp .items > a,
+.sidenav .nav-groups > a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 38px;
+  padding-block: 8px;
+  line-height: 1.8;
+}
+
+.sidenav a .ic {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  font-size: 15px;
+}
+
+.sidenav a .t {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sidenav a .tail {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  font-size: 10px;
+}
+
+.sidenav a.soon {
+  opacity: .58;
+  cursor: default;
+}
+
+.sidenav .nav-empty {
+  margin: 8px;
+  padding: 12px;
+  border: 1px dashed var(--rule);
+  border-radius: 8px;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Sidebar footer ---------- */
+
+.sidenav .nav-foot {
+  padding: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+.sidenav .nav-foot > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surf);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sidenav .nav-foot > button:hover {
+  border-color: var(--cy);
+  background: var(--cy-soft);
+}
+
+/* ---------- Section page tabs ---------- */
+
+.section-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  min-width: 0;
+  padding-block: 8px 0;
+}
+
+.section-tabs .st-title {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.section-tabs .st-list {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.section-tabs .st-list a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  color: var(--dim);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.section-tabs .st-list a:hover {
+  background: var(--surf2);
+  color: var(--ink);
+}
+
+.section-tabs .st-list a.on {
+  border-color: var(--rule);
+  background: var(--cy-soft);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ---------- Keyboard focus ---------- */
+
+.topbar :where(button, a, select):focus-visible,
+.sidenav :where(button, a, input):focus-visible,
+.section-tabs a:focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 2px;
+}
+
+/* ---------- Tablet and mobile ---------- */
+
+@media (max-width: 900px) {
+  .topbar {
+    gap: 7px;
+    padding-inline: 10px;
+  }
+
+  .topbar .crumb {
+    display: none;
+  }
+
+  .topbar > select {
+    flex: 1 1 130px;
+    max-width: 240px !important;
+  }
+
+  .topbar .brand .t {
+    display: none;
+  }
+
+  .usermenu > button {
+    gap: 5px;
+    padding-inline: 4px;
+  }
+
+  .usermenu .role-pill {
+    display: none;
+  }
+
+  .section-tabs {
+    gap: 6px;
+  }
+
+  .shell.drawer .scrim {
+    backdrop-filter: blur(2px);
+  }
+
+  .sidenav {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar {
+    gap: 5px;
+    padding-inline: 7px;
+  }
+
+  .topbar .hamb,
+  .topbar .iconbtn {
+    min-width: 35px;
+    min-height: 35px;
+  }
+
+  .topbar .brand .logo {
+    min-width: 32px;
+    min-height: 30px;
+    padding: 3px 5px;
+  }
+
+  .topbar > select {
+    min-width: 0;
+    max-width: none !important;
+    font-size: 11px;
+  }
+
+  .usermenu > button {
+    min-height: 35px;
+  }
+
+  .usermenu .avatar {
+    flex-basis: 28px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .usermenu .menu {
+    position: fixed;
+    inset-inline: 12px;
+    top: 58px;
+    width: auto;
+    max-width: none;
+  }
+
+  .section-tabs {
+    display: block;
+  }
+
+  .section-tabs .st-title {
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .section-tabs .st-list {
+    width: 100%;
+  }
+}
+
+/* ---------- Reduced motion and printing ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .sidenav .nav-grp > button.grp .chev,
+  .section-tabs .st-list a {
+    transition: none;
+  }
+}
+
+@media print {
+  .topbar,
+  .sidenav,
+  .scrim,
+  .section-tabs,
+  .offline-bar {
+    display: none !important;
+  }
+
+  .body {
+    width: 100%;
+    max-width: none;
+  }
+}

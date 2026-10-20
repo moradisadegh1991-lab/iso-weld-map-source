@@ -1,0 +1,220 @@
+/*
+ * ISO Weld Map — Weld Registration Form UX
+ * Visual-only enhancement.
+ * No changes to APIs, database, validation logic or business rules.
+ *
+ * Component classes (.weld-form__*): no form carries them yet; a form
+ * opts in by taking the class names.
+ */
+
+/* ---------- Form workspace ---------- */
+
+.weld-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  width: 100%;
+}
+
+.weld-form__section {
+  min-width: 0;
+  padding: clamp(14px, 2vw, 22px);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+}
+
+.weld-form__section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.weld-form__section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.weld-form__section-description {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.9;
+  opacity: .75;
+}
+
+/* ---------- Responsive field grid ---------- */
+
+.weld-form__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+
+.weld-form__field {
+  min-width: 0;
+}
+
+.weld-form__field--wide {
+  grid-column: 1 / -1;
+}
+
+.weld-form__field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.9;
+}
+
+.weld-form__field :where(input, select, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  font: inherit;
+  border-radius: 8px;
+}
+
+.weld-form__field :where(input, select) {
+  min-height: 44px;
+}
+
+.weld-form__field textarea {
+  min-height: 100px;
+  resize: vertical;
+  line-height: 1.9;
+}
+
+.weld-form__field :where(input, select, textarea):focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 2px;
+}
+
+.weld-form__hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.8;
+  opacity: .72;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Read-only fields ---------- */
+
+.weld-form__readonly {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surf2);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Form actions ---------- */
+
+.weld-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.weld-form__actions :where(button, .btn) {
+  min-height: 42px;
+}
+
+/* ---------- Inline feedback ---------- */
+
+.weld-form__message {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.weld-form__message--error {
+  border-color: #c94b4b;
+  background: #c94b4b12;
+}
+
+.weld-form__message--success {
+  border-color: #25845c;
+  background: #25845c12;
+}
+
+/* ---------- Tablet ---------- */
+
+@media (max-width: 900px) {
+  .weld-form__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 520px) {
+  .weld-form {
+    gap: 14px;
+  }
+
+  .weld-form__section {
+    padding: 13px;
+  }
+
+  .weld-form__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 13px;
+  }
+
+  .weld-form__field--wide {
+    grid-column: auto;
+  }
+
+  .weld-form__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .weld-form__actions :where(button, .btn) {
+    width: 100%;
+  }
+}
+
+/* ---------- Accessibility ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .weld-form * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ---------- Printing ---------- */
+
+@media print {
+  .weld-form__actions {
+    display: none !important;
+  }
+
+  .weld-form__section {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+}
