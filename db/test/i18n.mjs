@@ -28,6 +28,7 @@ import supply from "../../lib/i18n/sections/supply.mjs";
 import hseSection from "../../lib/i18n/sections/hse.mjs";
 import mechanical from "../../lib/i18n/sections/mechanical.mjs";
 import ei from "../../lib/i18n/sections/ei.mjs";
+import piping from "../../lib/i18n/sections/piping.mjs";
 import { translate, dirOf, num, dateIn, keys as keysOf } from "../../lib/i18n/index.mjs";
 import { LABELS, label } from "../../lib/i18n/labels.mjs";
 import { INSPECTABLE, EQUIPMENT_KINDS as TAG_KINDS } from "../../lib/platform/precedence.mjs";
@@ -85,7 +86,7 @@ test("the three dictionaries hold the same keys, none empty", () => {
     equal(K.filter((k) => !String(d[k]).trim()), [], `${name}: empty strings`);
   }
   assert(F.length > 150, `${F.length} keys`);
-  const sections = [quality, contracts, reports, grid, eps, supply, hseSection, mechanical, ei];
+  const sections = [quality, contracts, reports, grid, eps, supply, hseSection, mechanical, ei, piping];
   const seen = new Set(Object.keys(base));
   const twice = [];
   for (const x of sections) for (const k of Object.keys(x.fa)) { if (seen.has(k)) twice.push(k); seen.add(k); }
@@ -191,7 +192,8 @@ const TRANSLATED = ["app/quality/page.jsx", "app/inspection/page.jsx", "app/ndt-
   "app/procurement/page.jsx", "app/procurement/Tender.jsx", "app/procurement/Vendors.jsx",
   "app/warehouse/page.jsx", "app/warehouse/Stores.jsx", "app/warehouse/Mesc.jsx", "app/hse/page.jsx", "app/hse/SafeWork.jsx",
   "components/ui/Tabs.jsx", "app/equipment/page.jsx", "app/coating/page.jsx",
-  "app/electrical/page.jsx", "app/instrumentation/page.jsx"];
+  "app/electrical/page.jsx", "app/instrumentation/page.jsx",
+  "app/piping/overview/page.jsx", "app/piping/execution/page.jsx", "app/piping/welding/page.jsx", "app/piping/joint/page.jsx", "app/qc/page.jsx"];
 
 test("a translated page keeps no Persian of its own", async () => {
   const left = [];
