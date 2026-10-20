@@ -1025,3 +1025,6 @@ tr.p6-editing{outline:1.5px solid #1d6fd8;outline-offset:-1px}
 .rp-detail h3{margin:0;font-size:14px}
 .rp-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px;max-height:260px;overflow:auto;margin-bottom:8px}
 .rp-pick label{display:flex;gap:6px;align-items:center}
+.iso-reader{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:8px 0}
+.iso-reader label{display:inline-flex;gap:5px;align-items:center}
+.iso-reader .muted:last-child{flex-basis:100%}

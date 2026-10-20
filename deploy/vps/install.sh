@@ -53,7 +53,7 @@ die()  { printf '   [FAIL] %s\n' "$*" >&2; exit 1; }
 say "۱. بسته‌های سیستم"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq git curl ca-certificates xz-utils caddy tesseract-ocr poppler-utils >/dev/null
+apt-get install -y -qq git curl ca-certificates xz-utils caddy tesseract-ocr poppler-utils python3-opencv python3-numpy >/dev/null
 ok "git, curl, caddy $(caddy version 2>/dev/null | cut -d' ' -f1)"
 
 # ── 2. Node 22 ────────────────────────────────────────────────────────────
