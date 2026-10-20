@@ -993,3 +993,35 @@ tr.p6-editing{outline:1.5px solid #1d6fd8;outline-offset:-1px}
 .p6-modal{position:fixed;inset:0;z-index:60;background:var(--overlay);display:flex;align-items:flex-start;justify-content:center;padding-top:8vh}
 .p6-modal>.card{width:min(720px,94vw);max-height:80vh;overflow:auto}
 .p6-days-pick{position:absolute;z-index:30;top:100%;inset-inline-start:0;width:260px;max-height:380px;overflow:auto;padding:8px}
+
+/* ── drawing labels, 4×2 in (app/piping/reports) ─────────────────────────
+   One drawing sheet a label: the load or transmittal it travels on, the
+   drawing number, sheet and revision, and a QR to its reports. Printed on
+   a named page of its own size, so no other print of the platform changes;
+   while labels print, the page itself is hidden and only the sheet goes. */
+.dlabels{display:grid;grid-template-columns:repeat(auto-fill,minmax(4in,4in));gap:10px;margin-top:10px}
+.dlabel{width:4in;height:2in;box-sizing:border-box;background:#fff;color:#111;border:1px solid #bbb;border-radius:4px;
+  display:flex;gap:.18in;align-items:center;padding:.15in;font-family:Arial,Helvetica,sans-serif;break-inside:avoid}
+.dl-qr{flex:none;width:1.25in;height:1.25in} .dl-qr svg{width:100%;height:100%}
+.dl-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dl-head{color:#7b2b8f;font-weight:700;font-size:11pt}
+.dl-k{font-weight:700;font-size:11pt}
+.dl-no{font-weight:700;font-size:12pt;overflow-wrap:anywhere}
+.dl-meta{font-size:11pt;margin-top:2px}
+.dlabels-print{display:none}
+@page dlabel{size:4in 2in;margin:0}
+@media print{
+  body.print-labels > :not(.dlabels-print){display:none !important}
+  body.print-labels .dlabels-print{display:block}
+  body.print-labels .dlabels-print .dlabels{display:block;margin:0}
+  body.print-labels .dlabel{page:dlabel;border:0;border-radius:0;break-after:page}
+}
+.rp-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:10px 0}
+.rp-item{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--surf);
+  text-decoration:none !important;color:var(--ink) !important}
+.rp-item:hover{border-color:var(--cy)}
+.rp-item .btn{align-self:flex-start;margin-top:auto}
+.rp-detail{border-top:1px solid var(--rule);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.rp-detail h3{margin:0;font-size:14px}
+.rp-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px;max-height:260px;overflow:auto;margin-bottom:8px}
+.rp-pick label{display:flex;gap:6px;align-items:center}

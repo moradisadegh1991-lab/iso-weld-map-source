@@ -4,6 +4,7 @@ import TemplateButton from "./ui/TemplateButton";
 import SaveBar from "./SaveBar";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
+import { splitWeldLog, weldLogSheetName } from "../lib/register/weld-log-import.mjs";
 
 /**
  * A weld register from a weld list: typed row by row, or read from the
@@ -35,6 +36,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [paste, setPaste] = useState("");
   const [read, setRead] = useState(null);
   const [approval, setApproval] = useState({ phase: "idle" });
+  // a weld log of many drawings (Piping.Tools, this platform's Weld Log, a contractor's register): one sheet is loaded at a time
+  const [log, setLog] = useState(null);
 
   const typed = rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
   // A list read from the drawing's printed markers keeps what the model read
@@ -68,9 +71,28 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       if (/\.(xlsx?|xlsm)$/i.test(f.name)) {
         const XLSX = await import("xlsx");
         const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
-        fromText(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]), `«${f.name}» (برگ ${wb.SheetNames[0]})`);
+        const name = weldLogSheetName(wb.SheetNames);
+        const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" });
+        const split = splitWeldLog(aoa);
+        // a log that names its drawings: pick the sheet to load
+        if (!split.error && split.groups.some((g) => g.drawingNo)) return openLog({ aoa, source: `«${f.name}» (برگ ${name})`, byLine: false });
+        fromText(XLSX.utils.sheet_to_csv(wb.Sheets[name]), `«${f.name}» (برگ ${name})`);
       } else fromText(await f.text(), `«${f.name}»`);
     } catch (e) { setRead({ error: `«${f.name}»: ${e.message}` }); }
+  }
+
+  function openLog({ aoa, source, byLine }) {
+    const split = splitWeldLog(aoa, { byLine });
+    setLog({ aoa, source, byLine, ...split });
+    setRead(null);
+  }
+  function loadGroup(key) {
+    const g = log.groups.find((x) => x.key === key);
+    if (!g) return;
+    setRows(g.rows.map((r) => ({ ...BLANK_ROW, ...r, loc: normalizeLoc(r.loc) || r.loc })));
+    setMeta({ ...meta, drawingNo: g.drawingNo || meta.drawingNo, sheet: g.sheet || meta.sheet, rev: g.rev || meta.rev, lineNo: g.lineNo || meta.lineNo });
+    setRead({ source: `${log.source} · ${g.drawingNo} ${g.sheet}${log.byLine && g.lines[0] ? ` · ${g.lines[0]}` : ""}`, rows: g.rows.length,
+      found: Object.entries(log.found).map(([k, h]) => `${COLS.find((c) => c[0] === k)[1]} ← «${h}»`), unmapped: log.unmapped });
   }
 
   async function approve() {
@@ -119,6 +141,22 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         <textarea id="wl-paste" rows={4} dir="ltr" value={paste} onChange={(e) => setPaste(e.target.value)}
           placeholder={"Weld No\tSpool No\tShop/Field\tWeld Type\tNPS\nW-01\t\tField\tTie-in\t3"} style={{ width: "100%", minHeight: 0, height: 90 }} />
         <button className="ghost" type="button" disabled={!paste.trim()} onClick={() => fromText(paste, "متن چسبانده‌شده")}>خواندن متن</button>
+        {log && (
+          <div className="wl-log" data-weld-log={log.groups.length}>
+            <p className="note sm">{log.source}: {log.groups.length} برگ نقشه، {log.groups.reduce((n, g) => n + g.rows.length, 0)} جوش. یک برگ را برای این رجیستر انتخاب کنید؛ هر برگ رجیستر خودش است.</p>
+            <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+              <select id="wl-group" defaultValue="" onChange={(e) => loadGroup(e.target.value)}>
+                <option value="" disabled>— برگ نقشه —</option>
+                {log.groups.map((g) => <option key={g.key} value={g.key}>
+                  {g.drawingNo || "بدون شمارهٔ نقشه"} · برگ {g.sheet || "؟"}{log.byLine && g.lines[0] ? ` · ${g.lines[0]}` : ""} · {g.rows.length} جوش{!log.byLine && g.lines.length > 1 ? ` · ${g.lines.length} خط` : ""}
+                </option>)}
+              </select>
+              {log.hasLine && <label className="sm"><input id="wl-byline" type="checkbox" checked={log.byLine}
+                onChange={(e) => openLog({ aoa: log.aoa, source: log.source, byLine: e.target.checked })} /> هر برگ به تفکیک خط (ستون System)</label>}
+            </div>
+            {!log.byLine && log.groups.some((g) => g.lines.length > 1) && (
+              <p className="muted sm">برگی که جوش‌های چند خط را زیر یک شمارهٔ نقشه آورده، احتمالاً چند نقشه را یکی کرده است — شماره‌های تکراری را بررسی بالا نشان می‌دهد. تفکیک به خط را امتحان کنید.</p>)}
+          </div>)}
         {read?.error && <p className="err">{read.error}</p>}
         {read?.rows != null && (
           <p className="note sm">
