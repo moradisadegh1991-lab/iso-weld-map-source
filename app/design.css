@@ -276,3 +276,92 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--cy)}
   .tk[data-tk-mode="grid"] > .wrap{max-height:none;overflow:visible;border:0}
   .tk[data-tk-mode="grid"] .dtable th{position:static}
 }
+
+/* ═══ ERP refinement layer ═══════════════════════════════════════════════
+   The owner's erp-ui-refinement.css, written against this file's tokens.
+   Where a rule as given collided with markup here it is changed in place,
+   and the comment beside it says why. */
+
+/* workspace framing — `.body` already gives the side gutter, and the
+   section tabs above the page sit on it; a second inline padding would put
+   the page out of line with its own tabs. So the page pads top and bottom. */
+.page{max-width:1680px;margin-inline:auto;padding-block:clamp(4px,1vw,12px) clamp(14px,2vw,28px)}
+.pagehead{justify-content:space-between;gap:14px;margin-bottom:clamp(4px,1vw,10px);padding-bottom:14px;border-bottom:1px solid var(--rule)}
+.pagehead h1{margin:0;line-height:1.45}
+.pagehead .sub{color:var(--dim);font-size:12px}
+
+/* KPI tiles */
+.tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(10px,1.2vw,16px);margin-bottom:clamp(14px,2vw,24px)}
+.tile{position:relative;isolation:isolate;display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  grid-template-areas:"icon title value" "desc desc desc";align-items:start;gap:10px 12px;min-width:0;padding:16px;overflow:hidden;
+  border:1px solid var(--rule);border-top:3px solid var(--rule);background:var(--surf);box-shadow:var(--shadow-1);text-decoration:none;
+  transition:transform .16s var(--ease),border-color .16s,box-shadow .16s}
+.tile::after{content:"";position:absolute;z-index:-1;width:100px;height:100px;inset-inline-end:-42px;bottom:-52px;border-radius:50%;
+  background:var(--cy-soft);pointer-events:none}
+.tile:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--cy) 55%,var(--rule));
+  box-shadow:0 8px 24px color-mix(in srgb,var(--ink) 10%,transparent)}
+.tile .ic{grid-area:icon;display:grid;place-items:center;width:38px;height:38px;border-radius:10px;color:var(--cy);background:var(--cy-soft);
+  font-size:19px;opacity:1}
+.tile .t{grid-area:title;align-self:center;min-width:0;color:var(--ink);font-weight:650;line-height:1.5}
+.tile .d{grid-area:desc;min-height:2.8em;color:var(--dim);font-size:12px;line-height:1.8}
+.tile .big{grid-area:value;align-self:center;margin-top:0;color:var(--ink-strong,var(--ink));font-size:clamp(23px,2vw,30px);font-weight:750;line-height:1.1}
+.tile .big.ok{color:var(--ok)} .tile .big.warn{color:var(--warn)} .tile .big.bad{color:var(--bad)}
+/* a tile with more than the four parts (the form-type tiles carry buttons)
+   gives the extra row the full width instead of one narrow cell */
+.tile > :not(.ic,.t,.d,.big){grid-column:1 / -1}
+
+/* module launchpad — the tiles were a fixed 176px square in a wrapping row;
+   in a grid that size would leave each one stranded in its column */
+.lp-group{margin-top:24px}
+.lp-title{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:14px;font-weight:750}
+.lp-title::before{content:"";width:4px;height:18px;border-radius:99px;background:var(--cy)}
+.lp-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.lp-tile{width:auto;height:auto;min-width:0;min-height:116px;gap:8px;padding:14px;border:1px solid var(--rule);background:var(--surf);
+  color:var(--ink);text-decoration:none;transition:transform .16s var(--ease),border-color .16s,background .16s}
+/* `.page a` (the link colour, underline on hover) outranks a bare class */
+.page a.tile,.page a.lp-tile,.page a.tile:hover,.page a.lp-tile:hover{color:var(--ink);text-decoration:none}
+.lp-tile:hover{transform:translateY(-2px);border-color:var(--cy);background:color-mix(in srgb,var(--surf) 94%,var(--cy))}
+.lp-head{font-size:13px;font-weight:700;line-height:1.7}
+.lp-sub{flex:1;color:var(--dim);font-size:11px;line-height:1.7}
+.lp-foot{display:flex;align-items:center;justify-content:flex-end;margin-top:2px}
+.lp-ic{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--cy-soft);color:var(--cy);font-size:16px}
+
+/* cards — the file's `overflow:hidden` would clip the absolutely placed
+   pickers inside cards (the P6 chooser, the day picker) and turn every card
+   into a scroll box that sticky table heads then stick to. The heading band
+   rounds its own corners instead, and the first heading reaches the edges. */
+.card{border:1px solid var(--rule)}
+.card > h2{margin:0;padding:12px 14px;border-bottom:1px solid var(--rule);border-radius:var(--r);
+  background:color-mix(in srgb,var(--surf) 94%,var(--cy))}
+.card > h2:first-child{margin:calc(-1 * var(--gap)) calc(-1 * var(--gap)) 0;padding:14px var(--gap);
+  border-radius:calc(var(--r-lg) - 1px) calc(var(--r-lg) - 1px) 0 0}
+/* a card whose collapsible forms put their buttons beside the heading:
+   the band runs on under the buttons */
+/* :root — the compact density sets the card gap at that weight */
+:root .card[data-actions="head"]{column-gap:0}
+.card[data-actions="head"] > h2:first-child{margin-inline-end:0;border-start-end-radius:0}
+.card[data-actions="head"] > .card-actions{margin-block-start:calc(-1 * var(--gap));margin-inline-end:calc(-1 * var(--gap));
+  padding:6px var(--gap);border-bottom:1px solid var(--rule);border-start-end-radius:calc(var(--r-lg) - 1px);
+  background:color-mix(in srgb,var(--surf) 94%,var(--cy))}
+.dtable tbody tr:hover td{background:color-mix(in srgb,var(--surf) 93%,var(--cy))}
+.field input,.field select,.field textarea,input.search,.tk-bar input,.tk-bar select{min-height:36px}
+.btn{min-height:34px;font-weight:600}
+.empty-note{border:1px dashed var(--rule);line-height:1.9}
+
+/* keyboard focus; reduced motion is already off for everything above */
+.tile:focus-visible,.lp-tile:focus-visible{outline:2px solid var(--cy);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.tile:hover,.lp-tile:hover{transform:none}}
+
+/* responsive */
+@media (max-width:1120px){.lp-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:820px){
+  .tiles,.lp-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pagehead{align-items:flex-start;flex-direction:column;gap:4px}
+}
+@media (max-width:600px){.lp-tile{width:auto;height:auto}}
+@media (max-width:520px){
+  .tiles,.lp-tiles{grid-template-columns:1fr}
+  .tile{padding:13px}
+  .tile .d{min-height:0}
+  .lp-tile{min-height:0}
+}
