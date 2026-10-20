@@ -25,6 +25,13 @@ await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);
 await page.click("button[type=submit]"); await page.waitForSelector(".shell");
 await page.goto(BASE + "/ndt-joints", { waitUntil: "networkidle" }); await wait();
 console.log("header:", flat(await page.locator(".pagehead .sub").innerText()));
+// the summary cards show the server's own counts, the same four the line above states
+const projectId = (await page.locator(".topbar select").inputValue()).replace(/^p:/, "");
+const counts = (await page.evaluate((id) => fetch(`/api/ndt-joints?projectId=${id}`).then((r) => r.json()), projectId)).counts;
+const shown = Object.fromEntries(await page.locator(".ndt-summary__card").evaluateAll((cs) => cs.map((c) => [c.dataset.count, Number(c.querySelector(".ndt-summary__value").textContent)])));
+const same = ["total", "welded", "done", "unknown"].every((k) => shown[k] === counts[k]);
+console.log(same ? "ok  " : "FAIL", "summary cards match the server's counts:", JSON.stringify(shown));
+if (!same) problems.push("summary cards do not match the counts");
 const card = (h) => page.locator(".card", { has: page.locator("h2", { hasText: h }) }).first();
 for (const r of await card("ماتریس NDT").locator("tbody > tr").allInnerTexts()) console.log("  rule", flat(r).slice(0, 150));
 

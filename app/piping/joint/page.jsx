@@ -14,6 +14,8 @@ import { usePrefs } from "../../../lib/client/prefs.mjs";
  */
 // tones; the words are pi.jt.res.<result>, pi.jt.kind.<kind> and wa.mtc.<state>
 const RESULT = { accept: "ok", reject: "bad", pending: "" };
+// the same three results in the owner's NDT status style (app/ui-ux-ndt.css)
+const NDT_STATUS = { accept: "passed", reject: "failed", pending: "pending" };
 const KINDS = ["drawing", "material", "fitup", "inspection", "weld", "pwht", "ndt", "test"];
 const MTC = { pending: "", accepted: "ok", rejected: "bad" };
 
@@ -102,10 +104,11 @@ function History({ h }) {
         <h2 style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <bdi dir="ltr" className="mono">{id.weldNo}</bdi>
           <span className="pill">{shopField(id.shopField)}</span>
-          {!id.current && <span className="pill bad">{t("pi.jt.notCurrent")}</span>}
-          {st.accepted ? <span className="pill ok">{t("pi.jt.ndtAccepted")}</span> : st.examined ? <span className="pill bad">{t("pi.jt.ndtOpen")}</span>
-            : st.welded ? <span className="pill">{t("pi.wd.awaitNdt")}</span> : <span className="pill">{t("pi.jt.notWelded")}</span>}
-          {st.repairs > 0 && <span className="pill bad">{t("pi.jt.repairs", { n: st.repairs })}</span>}
+          {!id.current && <span className="weld-status weld-status--rejected">{t("pi.jt.notCurrent")}</span>}
+          {st.accepted ? <span className="weld-status weld-status--approved">{t("pi.jt.ndtAccepted")}</span>
+            : st.examined ? <span className="weld-status weld-status--rejected">{t("pi.jt.ndtOpen")}</span>
+            : <span className="weld-status weld-status--pending">{st.welded ? t("pi.wd.awaitNdt") : t("pi.jt.notWelded")}</span>}
+          {st.repairs > 0 && <span className="weld-status weld-status--repair">{t("pi.jt.repairs", { n: st.repairs })}</span>}
         </h2>
         <div className="kv">
           <KV k={t("pi.line")} v={id.lineNo} mono /><KV k={t("pi.jt.class")} v={id.pipingClass} mono /><KV k={t("pi.spool")} v={id.spoolNo} mono />
@@ -130,12 +133,14 @@ function History({ h }) {
       <div className="card">
         <h2>{t("pi.jt.timeline")}</h2>
         {h.timeline.length === 0 ? <p className="empty-note">{t("hs.noIncident")}</p> : (
-          <ol className="timeline">
+          <ol className="joint-history">
             {h.timeline.map((e, i) => (
-              <li key={i} className={e.tone}>
-                <span className="mono sm muted">{e.on ? date(e.on) : t("pi.jt.undated")}</span>
-                <span className="pill">{KINDS.includes(e.kind) ? t(`pi.jt.kind.${e.kind}`) : e.kind}</span>
-                <span className="sm">{e.text}</span>
+              <li key={i} className="joint-history__item" data-tone={e.tone || undefined}>
+                <div className="joint-history__header">
+                  <h3 className="joint-history__title">{KINDS.includes(e.kind) ? t(`pi.jt.kind.${e.kind}`) : e.kind}</h3>
+                  <div className="joint-history__meta mono">{e.on ? date(e.on) : t("pi.jt.undated")}</div>
+                </div>
+                <p className="joint-history__description sm">{e.text}</p>
               </li>
             ))}
           </ol>
@@ -173,15 +178,15 @@ function History({ h }) {
             <p className="sm">{t("pi.jt.sampling")} {h.selection.map((s) => `${s.method} ${s.percent}% (${fa(s.on)}): ${s.selected ? t("pi.jt.selected") : t("pi.jt.notSelected")}`).join(" · ")}</p>
           )}
           {h.ndt.length === 0 ? <p className="empty-note">{t("pi.jt.noNdt")}</p> : (
-            <table className="dtable">
+            <div className="ndt-table-wrap"><table className="ndt-table">
               <thead><tr><th>{t("pi.method")}</th><th>{t("pi.jt.cycle")}</th><th>{t("c.result")}</th><th>{t("pi.jt.defect")}</th><th>{t("pi.jt.report")}</th><th>{t("c.date")}</th><th>{t("c.inspector")}</th></tr></thead>
               <tbody>{h.ndt.map((n, i) => (
-                <tr key={i}><td className="mono">{n.method}</td><td className="mono">{n.cycle === 0 ? t("pi.jt.first") : `R${n.cycle}`}</td>
-                  <td><span className={"pill " + (RESULT[n.result] || "")}>{RESULT[n.result] !== undefined ? t(`pi.jt.res.${n.result}`) : n.result}</span></td>
+                <tr key={i}><td><span className="ndt-method">{n.method}</span></td><td className="mono">{n.cycle === 0 ? t("pi.jt.first") : `R${n.cycle}`}</td>
+                  <td><span className={`ndt-status${NDT_STATUS[n.result] ? ` ndt-status--${NDT_STATUS[n.result]}` : ""}`}>{RESULT[n.result] !== undefined ? t(`pi.jt.res.${n.result}`) : n.result}</span></td>
                   <td className="sm">{n.defect || "—"}</td><td className="mono sm">{n.reportNo || "—"}</td>
                   <td className="sm">{fa(n.inspectedOn)}</td><td className="sm">{n.inspector || "—"}</td></tr>
               ))}</tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>

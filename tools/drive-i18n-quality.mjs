@@ -34,7 +34,7 @@ const setLang = async (lang) => {
 };
 // The page's own words: what the page writes, not the project's data in the table cells.
 const chrome = () => page.evaluate(() => {
-  const sel = ".page h1, .page h2:not(.mono), .page th, .page label, .page button, .page .kpi .l, .page .kpi .b, .page .empty-note, .page .pagehead .sub, .page option, .page .muted.sm:not(td *), .page .tk-n";
+  const sel = ".page h1, .page h2:not(.mono), .page th, .page label, .page button, .page .kpi .l, .page .kpi .b, .page .ndt-summary__label, .page .ndt-status, .page .empty-note, .page .pagehead .sub, .page option, .page .muted.sm:not(td *), .page .tk-n";
   return [...document.querySelectorAll(sel)].filter((n) => n.offsetParent !== null || n.tagName === "OPTION")
     .map((n) => n.innerText || n.textContent).map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
 });

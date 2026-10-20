@@ -14,6 +14,9 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  */
 const TONE = { accepted: "ok", accepted_by_sample: "ok", not_welded: "", awaiting: "warn", awaiting_sample: "warn", progressive: "warn",
   rejected: "bad", full_examination: "bad", extension_unknown: "bad", unknown: "bad", sample_not_drawn: "bad", welder_unsampled: "bad", no_welder: "bad" };
+// the tones in the owner's NDT status style (app/ui-ux-ndt.css); a joint not yet welded has none
+const NDT_STATUS = { ok: "passed", warn: "pending", bad: "failed" };
+const ndtStatus = (k) => `ndt-status${NDT_STATUS[TONE[k]] ? ` ndt-status--${NDT_STATUS[TONE[k]]}` : ""}`;
 
 export default function NdtJointsPage() {
   const { projectId, role, call } = usePlatform();
@@ -38,7 +41,6 @@ export default function NdtJointsPage() {
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">{t("common.loading")}</p>;
   const c = data.counts;
-  const methodsText = (r) => r.methods.map((m) => `${m.method} ${m.percent}%`).join(" + ");
   const scope = (k) => L(`ndt.scope.${k}`, data.scopes[k]);
   const jt = (k) => L(`ndt.joint.${k}`, data.jointTypes[k]);
   const status = (k) => L(`ndt.status.${k}`, data.statusText[k]);
@@ -51,6 +53,16 @@ export default function NdtJointsPage() {
         <span className="sub">{t("ndtj.sub", { total: c.total, welded: c.welded, done: c.done, unknown: c.unknown })}</span>
       </div>
       {msg && <p className={msg.ok ? "muted" : "err"}>{msg.text}</p>}
+
+      {/* the same four counts as the line above, as summary cards */}
+      <div className="ndt-summary">
+        {[["total", c.total], ["welded", c.welded], ["done", c.done], ["unknown", c.unknown]].map(([k, v]) => (
+          <div key={k} className="ndt-summary__card" data-count={k}>
+            <span className="ndt-summary__label">{t(`ndtj.sum.${k}`)}</span>
+            <span className="ndt-summary__value">{v}</span>
+          </div>
+        ))}
+      </div>
 
       <Tabs name="ndt-joints">
       <div className="card">
@@ -82,7 +94,7 @@ export default function NdtJointsPage() {
           ))}
           {data.lots.map((l) => (
             <p key={`${l.group}|${l.jointType}|${l.method}|${l.welderId}`} className="sm">
-              <b>{l.groupLabel}</b> — {l.method} — {t("ndtj.welderStamp", { stamp: l.stamp })}: <span className={`pill ${TONE[l.status]}`}>{status(l.status)}</span>
+              <b>{l.groupLabel}</b> — {l.method} — {t("ndtj.welderStamp", { stamp: l.stamp })}: <span className={ndtStatus(l.status)}>{status(l.status)}</span>
               {l.defects.length > 0 && t("ndtj.defects", { list: list(l.defects) })}
               {l.drawn.length > 0 && t("ndtj.drawnList", { list: list(l.drawn) })}
               {l.waiting.length > 0 && t("ndtj.waiting", { list: list(l.waiting) })}
@@ -102,9 +114,9 @@ export default function NdtJointsPage() {
                 <tr key={j.id} data-key={j.id}>
                   <td className="mono">{j.jointNo}</td><td className="sm">{scope(j.scope)}</td><td className="mono">{j.parent}</td>
                   <td className="sm">{jt(j.jointType)}{j.thicknessMm && ` · ${j.thicknessMm} mm`}</td>
-                  <td className="mono sm">{methodsText(j) || "—"}</td>
+                  <td>{j.methods.length ? <span className="ndt-methods">{j.methods.map((m) => <span key={m.method} className="ndt-method">{m.method} {m.percent}%</span>)}</span> : "—"}</td>
                   <td className="mono">{j.stamp || "—"}{j.weldedOn && <div className="muted sm">{j.weldedOn}</div>}</td>
-                  <td><span className={`pill ${TONE[j.status]}`}>{status(j.status)}</span>
+                  <td><span className={ndtStatus(j.status)}>{status(j.status)}</span>
                     {j.methods.length > 1 && <div className="muted sm">{j.methods.map((m) => `${m.method}: ${m.text}`).join(" · ")}</div>}</td>
                   <td><button className="btn ghost" onClick={() => setOpen(open === j.id ? null : j.id)}>{open === j.id ? t("common.close") : t("ndtj.record")}</button></td>
                 </tr>
