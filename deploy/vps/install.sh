@@ -53,7 +53,8 @@ die()  { printf '   [FAIL] %s\n' "$*" >&2; exit 1; }
 say "۱. بسته‌های سیستم"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq git curl ca-certificates xz-utils caddy tesseract-ocr poppler-utils python3-opencv python3-numpy >/dev/null
+# one list for this and for `epc deps`, which installs what a later update adds
+apt-get install -y -qq $(grep -v '^#' "$APP_DIR/deploy/vps/packages.txt" | xargs) >/dev/null
 ok "git, curl, caddy $(caddy version 2>/dev/null | cut -d' ' -f1)"
 
 # ── 2. Node 22 ────────────────────────────────────────────────────────────
