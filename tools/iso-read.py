@@ -1,0 +1,369 @@
+"""What an isometric sheet prints at each weld marker — read without a model.
+
+    python3 -I tools/iso-read.py <sheet.pdf|.png|.jpg> [--page 1] [--dpi 200] [--debug out.png]
+
+Prints one JSON object: { "orientation", "marks": [ {no, shape, outline,
+label, box} ], "rejected": [...] }. The same `marks` a model's `welds` pass
+reports (lib/register/weld-marks.mjs), and nothing more: shop or field, the
+joint type and the register are decided there, by the project's declared
+symbol convention and the sheet's BOM.
+
+How a marker is found, all of it plain image processing (OpenCV) and a
+local OCR engine (tesseract), no network, no model:
+
+  1. The page is turned upright: of the four turns, the one in which the
+     most frames hold a weld number.
+  2. Every enclosed white region (a hole in the ink) of marker size is a
+     candidate frame. A frame is a thin closed stroke around it — a square
+     (four corners, square aspect, filling its box) or a circle (round:
+     nearest over farthest outline point from the centre above 0.9, which
+     the spool mark's hexagon, about 0.84, is not).
+  3. Table cells are square holes too: a candidate inside a stack of at
+     least three long horizontal rules (the BOM table, the title block) is
+     dropped.
+  4. The inside of the frame is read as a weld number (digits, an optional
+     "-n" suffix) four ways and by majority; a frame holding two lines of
+     text (an instrument bubble, a material box) or no number is not a weld
+     marker.
+  5. THD, FFW or BR printed near a frame — above, below or beside — is the
+     label of the nearest frame, closest pairs first.
+
+Measured on the 54 golden sheets of eval/cases/golden (npm run eval:reader;
+docs/epc-llm/08-no-model-reader.md).
+
+What it does not do: dashed frames (a joint of the neighbouring sheet) are
+not closed and are not found; that is the right answer for the register,
+which excludes them, but they are not reported either. Sizes, branches and
+spools are not read here.
+"""
+import sys, json, subprocess, tempfile, os, re
+import numpy as np, cv2
+
+args = sys.argv[1:]
+src = args[0]
+dpi = int(args[args.index("--dpi") + 1]) if "--dpi" in args else 200
+page = int(args[args.index("--page") + 1]) if "--page" in args else 1
+debug = args[args.index("--debug") + 1] if "--debug" in args else None
+S = dpi / 200.0                     # every size below is for 200 dpi
+
+
+def load(path):
+    if path.lower().endswith(".pdf"):
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run(["pdftoppm", "-r", str(dpi), "-gray", "-png", "-f", str(page), "-l", str(page), path, f"{d}/p"], check=True)
+            f = [x for x in os.listdir(d) if x.endswith(".png")][0]
+            return cv2.imread(f"{d}/{f}", cv2.IMREAD_GRAYSCALE)
+    return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+
+
+def tess(img, psm, extra=()):
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        cv2.imwrite(f.name, img)
+        name = f.name
+    try:
+        # one thread: its own threading only slows a server reading several sheets at once
+        r = subprocess.run(["tesseract", name, "-", "--psm", str(psm), *extra], capture_output=True, text=True,
+                           env={**os.environ, "OMP_THREAD_LIMIT": "1"})
+        return r.stdout
+    finally:
+        os.unlink(name)
+
+
+def table_boxes(ink):
+    """Bounding boxes of the ruled tables: where long horizontal rules stack."""
+    k = cv2.getStructuringElement(cv2.MORPH_RECT, (int(260 * S), 1))
+    rules = cv2.morphologyEx(ink, cv2.MORPH_OPEN, k)
+    n, lab, st, _ = cv2.connectedComponentsWithStats(rules)
+    lines = [st[i] for i in range(1, n) if st[i][2] >= 260 * S]
+    boxes = []
+    for x, y, w, h, _ in lines:
+        # a rule with another rule of overlapping span within 400 px below or above is part of a table
+        mates = [l for l in lines if abs(l[1] - y) < 400 * S and abs(l[1] - y) > 5 and min(x + w, l[0] + l[2]) - max(x, l[0]) > 0.5 * min(w, l[2])]
+        # a table stacks rules: two long lines are a border and a dimension
+        # line as often as a table (25-1007: the sheet border and the line
+        # under weld 1 hid both its welds)
+        if len(mates) >= 2:
+            ys = [y] + [l[1] for l in mates]
+            boxes.append((x - 4, min(ys) - 4, x + w + 4, max(ys) + 4))
+    return boxes
+
+
+def inside(b, boxes):
+    x0, y0, x1, y1 = b
+    return any(x0 >= a[0] and x1 <= a[2] and y0 >= a[1] and y1 <= a[3] for a in boxes)
+
+
+def roundness(c):
+    """Nearest over farthest point of the outline from its centre: a circle
+    is about 0.95, a hexagon (the spool mark) about 0.84."""
+    m = cv2.moments(c)
+    if m["m00"] == 0:
+        return 0
+    d = np.hypot(c[:, 0, 0] - m["m10"] / m["m00"], c[:, 0, 1] - m["m01"] / m["m00"])
+    return d.min() / d.max()
+
+
+def batch_read(crops, psm, whitelist):
+    """Read many small images in one tesseract run: stacked on one canvas
+    with white space between, each read back by where its words fall. One
+    process per page instead of one per marker (a sheet went from minutes
+    to seconds) — the same engine and settings either way."""
+    if not crops:
+        return []
+    gap = 60
+    width = max(c.shape[1] for c in crops) + 2 * gap
+    height = sum(c.shape[0] + gap for c in crops) + gap
+    canvas = np.full((height, width), 255, np.uint8)
+    spans, y = [], gap
+    for c in crops:
+        canvas[y:y + c.shape[0], gap:gap + c.shape[1]] = c
+        spans.append((y, y + c.shape[0]))
+        y += c.shape[0] + gap
+    out = tess(canvas, psm, ["-c", f"tessedit_char_whitelist={whitelist}", "-c", "preserve_interword_spaces=1", "tsv"])
+    words = [[] for _ in crops]
+    for line in out.splitlines()[1:]:
+        f = line.split("\t")
+        if len(f) < 12 or not f[11].strip():
+            continue
+        left, top, h = int(f[6]), int(f[7]), int(f[9])
+        cy = top + h / 2
+        for i, (a, b) in enumerate(spans):
+            if a - gap / 2 <= cy <= b + gap / 2:
+                words[i].append((left, f[11].strip()))
+                break
+    return [" ".join(t for _, t in sorted(ws)) for ws in words]
+
+
+NUMBER = re.compile(r"\d{1,3}(-\d{1,2})?")
+
+
+def number_crops(g, x, y, w, h, contour=None):
+    """The inside of a frame four ways — grey and binarized, 2× and 3×. A
+    circle's crop is blanked outside the hole's own outline (pulled in 2 px):
+    its arc in the crop's corners took the "1" of "15"."""
+    pad = int(max(w, h) * 0.12)
+    crop = g[y:y + h, x:x + w].copy()
+    if contour is not None:
+        mask = np.zeros(crop.shape, np.uint8)
+        cv2.drawContours(mask, [contour - [x, y]], -1, 255, -1)
+        crop[cv2.erode(mask, np.ones((5, 5), np.uint8)) == 0] = 255
+    crop = crop[pad:h - pad, pad:w - pad]
+    _, bw = cv2.threshold(crop, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    out = []
+    for base in (crop, bw):
+        b = cv2.copyMakeBorder(base, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+        for f in (2, 3):
+            out.append(cv2.resize(b, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC))
+    return out
+
+
+def text_lines(img):
+    """Rows of text in a binarized crop: bands of inked rows split by a
+    blank run at least a twentieth of the crop high. Any ink counts — the
+    thin stroke joining a bold "5"'s bar to its bowl is a row of text too —
+    but a band with under a quarter of the main band's ink is a speck of a
+    neighbouring line (an insulation scallop under "23"), not text."""
+    rows = (img < 128).sum(axis=1)
+    gap_min = max(3, img.shape[0] // 20)
+    bands, cur, blank = [], None, gap_min
+    for n in rows:
+        if n > 0:
+            if cur is None or blank >= gap_min:
+                cur = [0]
+                bands.append(cur)
+            cur[0] += int(n)
+            blank = 0
+        else:
+            blank += 1
+    if not bands:
+        return 0
+    top = max(b[0] for b in bands)
+    return sum(1 for b in bands if b[0] >= 0.25 * top)
+
+
+def read_numbers(g, cands):
+    """Each frame's number: the reading most of the four variants agree on.
+    Every single setting failed on some golden marker (a lone bold "9" lost
+    at 2× grey; "15" read "18" at 3× binarized); the vote is right on both.
+    A frame no variant read as a line gets one try per variant as a single
+    character."""
+    variants = [number_crops(g, *c["xywh"], c["contour"] if c["shape"] == "circle" else None) for c in cands]
+    # A weld frame holds one line: its number. An instrument bubble ("FG"
+    # over "8151", read 85 through the digit whitelist) and a material box
+    # ("MATL" over "1P1", read 11) hold two, and are not weld markers.
+    lines = [text_lines(v[1]) for v in variants]
+    votes = [{} for _ in cands]
+    for k in range(4):
+        for i, t in enumerate(batch_read([v[k] for v in variants], 6, "0123456789-")):
+            t = t.replace(" ", "")
+            if NUMBER.fullmatch(t):
+                votes[i][t] = votes[i].get(t, 0) + 1
+    for i, n in enumerate(lines):
+        if n != 1:
+            votes[i] = {}
+            variants[i] = None
+    for i, v in enumerate(variants):
+        if votes[i] or v is None:
+            continue
+        for k in (1, 3):
+            t = tess(v[k], 10, ["-c", "tessedit_char_whitelist=0123456789-"]).strip()
+            if NUMBER.fullmatch(t):
+                votes[i][t] = votes[i].get(t, 0) + 1
+    return [max(v.items(), key=lambda kv: (kv[1], len(kv[0])))[0] if v else "" for v in votes]
+
+
+def batch_words(crops, psm, whitelist):
+    """Like batch_read, but every word with its box in its own crop's pixels."""
+    if not crops:
+        return []
+    gap = 60
+    width = max(c.shape[1] for c in crops) + 2 * gap
+    height = sum(c.shape[0] + gap for c in crops) + gap
+    canvas = np.full((height, width), 255, np.uint8)
+    spans, y = [], gap
+    for c in crops:
+        canvas[y:y + c.shape[0], gap:gap + c.shape[1]] = c
+        spans.append(y)
+        y += c.shape[0] + gap
+    out = tess(canvas, psm, ["-c", f"tessedit_char_whitelist={whitelist}", "tsv"])
+    words = []
+    for line in out.splitlines()[1:]:
+        f = line.split("\t")
+        if len(f) < 12 or not f[11].strip():
+            continue
+        left, top, w, h = int(f[6]), int(f[7]), int(f[8]), int(f[9])
+        cy = top + h / 2
+        for i, y0 in enumerate(spans):
+            if y0 <= cy <= y0 + crops[i].shape[0]:
+                words.append((i, left - gap, top - y0, w, h, f[11].strip()))
+                break
+    return words
+
+
+LABELS = ("THD", "FFW", "BR")
+
+
+def read_labels(g, marks):
+    """THD / FFW / BR printed near a frame — above, below, or beside it.
+    Each word found is placed back on the page and given to the NEAREST
+    frame: a label printed between two frames belongs to one of them, not
+    both (25-1003: FFW between welds 15 and 13)."""
+    H, W = g.shape
+    crops, origin = [], []
+    for m in marks:
+        x, y, w, h = m["xywh"]
+        x0, y0 = int(max(0, x - 1.3 * w)), int(max(0, y - 0.9 * h))
+        x1, y1 = int(min(W, x + 2.3 * w)), int(min(H, y + 1.9 * h))
+        crops.append(cv2.resize(g[y0:y1, x0:x1], None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC))
+        origin.append((x0, y0))
+    found = []
+    for i, x, y, w, h, t in batch_words(crops, 11, "THDFWBR"):
+        if t.upper() not in LABELS:
+            continue
+        cx, cy = origin[i][0] + (x + w / 2) / 2, origin[i][1] + (y + h / 2) / 2
+        if not any(abs(cx - a) < 12 and abs(cy - b) < 12 and t2 == t.upper() for a, b, t2 in found):
+            found.append((cx, cy, t.upper()))
+    # closest pairs first; a word and a frame are each used once
+    def gap(m, cx, cy):
+        x, y, w, h = m["xywh"]
+        dx = max(x - cx, 0, cx - (x + w))
+        dy = max(y - cy, 0, cy - (y + h))
+        return (dx * dx + dy * dy) ** 0.5
+    pairs = sorted((gap(m, cx, cy), j, i) for i, (cx, cy, t) in enumerate(found) for j, m in enumerate(marks))
+    out, used = [""] * len(marks), set()
+    for d, j, i in pairs:
+        if i in used or out[j] or d > 1.1 * max(marks[j]["xywh"][2:]):
+            continue
+        out[j] = found[i][2]
+        used.add(i)
+    return out
+
+
+def detect(g):
+    """The weld markers of an upright page: (marks, rejected, tables)."""
+    _, ink = cv2.threshold(g, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    tables = table_boxes(ink)
+    cnts, hier = cv2.findContours(ink, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    lo, hi = 38 * S, 130 * S
+    marks, rejected = [], []
+    for i, c in enumerate(cnts):
+        if hier[0][i][3] < 0:          # outer stroke boundary; the holes are what we want
+            continue
+        x, y, w, h = cv2.boundingRect(c)
+        if not (lo <= w <= hi and lo <= h <= hi) or not (0.8 <= w / h <= 1.25):
+            continue
+        area = cv2.contourArea(c)
+        peri = cv2.arcLength(c, True)
+        if peri == 0:
+            continue
+        fill = area / (w * h)
+        circ = 4 * np.pi * area / (peri * peri)
+        approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+        if len(approx) == 4 and fill > 0.88:
+            shape = "square"
+        elif circ > 0.82 and 0.70 < fill < 0.85 and roundness(c) > 0.9:
+            shape = "circle"
+        else:
+            continue
+        # a thin frame: the band just outside the hole's own outline is ink
+        # (2–3 px at 200 dpi), whatever the hole's shape
+        band = max(2, int(3 * S))
+        x0, y0 = max(0, x - band - 1), max(0, y - band - 1)
+        sub = ink[y0:y + h + band + 1, x0:x + w + band + 1]
+        hole = np.zeros(sub.shape, np.uint8)
+        cv2.drawContours(hole, [c - [x0, y0]], -1, 255, -1)
+        ring = cv2.dilate(hole, np.ones((2 * band + 1, 2 * band + 1), np.uint8)) & ~hole
+        if (sub[ring > 0] > 0).mean() < 0.35:
+            continue
+        box = (x, y, x + w, y + h)
+        if inside(box, tables):
+            rejected.append({"why": "table", "box": box})
+            continue
+        marks.append({"shape": shape, "outline": "solid", "box": [int(v) for v in box], "xywh": (x, y, w, h), "contour": c})
+    # the numbers, then the labels, each in one pass over the page
+    nos = read_numbers(g, marks)
+    for m, no in zip(marks, nos):
+        m["no"] = no
+    for m in [m for m in marks if not m["no"]]:
+        rejected.append({"why": "no number", "shape": m["shape"], "box": m["box"]})
+    marks = [m for m in marks if m["no"]]
+    return marks, rejected, tables
+
+
+def main():
+    g0 = load(src)
+    # Which way up: the turn in which the most frames hold a weld number.
+    # Tesseract's orientation pass was tried first and is not used: on the
+    # golden set it turned 18 upright sheets over (an upside-down "16" reads
+    # "91"). The page as rendered (its PDF /Rotate applied) wins a tie.
+    best = None
+    for rot in (0, 180, 90, 270):
+        turn = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}[rot]
+        g = cv2.rotate(g0, turn) if turn is not None else g0
+        marks, rejected, tables = detect(g)
+        if best is None or len(marks) > len(best[1]):
+            best = (g, marks, rejected, tables, rot)
+    g, marks, rejected, tables, rot = best
+    for m, lab in zip(marks, read_labels(g, marks)):
+        m["label"] = lab
+    marks = [{k: m[k] for k in ("no", "shape", "outline", "label", "box")} for m in marks]
+    # one marker per number and place: a number read twice at one spot is one marker
+    seen, out = set(), []
+    for m in sorted(marks, key=lambda m: (m["box"][1], m["box"][0])):
+        k = (m["no"], m["box"][0] // 20, m["box"][1] // 20)
+        if k not in seen:
+            seen.add(k)
+            out.append(m)
+    if debug:
+        dbg = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
+        for t in tables:
+            cv2.rectangle(dbg, t[:2], t[2:], (200, 200, 0), 2)
+        for m in out:
+            b = m["box"]
+            cv2.rectangle(dbg, (b[0], b[1]), (b[2], b[3]), (0, 0, 255) if m["shape"] == "square" else (0, 160, 0), 3)
+            cv2.putText(dbg, m["no"] + (" " + m["label"] if m["label"] else ""), (b[2] + 4, b[1] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+        cv2.imwrite(debug, dbg)
+    print(json.dumps({"orientation": rot, "marks": out, "rejected": rejected}))
+
+
+main()

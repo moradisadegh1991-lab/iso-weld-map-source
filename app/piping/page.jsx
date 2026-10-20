@@ -23,6 +23,7 @@ import { useProjectData } from "../../lib/client/platform.mjs";
 import { prepare, prepareSource } from "../../lib/client/image-prep.mjs";
 import { isPdf, openPdf, renderPage } from "../../lib/client/pdf.mjs";
 import PdfSheetPicker from "../../components/PdfSheetPicker";
+import { base64FromBuffer } from "../../lib/client/base64.mjs";
 import { DISCLAIMER_FA } from "../../lib/disclaimer.mjs";
 
 export default function Page() {
@@ -44,6 +45,12 @@ export default function Page() {
   const [strictBom, setStrictBom] = useState(true);
   // What the rules said about a register read from the printed joint numbers.
   const [marksInfo, setMarksInfo] = useState(null);
+  // How a sheet is read: a model (the three passes), or with no model at all —
+  // OpenCV and a local tesseract on this server read the printed weld markers
+  // (app/api/read-local, tools/iso-read.py). Remembered on this browser.
+  const [reader, setReaderState] = useState("model");
+  useEffect(() => { try { const r = localStorage.getItem("epc.isoReader"); if (r === "local" || r === "model") setReaderState(r); } catch { /* ignore */ } }, []);
+  const setReader = (r) => { setReaderState(r); try { localStorage.setItem("epc.isoReader", r); } catch { /* ignore */ } };
   const [renderMode, setRenderMode] = useState("solid");
   const [colorBy, setColorBy] = useState("spool");
   const [editing, setEditing] = useState("");
@@ -203,6 +210,10 @@ export default function Page() {
       return;
     }
 
+    if (reader === "local") {
+      setErr("خواندن بدون مدل فقط برای فایل PDF است؛ برای تصویر، روش «مدل» را انتخاب کنید یا PDF نقشه را بدهید.");
+      return;
+    }
     try {
       setBusy("آماده‌سازی تصویر…");
       setSourceFile(f);
@@ -298,6 +309,7 @@ export default function Page() {
   async function onPdfPage(index, source = pdf) {
     if (!source) return;
     setErr(null); setNote(null); setSelected(null);
+    if (reader === "local") return readLocal(index, source);
     try {
       setBusy(`رندر برگ ${index} در ۳۰۰ DPI…`);
       const { canvas, effectiveDpi } = await renderPage(source.doc, index, { dpi: 300 });
@@ -308,6 +320,44 @@ export default function Page() {
       });
     } catch (e) {
       setErr(e.message);
+      setBusy("");
+    }
+  }
+
+  /**
+   * Read one sheet with no model: the server finds the weld frames and reads
+   * their numbers (OpenCV + tesseract). What comes back is what a model's
+   * `welds` pass returns — number, frame shape, outline, label — and goes
+   * through the same rules (lib/register/weld-marks.mjs) into the weld-list
+   * form, where a person types the drawing number and completes size, type
+   * and spool. Nothing on the title block or the BOM is read here.
+   */
+  async function readLocal(index, source) {
+    try {
+      setBusy(`خواندن برگ ${index} بدون مدل (OCR روی سرور)…`);
+      const { canvas } = await renderPage(source.doc, index, { dpi: 100 });
+      setPreview(canvas.toDataURL("image/jpeg", 0.6));
+      setPdfPage(index);
+      const pdfBase64 = base64FromBuffer(new Uint8Array(await source.file.arrayBuffer()));
+      const r = await session.call("/api/read-local", { method: "POST",
+        body: JSON.stringify({ projectId: session.projectId, pdfBase64, page: index }) });
+      const meta = { drawingNo: "", rev: "", sheet: "", lineNo: "", unit: "", pipingClass: "", nps: null, schedule: "" };
+      // which reader produced the markers travels with them: the review says so, and the saved run keeps it
+      const weldMarks = { marks: r.marks, reader: "local", readerVersion: r.reader };
+      const conv = weldListFromMarks({ meta, bom: [], weldMarks },
+        { shop: profile.data?.project?.weld_symbol_shop, field: profile.data?.project?.weld_symbol_field,
+          thdLabelled: Boolean(profile.data?.project?.weld_thd_labelled) });
+      const final = { meta, bom: [], nodes: [], edges: [], notes: [], weldMarks, weldList: conv.weldList };
+      setMarksInfo(conv);
+      setData(final);
+      setEditing(JSON.stringify(final, null, 2));
+      setOpenRun(null);
+      setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s · ${r.marks.length} نشانگر جوش` +
+        (r.orientation ? ` · صفحه ${r.orientation}° چرخانده شد` : "") +
+        (conv.problems.length ? ` · ${conv.problems.join(" ")}` : "") + (conv.notes.length ? ` · ${conv.notes.join(" · ")}` : ""));
+    } catch (e) {
+      setErr(e.message);
+    } finally {
       setBusy("");
     }
   }
@@ -391,6 +441,15 @@ export default function Page() {
                 <em>اتصالی که هیچ ردیفی در لیست متریال ندارد از طراحی حذف و گزارش می‌شود</em>
               </span>
             </label>
+          </div>
+
+          <div className="iso-reader" data-reader={reader}>
+            <span className="muted sm">روش خواندن نقشه:</span>
+            <label className="sm"><input type="radio" name="iso-reader" value="model" checked={reader === "model"}
+              onChange={() => setReader("model")} /> مدل هوش مصنوعی (کلید API، توکن)</label>
+            <label className="sm"><input type="radio" name="iso-reader" value="local" checked={reader === "local"}
+              onChange={() => setReader("local")} /> بدون مدل — OCR روی همین سرور، بدون توکن (فقط PDF)</label>
+            {reader === "local" && <span className="muted sm">شمارهٔ جوش، شکل قاب و برچسب THD/FFW/BR خوانده می‌شود؛ شمارهٔ نقشه، قطر، نوع اتصال و اسپول را شخص در فرم کامل می‌کند.</span>}
           </div>
 
           <div className={"drop" + (dim ? "" : " locked")}
@@ -500,10 +559,17 @@ export default function Page() {
         <section className="stage">
           {data.weldMarks && marksInfo && (
             <div className="pane" data-weld-marks>
-              <p className="note mono">
-                رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — مدل فقط شماره و شکل قاب را خواند؛
-                محل از نماد اعلام‌شدهٔ پروژه و نوع از BOM همین برگ تعیین شد. جای خالی را تکمیل کنید.
-              </p>
+              {data.weldMarks.reader === "local" ? (
+                <p className="note mono" data-reader="local">
+                  رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — خوانده‌شده بدون مدل و بدون توکن (OCR روی سرور):
+                  شماره، شکل قاب و برچسب کنار آن؛ محل از نماد اعلام‌شدهٔ پروژه تعیین شد. شمارهٔ نقشه، قطر، نوع اتصال و اسپول را تکمیل کنید.
+                </p>
+              ) : (
+                <p className="note mono">
+                  رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — مدل فقط شماره و شکل قاب را خواند؛
+                  محل از نماد اعلام‌شدهٔ پروژه و نوع از BOM همین برگ تعیین شد. جای خالی را تکمیل کنید.
+                </p>
+              )}
               {marksInfo.problems.map((x) => <p key={x} className="err sm">{x}</p>)}
               {marksInfo.notes.map((x) => <p key={x} className="muted sm">{x}</p>)}
             </div>
