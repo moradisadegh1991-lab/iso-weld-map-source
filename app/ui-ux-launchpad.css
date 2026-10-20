@@ -1,0 +1,422 @@
+/*
+ * EPC Platform — Launchpad UI/UX refinement
+ * Targets classes found in app/page.jsx and Shell.jsx.
+ * Presentation only: no API, permission, or business logic changes.
+ *
+ * The owner's file, with one change where it met the markup here: the
+ * page pads top and bottom only — `.body` already gives the side gutter and
+ * the section tabs above the page sit on it, so inline padding would put
+ * the page out of line with its own tabs.
+ */
+
+/* ---------- Dashboard page ---------- */
+
+.page {
+  width: 100%;
+  max-width: 1600px;
+  min-width: 0;
+  margin-inline: auto;
+  padding-block: clamp(14px, 2vw, 28px);
+}
+
+.pagehead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 22px;
+}
+
+.pagehead h1 {
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(20px, 2.3vw, 28px);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.pagehead .sub {
+  font-size: 12px;
+  line-height: 1.8;
+  opacity: .75;
+}
+
+/* ---------- KPI cards ---------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.tiles > .tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon title"
+    "icon description"
+    "value value";
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 4px;
+  min-width: 0;
+  min-height: 145px;
+  padding: 18px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surf);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color .16s ease, transform .16s ease;
+}
+
+.tiles > .tile .ic {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--rule);
+  border-radius: 11px;
+  background: var(--surf2);
+  font-size: 19px;
+}
+
+.tiles > .tile .t {
+  grid-area: title;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.tiles > .tile .d {
+  grid-area: description;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.9;
+  opacity: .75;
+  overflow-wrap: anywhere;
+}
+
+.tiles > .tile .big {
+  grid-area: value;
+  margin-top: 8px;
+  font-size: clamp(24px, 2.6vw, 32px);
+  font-weight: 800;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.tiles > .tile:hover {
+  border-color: var(--cy);
+  transform: translateY(-2px);
+}
+
+.tiles > .tile:focus-visible,
+.lp-tile:focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 3px;
+}
+
+/* ---------- Module groups ---------- */
+
+.lp-group {
+  min-width: 0;
+  margin-top: 26px;
+}
+
+.lp-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.lp-title::after {
+  content: "";
+  flex: 1;
+  min-width: 12px;
+  height: 1px;
+  background: var(--rule);
+}
+
+.lp-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.lp-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 118px;
+  padding: 15px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color .16s ease, background-color .16s ease,
+    transform .16s ease;
+}
+
+.lp-tile:hover {
+  border-color: var(--cy);
+  background: var(--surf2);
+  transform: translateY(-2px);
+}
+
+.lp-head {
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.lp-sub {
+  font-size: 11px;
+  line-height: 1.9;
+  opacity: .72;
+  overflow-wrap: anywhere;
+}
+
+.lp-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: auto;
+}
+
+.lp-ic {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--surf2);
+  font-size: 16px;
+}
+
+/* ---------- Feedback and empty states ---------- */
+
+.empty-note,
+.err,
+.okmsg {
+  min-width: 0;
+  padding: 13px 15px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 2;
+  overflow-wrap: anywhere;
+}
+
+.empty-note {
+  background: var(--surf);
+}
+
+.err {
+  border-color: #b45353;
+  background: #b4535310;
+}
+
+.okmsg {
+  border-color: #25845c;
+  background: #25845c10;
+}
+
+/* ---------- Application shell ---------- */
+
+.topbar {
+  min-width: 0;
+}
+
+.topbar > * {
+  min-width: 0;
+}
+
+.topbar .crumb {
+  overflow-wrap: anywhere;
+}
+
+.body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.section-tabs {
+  min-width: 0;
+}
+
+.st-list {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.st-list a {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ---------- Tablet ---------- */
+
+@media (max-width: 1100px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 11px;
+  }
+
+  .lp-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Phone ---------- */
+
+@media (max-width: 650px) {
+  .page {
+    padding-block: 14px;
+  }
+
+  .pagehead {
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-bottom: 22px;
+  }
+
+  .tiles > .tile {
+    min-height: 132px;
+    padding: 12px;
+    column-gap: 8px;
+  }
+
+  .tiles > .tile .ic {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 16px;
+  }
+
+  .tiles > .tile .t {
+    font-size: 12px;
+  }
+
+  .tiles > .tile .d {
+    font-size: 10px;
+  }
+
+  .tiles > .tile .big {
+    margin-top: 5px;
+    font-size: 25px;
+  }
+
+  .lp-group {
+    margin-top: 22px;
+  }
+
+  .lp-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .lp-tile {
+    min-height: 108px;
+    padding: 12px;
+  }
+
+  .lp-head {
+    font-size: 12px;
+  }
+
+  .lp-sub {
+    font-size: 10px;
+  }
+
+  .topbar .crumb {
+    max-width: 100%;
+  }
+}
+
+/* ---------- Very narrow screens ---------- */
+
+@media (max-width: 360px) {
+  .page {
+    padding-block: 10px;
+  }
+
+  .tiles {
+    gap: 7px;
+  }
+
+  .tiles > .tile {
+    padding: 9px;
+  }
+
+  .tiles > .tile .big {
+    font-size: 22px;
+  }
+
+  .lp-tiles {
+    gap: 7px;
+  }
+
+  .lp-tile {
+    padding: 10px;
+  }
+}
+
+/* ---------- Motion preferences ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .tiles > .tile,
+  .lp-tile {
+    transition: none;
+  }
+
+  .tiles > .tile:hover,
+  .lp-tile:hover {
+    transform: none;
+  }
+}
+
+/* ---------- Print ---------- */
+
+@media print {
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .tiles,
+  .lp-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tiles > .tile,
+  .lp-tile {
+    break-inside: avoid;
+    box-shadow: none;
+    transform: none;
+  }
+}

@@ -1,10 +1,12 @@
 /**
- * Drive the ERP refinement layer (app/design.css, end of file) in a real
- * browser and measure it: the launchpad and KPI tiles fill their grid
+ * Drive the ERP refinement layer (app/design.css, end of file) and the
+ * owner's UI/UX layers after it (app/ui-ux-*.css) in a real browser and
+ * measure them: the launchpad and KPI tiles fill their grid
  * columns, a card's first heading band reaches the card's edges (and runs on
  * under the form buttons beside it), and no page scrolls sideways — in
  * Persian, English and Arabic, dark and light, both densities, at desktop,
- * tablet and phone width.
+ * tablet and phone width. And what the UI/UX layers were adapted for: a
+ * table's cells still follow the density setting.
  * Screenshots go to SHOT_DIR for a look by eye.
  *   BASE_URL=http://localhost:3000 DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-ui-refinement.mjs
  */
@@ -60,6 +62,8 @@ const measure = () => page.evaluate(() => {
     const probe = document.createElement("i"); probe.style.color = "var(--ink)"; document.body.append(probe);
     out.lpInk = getComputedStyle(head).color === getComputedStyle(probe).color; probe.remove();
   }
+  const td = document.querySelector(".dtable tbody td");
+  if (td) out.cellPadY = parseFloat(getComputedStyle(td).paddingTop);
   const kt = document.querySelector(".tiles");
   if (kt) {
     const tiles = [...kt.querySelectorAll(":scope > .tile")];
@@ -98,14 +102,21 @@ for (const [lang, theme, width, density] of [["fa", "dark", 1500, "comfortable"]
     check(m.sideways <= 1 && m.bodySideways <= 1, `${tag}: no sideways scroll (${m.sideways}, ${m.bodySideways})`);
     if (m.lpTiles) {
       check(m.lpInk, `${tag}: a launchpad tile's title is in the ink colour, not the link colour`);
-      const want = width >= 1121 ? 4 : width > 820 ? 3 : width > 520 ? 2 : 1;
+      // ui-ux-launchpad.css: four, three at 1100px, two at 650px
+      const want = width > 1100 ? 4 : width > 650 ? 3 : 2;
       check(m.lpPerRow === Math.min(want, m.lpTiles), `${tag}: launchpad ${m.lpPerRow} per row (want ${want})`);
       if (m.lpTiles >= want) check(m.lpFill >= 95, `${tag}: launchpad tiles fill the row (${m.lpFill}%)`);
     }
     if (m.kpiTiles) {
-      const want = width > 820 ? 3 : width > 520 ? 2 : 1;
+      // ui-ux-launchpad.css: three, two at 1100px and on a phone
+      const want = width > 1100 ? 3 : 2;
       check(m.kpiPerRow === Math.min(want, m.kpiTiles), `${tag}: KPI tiles ${m.kpiPerRow} per row (want ${want})`);
       check(m.kpiClash === 0, `${tag}: each KPI value sits in its tile, clear of the title (${m.kpiClash} clash)`);
+    }
+    if (m.cellPadY != null) {
+      // ui-ux-data.css: --row-y + 2px (11/7) on a desk, +1 (10/6) to 820px, --row-y (9/5) on a phone
+      const want = { comfortable: 9, compact: 5 }[density] + (width > 820 ? 2 : width > 520 ? 1 : 0);
+      check(Math.abs(m.cellPadY - want) < 0.5, `${tag}: table cells follow the ${density} density (${m.cellPadY}px, want ${want})`);
     }
     const bad = m.cards.filter((c) => c.edge > 1.5 || Math.abs(c.top) > 1.5);
     if (m.cards.length) check(bad.length === 0, `${tag}: ${m.cards.length} card heading bands reach the card's edges${m.cards.some((c) => c.head) ? " (with buttons beside)" : ""}${bad.length ? " — off: " + JSON.stringify(bad.slice(0, 3)) : ""}`);

@@ -1,0 +1,252 @@
+/*
+ * ISO Weld Map — Data Tables & Forms UX
+ * Scope: visual presentation only.
+ * This file does not add search, filtering, validation or application logic.
+ *
+ * The owner's file, with these changes where it met the markup here:
+ *  - cell padding and font size follow the density setting (--row-y,
+ *    --row-x, --cell-fs; design.css) instead of fixed pixels — at the
+ *    default density they come out as the file gives them (11px 13px, 13px);
+ *    fixed values would have switched "compact" off for every table;
+ *  - long cell text wraps with break-word, not anywhere: `anywhere` lowers a
+ *    column's minimum width to one character, so a wide table squeezes its
+ *    columns letter by letter instead of scrolling;
+ *  - full-width, tall inputs leave checkboxes and radios alone.
+ */
+
+/* ---------- Data tables ---------- */
+
+.tablewrap,
+.wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dtable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--cell-fs) + .5px);
+  line-height: 1.7;
+}
+
+.dtable th {
+  position: relative;
+  font-weight: 700;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.dtable td {
+  vertical-align: middle;
+  overflow-wrap: break-word;
+}
+
+.dtable th,
+.dtable td {
+  padding: calc(var(--row-y) + 2px) calc(var(--row-x) + 3px);
+}
+
+.dtable tbody tr {
+  transition: background-color .15s ease;
+}
+
+@media (hover: hover) {
+  .dtable tbody tr:hover td {
+    background: var(--cy-soft);
+  }
+}
+
+.dtable td button,
+.dtable td .btn {
+  min-height: 34px;
+}
+
+/* Keep identifiers and numeric values easy to scan */
+.dtable td code,
+.dtable .number,
+.dtable .numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Forms ---------- */
+
+.field {
+  min-width: 0;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  line-height: 1.8;
+}
+
+.field :where(input:not([type="checkbox"], [type="radio"]), select, textarea),
+input.search,
+.tk-bar input,
+.tk-bar select {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  font: inherit;
+}
+
+.field :where(input:not([type="checkbox"], [type="radio"]), select, textarea) {
+  width: 100%;
+  border-radius: 8px;
+}
+
+.field :where(input:not([type="checkbox"], [type="radio"]), select) {
+  min-height: 42px;
+}
+
+.field textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder,
+input.search::placeholder {
+  opacity: .7;
+}
+
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled {
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.field input[aria-invalid="true"],
+.field select[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
+  border-color: #c94b4b;
+}
+
+.field :where(input, select, textarea):focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 2px;
+}
+
+/* ---------- Search and toolbar ---------- */
+
+.tk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tk-bar > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tk-bar input,
+.tk-bar select,
+input.search {
+  min-height: 40px;
+}
+
+.tk-bar button,
+.tk-bar .btn {
+  min-height: 40px;
+}
+
+/* ---------- Status and feedback messages ---------- */
+
+.err,
+.okmsg,
+.empty-note {
+  border-radius: 8px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.err,
+.okmsg {
+  padding: 10px 12px;
+}
+
+.empty-note {
+  padding: 20px 14px;
+  text-align: center;
+}
+
+/* ---------- Responsive layout ---------- */
+
+@media (max-width: 820px) {
+  .dtable th,
+  .dtable td {
+    padding: calc(var(--row-y) + 1px) var(--row-x);
+  }
+
+  .tk-bar {
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 520px) {
+  .dtable {
+    font-size: calc(var(--cell-fs) - .5px);
+  }
+
+  .dtable th,
+  .dtable td {
+    padding: var(--row-y) var(--row-x);
+  }
+
+  .field :where(input:not([type="checkbox"], [type="radio"]), select) {
+    min-height: 44px;
+  }
+
+  .field textarea {
+    min-height: 110px;
+  }
+
+  .tk-bar > input,
+  .tk-bar > select {
+    width: 100%;
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .dtable tbody tr {
+    transition: none;
+  }
+}
+
+/* ---------- Printing ---------- */
+
+@media print {
+  .tablewrap,
+  .wrap {
+    overflow: visible !important;
+    max-width: none !important;
+  }
+
+  .dtable {
+    width: 100%;
+    font-size: 10pt;
+  }
+
+  .dtable th,
+  .dtable td {
+    padding: 6px;
+  }
+
+  .dtable thead {
+    display: table-header-group;
+  }
+
+  .dtable tr {
+    break-inside: avoid;
+  }
+}

@@ -1,0 +1,252 @@
+/*
+ * ISO Weld Map — Dashboard UX Enhancement
+ * Visual-only layer. No changes to data, API, or business logic.
+ *
+ * The owner's file, with these left out or changed where they met the
+ * markup here:
+ *  - cards and folds keep design.css's radius and padding: the heading band
+ *    of a card reaches its edges by the card's own gap and rounds by its
+ *    radius (design.css, ERP layer), so another padding or radius here
+ *    would pull the band off the edge and square its corners;
+ *  - no `overflow: hidden` on a fold: it clips the pickers that open inside
+ *    one (the P6 chooser, the day picker), as it did on cards;
+ *  - a focused field inside a card colours the card's border (ui-ux-polish)
+ *    rather than drawing a second ring around the whole card;
+ *  - table cells wrap with break-word (see ui-ux-data.css).
+ */
+
+/* ---------- Dashboard layout ---------- */
+
+.page,
+.pagehead,
+.tiles,
+.lp-tiles,
+.lp-group {
+  min-width: 0;
+}
+
+.page {
+  width: 100%;
+}
+
+.pagehead {
+  margin-bottom: 20px;
+}
+
+.pagehead h1 {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- KPI cards ---------- */
+
+.tiles {
+  align-items: stretch;
+}
+
+.tile,
+.kpi {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border-radius: 12px;
+  transition:
+    border-color .18s ease,
+    box-shadow .18s ease,
+    background-color .18s ease;
+}
+
+.tile {
+  padding: 16px;
+  gap: 10px;
+}
+
+.tile .big {
+  display: block;
+  font-size: clamp(22px, 2.5vw, 32px);
+  font-weight: 750;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.tile :where(.label, .title, .sub) {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+@media (hover: hover) {
+  .tile:hover,
+  .kpi:hover {
+    box-shadow: 0 8px 24px
+      color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+}
+
+/* ---------- Module shortcuts ---------- */
+
+.lp-group {
+  margin-bottom: 22px;
+}
+
+.lp-title {
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.lp-tiles {
+  align-items: stretch;
+}
+
+.lp-tile {
+  min-width: 0;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.lp-tile .lp-head {
+  font-weight: 700;
+  line-height: 1.8;
+}
+
+.lp-tile .lp-sub {
+  line-height: 1.8;
+  opacity: .85;
+}
+
+.lp-ic {
+  flex-shrink: 0;
+}
+
+/* ---------- Cards and collapsible sections ---------- */
+
+.card,
+.fold {
+  min-width: 0;
+}
+
+.fold :where(h2, h3, summary) {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Data visualization containers ---------- */
+
+.chart,
+.chart-wrap,
+.dashboard-chart {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.chart :where(canvas, svg),
+.chart-wrap :where(canvas, svg),
+.dashboard-chart :where(canvas, svg) {
+  max-width: 100%;
+}
+
+/* ---------- Status badges ---------- */
+
+.status,
+.badge,
+[class*="status-"] {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+/* ---------- Tables on dashboard ---------- */
+
+.dtable {
+  width: 100%;
+  line-height: 1.7;
+}
+
+.dtable th {
+  font-weight: 700;
+}
+
+.dtable td {
+  overflow-wrap: break-word;
+}
+
+/* ---------- Responsive tablet ---------- */
+
+@media (max-width: 820px) {
+  .pagehead {
+    gap: 10px;
+  }
+
+  .tile {
+    padding: 13px;
+  }
+
+  .lp-group {
+    margin-bottom: 18px;
+  }
+}
+
+/* ---------- Responsive mobile ---------- */
+
+@media (max-width: 520px) {
+  .pagehead {
+    align-items: flex-start;
+  }
+
+  .pagehead h1 {
+    font-size: 19px;
+  }
+
+  .tile {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .tile .big {
+    font-size: 23px;
+  }
+
+  .lp-tile {
+    padding: 12px;
+  }
+
+  .lp-group {
+    margin-bottom: 16px;
+  }
+}
+
+/* ---------- Keyboard focus ---------- */
+
+.tile:focus-visible,
+.lp-tile:focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 3px;
+}
+
+/* ---------- Accessibility ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .kpi,
+  .lp-tile {
+    transition: none !important;
+  }
+}
+
+/* ---------- Print ---------- */
+
+@media print {
+  .tile,
+  .kpi,
+  .lp-tile {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  /* a card or fold can be longer than a page; kept whole it leaves a blank one */
+  .card,
+  .fold {
+    box-shadow: none !important;
+  }
+}

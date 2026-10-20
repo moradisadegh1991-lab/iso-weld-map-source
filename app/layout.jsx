@@ -2,6 +2,18 @@ import "@fontsource-variable/vazirmatn";
 import "@fontsource-variable/inter";
 import "./globals.css";
 import "./design.css";
+// the owner's UI/UX layers, after the design system they refine; each says
+// where a rule was changed to fit the markup here
+import "./ui-ux-polish.css";
+import "./ui-ux-data.css";
+import "./ui-ux-dashboard.css";
+import "./ui-ux-weld-map.css";
+import "./ui-ux-weld-form.css";
+import "./ui-ux-ndt.css";
+import "./ui-ux-repair.css";
+import "./ui-ux-mobile-inspector.css";
+import "./ui-ux-launchpad.css";
+import "./ui-ux-shell.css";
 import { PlatformProvider } from "../lib/client/platform.mjs";
 import { PrefsProvider } from "../lib/client/prefs.mjs";
 import Shell from "../components/platform/Shell";

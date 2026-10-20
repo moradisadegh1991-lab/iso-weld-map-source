@@ -1,0 +1,382 @@
+/*
+ * ISO Weld Map — Mobile Inspector UI
+ * UI-only enhancement. No business logic changes.
+ *
+ * Component classes (.mobile-inspector__*): no page carries them yet; a
+ * page opts in by taking the class names. The timeline rail and the table's
+ * alignment are written with logical sides (inline-start) instead of
+ * "right": the platform also runs in English, left to right, where a rail
+ * on the right would sit on the wrong side.
+ */
+
+/* ---------- Mobile inspector shell ---------- */
+
+.mobile-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.mobile-inspector *,
+.mobile-inspector *::before,
+.mobile-inspector *::after {
+  box-sizing: border-box;
+}
+
+.mobile-inspector__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mobile-inspector__title {
+  margin: 0;
+  font-size: clamp(18px, 4vw, 24px);
+  font-weight: 750;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.mobile-inspector__subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.9;
+  opacity: .75;
+}
+
+/* ---------- Key weld identification ---------- */
+
+.mobile-inspector__identity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+}
+
+.mobile-inspector__identity-item {
+  min-width: 0;
+}
+
+.mobile-inspector__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  line-height: 1.8;
+  opacity: .72;
+}
+
+.mobile-inspector__value {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-inspector__value--primary {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+/* ---------- Status and metadata ---------- */
+
+.mobile-inspector__status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mobile-inspector__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 5px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.mobile-inspector__status--pending {
+  border-color: #b88628;
+  background: #b8862815;
+}
+
+.mobile-inspector__status--complete {
+  border-color: #25845c;
+  background: #25845c15;
+}
+
+.mobile-inspector__status--attention {
+  border-color: #b45353;
+  background: #b4535315;
+}
+
+.mobile-inspector__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  line-height: 1.8;
+  opacity: .8;
+}
+
+/* ---------- Mobile action area ---------- */
+
+.mobile-inspector__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mobile-inspector__actions > button,
+.mobile-inspector__actions > a {
+  min-height: 42px;
+}
+
+.mobile-inspector__primary-action {
+  font-weight: 750;
+}
+
+/* ---------- Detail sections ---------- */
+
+.mobile-inspector__section {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+}
+
+.mobile-inspector__section-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.8;
+}
+
+.mobile-inspector__detail-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mobile-inspector__detail {
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.mobile-inspector__detail:last-child {
+  border-bottom: 0;
+}
+
+/* ---------- History timeline ---------- */
+
+.mobile-inspector__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.mobile-inspector__event {
+  position: relative;
+  min-width: 0;
+  padding-block: 0 18px;
+  padding-inline: 18px 0;
+  border-inline-start: 2px solid var(--rule);
+}
+
+.mobile-inspector__event:last-child {
+  padding-bottom: 0;
+  border-inline-start-color: transparent;
+}
+
+.mobile-inspector__event::before {
+  position: absolute;
+  top: 4px;
+  inset-inline-start: -6px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surf);
+  border-radius: 50%;
+  background: var(--cy);
+  content: "";
+}
+
+.mobile-inspector__event-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.mobile-inspector__event-date {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.8;
+  opacity: .7;
+}
+
+.mobile-inspector__event-description {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Tables: keep data readable ---------- */
+
+.mobile-inspector__table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-inspector__table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  text-align: start;
+  font-size: 12px;
+}
+
+.mobile-inspector__table th,
+.mobile-inspector__table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+  line-height: 1.8;
+  vertical-align: top;
+}
+
+.mobile-inspector__table th {
+  background: var(--surf2);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.mobile-inspector__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---------- Inputs and touch targets ---------- */
+
+.mobile-inspector :where(input, select, textarea) {
+  max-width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+
+.mobile-inspector :where(button, a, input, select) {
+  scroll-margin-block: 16px;
+}
+
+.mobile-inspector :where(button, a):focus-visible,
+.mobile-inspector :where(input, select, textarea):focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 3px;
+}
+
+/* ---------- Compact phone layouts ---------- */
+
+@media (max-width: 600px) {
+  .mobile-inspector {
+    gap: 10px;
+  }
+
+  .mobile-inspector__identity,
+  .mobile-inspector__section {
+    padding: 11px;
+    border-radius: 10px;
+  }
+
+  .mobile-inspector__detail-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .mobile-inspector__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-inspector__actions > button,
+  .mobile-inspector__actions > a {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .mobile-inspector__table {
+    min-width: 520px;
+  }
+}
+
+@media (max-width: 360px) {
+  .mobile-inspector__identity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-inspector__value--primary {
+    font-size: 15px;
+  }
+
+  .mobile-inspector__section-title {
+    font-size: 13px;
+  }
+}
+
+/* ---------- Motion and printing ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-inspector *,
+  .mobile-inspector *::before,
+  .mobile-inspector *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .mobile-inspector__actions {
+    display: none !important;
+  }
+
+  .mobile-inspector__section,
+  .mobile-inspector__identity {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  .mobile-inspector__table-wrap {
+    overflow: visible;
+  }
+
+  .mobile-inspector__table {
+    min-width: 0;
+    font-size: 10px;
+  }
+}

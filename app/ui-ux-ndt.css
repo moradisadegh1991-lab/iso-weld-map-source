@@ -1,0 +1,310 @@
+/*
+ * ISO Weld Map — NDT Tracking UI
+ * Visual-only stylesheet.
+ * No API, database, test-result or acceptance-criteria changes.
+ *
+ * Component classes (.ndt-*): no page carries them yet; a page opts in by
+ * taking the class names.
+ */
+
+/* ---------- NDT workspace ---------- */
+
+.ndt-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ndt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ndt-header__title {
+  margin: 0;
+  font-size: clamp(18px, 2vw, 24px);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.ndt-header__description {
+  margin: 5px 0 0;
+  font-size: 13px;
+  line-height: 1.9;
+  opacity: .75;
+}
+
+/* ---------- Summary cards ---------- */
+
+.ndt-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.ndt-summary__card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+}
+
+.ndt-summary__label {
+  display: block;
+  font-size: 12px;
+  line-height: 1.8;
+  opacity: .75;
+  overflow-wrap: anywhere;
+}
+
+.ndt-summary__value {
+  display: block;
+  margin-top: 7px;
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: 750;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Test method chips ---------- */
+
+.ndt-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ndt-method {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surf2);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* ---------- Test result status ---------- */
+
+.ndt-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.ndt-status--pending {
+  border-color: #b88628;
+  background: #b8862815;
+}
+
+.ndt-status--passed {
+  border-color: #25845c;
+  background: #25845c15;
+}
+
+.ndt-status--failed {
+  border-color: #c94b4b;
+  background: #c94b4b15;
+}
+
+.ndt-status--follow-up {
+  border-color: #c07828;
+  background: #c0782815;
+}
+
+/* ---------- Search and filter toolbar ---------- */
+
+.ndt-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+}
+
+.ndt-toolbar > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ndt-toolbar :where(input, select, button) {
+  min-height: 40px;
+  max-width: 100%;
+  font: inherit;
+}
+
+.ndt-toolbar :where(input, select) {
+  border-radius: 8px;
+}
+
+/* ---------- Results table ---------- */
+
+.ndt-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surf);
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ndt-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.ndt-table th,
+.ndt-table td {
+  padding: 11px 12px;
+  text-align: start;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.ndt-table th {
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.ndt-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.ndt-table tbody tr {
+  transition: background-color .15s ease;
+}
+
+@media (hover: hover) {
+  .ndt-table tbody tr:hover td {
+    background: var(--cy-soft);
+  }
+}
+
+.ndt-table :where(a, button):focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 2px;
+}
+
+/* ---------- Empty and informational states ---------- */
+
+.ndt-empty {
+  padding: 28px 16px;
+  text-align: center;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.ndt-note {
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--surf2);
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Tablet ---------- */
+
+@media (max-width: 900px) {
+  .ndt-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 520px) {
+  .ndt-workspace {
+    gap: 14px;
+  }
+
+  .ndt-summary {
+    gap: 8px;
+  }
+
+  .ndt-summary__card {
+    padding: 11px;
+  }
+
+  .ndt-summary__value {
+    font-size: 21px;
+  }
+
+  .ndt-toolbar {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .ndt-toolbar > :where(input, select, button) {
+    width: 100%;
+  }
+
+  .ndt-table th,
+  .ndt-table td {
+    padding: 9px 10px;
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .ndt-table tbody tr {
+    transition: none !important;
+  }
+}
+
+/* ---------- Printing ---------- */
+
+@media print {
+  .ndt-toolbar {
+    display: none !important;
+  }
+
+  .ndt-table-wrap {
+    overflow: visible;
+    border-color: #999;
+  }
+
+  .ndt-table {
+    font-size: 9pt;
+  }
+
+  .ndt-table thead {
+    display: table-header-group;
+  }
+
+  .ndt-table tr {
+    break-inside: avoid;
+  }
+}
