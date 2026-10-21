@@ -72,11 +72,12 @@ export default function AdminPage() {
         <button role="tab" aria-selected={tab === "users"} onClick={() => setTab("users")}>کاربران</button>
         <button role="tab" aria-selected={tab === "contracts"} onClick={() => setTab("contracts")}>تخصیص به قرارداد</button>
         <button role="tab" aria-selected={tab === "roles"} onClick={() => setTab("roles")}>نقش‌ها و اختیارات</button>
+        <button role="tab" aria-selected={tab === "usage"} onClick={() => setTab("usage")}>مصرف مدل (توکن)</button>
       </div>
       {msg && <p className="err" role="alert">{msg}</p>}
       {link && <LinkBox link={link} onClose={() => setLink(null)} />}
 
-      {tab === "roles" ? <Roles role={role} /> : !may ? (
+      {tab === "roles" ? <Roles role={role} /> : tab === "usage" ? (may ? <Usage projectId={projectId} call={call} /> : <p className="muted">حساب مصرف مدل با مدیر پروژه است.</p>) : !may ? (
         <p className="muted">مدیریت کاربران با مدیر پروژه است.</p>
       ) : err ? <p className="err">{err}</p> : !data ? <p className="muted">در حال بارگذاری…</p> : tab === "contracts" ? <ContractMembers data={data} post={post} /> : <>
         <div className="kpis">
@@ -396,3 +397,69 @@ function Roles({ role }) {
 function Kpi({ v, l, b, tone = "" }) {
   return <div className={`kpi ${tone}`}><span className="v">{v}</span><span className="l">{l}</span>{b && <span className="b">{b}</span>}</div>;
 }
+
+/**
+ * The project's model account (app/api/llm-usage): every call to a model —
+ * each pass of an isometric reading — with the tokens it spent. A cost is
+ * shown only for a model whose price the server is given (LLM_PRICES);
+ * tokens a provider did not report are counted as unknown, not as zero.
+ */
+const n = (v) => (v == null ? "—" : Number(v).toLocaleString("en-US"));
+function Usage({ projectId, call }) {
+  const [u, setU] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => { if (projectId) call(`/api/llm-usage?projectId=${projectId}`).then(setU).catch((e) => setErr(e.message)); }, [projectId, call]);
+  if (err) return <p className="err">{err}</p>;
+  if (!u) return <p className="muted">در حال بارگذاری…</p>;
+  const money = (v, row) => (v == null ? (row?.tokens ? "قیمت تنظیم نشده" : "—")
+    : `${v.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${u.currency}${row?.unpriced ? " + بی‌قیمت" : ""}`);
+  const Table = ({ title, rows, head }) => (
+    <div className="card">
+      <h2>{title}</h2>
+      {rows.length === 0 ? <p className="empty-note">هنوز فراخوانی ثبت نشده.</p> : (
+        <table className="dtable" data-usage={title}>
+          <thead><tr><th>{head}</th><th>فراخوان</th><th>ناموفق</th><th>توکن ورودی</th><th>توکن خروجی</th><th>جمع توکن</th><th>نامعلوم</th><th>هزینه</th></tr></thead>
+          <tbody>{rows.map((r) => (
+            <tr key={r.key}><td className="mono">{r.key}</td><td className="mono">{n(r.calls)}</td><td className="mono">{n(r.failed)}</td>
+              <td className="mono">{n(r.input)}</td><td className="mono">{n(r.output)}</td><td className="mono"><b>{n(r.tokens)}</b></td>
+              <td className="mono">{r.unknown ? n(r.unknown) : "—"}</td><td className="mono">{money(r.cost, r)}</td></tr>
+          ))}</tbody>
+        </table>
+      )}
+    </div>
+  );
+  const t = u.total;
+  return <>
+    <div className="kpis" data-usage-kpis>
+      <Kpi v={n(t.tokens)} l="کل توکن مصرف‌شده" />
+      <Kpi v={n(t.calls)} l={`فراخوان مدل · ${n(t.failed)} ناموفق`} />
+      <Kpi v={n(u.month.tokens)} l={u.month.limit == null ? "توکن این ماه (بدون سقف)" : `توکن این ماه از ${n(u.month.limit)}`}
+        tone={u.month.limit != null && u.month.left === 0 ? "bad" : u.month.limit != null && u.month.left < u.month.limit * 0.1 ? "warn" : ""} />
+      <Kpi v={money(t.cost, t)} l="هزینهٔ برآوردی" />
+    </div>
+    {t.unknown > 0 && <p className="muted sm">{n(t.unknown)} فراخوان توکن گزارش‌شده نداشت (خطای ارائه‌دهنده یا سرویسی که مصرف را نمی‌گوید)؛ در جمع‌ها صفر حساب نشده، جدا شمرده شده.</p>}
+    {Object.keys(u.prices).length === 0 && <p className="muted sm">قیمتی تنظیم نشده (LLM_PRICES روی سرور) — فقط توکن شمرده می‌شود.</p>}
+    <Table title="به تفکیک ماه" head="ماه" rows={u.byMonth} />
+    <Table title="به تفکیک مدل" head="مدل" rows={u.byModel} />
+    <Table title="به تفکیک کاربر" head="کاربر" rows={u.byUser} />
+    <Table title="به تفکیک پاس" head="پاس" rows={u.byPass} />
+    <div className="card">
+      <h2>آخرین فراخوان‌ها</h2>
+      {u.recent.length === 0 ? <p className="empty-note">هنوز فراخوانی ثبت نشده.</p> : (
+        <TableKit name="llm-usage">
+          <table className="dtable">
+            <thead><tr><th>زمان</th><th>کاربر</th><th>ارائه‌دهنده</th><th>مدل</th><th>پاس</th><th>ورودی</th><th>خروجی</th><th>نتیجه</th><th>زمان پاسخ</th><th>هزینه</th></tr></thead>
+            <tbody>{u.recent.map((r, i) => (
+              <tr key={i}><td className="mono sm">{new Date(r.at).toISOString().replace("T", " ").slice(0, 16)}</td><td>{r.who || "—"}</td>
+                <td className="mono sm">{r.provider}{r.via === "relay" ? " · رله" : ""}</td><td className="mono sm">{r.model}</td><td className="mono">{r.pass}</td>
+                <td className="mono">{n(r.input_tokens)}</td><td className="mono">{n(r.output_tokens)}</td>
+                <td>{r.ok ? <span className="pill ok">موفق</span> : <span className="pill bad">{r.error_code || "ناموفق"}</span>}</td>
+                <td className="mono sm">{r.ms != null ? `${(r.ms / 1000).toFixed(1)}s` : "—"}</td><td className="mono sm">{money(r.cost)}</td></tr>
+            ))}</tbody>
+          </table>
+        </TableKit>
+      )}
+    </div>
+  </>;
+}
+

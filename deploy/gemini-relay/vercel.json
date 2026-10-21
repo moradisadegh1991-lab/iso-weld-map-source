@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["iad1"],
+  "rewrites": [
+    { "source": "/v1beta/:path(.*)", "destination": "/api/relay?path=:path" }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [{ "key": "cache-control", "value": "no-store" }] }
+  ]
+}

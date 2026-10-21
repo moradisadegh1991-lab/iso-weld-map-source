@@ -67,7 +67,7 @@ const db = await createClient({ dataDir: process.env.PGLITE_DIR || ".pglite" });
     llm ? `${llm.id} · ${llm.defaultModel}${llm.configured ? "" : ` · ${C.d}پیکربندی نشده${C.o}`}`
         : "LLM_PROVIDER شناخته نشد",
     llm?.configured ? null
-      : llm?.id === "anthropic" ? "ANTHROPIC_API_KEY=…" : "LLM_BASE_URL=http://vllm:8000/v1");
+      : llm?.id === "anthropic" ? "ANTHROPIC_API_KEY=…" : llm?.id === "gemini" ? "GEMINI_API_KEY=…" : "LLM_BASE_URL=http://vllm:8000/v1");
 
   // ── 4b · the no-model reader ───────────────────────────────────────────
   // Not needed for a model's reading; needed for «بدون مدل». A server
