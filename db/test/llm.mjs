@@ -10,6 +10,7 @@ import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { parseLoose, cleanJsonText } from "../../lib/llm/parse.mjs";
 import { createAnthropicProvider } from "../../lib/llm/anthropic.mjs";
 import { createOpenAiCompatProvider } from "../../lib/llm/openai-compat.mjs";
+import { createGeminiProvider } from "../../lib/llm/gemini.mjs";
 import { createLlmClient } from "../../lib/llm/index.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -219,11 +220,85 @@ test("the served model list is configuration, not a fixed catalogue", async () =
   if (before === undefined) delete process.env.LLM_MODELS; else process.env.LLM_MODELS = before;
 });
 
+// ── Gemini adapter ───────────────────────────────────────────────────────
+
+const geminiStream = [
+  { candidates: [{ content: { role: "model", parts: [{ text: "checking the BOM first", thought: true }] } }] },
+  { candidates: [{ content: { role: "model", parts: [{ text: '{"meta":{"nps":36}' }] } }],
+    usageMetadata: { promptTokenCount: 18000, candidatesTokenCount: 5 } },
+  { candidates: [{ content: { role: "model", parts: [{ text: "}" }] }, finishReason: "STOP" }],
+    usageMetadata: { promptTokenCount: 18000, candidatesTokenCount: 3100, thoughtsTokenCount: 900 } },
+];
+
+test("gemini: the answer is the text parts, not the model's thoughts, and parses whole", async () => {
+  const fetchImpl = fakeSse(geminiStream);
+  const out = await createGeminiProvider({ apiKey: "g", fetchImpl }).complete({ maxTokens: 8000, prompt: "p" });
+  equal(out.text, '{"meta":{"nps":36}}');
+  equal(parseLoose(out.text), { meta: { nps: 36 } });
+  equal(out.stopReason, "end_turn");
+  equal(out.usage, { input_tokens: 18000, output_tokens: 4000 }, "thinking tokens are spent from the same ceiling, so they count");
+});
+
+test("gemini: JSON mode, the token ceiling and the streaming endpoint; the key in a header, never in the URL", async () => {
+  const fetchImpl = fakeSse(geminiStream);
+  await createGeminiProvider({ apiKey: "secret-key", fetchImpl, baseUrl: "https://relay.example/v1beta/" })
+    .complete({ model: "gemini-3.8-flash", maxTokens: 12000, prompt: "p" });
+  const c = fetchImpl.calls[0];
+  equal(c.url, "https://relay.example/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse");
+  assert(!c.url.includes("secret-key"), "the key does not travel in the URL");
+  equal(c.init.headers["x-goog-api-key"], "secret-key");
+  equal(c.body.generationConfig.responseMimeType, "application/json");
+  equal(c.body.generationConfig.maxOutputTokens, 12000);
+});
+
+test("gemini: images travel as inline data with their media type, labelled, before the prompt", async () => {
+  const fetchImpl = fakeSse(geminiStream);
+  await createGeminiProvider({ apiKey: "g", fetchImpl }).complete({ maxTokens: 100, prompt: "read it",
+    images: [{ label: "OVERVIEW", mediaType: "image/png", data: "AAAA" }] });
+  const parts = fetchImpl.calls[0].body.contents[0].parts;
+  equal(parts[0], { text: "--- OVERVIEW ---" });
+  equal(parts[1], { inline_data: { mime_type: "image/png", data: "AAAA" } });
+  equal(parts[2], { text: "read it" });
+});
+
+test("gemini: MAX_TOKENS maps onto max_tokens, so a cut-off drawing is reported as truncated", async () => {
+  const fetchImpl = fakeSse([{ candidates: [{ content: { parts: [{ text: '{"nodes":[' }] }, finishReason: "MAX_TOKENS" }] }]);
+  equal((await createGeminiProvider({ apiKey: "g", fetchImpl }).complete({ maxTokens: 10, prompt: "p" })).stopReason, "max_tokens");
+});
+
+test("gemini: a safety refusal is an error, not an empty drawing", async () => {
+  const fetchImpl = fakeSse([{ candidates: [{ finishReason: "SAFETY" }] }]);
+  const e = await throws(() => createGeminiProvider({ apiKey: "g", fetchImpl }).complete({ maxTokens: 10, prompt: "p" }), "LLM_UPSTREAM");
+  assert(e.message.includes("SAFETY"), e.message);
+});
+
+test("gemini: unconfigured says so without calling out; an upstream refusal keeps its status and body", async () => {
+  const fetchImpl = fakeSse([]);
+  await throws(() => createGeminiProvider({ apiKey: "", fetchImpl }).complete({ maxTokens: 10, prompt: "p" }), "LLM_NOT_CONFIGURED");
+  equal(fetchImpl.calls.length, 0);
+  const denied = fakeSse([], { ok: false, status: 400, text: '{"error":{"message":"User location is not supported for the API use."}}' });
+  const e = await throws(() => createGeminiProvider({ apiKey: "g", fetchImpl: denied }).complete({ maxTokens: 10, prompt: "p" }), "LLM_UPSTREAM");
+  equal(e.upstreamStatus, 400);
+  assert(e.message.includes("User location is not supported"), "the reason Google gave reaches the person");
+});
+
+test("gemini: the model list is Google's current catalogue, or GEMINI_MODELS when set", async () => {
+  const before = process.env.GEMINI_MODELS;
+  delete process.env.GEMINI_MODELS;
+  const p = createGeminiProvider({ apiKey: "g" });
+  assert(p.models.some((m) => m.id === p.defaultModel), "the default is in the list a person picks from");
+  assert(!p.models.some((m) => /^gemini-(1\.5|2\.0)/.test(m.id)), "no model Google has shut down");
+  process.env.GEMINI_MODELS = "gemini-x|X|test";
+  equal(createGeminiProvider({ apiKey: "g" }).models, [{ id: "gemini-x", label: "X", note: "test" }]);
+  if (before === undefined) delete process.env.GEMINI_MODELS; else process.env.GEMINI_MODELS = before;
+});
+
 // ── provider selection ───────────────────────────────────────────────────
 
 test("the provider is chosen by configuration alone", async () => {
   equal(createLlmClient({ provider: "anthropic", apiKey: "k" }).id, "anthropic");
   equal(createLlmClient({ provider: "openai-compatible", baseUrl: "http://v/v1" }).id, "openai-compatible");
+  equal(createLlmClient({ provider: "gemini", apiKey: "g" }).id, "gemini");
 });
 
 test("an unknown provider fails loudly at startup, not on the first drawing", async () => {

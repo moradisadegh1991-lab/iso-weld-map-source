@@ -126,6 +126,7 @@ STORAGE_ROOT=$DATA/files
 BACKUP_DIR=$DATA/backups
 # Model features (drawing extraction). Without a key the rest of the platform works.
 # ANTHROPIC_API_KEY=
+# or Gemini: LLM_PROVIDER=gemini and GEMINI_API_KEY=
 # «فراموشی رمز» با ایمیل: با این‌ها لینک بازیابی به ایمیل خود کاربر فرستاده می‌شود؛
 # بدون آن‌ها درخواست برای مدیر سامانه ثبت می‌شود.
 # SMTP_HOST=

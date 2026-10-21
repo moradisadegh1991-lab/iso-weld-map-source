@@ -11,7 +11,33 @@
 ```
 LLM_PROVIDER=anthropic          # پیش‌فرض
 LLM_PROVIDER=openai-compatible  # + LLM_BASE_URL=http://vllm:8000/v1
+LLM_PROVIDER=gemini             # + GEMINI_API_KEY=…
 ```
+
+## Gemini (`gemini.mjs`)
+
+درخواست مالک (۲۹ مهر ۱۴۰۵): اسکریپت‌های AI Studio او (`google-genai`، خروجی JSON) همین
+فراخوان‌اند؛ اینجا از همان رابط مشترک می‌گذرند، پس خواندن ایزومتریک، پاس ترمیم و ورود مدارک
+بی‌هیچ تغییری با Gemini کار می‌کنند — و خروجی همچنان از موتور قطعی و امضای انسان می‌گذرد.
+
+- REST بی‌SDK: `models/{model}:streamGenerateContent?alt=sse`، کلید در هدر `x-goog-api-key`
+  (نه در URL، تا در لاگ‌ها نماند).
+- JSON با `generationConfig.responseMimeType: "application/json"`؛ پاسخ باز هم از
+  `cleanJsonText`/`parseLoose` می‌گذرد.
+- بخش‌های «فکر» مدل استدلالی (`thought: true`) جزو پاسخ نیستند و حذف می‌شوند؛ توکن‌های فکر
+  از همان سقف `maxOutputTokens` خرج می‌شوند، پس در `output_tokens` شمرده می‌شوند.
+- `MAX_TOKENS` → `max_tokens` (نقشهٔ بریده‌شده «ناقص» گزارش می‌شود)؛ رد ایمنی (`SAFETY`…)
+  خطاست، نه نقشهٔ خالی.
+- فهرست مدل‌ها همان فهرست فعلی گوگل (مهر ۱۴۰۵): Gemini 4 Argon، 3.8 Flash (پیش‌فرض)،
+  3.5 Flash-Lite. خانوادهٔ 2.5 فقط برای کاربران قبلی است و 1.5 و 2.0 خاموش شده‌اند — مدل‌های
+  اسکریپت‌های نمونه (`gemini-1.5-pro`، `gemini-2.0-flash`) دیگر پاسخ نمی‌دهند. `GEMINI_MODELS`
+  فهرست را عوض می‌کند.
+- `GEMINI_BASE_URL` برای رله: Gemini به همهٔ کشورها سرویس نمی‌دهد.
+
+آزمون: ۷ آزمون در `db/test/llm.mjs` با transport ساختگی؛ برداشتن فیلتر «فکر» یا نگاشت
+`MAX_TOKENS` هر کدام آزمون را قرمز کرد. شکل نشانی و هدر روی خود سرور گوگل با کلید نادرست
+سنجیده شد (پاسخ: «API key not valid» — یعنی نشانی و قالب پذیرفته شد). دقت استخراج Gemini روی
+نقشه‌های golden هنوز سنجیده نشده — کلید لازم دارد.
 
 ## چرا این مهم است
 
