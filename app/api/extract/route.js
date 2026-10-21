@@ -335,7 +335,7 @@ export async function POST(req) {
     if (!client.configured) {
       return Response.json({
         error: client.id === "anthropic"
-          ? "ANTHROPIC_API_KEY روی سرور تنظیم نشده. آن را در Environment Variables بگذارید."
+          ? "Anthropic روی سرور تنظیم نشده: ANTHROPIC_RELAY_TOKEN (با رلهٔ Vercel) یا ANTHROPIC_API_KEY را در Environment Variables بگذارید."
           : client.id === "gemini"
             ? "Gemini تنظیم نشده: GEMINI_RELAY_TOKEN (با رلهٔ Vercel) یا GEMINI_API_KEY را روی سرور بگذارید."
             : "LLM_BASE_URL تنظیم نشده. آدرس سرویس vLLM را در Environment Variables بگذارید.",

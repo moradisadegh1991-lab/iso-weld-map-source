@@ -169,6 +169,19 @@ GEMINI_BASE_URL=https://epc-gemini-relay.vercel.app/v1beta
 GEMINI_RELAY_TOKEN=...
 ```
 
+**Claude و Gemini هر دو از همان رله** (پروژهٔ `iso-weld-map-source-gemini-relay` روی Vercel، با
+`ANTHROPIC_API_KEY` و `GEMINI_API_KEY` و یک `RELAY_TOKEN` در Vercel) — در سرور فقط توکن و نشانی:
+
+```
+ANTHROPIC_BASE_URL=https://<رله>.vercel.app/v1
+ANTHROPIC_RELAY_TOKEN=<RELAY_TOKEN>
+GEMINI_BASE_URL=https://<رله>.vercel.app/v1beta
+GEMINI_RELAY_TOKEN=<RELAY_TOKEN>
+```
+
+با توکن رله، کلید مستقیم (`ANTHROPIC_API_KEY` / `GEMINI_API_KEY`) روی سرور لازم نیست و به رله فرستاده
+نمی‌شود. راهنمای کامل: `deploy/gemini-relay/README.md`.
+
 ### حساب مصرف توکن
 
 هر فراخوان مدل — هر پاس خواندن ایزومتریک — با پروژه، کاربر، مدل و توکن مصرف‌شده ثبت می‌شود
