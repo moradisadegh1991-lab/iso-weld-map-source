@@ -312,6 +312,20 @@ process.env.AUTH_MODE = "dev";
 process.env.PGLITE_DIR = await scratchDir("llm-db-");
 const extractRoute = await import("../../app/api/extract/route.js");
 const modelsRoute = await import("../../app/api/models/route.js");
+const usageRoute = await import("../../app/api/llm-usage/route.js");
+const { getDb } = await import("../../lib/server/db.mjs");
+const { ensureUser, createProject, addMember } = await import("../../lib/db/repos/projects.mjs");
+const { withProject } = await import("../../lib/db/scope.mjs");
+const { pricesFromEnv, costOf, monthlyLimit, recordUsage, usageReport } = await import("../../lib/llm/accounting.mjs");
+const relay = await import("../../deploy/gemini-relay/api/relay.js");
+
+// the reading is accounted to a project: alice runs it there, bob only views
+const db = await getDb();
+const alice = await ensureUser(db, { subject: "kc|alice", email: "alice@x" });
+const bob = await ensureUser(db, { subject: "kc|bob", email: "bob@x" });
+const project = await createProject(db, { code: "LLM", name: "accounting", ownerUserId: alice.id });
+await addMember(db, { projectId: project.id, userId: bob.id, role: "viewer" });
+const projectId = project.id;
 
 const post = (body, as = "kc|alice") => new Request("http://x/api/extract", {
   method: "POST",
@@ -330,7 +344,7 @@ test("extraction requires an identity, now that the key is the server's", async 
 test("an apiKey in the request body is simply not read any more", async () => {
   const before = process.env.ANTHROPIC_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
-  const res = await extractRoute.POST(post({ pass: "meta", images: [{ data: "A" }], apiKey: "sk-ant-smuggled" }));
+  const res = await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }], apiKey: "sk-ant-smuggled" }));
   const body = await res.json();
   equal(res.status, 400);
   equal(body.code, "LLM_NOT_CONFIGURED", "a key from the browser cannot configure the server");
@@ -338,7 +352,7 @@ test("an apiKey in the request body is simply not read any more", async () => {
 });
 
 test("an empty image list is refused before any model is called", async () => {
-  const res = await extractRoute.POST(post({ pass: "meta", images: [] }));
+  const res = await extractRoute.POST(post({ projectId, pass: "meta", images: [] }));
   equal(res.status, 400);
 });
 
@@ -358,4 +372,154 @@ test("the model catalogue comes from the configured provider", async () => {
   delete process.env.LLM_MODEL;
 });
 
+// ── accounting (lib/llm/accounting.mjs, migration 082) ───────────────────
+
+/** Run the route against a Gemini that answers with these SSE events (or this status). */
+async function withGemini(events, fn, { status = 200, text = "", env = {} } = {}) {
+  const saved = { fetch: globalThis.fetch, env: { ...process.env } };
+  Object.assign(process.env, { LLM_PROVIDER: "gemini", GEMINI_API_KEY: "g" }, env);
+  const fake = fakeSse(events, { ok: status === 200, status, text });
+  globalThis.fetch = fake;
+  try { return await fn(fake); } finally {
+    globalThis.fetch = saved.fetch;
+    for (const k of Object.keys(process.env)) if (!(k in saved.env)) delete process.env[k];
+    Object.assign(process.env, saved.env);
+  }
+}
+const usageRows = () => withProject(db, projectId, async () => (await db.query(
+  "SELECT * FROM llm_usage WHERE project_id = $1 ORDER BY at", [projectId])).rows);
+
+test("a reading names its project: none, or one the caller is not in, is refused before the model", async () => {
+  await withGemini(geminiStream, async (fake) => {
+    equal((await extractRoute.POST(post({ pass: "meta", images: [{ data: "A" }] }))).status, 400);
+    equal((await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }] }, "kc|bob"))).status, 403, "a viewer may not spend tokens");
+    equal(fake.calls.length, 0);
+  });
+});
+
+test("every call is written down: who, which model and pass, the tokens spent", async () => {
+  const before = (await usageRows()).length;
+  await withGemini(geminiStream, async () => {
+    const res = await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }] }));
+    equal(res.status, 200);
+  });
+  const rows = await usageRows();
+  equal(rows.length, before + 1);
+  const r = rows.at(-1);
+  equal([r.user_id, r.provider, r.via, r.model, r.pass, r.input_tokens, r.output_tokens, r.ok],
+    [alice.id, "gemini", "direct", "gemini-3.8-flash", "meta", 18000, 4000, true]);
+});
+
+test("a failed call is a call: written down, its tokens unknown rather than zero", async () => {
+  await withGemini([], async () => {
+    const res = await extractRoute.POST(post({ projectId, pass: "nodes", images: [{ data: "A" }] }));
+    equal(res.status, 502);
+  }, { status: 400, text: '{"error":{"message":"User location is not supported for the API use."}}' });
+  const r = (await usageRows()).at(-1);
+  equal([r.pass, r.ok, r.error_code, r.input_tokens, r.output_tokens], ["nodes", false, "LLM_UPSTREAM", null, null]);
+});
+
+test("a project past its monthly allowance is refused before the model is called", async () => {
+  await withGemini(geminiStream, async (fake) => {
+    const res = await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }] }));
+    equal(res.status, 429);
+    equal((await res.json()).code, "LLM_MONTHLY_LIMIT");
+    equal(fake.calls.length, 0, "nothing spent past the allowance");
+  }, { env: { LLM_MONTHLY_TOKENS: "22000" } });   // 22000 spent so far this month
+  await withGemini(geminiStream, async (fake) => {
+    equal((await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }] }))).status, 200);
+    equal(fake.calls.length, 1);
+  }, { env: { LLM_MONTHLY_TOKENS: "22001" } });
+});
+
+test("prices: parsed from LLM_PRICES; no price, no cost — never a guessed one", async () => {
+  const p = pricesFromEnv("gemini-3.8-flash|0.30|2.50, bad|x|1 ,gemini-4-argon|2|12");
+  equal(p, { "gemini-3.8-flash": { input: 0.3, output: 2.5 }, "gemini-4-argon": { input: 2, output: 12 } });
+  equal(costOf({ model: "gemini-3.8-flash", input: 1_000_000, output: 200_000 }, p), 0.8);
+  equal(costOf({ model: "gemini-3.5-flash-lite", input: 10, output: 10 }, p), null);
+  equal(costOf({ model: "gemini-3.8-flash", input: null, output: 10 }, p), null, "unknown tokens have no cost");
+  equal(monthlyLimit(""), null); equal(monthlyLimit("abc"), null); equal(monthlyLimit("5e6"), 5_000_000);
+});
+
+test("the account: totals by month, model, person and pass; unknown calls counted apart; cost only where priced", async () => {
+  await withProject(db, projectId, () => recordUsage(db, { projectId, userId: bob.id, provider: "gemini", via: "relay",
+    model: "gemini-3.5-flash-lite", pass: "repair", usage: { input_tokens: 1000, output_tokens: 500 }, ok: true }));
+  const r = await withProject(db, projectId, () => usageReport(db, { projectId, prices: pricesFromEnv("gemini-3.8-flash|1|10"), limit: 100000 }));
+  equal(r.total.calls, 4, "two readings, one failed call, bob's repair pass; the refused one never reached a model");
+  equal(r.total.unknown, 1, "the failed call");
+  equal(r.total.tokens, 18000 * 2 + 4000 * 2 + 1500);
+  equal(r.byModel.find((m) => m.key === "gemini-3.8-flash").cost, (36000 * 1 + 8000 * 10) / 1e6);
+  equal(r.byModel.find((m) => m.key === "gemini-3.5-flash-lite").cost, null, "an unpriced model shows no cost");
+  equal(r.byUser.map((u) => u.key).sort(), ["alice@x", "bob@x"]);
+  equal(r.month, { tokens: 45500, limit: 100000, left: 54500 });
+  equal(r.recent[0].via, "relay");
+});
+
+test("the account is the project administrator's to read; usage rows cannot be changed or removed", async () => {
+  const get = (as) => usageRoute.GET(new Request(`http://x/api/llm-usage?projectId=${projectId}`, { headers: { authorization: `Bearer ${as}` } }));
+  equal((await get("kc|alice")).status, 200);
+  equal((await get("kc|bob")).status, 403);
+  const e = await withProject(db, projectId, () => db.query("UPDATE llm_usage SET input_tokens = 0 WHERE project_id = $1", [projectId])).catch((x) => x);
+  assert(e instanceof Error && /permission denied/i.test(e.message), `an UPDATE is refused: ${e?.message}`);
+  const d = await withProject(db, projectId, () => db.query("DELETE FROM llm_usage WHERE project_id = $1", [projectId])).catch((x) => x);
+  assert(d instanceof Error && /permission denied/i.test(d.message), `a DELETE is refused: ${d?.message}`);
+});
+
+// ── the relay (deploy/gemini-relay) and the provider's relay mode ─────────
+
+test("relay mode: the server sends the relay token, never the Gemini key", async () => {
+  const fetchImpl = fakeSse(geminiStream);
+  const p = createGeminiProvider({ apiKey: "real-key", relayToken: "relay-secret", baseUrl: "https://r.vercel.app/v1beta", fetchImpl });
+  equal([p.configured, p.via], [true, "relay"]);
+  await p.complete({ maxTokens: 10, prompt: "p" });
+  const h = fetchImpl.calls[0].init.headers;
+  equal(h["x-relay-token"], "relay-secret");
+  assert(!("x-goog-api-key" in h), "the key, if one is set here too, does not travel to the relay");
+  equal(createGeminiProvider({ relayToken: "t", apiKey: "" }).configured, true, "a relay token alone configures it");
+});
+
+async function relayCall({ token = "relay-secret", path = "models/gemini-3.8-flash:streamGenerateContent", alt = "sse", env = {}, upstream } = {}) {
+  const saved = { fetch: globalThis.fetch, env: { ...process.env } };
+  Object.assign(process.env, { GEMINI_API_KEY: "real-key", RELAY_TOKEN: "relay-secret" }, env);
+  for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k];
+  const seen = [];
+  globalThis.fetch = async (url, init) => { seen.push({ url, init }); return upstream || new Response('data: {"candidates":[]}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } }); };
+  try {
+    const qs = new URLSearchParams({ path, ...(alt ? { alt } : {}) });
+    const res = await relay.POST(new Request(`https://r.vercel.app/api/relay?${qs}`, {
+      method: "POST", headers: token ? { "x-relay-token": token, "content-type": "application/json" } : { "content-type": "application/json" },
+      body: '{"contents":[]}' }));
+    return { res, seen };
+  } finally {
+    globalThis.fetch = saved.fetch;
+    for (const k of Object.keys(process.env)) if (!(k in saved.env)) delete process.env[k];
+    Object.assign(process.env, saved.env);
+  }
+}
+
+test("relay: closed without its secrets, to a wrong or missing token, and to anything but generateContent", async () => {
+  equal((await relayCall({ env: { RELAY_TOKEN: undefined } })).res.status, 503);
+  equal((await relayCall({ env: { GEMINI_API_KEY: undefined } })).res.status, 503);
+  const wrong = await relayCall({ token: "guess" });
+  equal(wrong.res.status, 401); equal(wrong.seen.length, 0, "Google is not called");
+  equal((await relayCall({ token: null })).res.status, 401);
+  for (const path of ["files", "models", "models/gemini-3.8-flash:countTokens", "models/../tunedModels:list", "cachedContents"]) {
+    equal((await relayCall({ path })).res.status, 404, path);
+  }
+  equal((await relayCall({ env: { ALLOWED_MODELS: "gemini-4-argon" } })).res.status, 403);
+});
+
+test("relay: adds the Gemini key, keeps the stream flag, drops the relay token, passes Google's answer through", async () => {
+  const { res, seen } = await relayCall();
+  equal(res.status, 200);
+  equal(seen[0].url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse");
+  equal(seen[0].init.headers["x-goog-api-key"], "real-key");
+  assert(!("x-relay-token" in seen[0].init.headers), "the relay token goes no further");
+  assert((await res.text()).includes("candidates"));
+  const refused = await relayCall({ upstream: new Response('{"error":{"code":400,"message":"API key not valid"}}', { status: 400 }) });
+  equal(refused.res.status, 400);
+  assert((await refused.res.text()).includes("API key not valid"), "Google's own reason comes back");
+});
+
 await run();
+

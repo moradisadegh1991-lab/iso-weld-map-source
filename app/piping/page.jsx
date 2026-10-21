@@ -138,7 +138,8 @@ export default function Page() {
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         signal: ctrl.signal,
-        body: JSON.stringify({ pass, images, ...extra,
+        // the project the model's tokens are accounted to (lib/llm/accounting.mjs)
+        body: JSON.stringify({ pass, images, ...extra, projectId: session.projectId,
           model: overrideModel || modelName || undefined }),
       });
       const raw = await resp.text();

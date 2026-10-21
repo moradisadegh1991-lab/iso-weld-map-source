@@ -7,6 +7,9 @@ import { ELL90, ELL45, TEE_C } from "../../../lib/standards";
 import { createLlmClient } from "../../../lib/llm/index.mjs";
 import { parseLoose, cleanJsonText } from "../../../lib/llm/parse.mjs";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
+import { withProject } from "../../../lib/db/scope.mjs";
+import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
+import { recordUsage, monthTokens, monthlyLimit } from "../../../lib/llm/accounting.mjs";
 
 /* Give the model the real B16.9 take-outs instead of one hard-coded size —
    it can then self-check every dimension it reads, at any diameter. */
@@ -274,29 +277,42 @@ const MAX_IMAGE_BYTES = 4_000_000;
  * The API key is read from the server environment and never from the request.
  * A key travelling in a request body is a key in the browser, in every proxy
  * log along the way, and in anyone's devtools.
+ *
+ * Every call is accounted (lib/llm/accounting.mjs): the project it was made
+ * for, who asked, the model and the tokens spent — written after the call
+ * whether it succeeded or not. So a reading names its project, and a
+ * project past its monthly allowance (LLM_MONTHLY_TOKENS) is refused before
+ * the model is called.
  */
 export async function POST(req) {
   const started = Date.now();
   try {
-    // Now that the key lives on the server, an open endpoint would let anyone
-    // who can reach it spend it. Moving the key server-side without this
-    // check would have been a downgrade, not a fix.
-    try {
-      await authenticate(req);
-    } catch (e) {
-      return errorResponse(e);
-    }
-
     let body;
     try {
       body = await req.json();
     } catch {
+      // read first so a too-large body says so; nobody is answered anything else before authentication
+      try { await authenticate(req); } catch (e) { return errorResponse(e); }
       return Response.json(
         { error: "بدنه درخواست خوانده نشد؛ احتمالاً از سقف ۴.۵ مگابایت Vercel رد شده." },
         { status: 413 });
     }
 
-    const { images, imageBase64, mediaType, model, pass, json, issues } = body || {};
+    const { images, imageBase64, mediaType, model, pass, json, issues, projectId } = body || {};
+
+    // Now that the key lives on the server, an open endpoint would let anyone
+    // who can reach it spend it. Moving the key server-side without this
+    // check would have been a downgrade, not a fix. And the spending is
+    // accounted to a project, so the caller must be a member who may run it.
+    let db, user, membership;
+    try {
+      ({ db, user, membership } = await authenticate(req, { projectId: projectId || undefined }));
+    } catch (e) {
+      return errorResponse(e);
+    }
+    if (!projectId) return Response.json({ error: "projectId لازم است: مصرف مدل به حساب پروژه نوشته می‌شود." }, { status: 400 });
+    if (!membership) return Response.json({ error: "not found" }, { status: 404 });
+    try { assertCan(membership, ACTIONS.RUN_EXTRACTION); } catch (e) { return errorResponse(e); }
     const cfg = PASSES[pass] || PASSES.meta;
     const label = pass || "meta";
 
@@ -319,10 +335,28 @@ export async function POST(req) {
       return Response.json({
         error: client.id === "anthropic"
           ? "ANTHROPIC_API_KEY روی سرور تنظیم نشده. آن را در Environment Variables بگذارید."
-          : "LLM_BASE_URL تنظیم نشده. آدرس سرویس vLLM را در Environment Variables بگذارید.",
+          : client.id === "gemini"
+            ? "Gemini تنظیم نشده: GEMINI_RELAY_TOKEN (با رلهٔ Vercel) یا GEMINI_API_KEY را روی سرور بگذارید."
+            : "LLM_BASE_URL تنظیم نشده. آدرس سرویس vLLM را در Environment Variables بگذارید.",
         code: "LLM_NOT_CONFIGURED",
       }, { status: 400 });
     }
+
+    // the project's monthly allowance, before anything is spent
+    const limit = monthlyLimit();
+    if (limit != null) {
+      const spent = await withProject(db, projectId, () => monthTokens(db, { projectId }));
+      if (spent >= limit) {
+        return Response.json({
+          error: `سهمیهٔ توکن این ماه پروژه تمام شده است (${spent.toLocaleString("en-US")} از ${limit.toLocaleString("en-US")}). مدیر سامانه می‌تواند LLM_MONTHLY_TOKENS را بیشتر کند.`,
+          code: "LLM_MONTHLY_LIMIT",
+        }, { status: 429 });
+      }
+    }
+    const account = (fields) => withProject(db, projectId, () => recordUsage(db, {
+      projectId, userId: user?.id, provider: client.id, via: client.via || null,
+      model: fields.model || model || client.defaultModel, pass: label, ms: Date.now() - started, ...fields,
+    })).catch((e) => console.error("llm usage not recorded:", e.message));
 
     const extraText = pass === "repair"
       ? `CURRENT EXTRACTION:\n${JSON.stringify(json)}\n\nFAILED CHECKS:\n` +
@@ -336,8 +370,14 @@ export async function POST(req) {
         images: list, prompt: cfg.prompt, extraText,
       });
     } catch (e) {
+      // tokens unknown: a failed call is still a call
+      await account({ ok: false, errorCode: e.code || "LLM_ERROR", model: e.model });
       return Response.json({ error: hint(e), code: e.code || "LLM_ERROR" }, { status: e.status || 502 });
     }
+
+    const cleaned0 = out.text.trim() ? parseLoose(cleanJsonText(out.text)) : null;
+    await account({ ok: !!cleaned0, usage: out.usage, model: out.model, stopReason: out.stopReason,
+      errorCode: cleaned0 ? null : out.text.trim() ? "LLM_BAD_JSON" : "LLM_EMPTY" });
 
     if (!out.text.trim()) {
       return Response.json({
