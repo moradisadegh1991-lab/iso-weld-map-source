@@ -9,12 +9,36 @@ supported». این رله یک تابع Vercel است بین سرور و گوگ
 
 - **کلید Gemini فقط روی Vercel است.** سرور پلتفرم فقط «توکن رله» را دارد که فقط همین رله را باز
   می‌کند.
-- **فقط دو فراخوان رد می‌شود:** `models/<مدل>:generateContent` و `:streamGenerateContent` — نه
+- **(Gemini) فقط دو فراخوان رد می‌شود:** `models/<مدل>:generateContent` و `:streamGenerateContent` — نه
   بارگذاری فایل، نه مدیریت کلید، نه چیز دیگری از API گوگل. با `ALLOWED_MODELS` مدل‌ها را هم محدود
   کنید.
 - **بی‌تنظیم، بسته:** بدون `GEMINI_API_KEY` و `RELAY_TOKEN` به همه پاسخ ۵۰۳ می‌دهد؛ توکن غلط ۴۰۱.
 - بدنهٔ درخواست و پاسخ ذخیره یا لاگ نمی‌شود؛ پاسخ گوگل همان‌طور که می‌آید stream می‌شود.
 - حساب توکن روی سرور پلتفرم نگه داشته می‌شود (جدول `llm_usage`)، نه اینجا.
+
+## Claude از همین رله (Anthropic)
+
+Anthropic هم از IP ایران سرویس نمی‌دهد. همین پروژهٔ Vercel یک تابع دوم دارد (`api/anthropic.js`):
+`/v1/messages` را با کلید Anthropic که فقط روی Vercel است به `api.anthropic.com` می‌فرستد. فقط همین
+یک مسیر رد می‌شود (نه batch، نه files، نه کلیدها). **توکن همان `RELAY_TOKEN` است** — یک توکن برای هر
+دو رله.
+
+روی Vercel یک متغیر اضافه کنید (Settings → Environment Variables، Sensitive، همهٔ محیط‌ها):
+`ANTHROPIC_API_KEY` = کلید از console.anthropic.com. بعد Redeploy (یا با merge به master اگر پروژه به
+Git وصل است خودکار دوباره ساخته می‌شود). در سرور:
+
+```
+ANTHROPIC_BASE_URL=https://<رله>.vercel.app/v1
+ANTHROPIC_RELAY_TOKEN=<همان RELAY_TOKEN>
+```
+
+آزمون:
+
+```bash
+curl -s -X POST -H "content-type: application/json" -H "x-relay-token: <RELAY_TOKEN>" \
+  -H "anthropic-version: 2023-06-01" "https://<رله>.vercel.app/v1/messages" \
+  -d '{"model":"claude-haiku-4-5-20251001","max_tokens":16,"messages":[{"role":"user","content":"say ok"}]}'
+```
 
 ## نصب (یک بار، از داشبورد Vercel)
 

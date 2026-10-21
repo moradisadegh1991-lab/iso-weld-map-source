@@ -318,6 +318,7 @@ const { ensureUser, createProject, addMember } = await import("../../lib/db/repo
 const { withProject } = await import("../../lib/db/scope.mjs");
 const { pricesFromEnv, costOf, monthlyLimit, recordUsage, usageReport } = await import("../../lib/llm/accounting.mjs");
 const relay = await import("../../deploy/gemini-relay/api/relay.js");
+const claudeRelay = await import("../../deploy/gemini-relay/api/anthropic.js");
 
 // the reading is accounted to a project: alice runs it there, bob only views
 const db = await getDb();
@@ -585,6 +586,63 @@ test("relay: adds the Gemini key, keeps the stream flag, drops the relay token, 
   const refused = await relayCall({ upstream: new Response('{"error":{"code":400,"message":"API key not valid"}}', { status: 400 }) });
   equal(refused.res.status, 400);
   assert((await refused.res.text()).includes("API key not valid"), "Google's own reason comes back");
+});
+
+// ── the same relay for Anthropic (deploy/gemini-relay/api/anthropic.js) ───
+
+test("anthropic relay mode: the server sends the relay token, never the Anthropic key", async () => {
+  const fetchImpl = fakeSse([{ type: "message_start", message: { usage: { input_tokens: 5 } } },
+    { type: "content_block_delta", delta: { type: "text_delta", text: "{}" } },
+    { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 2 } }]);
+  const p = createAnthropicProvider({ apiKey: "sk-real", relayToken: "relay-secret", baseUrl: "https://r.vercel.app/v1", fetchImpl });
+  equal([p.configured, p.via], [true, "relay"]);
+  await p.complete({ maxTokens: 10, prompt: "p" });
+  equal(fetchImpl.calls[0].url, "https://r.vercel.app/v1/messages");
+  const h = fetchImpl.calls[0].init.headers;
+  equal(h["x-relay-token"], "relay-secret");
+  assert(!("x-api-key" in h), "the key, if one is set here too, does not travel to the relay");
+  equal(createAnthropicProvider({ relayToken: "t", apiKey: "" }).configured, true, "a relay token alone configures it");
+  equal([createAnthropicProvider({ apiKey: "k" }).configured, createAnthropicProvider({ apiKey: "k" }).via], [true, "direct"]);
+});
+
+async function claudeRelayCall({ token = "relay-secret", path = "messages", env = {}, upstream, headers = {} } = {}) {
+  const saved = { fetch: globalThis.fetch, env: { ...process.env } };
+  Object.assign(process.env, { ANTHROPIC_API_KEY: "sk-real", RELAY_TOKEN: "relay-secret" }, env);
+  for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k];
+  const seen = [];
+  globalThis.fetch = async (url, init) => { seen.push({ url, init }); return upstream || new Response("data: {}\n\n", { status: 200, headers: { "content-type": "text/event-stream" } }); };
+  try {
+    const res = await claudeRelay.POST(new Request(`https://r.vercel.app/api/anthropic?path=${path}`, {
+      method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-relay-token": token } : {}), ...headers },
+      body: '{"model":"claude-sonnet-5"}' }));
+    return { res, seen };
+  } finally {
+    globalThis.fetch = saved.fetch;
+    for (const k of Object.keys(process.env)) if (!(k in saved.env)) delete process.env[k];
+    Object.assign(process.env, saved.env);
+  }
+}
+
+test("anthropic relay: closed without its secrets, to a wrong or missing token, and to anything but /v1/messages", async () => {
+  equal((await claudeRelayCall({ env: { RELAY_TOKEN: undefined } })).res.status, 503);
+  equal((await claudeRelayCall({ env: { ANTHROPIC_API_KEY: undefined } })).res.status, 503);
+  const wrong = await claudeRelayCall({ token: "guess" });
+  equal(wrong.res.status, 401); equal(wrong.seen.length, 0, "Anthropic is not called");
+  equal((await claudeRelayCall({ token: null })).res.status, 401);
+  for (const path of ["models", "messages/batches", "files", "organizations/api_keys", "../admin"]) {
+    equal((await claudeRelayCall({ path: encodeURIComponent(path) })).res.status, 404, path);
+  }
+});
+
+test("anthropic relay: adds the key, drops the relay token, passes Anthropic's answer and errors through", async () => {
+  const { res, seen } = await claudeRelayCall({ headers: { "anthropic-beta": "x-beta" } });
+  equal(res.status, 200);
+  equal(seen[0].url, "https://api.anthropic.com/v1/messages");
+  equal([seen[0].init.headers["x-api-key"], seen[0].init.headers["anthropic-version"], seen[0].init.headers["anthropic-beta"]], ["sk-real", "2023-06-01", "x-beta"]);
+  assert(!("x-relay-token" in seen[0].init.headers), "the relay token goes no further");
+  const refused = await claudeRelayCall({ upstream: new Response('{"type":"error","error":{"message":"invalid x-api-key"}}', { status: 401 }) });
+  equal(refused.res.status, 401);
+  assert((await refused.res.text()).includes("invalid x-api-key"), "Anthropic's own reason comes back");
 });
 
 await run();
