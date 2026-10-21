@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 import { ELL90, ELL45, TEE_C } from "../../../lib/standards";
-import { createLlmClient } from "../../../lib/llm/index.mjs";
+import { createLlmRouter } from "../../../lib/llm/index.mjs";
 import { parseLoose, cleanJsonText } from "../../../lib/llm/parse.mjs";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
@@ -330,7 +330,8 @@ export async function POST(req) {
         { status: 413 });
     }
 
-    const client = createLlmClient();
+    // the model picked decides who answers: Claude, Gemini or the in-house server
+    const client = createLlmRouter().clientFor(model);
     if (!client.configured) {
       return Response.json({
         error: client.id === "anthropic"

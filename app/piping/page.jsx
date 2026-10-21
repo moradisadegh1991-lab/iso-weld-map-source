@@ -104,6 +104,25 @@ export default function Page() {
   }
 
   const MODELS = catalogue?.models || [];
+  // the models grouped by provider — Claude, Gemini, the in-house server — each saying whether it is set up here
+  const PROVIDER_GROUPS = (catalogue?.providers || [{ id: catalogue?.provider, label: catalogue?.provider, configured: catalogue?.configured }])
+    .map((p) => ({ ...p, models: MODELS.filter((m) => (m.provider || catalogue?.provider) === p.id) }))
+    .filter((p) => p.models.length);
+  const modelPicker = (value, set, withNote) => PROVIDER_GROUPS.map((p) => (
+    <div key={p.id} className="model-group" data-provider={p.id}>
+      <div className="muted sm">{p.label}{p.via === "relay" ? " · از رلهٔ Vercel" : ""}{p.configured ? "" : " — روی سرور پیکربندی نشده"}</div>
+      <div className="models">
+        {p.models.map((m) => (
+          <button key={m.id} className={value === m.id ? "on" : ""} disabled={!p.configured} data-model={m.id}
+            title={p.configured ? undefined : "این ارائه‌دهنده روی سرور تنظیم نشده (کلید یا نشانی)"}
+            onClick={() => set(m.id)}>
+            <b className="mono">{m.label}</b>
+            {withNote && m.note && <span>{m.note}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  ));
 
   // The project's grade elevation, so the preview can say which welds are
   // buried before anything is saved. Absent, the engine gives no verdict.
@@ -481,32 +500,16 @@ export default function Page() {
 
             {catalogue && (
               <>
-                <div className="note mono">
-                  ارائه‌دهنده: {catalogue.provider}
-                  {catalogue.configured ? "" : " — روی سرور پیکربندی نشده"}
+                <div className="note mono" data-providers>
+                  ارائه‌دهنده‌ها: {(catalogue.providers || []).map((p) => `${p.label}${p.configured ? " ✓" : " (تنظیم نشده)"}`).join(" · ") || catalogue.provider}
                 </div>
                 <label className="muted">مدل استخراج</label>
-                <div className="models">
-                  {MODELS.map((m) => (
-                    <button key={m.id} className={modelName === m.id ? "on" : ""}
-                      onClick={() => setModelName(m.id)}>
-                      <b className="mono">{m.label}</b>
-                      {m.note && <span>{m.note}</span>}
-                    </button>
-                  ))}
-                </div>
+                {modelPicker(modelName, setModelName, true)}
                 <label className="muted">
                   مدل پاس اصلاح — فقط وقتی چک‌ها نخوانند اجرا می‌شود؛ خروجی‌اش کوچک است
-                  پس ارتقا به مدل قوی‌تر تقریباً رایگان است
+                  پس ارتقا به مدل قوی‌تر تقریباً رایگان است؛ می‌تواند از ارائه‌دهندهٔ دیگری باشد
                 </label>
-                <div className="models">
-                  {MODELS.map((m) => (
-                    <button key={m.id} className={repairModel === m.id ? "on" : ""}
-                      onClick={() => setRepairModel(m.id)}>
-                      <b className="mono">{m.label}</b>
-                    </button>
-                  ))}
-                </div>
+                {modelPicker(repairModel, setRepairModel, false)}
               </>
             )}
             <button className="ghost" disabled={!dim} onClick={loadDemo}>نمونه بدون سرور: SW 265022A</button>
