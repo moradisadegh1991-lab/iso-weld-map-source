@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
-import { createLlmClient } from "../../../lib/llm/index.mjs";
+import { createLlmRouter } from "../../../lib/llm/index.mjs";
 
 /**
  * What the server can actually run.
@@ -14,14 +14,8 @@ import { createLlmClient } from "../../../lib/llm/index.mjs";
 export async function GET(request) {
   try {
     await authenticate(request);
-    const client = createLlmClient();
-    return Response.json({
-      provider: client.id,
-      configured: client.configured,
-      models: client.models,
-      defaultModel: client.defaultModel,
-      repairModel: client.repairModel,
-    });
+    // every offered provider's models, each with its provider and whether this server is set up for it
+    return Response.json(createLlmRouter().catalogue());
   } catch (e) {
     return errorResponse(e);
   }

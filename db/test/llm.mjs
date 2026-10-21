@@ -11,7 +11,7 @@ import { parseLoose, cleanJsonText } from "../../lib/llm/parse.mjs";
 import { createAnthropicProvider } from "../../lib/llm/anthropic.mjs";
 import { createOpenAiCompatProvider } from "../../lib/llm/openai-compat.mjs";
 import { createGeminiProvider } from "../../lib/llm/gemini.mjs";
-import { createLlmClient } from "../../lib/llm/index.mjs";
+import { createLlmClient, createLlmRouter } from "../../lib/llm/index.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -463,6 +463,72 @@ test("the account is the project administrator's to read; usage rows cannot be c
   assert(e instanceof Error && /permission denied/i.test(e.message), `an UPDATE is refused: ${e?.message}`);
   const d = await withProject(db, projectId, () => db.query("DELETE FROM llm_usage WHERE project_id = $1", [projectId])).catch((x) => x);
   assert(d instanceof Error && /permission denied/i.test(d.message), `a DELETE is refused: ${d?.message}`);
+});
+
+// ── several providers at once: the model picked decides who answers ──────
+
+/** Run fn with these environment variables (undefined removes one), then put them back. */
+async function withEnv(env, fn) {
+  const saved = { ...process.env };
+  for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  try { return await fn(); } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
+}
+const claudeUnsetGeminiSet = { LLM_PROVIDER: "anthropic", ANTHROPIC_API_KEY: undefined, GEMINI_API_KEY: "g",
+  GEMINI_RELAY_TOKEN: undefined, LLM_PROVIDERS: undefined, LLM_BASE_URL: undefined };
+
+test("the catalogue lists Claude and Gemini together, each model with its provider and whether it can run", async () => {
+  await withEnv(claudeUnsetGeminiSet, async () => {
+    const body = await (await modelsRoute.GET(new Request("http://x/api/models", {
+      headers: { authorization: "Bearer kc|alice" } }))).json();
+    equal(body.providers.map((p) => [p.id, p.configured]), [["anthropic", false], ["gemini", true]]);
+    const of = (id) => body.models.find((m) => m.id === id);
+    equal([of("claude-sonnet-5").provider, of("claude-sonnet-5").configured], ["anthropic", false]);
+    equal([of("gemini-3.8-flash").provider, of("gemini-3.8-flash").configured], ["gemini", true]);
+    equal([body.provider, body.defaultModel, body.repairModel], ["gemini", "gemini-3.8-flash", "gemini-4-argon"],
+      "an unconfigured default provider does not preselect a model that cannot run");
+  });
+  await withEnv({ ...claudeUnsetGeminiSet, LLM_PROVIDERS: "anthropic" }, async () => {
+    equal(createLlmRouter().catalogue().providers.map((p) => p.id), ["anthropic"], "LLM_PROVIDERS limits what is offered");
+  });
+  await withEnv({ ...claudeUnsetGeminiSet, LLM_PROVIDERS: "anthropic,telepathy" }, async () => {
+    await throws(() => createLlmRouter(), "LLM_UNKNOWN_PROVIDER");
+  });
+});
+
+test("routing: a Gemini model goes to Gemini, a Claude model to Anthropic, whatever LLM_PROVIDER says", async () => {
+  await withEnv({ ...claudeUnsetGeminiSet, ANTHROPIC_API_KEY: "a" }, async () => {
+    const r = createLlmRouter();
+    equal(r.clientFor("gemini-4-argon").id, "gemini");
+    equal(r.clientFor("gemini-9-unlisted").id, "gemini", "by name when the catalogue does not list it");
+    equal(r.clientFor("claude-opus-5").id, "anthropic");
+    equal(r.clientFor(undefined).id, "anthropic", "no model: the default provider");
+    equal(r.clientFor("Qwen/Qwen2.5-VL").id, "anthropic", "an unknown name: the default provider");
+  });
+});
+
+test("a reading with a Gemini model is answered by Gemini and written down as Gemini's, with Claude the default", async () => {
+  const before = (await usageRows()).length;
+  await withGemini(geminiStream, async (fake) => {
+    const res = await extractRoute.POST(post({ projectId, pass: "meta", model: "gemini-4-argon", images: [{ data: "A" }] }));
+    equal(res.status, 200);
+    equal(fake.calls.length, 1);
+    assert(fake.calls[0].url.includes("/models/gemini-4-argon:streamGenerateContent"), fake.calls[0].url);
+  }, { env: { LLM_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "" } });
+  const rows = await usageRows();
+  equal(rows.length, before + 1);
+  equal([rows.at(-1).provider, rows.at(-1).model], ["gemini", "gemini-4-argon"]);
+});
+
+test("a model whose provider is not set up is refused before any call, naming that provider", async () => {
+  await withGemini(geminiStream, async (fake) => {
+    const res = await extractRoute.POST(post({ projectId, pass: "meta", model: "claude-opus-5", images: [{ data: "A" }] }));
+    equal(res.status, 400);
+    equal((await res.json()).code, "LLM_NOT_CONFIGURED");
+    equal(fake.calls.length, 0, "a Claude model is not quietly sent to Gemini");
+  }, { env: { LLM_PROVIDER: "gemini", ANTHROPIC_API_KEY: "" } });
 });
 
 // ── the relay (deploy/gemini-relay) and the provider's relay mode ─────────

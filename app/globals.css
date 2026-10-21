@@ -268,6 +268,10 @@ code{font-family:var(--mono);font-size:10px;background:var(--surf);
 .models button span{font-size:10px;line-height:1.5}
 .models button.on{border-color:var(--ink);background:var(--hover-strong)}
 .models button.on b{color:var(--ink)}
+.model-group{display:flex;flex-direction:column;gap:4px}
+.model-group+.model-group{margin-top:8px}
+.models button:disabled{opacity:.45;cursor:not-allowed}
+.models button:disabled:hover{border-color:var(--rule)}
 
 .ask{border:1px solid var(--rule);border-radius:6px;padding:16px}
 .ask-q{font-size:14px;margin-bottom:12px}
