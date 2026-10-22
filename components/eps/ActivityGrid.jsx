@@ -20,6 +20,7 @@ import { useEpsFmt } from "./ActivityDetail";
  *   defaultCols the keys shown at first
  *   storeKey    where the layout (columns, widths, pane width) is remembered in this browser
  *   selected    the selected row's id; onSelect(row)
+ *   onOpen      a double click on an activity row: onOpen(row) (the planning page adds it, as «add item single»)
  *   keep        optional (activity) → bool: only these activities (and the nodes above them) are shown
  *   onVisible   gets the activities shown now (after filter, keep and closing) whenever they change
  *   gantt       false to leave the chart out
@@ -28,6 +29,7 @@ import { useEpsFmt } from "./ActivityDetail";
  *   ops         what the page lets a person do to rows in place (owner's requirements 2026-10-18,
  *               items 4, 7, 9, 15) — every member optional:
  *                 fields(row)            the columns editable on this row: [{ key: column key, type: text|number|date }]
+ *                 removable(rows)        of the rows picked, those `remove` deletes (the count the question names)
  *                 value(row)             the row's current values, by column key
  *                 save(row, values)      → truthy when saved
  *                 create(nodeRow, values) a new activity under a node, typed in a draft row
@@ -59,7 +61,7 @@ export function Hl({ text, q }) {
   return <>{splitHits(text, q).map((p, i) => (p.hit ? <mark key={i} style={{ background: "#ffe14d", color: "#111", padding: 0 }}>{p.text}</mark> : <span key={i}>{p.text}</span>))}</>;
 }
 
-export default function ActivityGrid({ data, columns, defaultCols, storeKey, selected, onSelect, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null }) {
+export default function ActivityGrid({ data, columns, defaultCols, storeKey, selected, onSelect, onOpen = null, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null }) {
   const all = useMemo(() => flatRows(data.roots), [data]);
   const { t, locale } = usePrefs();
   // what a column's get(row, x) writes with: numbers, dates and words in the reader's language
@@ -172,7 +174,10 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
   };
   const removeRows = async (list) => {
     if (!list.length || !ops?.remove) return;
-    if (!window.confirm(t("gr.deleteAsk", { n: list.length }))) return;
+    // a page may delete only some of what is picked (the activities page: activities, never their nodes)
+    const gone = ops.removable ? ops.removable(list) : list;
+    if (!gone.length) { window.alert(t("gr.nothingToDelete")); return; }
+    if (!window.confirm(t("gr.deleteAsk", { n: gone.length }))) return;
     if (await run(() => ops.remove(list))) { setPicked(new Set()); setEditing(null); }
   };
   const pasteInto = async (node) => {
@@ -310,6 +315,7 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
               return (
                 <tr key={r.id} data-row={r.item.code || (r.kind === "draft" ? "__draft" : "")} data-kind={r.kind} className={[isSel ? "sel" : "", ed ? "p6-editing" : ""].join(" ").trim() || undefined}
                   onClick={(e) => { if (e.target.closest("input,select,button,textarea")) return; if (r.kind === "draft" || ed) return; ops ? open(r) : onSelect && onSelect(r); }}
+                  onDoubleClick={onOpen ? (e) => { if (e.target.closest("input,select,button,textarea") || r.kind !== "act") return; onOpen(r); } : undefined}
                   onContextMenu={ops && r.kind !== "draft" ? (e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, row: r }); } : undefined}
                   style={{ height: ROW, background: r.kind === "node" ? tint(r.color) : undefined, fontWeight: r.kind === "node" ? 600 : undefined }}>
                   {ops && <td className="p6-pick">{r.kind !== "draft" && <input type="checkbox" aria-label={t("gr.pickRow", { code: r.item.code })}

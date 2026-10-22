@@ -24,9 +24,9 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function ProgressPage() {
   const { projectId, contractId, call } = usePlatform();
-  const { versionId, picker } = useVersion(contractId);
-  const { data, error, reload } = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}` : null), [versionId]);
-  const lines = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}&lines=1` : null), [versionId]);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId);
+  const { data, error, reload } = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}` : null), [plan]);
+  const lines = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}&lines=1` : null), [plan]);
   const [sel, setSel] = useState(null);
   const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&activityId=${sel.id}` : null), [sel?.id]);
   const [visible, setVisible] = useState([]);
@@ -63,7 +63,7 @@ export default function ProgressPage() {
       <span className="sub">{picker} <Link href="/eps/activities">{t("ep.link.activities")}</Link> · <Link href="/eps/progress/days">{t("ep.link.days")}</Link> · <Link href="/contract-reports">{t("ep.link.contractReport")}</Link></span></div>);
   if (!contractId) return <div className="page"><div className="pagehead"><h1>{t("ep.pg.title")}</h1></div><p className="empty-note">{t("cs.pick")}</p></div>;
   if (error) return <div className="page">{head}<p className="err">{error}</p></div>;
-  if (!versionId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
+  if (!plan) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
   if (!data) return <div className="page">{head}<p className="muted">{t("common.loading")}</p></div>;
   const rep = (reports.data?.reports || []).find((r) => r.id === f.reportId);
   const canAdd = rep?.may.edit && (f.mode === "remain" || String(f.value).trim() !== "");

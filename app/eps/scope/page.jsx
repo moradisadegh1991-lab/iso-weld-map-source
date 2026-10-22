@@ -19,11 +19,11 @@ const NO_LABELS = { disciplines: {}, measures: {} };
 
 export default function ScopePage() {
   const { projectId, contractId, call } = usePlatform();
-  const { versionId, picker } = useVersion(contractId);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId);
   const { t } = usePrefs();
   const { fmt } = useEpsFmt();
-  const v = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}` : null), [versionId]);
-  const u = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}&unplanned=1` : null), [versionId]);
+  const v = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}` : null), [plan]);
+  const u = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}&unplanned=1` : null), [plan]);
   const [open, setOpen] = useState(null);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);

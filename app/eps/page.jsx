@@ -15,7 +15,7 @@ import TableKit from "../../components/ui/TableKit";
  * PMSs. Each version's WBS opens from here. One version of each PMS may be
  * its master plan (the baseline the delay claim is measured against).
  */
-const BLANK_PMS = { id: null, code: "", title: "", pmsType: "", description: "", registeredOn: "", planStart: "", planEnd: "", actualStart: "", actualEnd: "" };
+const BLANK_PMS = { id: null, code: "", title: "", pmsType: "", description: "", registeredOn: "", planStart: "", planEnd: "", actualStart: "", actualEnd: "", budgetPlan: "", budgetActual: "" };
 const BLANK_VER = { id: null, pmsId: "", code: "", title: "", description: "", registeredOn: "", startOn: "", endOn: "", budgetPlan: "", budgetActual: "" };
 const span = (a, b) => (a && b ? Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1 : null);
 
@@ -54,11 +54,11 @@ export default function EpsPage() {
       <td className="mono sm">{day(p.registered_on)}</td>
       <td className="mono sm">{day(p.plan_start)} — {day(p.plan_end)}</td><td className="mono">{fmt(p.planDays)}</td>
       <td className="mono sm">{day(p.actual_start)} — {day(p.actual_end)}</td><td className="mono">{fmt(p.actualDays)}</td>
-      <td className="mono">{p.versions.length}</td>
-      <td style={{ whiteSpace: "nowrap" }}>{may && <>
+      <td className="mono">{t("ep.bd.pmsCounts", { v: p.versions.length, n: p.nodes })}</td>
+      <td style={{ whiteSpace: "nowrap" }}><Link className="btn sm" href={`/eps/wbs?pms=${p.id}`}>WBS</Link>{may && <>
         <button className="btn ghost sm" type="button" onClick={() => { setVf({ ...BLANK_VER, pmsId: p.id, code: `${p.code}-R${p.versions.length + 1}` }); setPf(null); }}>{t("ep.bd.addVersion")}</button>
         <button className="btn ghost sm" type="button" onClick={() => { setPf({ id: p.id, code: p.code, title: p.title, pmsType: p.pms_type || "", description: p.description || "", registeredOn: p.registered_on || "", planStart: p.plan_start || "",
-          planEnd: p.plan_end || "", actualStart: p.actual_start || "", actualEnd: p.actual_end || "" }); setVf(null); }}>{t("ep.edit")}</button>
+          planEnd: p.plan_end || "", actualStart: p.actual_start || "", actualEnd: p.actual_end || "", budgetPlan: p.budget_plan ?? "", budgetActual: p.budget_actual ?? "" }); setVf(null); }}>{t("ep.edit")}</button>
         <button className="btn ghost sm" type="button" onClick={() => post({ kind: "eps-remove", epsKind: "pms", id: p.id }, () => t("ep.removed"))}>{t("ep.remove")}</button></>}</td>
     </tr>);
   const versionRow = (p, v) => (
@@ -70,9 +70,9 @@ export default function EpsPage() {
       <td className="mono sm">{day(v.registered_on)}</td>
       <td className="mono sm">{day(v.start_on)} — {day(v.end_on)}</td><td className="mono">{fmt(v.days)}</td>
       <td className="sm" colSpan={2}>{t("ep.bd.budget", { plan: fmt(v.budget_plan), actual: fmt(v.budget_actual) })}</td>
-      <td className="mono">{t("ep.bd.nodes", { n: v.nodes })}</td>
+      <td className="mono">{t("ep.bd.planned", { n: v.planned })}</td>
       <td style={{ whiteSpace: "nowrap" }}>
-        <Link className="btn sm" href={`/eps/wbs?version=${v.id}`}>WBS</Link>
+        <Link className="btn sm" href={`/eps/planning?version=${v.id}`}>{t("ep.link.planning")}</Link>
         <Link className="btn ghost sm" href={`/eps/activities?version=${v.id}`}>{t("ep.link.activities")}</Link>
         {may && <label className="sm" style={{ marginInline: 6, whiteSpace: "nowrap" }} title={t("ep.bd.masterTip")}>
           <input type="radio" name={`master-${p.id}`} checked={!!v.master} aria-label={t("ep.bd.masterOf", { code: v.code })}
@@ -106,6 +106,7 @@ export default function EpsPage() {
             {F(pf, setPf, "registeredOn", t("ep.bd.registered"), "date")}
             {F(pf, setPf, "planStart", t("ep.planStart"), "date")}{F(pf, setPf, "planEnd", t("ep.planEnd"), "date")}
             {F(pf, setPf, "actualStart", t("ep.actualStart"), "date")}{F(pf, setPf, "actualEnd", t("ep.actualEnd"), "date")}
+            {F(pf, setPf, "budgetPlan", t("ep.bd.rootBudget"), "text", { inputMode: "decimal" })}{F(pf, setPf, "budgetActual", t("ep.d.budgetActual"), "text", { inputMode: "decimal" })}
           </div>
           <p className="sm muted">{t("ep.bd.spans", { plan: fmt(span(pf.planStart, pf.planEnd)), actual: fmt(span(pf.actualStart, pf.actualEnd)) })}</p>
           <button className="btn" type="submit">{t("ep.save")}</button> <button className="btn ghost" type="button" onClick={() => setPf(null)}>{t("ep.cancel")}</button>

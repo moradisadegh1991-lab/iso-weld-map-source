@@ -74,7 +74,7 @@ test("the EPS: PMSs of a contract and their versions, with durations; a version 
     const { rows: [k] } = await db.query("INSERT INTO contractor (project_id, code, name) VALUES ($1, 'K', 'K') RETURNING id", [P]);
     C = await ctr.upsertContract(db, { projectId: P, contractNo: "SC-1", title: "x", kind: "subcontract", contractorId: k.id, currency: "USD", userId: U.id });
     C2 = await ctr.upsertContract(db, { projectId: P, contractNo: "SC-2", title: "y", kind: "subcontract", contractorId: k.id, currency: "USD", userId: U.id });
-    PM = await eps.savePms(db, { projectId: P, contractId: C.id, code: "pm01", title: "برنامهٔ اصلی", planStart: "2026-01-01", planEnd: "2026-12-31", userId: U.id });
+    PM = await eps.savePms(db, { projectId: P, contractId: C.id, code: "pm01", title: "برنامهٔ اصلی", planStart: "2026-01-01", planEnd: "2026-12-31", budgetPlan: 1000, userId: U.id });
     const pm2 = await eps.savePms(db, { projectId: P, contractId: C.id, code: "PM02", title: "دوم", userId: U.id });
     const other = await eps.savePms(db, { projectId: P, contractId: C2.id, code: "PM09", title: "قرارداد دیگر", userId: U.id });
     await throws(() => eps.savePms(db, { projectId: P, contractId: C.id, code: "PM01", title: "x" }), "ثبت شده");
@@ -123,7 +123,7 @@ test("budget modes in the database: a mode that would break the 100% rule is ref
   await inP(async () => {
     await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: { ...w.DEFAULT_SETTINGS, budgetMode: "wf_to_budget" }, userId: U.id });
     let view = await eps.wbsView(db, { projectId: P, versionId: V.id });
-    equal(view.roots.find((n) => n.code === "PM01.C.02").budgetPlan, 400, "40% of the version's 1000");
+    equal(view.roots.find((n) => n.code === "PM01.C.02").budgetPlan, 400, "40% of the PMS's 1000 (the root budget is the PMS's, 083)");
     await eps.saveNode(db, { projectId: P, versionId: V.id, name: "بی‌بودجه", wf: 0 });
     await db.query("UPDATE wbs_node SET budget_plan = 900 WHERE code = 'PM01.C.03'");
     await throws(() => eps.saveSettings(db, { projectId: P, versionId: V.id, settings: { ...w.DEFAULT_SETTINGS, budgetMode: "budget_to_wf" } }), "بیش از ۱۰۰٪");

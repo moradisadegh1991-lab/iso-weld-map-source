@@ -10,7 +10,8 @@ import { NodeScope } from "../../../components/eps/ScopePanel";
 
 import TableKit from "../../../components/ui/TableKit";
 /**
- * The activity view of a version, after Primavera P6: the WBS and its
+ * The activity view of a PMS as one of its versions plans it (the master
+ * plan unless another is picked), after Primavera P6: the WBS and its
  * activities as a tree table beside their Gantt chart, the details of the
  * selected activity below — the line between them dragged to share the
  * height. Activities are attached here from a template (only templates that
@@ -23,11 +24,11 @@ const PAGE_TABS = ["detail", "scope", "workfront", "groups", "relations", "progr
 
 export default function ActivitiesPage() {
   const { projectId, contractId, call } = usePlatform();
-  const { versionId, picker } = useVersion(contractId);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId);
   const { t } = usePrefs();
-  const { data, error, reload } = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}` : null), [versionId]);
+  const { data, error, reload } = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}` : null), [plan]);
   const [sel, setSel] = useState(null);                // the selected row {kind, id, item}
-  const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&activityId=${sel.id}` : null), [sel?.id]);
+  const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&activityId=${sel.id}${versionId ? `&versionId=${versionId}` : ""}` : null), [sel?.id, versionId]);
   const [tab, setTab] = useState("detail");
   const [tabs, setTabs] = useState(PAGE_TABS);
   const [pickTabs, setPickTabs] = useState(false);
@@ -44,30 +45,38 @@ export default function ActivitiesPage() {
   useEffect(() => { write("p6-activities:tabs", tabs); write("p6-activities:known", PAGE_TABS); if (!tabs.includes(tab) && tabs.length) setTab(tabs[0]); }, [tabs]); // eslint-disable-line react-hooks/exhaustive-deps
   async function post(url, body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) }); reload(); detail.reload(); if (done) setOk(done(r)); return r; }
+    try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, pmsId, versionId, ...body }) }); reload(); detail.reload(); if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; }
   }
   // editing rows in place, adding under a node, cut / copy / paste / delete (owner's requirements 2026-10-18, items 4, 7, 15)
   const ops = useMemo(() => {
     if (!data?.may?.edit) return null;
-    const send = (body) => call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) });
+    const send = ({ url = "/api/eps", ...body }) => call(url, { method: "POST", body: JSON.stringify({ projectId, pmsId, versionId, ...body }) });
     const batch = async (list, done) => {
       setMsg(null); setOk(null);
       try { for (const b of list) await send(b); reload(); detail.reload(); if (done) setOk(done); return true; }
       catch (e) { setMsg(e.message); reload(); return false; }
     };
-    const actBody = (v) => ({ name: v.name, wf: v.wf === "" ? null : v.wf, planStart: v.start || null, planEnd: v.finish || null,
-      volumePlan: v.volPlan === "" ? null : v.volPlan, volumeActual: v.volActual === "" ? null : v.volActual });
+    const own = (v) => ({ name: v.name, wf: v.wf === "" ? null : v.wf, volumeActual: v.volActual === "" ? null : v.volActual,
+      actType: v.actType, activityNo: v.activityNo, wfRate: v.wfRate === "" ? null : v.wfRate, description: v.description });
+    const actBody = (v) => ({ ...own(v), planStart: v.start || null, planEnd: v.finish || null, volumePlan: v.volPlan === "" ? null : v.volPlan });
     const valueOf = (it) => ({ name: it.name ?? "", wf: it.wf ?? "", volPlan: it.volumePlan ?? "", volActual: it.volumeActual ?? "",
-      start: it.plan_start ? String(it.plan_start).slice(0, 10) : "", finish: it.plan_end ? String(it.plan_end).slice(0, 10) : "" });
+      start: it.plan_start ? String(it.plan_start).slice(0, 10) : "", finish: it.plan_end ? String(it.plan_end).slice(0, 10) : "",
+      actType: it.act_type ?? "", activityNo: it.activity_no ?? "", wfRate: it.wf_rate ?? "", description: it.description ?? "" });
+    // under a version that plans the activity, its dates and planned quantity are the version's row (owner's requirements 2026-10-22)
+    const planned = (row) => !!(versionId && row.item?.plan);
+    const toPlan = (row, v) => ({ url: "/api/eps/planning", kind: "plan-edit", id: row.item.plan.id, startOn: v.start || "", endOn: v.finish || "", volumePlan: v.volPlan });
     return {
-      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "wf", type: "number" }, { key: "volPlan", type: "number" },
-        { key: "volActual", type: "number" }, { key: "start", type: "date" }, { key: "finish", type: "date" }] : []),
+      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "actType", type: "text" }, { key: "activityNo", type: "text" },
+        { key: "wf", type: "number" }, { key: "wfRate", type: "number" }, { key: "volPlan", type: "number" },
+        { key: "volActual", type: "number" }, { key: "start", type: "date" }, { key: "finish", type: "date" }, { key: "description", type: "text" }] : []),
       value: (row) => valueOf(row.item),
-      save: (row, v) => batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...actBody(v) }]),
+      save: (row, v) => (planned(row) ? batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...own(v) }, toPlan(row, v)])
+        : batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...actBody(v) }])),
       create: (node, v) => batch([{ kind: "activity", nodeId: node.id, ...actBody(v) }]),
-      remove: (rows) => batch(rows.filter((x) => x.kind === "act").map((x) => ({ kind: "activity-remove", id: x.id }))
-        .concat(rows.filter((x) => x.kind === "node").reverse().map((x) => ({ kind: "node-remove", id: x.id })))),
+      // here a node picked for deletion takes only its activities: nodes are deleted on the WBS page (owner's requirements 2026-10-22)
+      removable: (rows) => rows.filter((x) => x.kind === "act"),
+      remove: (rows) => batch(rows.filter((x) => x.kind === "act").map((x) => ({ kind: "activity-remove", id: x.id }))),
       paste: (node, rows, mode) => {
         const nodes = rows.filter((x) => x.kind === "node"), inNode = new Set(nodes.flatMap((n) => [n.id]));
         // an activity whose node is pasted too travels with it
@@ -97,7 +106,7 @@ export default function ActivitiesPage() {
       <span className="sub">{picker} <Link href="/eps">{t("ep.link.board")}</Link> · <Link href="/eps/wbs">WBS</Link> · <Link href="/eps/codes">{t("ep.co.title")}</Link> · <Link href="/eps/scope">{t("ep.link.scope")}</Link> · <Link href="/eps/progress">{t("ep.link.entry")}</Link></span></div>);
   if (!contractId) return <div className="page"><div className="pagehead"><h1>{t("ep.ac.title")}</h1></div><p className="empty-note">{t("cs.pick")}</p></div>;
   if (error) return <div className="page">{head}<p className="err">{error}</p></div>;
-  if (!versionId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
+  if (!plan) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
   if (!data) return <div className="page">{head}<p className="muted">{t("common.loading")}</p></div>;
   const may = data.may.edit;
   const node = sel ? (sel.kind === "node" ? sel.item : null) : null;
@@ -120,7 +129,7 @@ export default function ActivitiesPage() {
         {t("ep.ac.pendingLinks", { n: data.scope.filter((x) => !x.rule.auto_apply && (x.pending.any || x.firstApply)).length })} <Link href="/eps/scope">{t("ep.link.scope")}</Link></p>}
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>{t("ep.ac.problems")}</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
       <div style={{ height }}>
-        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "name", "wf", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur"]}
+        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "actType", "activityNo", "name", "wf", "wfRate", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur", "description"]}
           storeKey="p6-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} ops={ops} />
       </div>
       {grip}

@@ -59,8 +59,8 @@ async function scopeTrees(db, projectId) {
     `SELECT r.id, r.category_id AS parent_id, r.name, k.contract_no FROM contract_resource r JOIN contract k ON k.id = r.contract_id
       WHERE k.project_id = $1 ORDER BY k.contract_no, r.name`, [projectId]);
   const { rows: wbs } = await db.query(
-    `SELECT n.id, n.parent_id, n.code, n.name, k.contract_no FROM wbs_node n JOIN eps_version v ON v.id = n.version_id JOIN eps_pms p ON p.id = v.pms_id
-       LEFT JOIN contract k ON k.id = p.contract_id WHERE p.project_id = $1 AND v.master ORDER BY n.code`, [projectId]);
+    `SELECT n.id, n.parent_id, n.code, n.name, k.contract_no FROM wbs_node n JOIN eps_pms p ON p.id = n.pms_id
+       LEFT JOIN contract k ON k.id = p.contract_id WHERE p.project_id = $1 AND EXISTS (SELECT 1 FROM eps_version v WHERE v.pms_id = p.id AND v.master) ORDER BY n.code`, [projectId]);
   return {
     narrative: cats.filter((c) => c.tree === "narrative").map((c) => ({ id: c.id, parentId: c.parent_id, name: c.name, group: c.contract_no })),
     resource: [...cats.filter((c) => c.tree === "resource").map((c) => ({ id: c.id, parentId: c.parent_id, name: c.name, group: c.contract_no })),

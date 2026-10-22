@@ -16,6 +16,7 @@ import { parsePmsRows, checkPms } from "../../lib/controls/pms.mjs";
 import { readPmsWorkbook } from "../../lib/db/repos/pms.mjs";
 import { readPlanFile } from "../../lib/db/repos/eps-import.mjs";
 import { fromSheet } from "../../lib/eps/import.mjs";
+import { fromPlanSheet } from "../../lib/eps/planning.mjs";
 
 /** The workbook the download button writes, as bytes. */
 const book = (key) => {
@@ -41,6 +42,16 @@ test("the EPS template imports as a version: nodes nested by parent code, activi
     [["01", null, 100], ["01.01", "01", 60], ["01.02", "01", 40]]);
   equal(plan.activities.map((a) => [a.code, plan.nodes.find((n) => n.key === a.nodeKey).code, a.wf, a.volume, a.plan_start, a.plan_end]),
     [["A-010", "01.01", 60, 700, "2026-11-01", "2027-01-15"], ["A-020", "01.01", 40, 500, "2026-12-01", "2027-02-28"], ["A-030", "01.02", 100, 300, "2027-01-01", "2027-03-31"]]);
+});
+
+test("the planning template reads back line by line: WBS code where given, days, dates, ten decimals", () => {
+  const wb = XLSX.read(book("planning"), { type: "buffer", cellDates: true });
+  const r = fromPlanSheet(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null, blankrows: false }));
+  equal(r.problems, []);
+  equal(r.lines.map((l) => [l.wbs, l.code, l.startOn, l.days, l.endOn, l.doneBefore, l.volumePlan]), [
+    ["PM01.C.01.01", "PM01.C.01.01.01", "2026-11-01", 10, null, 0, 120.5],
+    [null, "PM01.C.01.01.02", "2026-11-05", null, "2026-11-30", 40, null],
+    [null, "A-030", null, null, null, null, 0.1234567891]]);
 });
 
 test("an EPS sheet without a Type column, as the tree's own export writes it, and what it cannot place", () => {

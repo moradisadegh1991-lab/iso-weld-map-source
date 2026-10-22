@@ -18,8 +18,8 @@ import { REL_TYPES, BUDGET_UNITS, ROLE_STATUS, QTY_MODES } from "../../../../lib
  * into the contract's daily report, so the report's workflow decides on top
  * of that whether the caller may write to that report now.
  *
- *   GET ?projectId&versionId                 the version's WBS with activities, done, progress, codes, relations
- *   GET ?projectId&activityId                one activity's detail sub-forms
+ *   GET ?projectId&(pmsId|versionId)         the PMS's WBS (as the version plans it) with activities, done, progress, codes, relations
+ *   GET ?projectId&activityId[&versionId]    one activity's detail sub-forms (as the version plans it; else the master plan)
  *   GET ?projectId&contractId&codes=1        the contract's activity codes
  *   GET ?projectId&contractId&day=YYYY-MM-DD the contract's daily reports of that day, and whether the caller may write to each
  *   GET ?projectId&versionId&days=d1,d2      the chosen days as columns
@@ -34,17 +34,18 @@ const LABELS = { relTypes: REL_TYPES, budgetUnits: BUDGET_UNITS, roleStatus: ROL
 const notFound = () => Object.assign(new Error("not found"), { status: 404 });
 
 const VERSION = "SELECT p.contract_id FROM eps_version v JOIN eps_pms p ON p.id = v.pms_id WHERE v.id = $1 AND v.project_id = $2";
-const ACTIVITY = `SELECT p.contract_id FROM wbs_activity a JOIN wbs_node n ON n.id = a.node_id JOIN eps_version v ON v.id = n.version_id
-                   JOIN eps_pms p ON p.id = v.pms_id WHERE a.id = $1 AND a.project_id = $2`;
+const PMS = "SELECT contract_id FROM eps_pms WHERE id = $1 AND project_id = $2";
+const ACTIVITY = `SELECT p.contract_id FROM wbs_activity a JOIN wbs_node n ON n.id = a.node_id JOIN eps_pms p ON p.id = n.pms_id
+                   WHERE a.id = $1 AND a.project_id = $2`;
 const REL = `SELECT p.contract_id FROM activity_relation r JOIN wbs_activity a ON a.id = r.pred_id JOIN wbs_node n ON n.id = a.node_id
-              JOIN eps_version v ON v.id = n.version_id JOIN eps_pms p ON p.id = v.pms_id WHERE r.id = $1 AND r.project_id = $2`;
+              JOIN eps_pms p ON p.id = n.pms_id WHERE r.id = $1 AND r.project_id = $2`;
 const CODE = "SELECT contract_id FROM activity_code WHERE id = $1 AND project_id = $2";
 const ROLE = `SELECT p.contract_id FROM activity_role r JOIN wbs_activity a ON a.id = r.activity_id JOIN wbs_node n ON n.id = a.node_id
-               JOIN eps_version v ON v.id = n.version_id JOIN eps_pms p ON p.id = v.pms_id WHERE r.id = $1 AND r.project_id = $2`;
+               JOIN eps_pms p ON p.id = n.pms_id WHERE r.id = $1 AND r.project_id = $2`;
 const DELAY = ROLE.replace("activity_role", "activity_delay");
 const REPORT = "SELECT contract_id FROM report WHERE id = $1 AND project_id = $2";
-const NODE = `SELECT p.contract_id FROM wbs_node n JOIN eps_version v ON v.id = n.version_id JOIN eps_pms p ON p.id = v.pms_id WHERE n.id = $1 AND n.project_id = $2`;
-const RULE = `SELECT p.contract_id FROM scope_rule r JOIN eps_version v ON v.id = r.version_id JOIN eps_pms p ON p.id = v.pms_id WHERE r.id = $1 AND r.project_id = $2`;
+const NODE = "SELECT p.contract_id FROM wbs_node n JOIN eps_pms p ON p.id = n.pms_id WHERE n.id = $1 AND n.project_id = $2";
+const RULE = "SELECT p.contract_id FROM scope_rule r JOIN eps_pms p ON p.id = r.pms_id WHERE r.id = $1 AND r.project_id = $2";
 
 /** The contract a request's record belongs to, read from the record itself. */
 async function contractOf(db, projectId, b) {
@@ -80,21 +81,22 @@ export async function GET(request) {
         return assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
       };
       const one = async (sql, id) => (await db.query(sql, [id, projectId])).rows[0]?.contract_id ?? null;
-      const versionId = q("versionId"), activityId = q("activityId"), contractId = q("contractId");
+      const versionId = q("versionId"), pmsId = q("pmsId"), activityId = q("activityId"), contractId = q("contractId");
       if (activityId) {
         const a = await access(await one(ACTIVITY, activityId));
-        return Response.json({ ...(await act.activityDetail(db, { projectId, activityId, userId: user.id })), labels: LABELS, may: { edit: a !== "view" } });
+        return Response.json({ ...(await act.activityDetail(db, { projectId, activityId, versionId, userId: user.id })), labels: LABELS, may: { edit: a !== "view" } });
       }
-      if (versionId) {
-        const a = await access(await one(VERSION, versionId));
-        if (q("lines")) return Response.json({ lines: await act.versionLines(db, { projectId, versionId }) });
-        if (q("unplanned")) return Response.json({ unplanned: await scope.unplanned(db, { projectId, versionId }), labels: LABELS });
-        const autoApplied = a !== "view" ? (await scope.autoApply(db, { projectId, versionId, userId: user.id })).filter((x) => x.error || x.added || x.removed || x.changed || x.made || x.dropped) : [];
+      if (versionId || pmsId) {
+        const a = await access(versionId ? await one(VERSION, versionId) : await one(PMS, pmsId));
+        const at = { projectId, pmsId, versionId };
+        if (q("lines")) return Response.json({ lines: await act.versionLines(db, at) });
+        if (q("unplanned")) return Response.json({ unplanned: await scope.unplanned(db, at), labels: LABELS });
+        const autoApplied = a !== "view" ? (await scope.autoApply(db, { ...at, userId: user.id })).filter((x) => x.error || x.added || x.removed || x.changed || x.made || x.dropped) : [];
         if (q("days") !== null || url.searchParams.has("days")) {
           const days = String(q("days") || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 62);
-          return Response.json({ ...(await act.daysView(db, { projectId, versionId, days })), labels: LABELS, may: { edit: a !== "view" } });
+          return Response.json({ ...(await act.daysView(db, { ...at, days })), labels: LABELS, may: { edit: a !== "view" } });
         }
-        return Response.json({ ...(await act.activityView(db, { projectId, versionId })), autoApplied, labels: LABELS, may: { edit: a !== "view" } });
+        return Response.json({ ...(await act.activityView(db, at)), autoApplied, labels: LABELS, may: { edit: a !== "view" } });
       }
       if (contractId) {
         const a = await access(contractId);

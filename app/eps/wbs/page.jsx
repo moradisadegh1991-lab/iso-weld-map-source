@@ -6,10 +6,12 @@ import { useTreeDrag } from "../../../components/ui/treeDrag";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 import { useEpsFmt } from "../../../components/eps/ActivityDetail";
 import { SEPARATOR_NAMES } from "../../../lib/eps/wbs.mjs";
+import { useVersion } from "../../../components/eps/shared";
 
 import TableKit from "../../../components/ui/TableKit";
 /**
- * A version's WBS. Part one: the settings — a colour per level, how each
+ * A PMS's WBS — one tree for all its versions (083); a version plans its
+ * activities on the planning page. Part one: the settings — a colour per level, how each
  * level is numbered and the separator, and how budget and weight relate
  * (typed by hand / budget from W.F / W.F from budget). Part two: the tree
  * under the PMS code — nodes added, edited, moved under another node by drag
@@ -27,10 +29,8 @@ const toForm = (n) => ({ id: n.id, parentId: n.parent_id, code: n.code, name: n.
 
 export default function WbsPage() {
   const { projectId, contractId, call } = usePlatform();
-  const [versionId, setVersionId] = useState(null);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("version"); if (v) setVersionId(v); }, []);
-  const board = useProjectData((id) => (contractId ? `/api/eps?projectId=${id}&contractId=${contractId}` : null), [contractId]);
-  const { data, error, reload } = useProjectData((id) => (versionId ? `/api/eps?projectId=${id}&versionId=${versionId}` : null), [versionId]);
+  const { pmsId, picker, reloadBoard } = useVersion(contractId, { version: false });
+  const { data, error, reload } = useProjectData((id) => (pmsId ? `/api/eps?projectId=${id}&pmsId=${pmsId}` : null), [pmsId]);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const [closed, setClosed] = useState(new Set());
@@ -41,23 +41,19 @@ export default function WbsPage() {
   const { fmt, day } = useEpsFmt();
   async function post(body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) }); reload(); board.reload(); if (done) setOk(done(r)); return r; }
+    try { const r = await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, pmsId, ...body }) }); reload(); reloadBoard(); if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; }
   }
   const dnd = useTreeDrag((d, to, zone) => post(zone === "inside" ? { kind: "node-move", id: d.id, parentId: to.id === "root" ? null : to.id }
     : { kind: "node-move", id: d.id, parentId: to.parentId, [zone === "before" ? "beforeId" : "afterId"]: to.id }, () => t("ep.wb.moved")),
   { sibling: (d, to) => to.id !== "root" });
-  const versions = (board.data?.pms || []).flatMap((p) => p.versions.map((v) => ({ ...v, pmsCode: p.code })));
-  useEffect(() => { if (!versionId && versions.length) setVersionId(versions[0].id); }, [versions.length]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!contractId) return <div className="page"><div className="pagehead"><h1>{t("ep.wb.title")}</h1></div><p className="empty-note">{t("cs.pick")}</p></div>;
   const head = (
     <div className="pagehead"><h1>{t("ep.wb.title")}</h1>
-      <span className="sub"><select aria-label={t("ep.version")} value={versionId || ""} onChange={(e) => { setVersionId(e.target.value); setForm(null); }}>
-        {versions.length === 0 && <option value="">{t("ep.noVersion")}</option>}
-        {versions.map((v) => <option key={v.id} value={v.id}>{v.pmsCode} › {v.code} — {v.title}</option>)}</select>
+      <span className="sub">{picker}
         {" "}<Link href="/eps">{t("ep.link.board")}</Link> · <Link href="/eps/templates">{t("ep.tp.title")}</Link></span></div>);
   if (error) return <div className="page">{head}<p className="err">{error}</p></div>;
-  if (!versionId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
+  if (!pmsId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
   if (!data) return <div className="page">{head}<p className="muted">{t("common.loading")}</p></div>;
   const may = data.may.edit;
   const S = data.settings;
@@ -74,7 +70,7 @@ export default function WbsPage() {
 
   async function openAdd(parentId) {
     let code = "";
-    try { code = (await call(`/api/eps?projectId=${projectId}&versionId=${versionId}&suggest=1${parentId ? `&parentId=${parentId}` : ""}`)).code; } catch { /* typed by hand */ }
+    try { code = (await call(`/api/eps?projectId=${projectId}&pmsId=${pmsId}&suggest=1${parentId ? `&parentId=${parentId}` : ""}`)).code; } catch { /* typed by hand */ }
     setForm({ mode: "add", parentId, ...BLANK_NODE, code });
   }
   const nodeRow = (n) => {
@@ -115,7 +111,8 @@ export default function WbsPage() {
       <Settings S={S} labels={data.labels} may={may} post={post} pmsCode={data.version.pms_code} />
       {form && <NodeForm form={form} setForm={setForm} mode={mode} templates={withActs} post={post} />}
       <div className="card">
-        <h2>{t("ep.wb.structure", { pms: data.version.pms_code })} <span className="sm muted">{t("ep.wb.rootBudget", { code: data.version.code, budget: fmt(data.version.budget_plan) })}</span></h2>
+        <h2>{t("ep.wb.structure", { pms: data.version.pms_code })} <span className="sm muted">{t("ep.wb.rootBudget", { code: data.version.code, budget: fmt(data.version.budget_plan) })}</span>
+          {may && <RootBudget v={data.version} post={post} />}</h2>
         <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
           <span className="sm">{t("ep.g.levels")}:</span>
           {Array.from({ length: Math.max(maxLevel, 1) }, (_, i) => i + 1).map((l) => <button key={l} className="btn ghost sm" type="button" onClick={() => openTo(l)}>{l}</button>)}
@@ -127,10 +124,10 @@ export default function WbsPage() {
             <th>{t("ep.wb.planned")}</th><th>{t("ep.wb.actual")}</th><th>{t("ep.wb.tplActs")}</th><th /></tr></thead>
           <tbody>
             <tr data-wbs-root="" {...(may ? dnd.target({ id: "root" }) : {})} style={{ fontWeight: 700, ...dnd.look({ id: "root" }) }}>
-              <td className="mono">{data.version.pms_code}</td><td>{data.version.pms_title} — {data.version.title}</td>
+              <td className="mono">{data.version.pms_code}</td><td>{data.version.pms_title}</td>
               <td className="mono">{fmt(data.version.budget_plan)}</td><td className="mono">{fmt(data.version.budget_actual)}</td><td /><td />
               <td className="mono sm">Σ {fmt(data.rootWf, 4)}%</td><td className="mono">{fmt(100)}%</td>
-              <td className="mono sm">{day(data.version.start_on)} — {day(data.version.end_on)}</td><td /><td />
+              <td /><td /><td />
               <td style={{ whiteSpace: "nowrap" }}>{may && <><button className="btn sm" type="button" onClick={() => openAdd(null)}>{t("ep.wb.addTop")}</button>
                 {clip && <button className="btn ghost sm" type="button" onClick={() => post({ kind: "node-copy", id: clip.id, parentId: null }, (r) => t("ep.wb.pasted", { code: r.row.code }))}>{t("ep.tp.paste")}</button>}</>}</td>
             </tr>
@@ -140,6 +137,21 @@ export default function WbsPage() {
       </div>
     </div>
   );
+}
+
+/** The root's budget is the PMS's (083): the budget modes take a child's share of it. */
+function RootBudget({ v, post }) {
+  const { t } = usePrefs();
+  const [f, setF] = useState(null);
+  if (!f) return <button type="button" className="btn ghost sm" style={{ marginInlineStart: 8 }} data-root-budget
+    onClick={() => setF({ budgetPlan: v.budget_plan ?? "", budgetActual: v.budget_actual ?? "" })}>{t("ep.wb.rootBudgetEdit")}</button>;
+  return (
+    <form className="row sm" style={{ gap: 6, display: "inline-flex", marginInlineStart: 8, alignItems: "center" }}
+      onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "pms-budget", id: v.pms_id, ...f }, () => t("ep.wb.rootBudgetSaved"))) setF(null); }}>
+      <input aria-label={t("ep.wb.budgetPlan")} dir="ltr" inputMode="decimal" style={{ width: 120 }} value={f.budgetPlan} onChange={(e) => setF({ ...f, budgetPlan: e.target.value })} />
+      <input aria-label={t("ep.d.budgetActual")} dir="ltr" inputMode="decimal" style={{ width: 120 }} value={f.budgetActual} onChange={(e) => setF({ ...f, budgetActual: e.target.value })} />
+      <button className="btn sm" type="submit">{t("ep.save")}</button><button className="btn ghost sm" type="button" onClick={() => setF(null)}>{t("ep.cancel")}</button>
+    </form>);
 }
 
 function Settings({ S, labels, may, post, pmsCode }) {

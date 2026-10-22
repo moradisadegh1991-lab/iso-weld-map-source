@@ -18,10 +18,11 @@ import { logEvent } from "../../../lib/db/repos/log.mjs";
  * Activity templates are the project's: kept by contracts or controls.
  *
  *   GET ?projectId&contractId              the contract's EPS: PMSs and their versions
- *   GET ?projectId&versionId               a version's WBS with every derived figure, and the templates
- *   GET ?projectId&versionId&suggest=1[&parentId]   the code a new node would get
+ *   GET ?projectId&pmsId                   a PMS's WBS with every derived figure, and the templates
+ *   GET ?projectId&versionId               the same tree as a version plans it
+ *   GET ?projectId&(pmsId|versionId)&suggest=1[&parentId]   the code a new node would get
  *   GET ?projectId&templates=1             the activity templates
- *   POST {kind: pms | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
+ *   POST {kind: pms | pms-budget | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
  *         attach | activity | activity-remove | template | template-move | template-copy | template-remove |
  *         template-activity | template-activity-remove | template-sync | convert-legacy}
  *   POST multipart {kind: import-plan, pmsId, versionCode, fileKind: mspdi | pms | sheet, file}
@@ -33,19 +34,19 @@ const notFound = () => Object.assign(new Error("not found"), { status: 404 });
 /** The contract a request's record belongs to, read from the record itself (the repository checks the rest belongs with it). */
 const PMS = "SELECT contract_id FROM eps_pms WHERE id = $1 AND project_id = $2";
 const VERSION = "SELECT p.contract_id FROM eps_version v JOIN eps_pms p ON p.id = v.pms_id WHERE v.id = $1 AND v.project_id = $2";
-const NODE = `SELECT p.contract_id FROM wbs_node n JOIN eps_version v ON v.id = n.version_id JOIN eps_pms p ON p.id = v.pms_id
-               WHERE n.id = $1 AND n.project_id = $2`;
-const ACTIVITY = `SELECT p.contract_id FROM wbs_activity a JOIN wbs_node n ON n.id = a.node_id JOIN eps_version v ON v.id = n.version_id
-                   JOIN eps_pms p ON p.id = v.pms_id WHERE a.id = $1 AND a.project_id = $2`;
+const NODE = "SELECT p.contract_id FROM wbs_node n JOIN eps_pms p ON p.id = n.pms_id WHERE n.id = $1 AND n.project_id = $2";
+const ACTIVITY = `SELECT p.contract_id FROM wbs_activity a JOIN wbs_node n ON n.id = a.node_id JOIN eps_pms p ON p.id = n.pms_id
+                   WHERE a.id = $1 AND a.project_id = $2`;
 async function contractOf(db, projectId, b) {
   const q = async (sql, id) => (id ? (await db.query(sql, [id, projectId])).rows[0]?.contract_id ?? null : null);
   switch (b.kind) {
     case "pms": return b.id ? q(PMS, b.id) : b.contractId || null;
+    case "pms-budget": return q(PMS, b.id);
     case "version": return b.id ? q(VERSION, b.id) : q(PMS, b.pmsId);
     case "import-plan": case "convert-legacy": return q(PMS, b.pmsId);
     case "version-master": return q(VERSION, b.id);
     case "eps-move": case "eps-remove": return b.epsKind === "version" ? q(VERSION, b.id) : q(PMS, b.id);
-    case "settings": case "node": case "node-move": case "node-copy": case "node-remove": return q(VERSION, b.versionId);
+    case "settings": case "node": case "node-move": case "node-copy": case "node-remove": return b.pmsId ? q(PMS, b.pmsId) : q(VERSION, b.versionId);
     case "attach": case "activity": return q(NODE, b.nodeId);
     case "activity-remove": return q(ACTIVITY, b.id);
     default: return null;
@@ -64,13 +65,13 @@ export async function GET(request) {
     const mayTemplates = can(membership, ACTIONS.MANAGE_CONTRACTS) || can(membership, ACTIONS.MANAGE_CONTROLS);
     return await withProject(db, projectId, async () => {
       if (q("templates")) return Response.json({ templates: await eps.templatesWithActivities(db, { projectId }), may: { edit: mayTemplates } });
-      const versionId = q("versionId");
-      if (versionId) {
-        const contractId = await contractOf(db, projectId, { kind: "settings", versionId });
+      const versionId = q("versionId"), pmsId = q("pmsId");
+      if (versionId || pmsId) {
+        const contractId = await contractOf(db, projectId, { kind: "settings", versionId, pmsId });
         if (!contractId) throw notFound();
         const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
-        if (q("suggest")) return Response.json({ code: await eps.suggestNodeCode(db, { projectId, versionId, parentId: q("parentId") }) });
-        return Response.json({ ...(await eps.wbsView(db, { projectId, versionId })), labels: LABELS, may: { edit: access !== "view" } });
+        if (q("suggest")) return Response.json({ code: await eps.suggestNodeCode(db, { projectId, pmsId, versionId, parentId: q("parentId") }) });
+        return Response.json({ ...(await eps.wbsView(db, { projectId, pmsId, versionId })), labels: LABELS, may: { edit: access !== "view" } });
       }
       const contractId = q("contractId");
       if (!contractId) return Response.json({ error: "contractId is required" }, { status: 400 });
@@ -115,6 +116,7 @@ export async function POST(request) {
       }
       const run = {
         pms: () => eps.savePms(db, a),
+        "pms-budget": () => eps.savePmsBudget(db, a),
         version: () => eps.saveVersion(db, a),
         "version-master": () => eps.setMaster(db, a),
         "eps-move": () => eps.moveEps(db, { ...a, kind: b.epsKind }),
