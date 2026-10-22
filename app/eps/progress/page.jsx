@@ -9,6 +9,7 @@ import { codeSummary, periodColumns } from "../../../lib/eps/activities.mjs";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 
 import TableKit from "../../../components/ui/TableKit";
+import TemplateButton from "../../../components/ui/TemplateButton";
 /**
  * The work done each day, entered against the WBS activities (owner's «PMS»
  * document, images 10–12). The activity's own figures are not edited here.
@@ -18,9 +19,16 @@ import TableKit from "../../../components/ui/TableKit";
  * selected activity) or «add item multi» (every activity the filter shows).
  * Each line becomes a row of the daily report, so the report's workflow
  * decides who may add, change or remove it and when.
+ *
+ * Owner's requirements 2026-10-22, item 29: the PMS and its version come
+ * first (the master plan by default; the planned dates are the version's),
+ * a double click on an activity adds it as «add item single» does, the work
+ * is read from an Excel sheet too (with its template), and in the daily
+ * report sub-form a line's report number and activity code are list boxes.
  */
 const TABS = ["reports", "detail", "codes", "docs"];
 const today = () => new Date().toISOString().slice(0, 10);
+const flatActs = (roots) => { const out = []; const walk = (n) => { out.push(...n.activities); n.children.forEach(walk); }; roots.forEach(walk); return out; };
 
 export default function ProgressPage() {
   const { projectId, contractId, call } = usePlatform();
@@ -33,6 +41,7 @@ export default function ProgressPage() {
   const [tab, setTab] = useState("reports");
   const [f, setF] = useState({ mode: "number", value: "", day: today(), reportId: "", areaId: "", mark: "", notes: "" });
   const reports = useProjectData((id) => (contractId && f.day ? `/api/eps/activities?projectId=${id}&contractId=${contractId}&day=${f.day}` : null), [contractId, f.day]);
+  const allReports = useProjectData((id) => (contractId ? `/api/contract-reports?projectId=${id}&contractId=${contractId}` : null), [contractId]);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const { height, grip } = useSplit("p6-progress", 400);
@@ -42,8 +51,21 @@ export default function ProgressPage() {
   }, [reports.data]); // eslint-disable-line react-hooks/exhaustive-deps
   async function post(url, body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, ...body }) }); reload(); lines.reload(); detail.reload(); reports.reload(); if (done) setOk(done(r)); return r; }
+    try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, ...body }) }); reload(); lines.reload(); detail.reload(); reports.reload(); allReports.reload(); if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; }
+  }
+  async function importFile(file) {
+    setMsg(null); setOk(null);
+    try {
+      const form = new FormData();
+      for (const [k, v] of Object.entries({ projectId, kind: "progress-import", contractId })) form.set(k, v);
+      form.set("file", file);
+      const res = await fetch("/api/eps/activities", { method: "POST", body: form, credentials: "same-origin" });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(b.error || t("ep.im.status", { n: res.status }));
+      reload(); lines.reload(); detail.reload(); reports.reload();
+      setOk(t("ep.pg.imported", { n: b.row.added, reports: b.row.reports.join(", ") }));
+    } catch (e) { setMsg(e.message); }
   }
   const add = (ids) => post("/api/eps/activities", { kind: "progress-add", reportId: f.reportId, activityIds: ids, mode: f.mode, value: f.value, areaId: f.areaId || null, mark: f.mark, notes: f.notes },
     () => t("ep.pg.added", { n: ids.length, no: (reports.data?.reports || []).find((r) => r.id === f.reportId)?.report_no || "" }));
@@ -60,7 +82,7 @@ export default function ProgressPage() {
 
   const head = (
     <div className="pagehead"><h1>{t("ep.pg.title")}</h1>
-      <span className="sub">{picker} <Link href="/eps/activities">{t("ep.link.activities")}</Link> · <Link href="/eps/progress/days">{t("ep.link.days")}</Link> · <Link href="/contract-reports">{t("ep.link.contractReport")}</Link></span></div>);
+      <span className="sub">{picker} <Link href="/eps/activities">{t("ep.link.activities")}</Link> · <Link href="/eps/progress/days">{t("ep.link.days")}</Link> · <Link href={`/eps/progress/preview?${new URLSearchParams({ ...(f.reportId ? { report: f.reportId } : {}), ...(versionId ? { version: versionId } : pmsId ? { pms: pmsId } : {}) })}`} data-report-preview>{t("ep.link.reportPreview")}</Link> · <Link href="/contract-reports">{t("ep.link.contractReport")}</Link></span></div>);
   if (!contractId) return <div className="page"><div className="pagehead"><h1>{t("ep.pg.title")}</h1></div><p className="empty-note">{t("cs.pick")}</p></div>;
   if (error) return <div className="page">{head}<p className="err">{error}</p></div>;
   if (!plan) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
@@ -84,6 +106,9 @@ export default function ProgressPage() {
         <button className="btn" type="button" disabled={!canAdd || sel?.kind !== "act"} data-add="single" onClick={() => add([sel.id])}>{t("pg.addSingle")}</button>
         <button className="btn" type="button" disabled={!canAdd || visible.length === 0} data-add="multi"
           onClick={() => { if (window.confirm(t("pg.addMultiAsk", { n: visible.length }))) add(visible.map((a) => a.id)); }}>{t("pg.addMulti", { n: visible.length })}</button>
+        <TemplateButton kind="daily" />
+        <label className="btn ghost sm" style={{ cursor: "pointer" }}>{t("ep.pl.import")}
+          <input type="file" accept=".xlsx,.xls" hidden data-progress-import onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ""; if (x && window.confirm(t("ep.pg.importAsk", { name: x.name }))) importFile(x); }} /></label>
         <span className="sm" data-day-progress>{t("pg.dayProgress", { day: f.day, plan: num(toDay.get("__all")?.TPP ?? null, { maximumFractionDigits: 2 }), actual: num(toDay.get("__all")?.TPA ?? null, { maximumFractionDigits: 2 }) })}</span>
       </div>
       <div className="card row" style={{ gap: 18, flexWrap: "wrap", alignItems: "flex-start" }} data-entry-box>
@@ -110,7 +135,8 @@ export default function ProgressPage() {
       </div>
       <div style={{ height }}>
         <ActivityGrid data={data} columns={columns} defaultCols={["code", "name", "unit", "volActual", "done", "pct", "dayPlan", "dayActual", "remain", "start", "finish"]}
-          storeKey="p6-progress" selected={sel?.id} onSelect={(r) => setSel(r)} onVisible={setVisible} />
+          storeKey="p6-progress" selected={sel?.id} onSelect={(r) => setSel(r)} onVisible={setVisible}
+          onOpen={(r) => { setSel(r); if (canAdd) add([r.id]); else setMsg(rep ? t("ep.pg.needQty") : t("pg.noReport")); }} />
       </div>
       {grip}
       <div className="p6-detail">
@@ -137,7 +163,8 @@ export default function ProgressPage() {
           </div>
         ) : sel?.kind !== "act" ? <p className="empty-note">{t("ep.pickActivity")}</p>
           : detail.error ? <p className="err">{detail.error}</p> : !detail.data ? <p className="muted">{t("common.loading")}</p>
-            : <ActivityDetail d={detail.data} tab={tab === "detail" ? "detail" : tab} may={false} readOnly post={post} companies={data.companies} projectId={projectId} />}
+            : <ActivityDetail d={detail.data} tab={tab === "detail" ? "detail" : tab} may={false} readOnly post={post} companies={data.companies} projectId={projectId}
+              acts={flatActs(data.roots)} reportList={allReports.data?.reports || []} />}
       </div>
     </div>
   );

@@ -45,7 +45,7 @@ export function useEpsFmt() {
 }
 const KV = ({ k, v }) => <div className="kv"><span>{k}</span><b>{v}</b></div>;
 
-export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null, history = false }) {
+export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null, history = false, reportList = [] }) {
   const a = d.activity;
   switch (tab) {
     case "detail": return <Detail d={d} a={a} may={may && !readOnly} post={post} />;
@@ -54,7 +54,7 @@ export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [
     case "relations": return <Relations d={d} may={may && !readOnly} post={post} acts={acts} />;
     case "progress": return <Progress a={a} codes={d.codes} />;
     case "roles": return <Roles d={d} may={may && !readOnly} post={post} resources={resources} />;
-    case "reports": return <Reports d={d} post={post} companies={companies} readOnly={readOnly || history} />;
+    case "reports": return <Reports d={d} post={post} companies={companies} readOnly={history} acts={acts} reportList={reportList} />;
     case "codes": return <Codes d={d} may={may && !readOnly} post={post} codes={codes} />;
     case "overall": return <Overall d={d} may={may && !readOnly} post={post} />;
     case "docs": return <Docs d={d} projectId={projectId} />;
@@ -254,7 +254,14 @@ function Roles({ d, may, post, resources }) {
     </div>);
 }
 
-function Reports({ d, post, companies, readOnly = false }) {
+/**
+ * The activity's lines in the daily reports, each edited where it stands as
+ * its report's workflow allows: quantity, area, mark — and, as list boxes,
+ * the report number (the line moves to another report of the contract) and
+ * the activity code (only activities are offered; owner's requirements
+ * 2026-10-22, item 29).
+ */
+function Reports({ d, post, companies, readOnly = false, acts = [], reportList = [] }) {
   const { t } = usePrefs();
   const { fmt, day } = useEpsFmt();
   const [edit, setEdit] = useState(null);
@@ -269,18 +276,23 @@ function Reports({ d, post, companies, readOnly = false }) {
         const mine = edit && edit.rowId === l.rowId && edit.reportId === l.reportId;
         return (
           <tr key={`${l.reportId}-${l.rowId}`} data-line={`${l.reportNo}`}>
-            <td className="sm"><span className="mono" dir="ltr">{a.code}</span> {a.name}</td>
+            <td className="sm">{mine && acts.length ? <select aria-label={t("ep.rp.activityCode")} value={edit.activityId} onChange={(e) => setEdit({ ...edit, activityId: e.target.value })}>
+              {acts.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}</select> : <><span className="mono" dir="ltr">{a.code}</span> {a.name}</>}</td>
             <td>{mine ? <select aria-label={t("ep.rp.areaShort")} value={edit.areaId || ""} onChange={(e) => setEdit({ ...edit, areaId: e.target.value })}><option value="">—</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select> : l.areaName || "—"}</td>
             <td>{mine ? <input aria-label="Mark" value={edit.mark || ""} onChange={(e) => setEdit({ ...edit, mark: e.target.value })} style={{ width: 80 }} /> : l.mark || "—"}</td>
             <td>{a.unit || "—"}</td>
             <td className="mono">{mine ? <input aria-label={t("ep.qty")} dir="ltr" value={edit.qty} onChange={(e) => setEdit({ ...edit, qty: e.target.value })} style={{ width: 90 }} /> : <b>{fmt(l.qty, 4)}</b>}</td>
-            <td className="mono"><Link href={`/contract-reports?id=${l.reportId}`}>{l.reportNo}</Link></td><td className="mono">{day(l.date)}</td>
+            <td className="mono">{mine && reportList.length ? <select aria-label={t("ep.rp.reportNo")} value={edit.toReportId} onChange={(e) => setEdit({ ...edit, toReportId: e.target.value })}>
+              {reportList.map((r) => <option key={r.id} value={r.id}>{r.report_no} — {day(String(r.report_date).slice(0, 10))}</option>)}</select>
+              : <Link href={`/contract-reports?id=${l.reportId}`}>{l.reportNo}</Link>}</td><td className="mono">{day(l.date)}</td>
             <td className="sm">{l.status === "approved" ? t("ep.rp.approved") : l.stageName || "—"}</td><td className="sm">{l.notes || ""}</td>
             <td style={{ whiteSpace: "nowrap" }}>{m?.edit ? (mine ? <>
-              <button className="btn sm" type="button" onClick={async () => { if (await post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, qty: edit.qty, areaId: edit.areaId, mark: edit.mark }, () => t("ep.rp.saved"))) setEdit(null); }}>{t("ep.save")}</button>
+              <button className="btn sm" type="button" data-line-save onClick={async () => { if (await post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, qty: edit.qty, areaId: edit.areaId, mark: edit.mark,
+                activityId: edit.activityId !== a.id ? edit.activityId : undefined, toReportId: edit.toReportId !== l.reportId ? edit.toReportId : undefined }, () => t("ep.rp.saved"))) setEdit(null); }}>{t("ep.save")}</button>
               <button className="btn ghost sm" type="button" onClick={() => setEdit(null)}>{t("ep.cancel")}</button></> : <>
-              <button className="btn ghost sm" type="button" onClick={() => setEdit({ reportId: l.reportId, rowId: l.rowId, qty: String(l.qty), areaId: l.areaId || "", mark: l.mark || "" })}>{t("ep.edit")}</button>
+              <button className="btn ghost sm" type="button" data-line-edit onClick={() => setEdit({ reportId: l.reportId, rowId: l.rowId, qty: String(l.qty), areaId: l.areaId || "", mark: l.mark || "",
+                activityId: a.id, toReportId: l.reportId })}>{t("ep.edit")}</button>
               <button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, remove: true }, () => t("ep.rp.rowRemoved"))}>{t("ep.remove")}</button></>)
               : <span className="sm muted" title={m?.why || ""}>{t("ep.viewOnly")}</span>}</td>
           </tr>);

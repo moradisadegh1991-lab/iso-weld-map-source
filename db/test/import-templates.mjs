@@ -17,6 +17,7 @@ import { readPmsWorkbook } from "../../lib/db/repos/pms.mjs";
 import { readPlanFile } from "../../lib/db/repos/eps-import.mjs";
 import { fromSheet } from "../../lib/eps/import.mjs";
 import { fromPlanSheet } from "../../lib/eps/planning.mjs";
+import { fromDailySheet } from "../../lib/eps/daily-sheet.mjs";
 
 /** The workbook the download button writes, as bytes. */
 const book = (key) => {
@@ -52,6 +53,19 @@ test("the planning template reads back line by line: WBS code where given, days,
     ["PM01.C.01.01", "PM01.C.01.01.01", "2026-11-01", 10, null, 0, 120.5],
     [null, "PM01.C.01.01.02", "2026-11-05", null, "2026-11-30", 40, null],
     [null, "A-030", null, null, null, null, 0.1234567891]]);
+});
+
+test("the daily work template reads back line by line: report, activity, quantity to ten decimals, area by code", () => {
+  const wb = XLSX.read(book("daily"), { type: "buffer", cellDates: true });
+  const r = fromDailySheet(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null, blankrows: false }));
+  equal(r.problems, []);
+  equal(r.lines.map((l) => [l.date, l.reportNo, l.wbs, l.code, l.qty, l.area, l.mark]), [
+    ["2026-11-05", "CR-0012", null, "PM01.C.01.01.01", 12.5, null, "Z1"],
+    ["2026-11-05", "CR-0012", "PM01.C.01.02", "A-030", 3, "AZM", null],
+    [null, "CR-0013", null, "PM01.C.01.01.01", 0.1234567891, null, null]]);
+  const bad = fromDailySheet([["Report No", "Activity code", "Qty", "Date"], ["", "A-1", 0, "1405/08/01"]]);
+  assert(bad.problems.some((p) => p.includes("شمارهٔ گزارش")) && bad.problems.some((p) => p.includes("بزرگ‌تر از صفر")) && bad.problems.some((p) => p.includes("1405/08/01")),
+    "a missing report, a zero and a date it cannot read are named");
 });
 
 test("an EPS sheet without a Type column, as the tree's own export writes it, and what it cannot place", () => {
