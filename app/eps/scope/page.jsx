@@ -58,7 +58,7 @@ export default function ScopePage() {
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       <div className="card">
         <h2>{t("ep.sp.links")}</h2>
         {v.data.scope.length === 0 ? <p className="empty-note">{t("ep.sp.none")}</p> : (

@@ -35,7 +35,7 @@ export default function CodesPage() {
       <div className="pagehead"><h1>{t("ep.co.titleFull")}</h1>
         <span className="sub">{t("ep.co.sub", { no: contract?.contract_no || "" })} · <Link href="/eps/activities">{t("ep.link.activities")}</Link></span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {may && !f && <p><button className="btn" type="button" onClick={() => setF({ ...BLANK, categories: Array(8).fill("") })}>{t("ep.co.new")}</button></p>}
       {f && (
         <form className="card" onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "code", ...f }, (r) => t("ep.co.saved", { code: r.row.code }))) setF(null); }}>

@@ -74,7 +74,7 @@ await page.keyboard.press("Escape");
 await page.locator("[data-tab=requirements]").click();
 await page.locator("[data-sub=requirements]").waitFor();
 const addReq = async (name, type, hold) => {
-  await page.locator("[data-sub=requirements] .tk-add, [data-sub=requirements] button", { hasText: "+" }).first().click();
+  await page.locator("[data-sub=requirements] [data-tk-add]").first().click();
   await page.locator('[data-sub=requirements] input[aria-label="REQ Name"]').fill(name);
   await page.locator('[data-sub=requirements] select[aria-label="REQ Type"]').selectOption({ label: type });
   await page.locator('[data-sub=requirements] input[aria-label="Hold Weight"]').fill(String(hold));
@@ -90,7 +90,7 @@ await page.screenshot({ path: `${SHOT}/380-preview-requirements-en.png` });
 
 // comments
 await page.locator("[data-tab=comments]").click();
-await page.locator("[data-sub=comments] button", { hasText: "+" }).first().click();
+await page.locator("[data-sub=comments] [data-tk-add]").first().click();
 await page.locator('[data-sub=comments] input[aria-label="Item Discussed"]').fill("Late pipe delivery");
 await page.locator("[data-sub=comments] [data-tk-save]").click();
 await page.locator("[data-sub=comments] tr[data-comment='1']").waitFor({ timeout: 8000 }).catch(() => {});

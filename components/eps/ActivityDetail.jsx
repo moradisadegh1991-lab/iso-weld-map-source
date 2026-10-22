@@ -6,6 +6,7 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
 import { BUDGET_UNITS as BUDGET_FA, ROLE_STATUS as ROLE_FA } from "../../lib/eps/activities.mjs";
 
 import TableKit from "../ui/TableKit";
+import { wIn, wOut } from "./shared";
 /**
  * The detail sub-forms under the activity view, for the selected activity
  * (owner's «PMS» document: images 1–9 and 11–12). Every figure comes from the
@@ -38,6 +39,8 @@ export function useEpsFmt() {
   const { num, date, t } = usePrefs();
   return useMemo(() => ({
     fmt: (v, d = 2) => (v == null || v === "" ? "—" : num(Number(v), { maximumFractionDigits: d })),
+    // W.F and W.V are kept as percentages and shown as decimal fractions, 45.05% → 0.4505 (owner's requirements 2026-10-22, item 8)
+    w: (v, d = 8) => (v == null || v === "" ? "—" : num(Number(v) / 100, { maximumFractionDigits: d })),
     // a bare day is a local day, not UTC midnight
     day: (d) => (d ? date(/^\d{4}-\d\d-\d\d$/.test(d) ? `${d}T00:00:00` : d) : "—"),
     statusOf: (a) => t(statusKey(a)),
@@ -72,10 +75,10 @@ export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [
  */
 function Detail({ d, a, may, post }) {
   const { t } = usePrefs();
-  const { fmt, day, statusOf } = useEpsFmt();
+  const { fmt, day, statusOf, w } = useEpsFmt();
   const [f, setF] = useState(null);
   const x = d.figures || {};
-  const open = () => setF({ name: a.name, wf: a.wf ?? "", description: a.description || "", progress: a.progress ?? "",
+  const open = () => setF({ name: a.name, wf: wIn(a.wf), description: a.description || "", progress: a.progress ?? "",
     planStart: a.own?.plan_start || "", planEnd: a.own?.plan_end || "", actualStart: a.own?.actual_start || "", actualEnd: a.own?.actual_end || "",
     volumePlan: a.own?.volume_plan ?? "", volumeActual: a.own?.volume_actual ?? "", updateDate: a.update_date || "", statusText: a.status_text || "",
     addToInvoice: !!a.add_to_invoice, suspended: !!a.suspended, scaleUpPct: a.scale_up_pct ?? "", constraintStart: a.constraint_start || "", constraintEnd: a.constraint_end || "" });
@@ -85,7 +88,7 @@ function Detail({ d, a, may, post }) {
   const C = (k) => <input aria-label={k} type="checkbox" checked={!!f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />;
   // the field is built only while editing: `edit` is a function, called with the form open
   const V = (show, edit) => (f ? edit() : show);
-  const save = async (e) => { e.preventDefault(); if (await post("/api/eps", { kind: "activity", nodeId: a.node_id, id: a.id, ...f }, () => t("ep.activitySaved"))) setF(null); };
+  const save = async (e) => { e.preventDefault(); if (await post("/api/eps", { kind: "activity", nodeId: a.node_id, id: a.id, ...f, wf: wOut(f.wf) }, () => t("ep.activitySaved"))) setF(null); };
   return (
     <form onSubmit={save} data-detail={a.code}>
       <div className="row" style={{ gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -119,7 +122,7 @@ function Detail({ d, a, may, post }) {
         <fieldset><legend>Float</legend><KV k="Free Float" v={fmt(a.freeFloat)} /><KV k="Total Float" v={<span title={t("ep.d.totalFloatTip")}>—</span>} /></fieldset>
         <fieldset><legend>Weight</legend>
           <KV k="Estimate Weight" v={V(fmt(a.volumePlan), () => I("volumePlan"))} /><KV k="Actual Weight" v={V(fmt(a.volumeActual), () => I("volumeActual"))} />
-          <KV k="Total Worked" v={fmt(a.done)} /><KV k="Remain Weight" v={fmt(a.remain)} /><KV k="W.F / W.V" v={`${a.wf == null ? "—" : `${fmt(a.wf, 4)}%`} / ${a.wv == null ? "—" : `${fmt(a.wv, 6)}%`}`} /></fieldset>
+          <KV k="Total Worked" v={fmt(a.done)} /><KV k="Remain Weight" v={fmt(a.remain)} /><KV k="W.F / W.V" v={`${w(a.wf)} / ${w(a.wv, 10)}`} /></fieldset>
       </div>
       {a.description && <p className="sm">{a.description}</p>}
       {f && <p className="sm muted">{t("ep.d.ownHint")}</p>}
@@ -201,15 +204,15 @@ function Relations({ d, may, post, acts }) {
 
 function Progress({ a, codes }) {
   const { t } = usePrefs();
-  const { fmt, day, statusOf } = useEpsFmt();
+  const { fmt, day, statusOf, w } = useEpsFmt();
   const cats = codes[0]?.categories || [];
   return (
     <div className="tablewrap"><TableKit name="eps-activitydetail-4" min={8}><table className="dtable">
       <thead><tr>{["A", "B", "C", "D", "E", "F", "G", "H"].map((x) => <th key={x}>Category {x}</th>)}<th>Activity No.</th><th>Description</th><th>Unit</th>
         <th>W.F</th><th>W.V</th><th>Actual weight</th><th>Progress</th><th>Total work</th><th>Status</th><th>Original start</th><th>Orig. dur.</th><th>Original finish</th></tr></thead>
       <tbody><tr data-progress={a.code}>{Array.from({ length: 8 }, (_, i) => <td key={i} className="sm">{cats[i] || "—"}</td>)}
-        <td className="mono" dir="ltr">{a.code}</td><td>{a.name}</td><td>{a.unit || "—"}</td><td className="mono">{a.wf == null ? "—" : `${fmt(a.wf, 4)}%`}</td>
-        <td className="mono">{a.wv == null ? "—" : `${fmt(a.wv, 6)}%`}</td><td className="mono">{fmt(a.volumeActual)}</td>
+        <td className="mono" dir="ltr">{a.code}</td><td>{a.name}</td><td>{a.unit || "—"}</td><td className="mono">{w(a.wf)}</td>
+        <td className="mono">{w(a.wv, 10)}</td><td className="mono">{fmt(a.volumeActual)}</td>
         <td className="mono"><b>{a.pct == null ? t("ep.unknown") : `${fmt(a.pct)}%`}</b></td><td className="mono">{fmt(a.done)}</td><td>{statusOf(a)}</td>
         <td className="mono">{day(a.plan_start)}</td><td className="mono">{fmt(a.planDays)}</td><td className="mono">{day(a.plan_end)}</td></tr></tbody></table></TableKit>
       <p className="sm muted">{t("ep.pr.note")}</p></div>);

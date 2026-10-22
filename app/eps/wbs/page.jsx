@@ -6,7 +6,7 @@ import { useTreeDrag } from "../../../components/ui/treeDrag";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 import { useEpsFmt } from "../../../components/eps/ActivityDetail";
 import { SEPARATOR_NAMES } from "../../../lib/eps/wbs.mjs";
-import { useVersion } from "../../../components/eps/shared";
+import { useVersion, wIn, wOut } from "../../../components/eps/shared";
 
 import TableKit from "../../../components/ui/TableKit";
 /**
@@ -23,7 +23,7 @@ import TableKit from "../../../components/ui/TableKit";
 const BLANK_NODE = { name: "", code: "", budgetPlan: "", budgetActual: "", qty: "", unit: "", volumePlan: "", volumeActual: "", wf: "",
   planStart: "", planEnd: "", actualStart: "", actualEnd: "", description: "", templateId: "" };
 const toForm = (n) => ({ id: n.id, parentId: n.parent_id, code: n.code, name: n.name, budgetPlan: n.budget_plan ?? "", budgetActual: n.budget_actual ?? "",
-  qty: n.qty ?? "", unit: n.unit || "", volumePlan: n.volume_plan ?? "", volumeActual: n.volume_actual ?? "", wf: n.wf_typed ?? n.wf ?? "",
+  qty: n.qty ?? "", unit: n.unit || "", volumePlan: n.volume_plan ?? "", volumeActual: n.volume_actual ?? "", wf: wIn(n.wf_typed ?? n.wf),
   planStart: n.plan_start || "", planEnd: n.plan_end || "", actualStart: n.actual_start || "", actualEnd: n.actual_end || "",
   description: n.description || "", templateId: n.template_id || "" });
 
@@ -38,7 +38,7 @@ export default function WbsPage() {
   const [form, setForm] = useState(null);           // { mode: "add"|"edit", parentId, ...fields }
   const [clip, setClip] = useState(null);
   const { t } = usePrefs();
-  const { fmt, day } = useEpsFmt();
+  const { fmt, day, w } = useEpsFmt();
   async function post(body, done) {
     setMsg(null); setOk(null);
     try { const r = await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, pmsId, ...body }) }); reload(); reloadBoard(); if (done) setOk(done(r)); return r; }
@@ -73,10 +73,12 @@ export default function WbsPage() {
     try { code = (await call(`/api/eps?projectId=${projectId}&pmsId=${pmsId}&suggest=1${parentId ? `&parentId=${parentId}` : ""}`)).code; } catch { /* typed by hand */ }
     setForm({ mode: "add", parentId, ...BLANK_NODE, code });
   }
+  // what goes with a node (owner's requirements 2026-10-22, item 7): its activities, counted in the question (a node with child nodes is refused by the server)
+  const removeAsk = (n) => (n.activities.length ? t("ep.wb.removeAskActs", { code: n.code, acts: n.activities.length }) : t("ep.wb.removeAsk", { code: n.code }));
   const nodeRow = (n) => {
     const kids = n.children.length > 0, isClosed = closed.has(n.id);
     return [
-      <tr key={n.id} data-wbs={n.code} {...(may ? { ...dnd.source({ id: n.id }), ...dnd.target({ id: n.id, parentId: n.parent_id || null }) } : {})}
+      <tr key={n.id} data-key={n.id} data-wbs={n.code} {...(may ? { ...dnd.source({ id: n.id }), ...dnd.target({ id: n.id, parentId: n.parent_id || null }) } : {})}
         style={{ background: tint(n.color), borderInlineStart: `4px solid ${n.color}`, cursor: may ? "grab" : undefined, ...dnd.look({ id: n.id }) }}>
         <td style={{ paddingInlineStart: 6 + (n.level - 1) * 18, whiteSpace: "nowrap" }}>
           <button type="button" className="btn ghost sm" aria-label={t(isClosed ? "ep.g.open" : "ep.close")} disabled={!kids} onClick={() => flip(closed, setClosed, n.id)}
@@ -85,8 +87,8 @@ export default function WbsPage() {
         <td>{n.name}{n.description && <div className="sm muted">{n.description}</div>}</td>
         <td className="mono">{fmt(n.budgetPlan)}</td><td className="mono">{fmt(n.budgetActual)}</td>
         <td className="mono">{fmt(n.qty)}</td><td className="mono">{fmt(n.volume_plan)} / {fmt(n.volume_actual)} {n.unit || ""}</td>
-        <td className="mono">{n.wf == null ? "—" : `${fmt(n.wf, 4)}%`}{kids && <div className="sm muted" title={t("ep.wb.childWf")}>Σ {fmt(n.childWf, 4)}%</div>}</td>
-        <td className="mono">{n.wv == null ? "—" : `${fmt(n.wv, 4)}%`}</td>
+        <td className="mono">{w(n.wf)}{kids && <div className="sm muted" title={t("ep.wb.childWf")} data-child-wf>Σ {w(n.childWf)}</div>}</td>
+        <td className="mono">{w(n.wv, 10)}</td>
         <td className="mono sm">{day(n.plan_start)} — {day(n.plan_end)}{n.planDays && <div className="muted">{t("ep.wb.days", { n: fmt(n.planDays) })}</div>}</td>
         <td className="mono sm">{day(n.actual_start)} — {day(n.actual_end)}{n.actualDays && <div className="muted">{t("ep.wb.days", { n: fmt(n.actualDays) })}</div>}</td>
         <td className="sm">{n.template_id ? <span className="mono">{data.templates.find((x) => x.id === n.template_id)?.code}</span> : "—"}
@@ -96,7 +98,7 @@ export default function WbsPage() {
           <button className="btn ghost sm" type="button" onClick={() => setForm({ mode: "edit", ...toForm(n) })}>{t("ep.edit")}</button>
           <button className="btn ghost sm" type="button" onClick={() => { setClip(n); setOk(t("ep.wb.copied", { code: n.code })); }}>{t("ep.tp.copy")}</button>
           {clip && clip.id !== n.id && <button className="btn ghost sm" type="button" onClick={() => post({ kind: "node-copy", id: clip.id, parentId: n.id }, (r) => t("ep.wb.pasted", { code: r.row.code }))}>{t("ep.tp.paste")}</button>}
-          <button className="btn ghost sm" type="button" onClick={() => post({ kind: "node-remove", id: n.id }, () => t("ep.removed"))}>{t("ep.remove")}</button></>}</td>
+          <button className="btn ghost sm" type="button" data-node-remove onClick={() => { if (window.confirm(removeAsk(n))) post({ kind: "node-remove", id: n.id }, () => t("ep.removed")); }}>{t("ep.remove")}</button></>}</td>
       </tr>,
       openActs.has(n.id) && <tr key={`${n.id}-acts`}><td colSpan={12} style={{ background: "var(--surf, #fff)" }}><Activities n={n} may={may} post={post} templates={withActs} /></td></tr>,
       ...(isClosed ? [] : n.children.flatMap(nodeRow)),
@@ -106,7 +108,7 @@ export default function WbsPage() {
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>{t("ep.ac.problems")}</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
       <Settings S={S} labels={data.labels} may={may} post={post} pmsCode={data.version.pms_code} />
       {form && <NodeForm form={form} setForm={setForm} mode={mode} templates={withActs} post={post} />}
@@ -117,6 +119,9 @@ export default function WbsPage() {
           <span className="sm">{t("ep.g.levels")}:</span>
           {Array.from({ length: Math.max(maxLevel, 1) }, (_, i) => i + 1).map((l) => <button key={l} className="btn ghost sm" type="button" onClick={() => openTo(l)}>{l}</button>)}
           <button className="btn ghost sm" type="button" onClick={() => setClosed(new Set())}>{t("ep.wb.all")}</button>
+          {may && S.budgetMode !== "manual" && <button className="btn ghost sm" type="button" data-refresh-weights
+            title={t(S.budgetMode === "wf_to_budget" ? "ep.wb.refreshBudgetTip" : "ep.wb.refreshWfTip")}
+            onClick={() => { if (window.confirm(t("ep.wb.refreshAsk"))) post({ kind: "refresh-weights" }, (r) => t("ep.wb.refreshed", { n: r.row.updated })); }}>{t("ep.wb.refresh")}</button>}
           {clip && <span className="sm">{t("ep.wb.clip")} <b className="mono">{clip.code}</b> <button className="btn ghost sm" type="button" onClick={() => setClip(null)}>×</button></span>}
         </div>
         <div className="tablewrap"><TableKit name="eps-wbs-1"><table className="dtable" data-wbs-table="">
@@ -126,7 +131,7 @@ export default function WbsPage() {
             <tr data-wbs-root="" {...(may ? dnd.target({ id: "root" }) : {})} style={{ fontWeight: 700, ...dnd.look({ id: "root" }) }}>
               <td className="mono">{data.version.pms_code}</td><td>{data.version.pms_title}</td>
               <td className="mono">{fmt(data.version.budget_plan)}</td><td className="mono">{fmt(data.version.budget_actual)}</td><td /><td />
-              <td className="mono sm">Σ {fmt(data.rootWf, 4)}%</td><td className="mono">{fmt(100)}%</td>
+              <td className="mono sm">Σ {w(data.rootWf)}</td><td className="mono">{w(100)}</td>
               <td /><td /><td />
               <td style={{ whiteSpace: "nowrap" }}>{may && <><button className="btn sm" type="button" onClick={() => openAdd(null)}>{t("ep.wb.addTop")}</button>
                 {clip && <button className="btn ghost sm" type="button" onClick={() => post({ kind: "node-copy", id: clip.id, parentId: null }, (r) => t("ep.wb.pasted", { code: r.row.code }))}>{t("ep.tp.paste")}</button>}</>}</td>
@@ -201,7 +206,7 @@ function NodeForm({ form, setForm, mode, templates, post }) {
   const save = async (e) => {
     e.preventDefault();
     const { mode: m, ...b } = form;
-    if (await post({ kind: "node", ...b, templateId: b.templateId || null }, (r) => t("ep.wb.saved", { code: r.row.code }))) setForm(null);
+    if (await post({ kind: "node", ...b, wf: wOut(b.wf), templateId: b.templateId || null }, (r) => t("ep.wb.saved", { code: r.row.code }))) setForm(null);
   };
   return (
     <form className="card" onSubmit={save}>
@@ -229,7 +234,7 @@ function NodeForm({ form, setForm, mode, templates, post }) {
 
 function Activities({ n, may, post, templates }) {
   const { t } = usePrefs();
-  const { fmt, day } = useEpsFmt();
+  const { fmt, day, w } = useEpsFmt();
   const [tpl, setTpl] = useState(n.template_id || "");
   const [f, setF] = useState(null);
   return (
@@ -239,14 +244,14 @@ function Activities({ n, may, post, templates }) {
           <th>{t("ep.wb.planned")}</th><th>{t("ep.wb.actual")}</th><th>{t("ep.col.pct")}</th>{may && <th />}</tr></thead>
         <tbody>{n.activities.map((a) => (
           <tr key={a.id} data-activity={a.code}><td className="mono">{a.code}</td><td className="mono sm">{a.template_code || t("ep.wb.manual")}</td><td>{a.name}</td>
-            <td className="mono">{a.wf == null ? "—" : `${fmt(a.wf, 4)}%`}</td><td className="mono">{a.wv == null ? "—" : `${fmt(a.wv, 4)}%`}</td>
+            <td className="mono">{w(a.wf)}</td><td className="mono">{w(a.wv, 10)}</td>
             <td className="mono">{fmt(a.budgetPlan)} / {fmt(a.budgetActual)}</td><td className="mono">{fmt(a.volumePlan)} / {fmt(a.volumeActual)} {a.unit || ""}</td>
             <td className="mono sm">{day(a.plan_start)} — {day(a.plan_end)}</td><td className="mono sm">{day(a.actual_start)} — {day(a.actual_end)}</td>
             <td className="mono">{a.progress == null ? "—" : `${fmt(a.progress)}%`}</td>
             {may && <td style={{ whiteSpace: "nowrap" }}>
-              <button className="btn ghost sm" type="button" onClick={() => setF({ id: a.id, code: a.code, name: a.name, wf: a.wf ?? "", progress: a.progress ?? "", description: a.description || "" })}>{t("ep.edit")}</button>
+              <button className="btn ghost sm" type="button" onClick={() => setF({ id: a.id, code: a.code, name: a.name, wf: wIn(a.wf), progress: a.progress ?? "", description: a.description || "" })}>{t("ep.edit")}</button>
               <button className="btn ghost sm" type="button" onClick={() => post({ kind: "activity-remove", id: a.id }, () => t("ep.removed"))}>{t("ep.remove")}</button></td>}</tr>))}
-          {n.activities.length > 0 && <tr><td colSpan={3}><b>{t("ep.total")}</b></td><td className="mono"><b>{fmt(n.activityWf, 4)}%</b></td><td colSpan={may ? 7 : 6} /></tr>}</tbody></table></TableKit>
+          {n.activities.length > 0 && <tr><td colSpan={3}><b>{t("ep.total")}</b></td><td className="mono"><b>{w(n.activityWf)}</b></td><td colSpan={may ? 7 : 6} /></tr>}</tbody></table></TableKit>
       {n.activities.length === 0 && <p className="sm muted">{t("ep.wb.noActivities")}</p>}
       {may && (
         <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap", marginTop: 6 }}>
@@ -259,10 +264,10 @@ function Activities({ n, may, post, templates }) {
         </div>)}
       {f && (
         <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", marginTop: 6 }}
-          onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "activity", nodeId: n.id, ...f }, () => t(f.id ? "ep.activitySaved" : "ep.tp.actAdded"))) setF(null); }}>
+          onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "activity", nodeId: n.id, ...f, wf: wOut(f.wf) }, () => t(f.id ? "ep.activitySaved" : "ep.tp.actAdded"))) setF(null); }}>
           <div className="field" style={{ width: 170 }}><label htmlFor={`af-c-${n.id}`}>{t("ep.ac.codeNext")}</label><input id={`af-c-${n.id}`} dir="ltr" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
           <div className="field"><label htmlFor={`af-n-${n.id}`}>{t("ep.activityName")}</label><input id={`af-n-${n.id}`} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-          <div className="field" style={{ width: 100 }}><label htmlFor={`af-w-${n.id}`}>W.F %</label><input id={`af-w-${n.id}`} dir="ltr" inputMode="decimal" value={f.wf} onChange={(e) => setF({ ...f, wf: e.target.value })} /></div>
+          <div className="field" style={{ width: 100 }}><label htmlFor={`af-w-${n.id}`}>W.F</label><input id={`af-w-${n.id}`} dir="ltr" inputMode="decimal" value={f.wf} onChange={(e) => setF({ ...f, wf: e.target.value })} /></div>
           <div className="field" style={{ width: 100 }}><label htmlFor={`af-p-${n.id}`}>{t("ep.col.pct")}</label><input id={`af-p-${n.id}`} dir="ltr" inputMode="decimal" value={f.progress} onChange={(e) => setF({ ...f, progress: e.target.value })} /></div>
           <div className="field"><label htmlFor={`af-d-${n.id}`}>{t("ep.description")}</label><input id={`af-d-${n.id}`} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
           <button className="btn sm" type="submit">{t("ep.save")}</button><button className="btn ghost sm" type="button" onClick={() => setF(null)}>{t("ep.cancel")}</button>

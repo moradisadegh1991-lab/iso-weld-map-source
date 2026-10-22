@@ -10,6 +10,13 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  * statusOf, t } so its value is written in the reader's language.
  */
 const SRC = { equipment: "ep.src.equipment", piping: "ep.src.piping", electrical: "ep.src.electrical", instrumentation: "ep.src.instrumentation", civil: "ep.src.civil", structural: "ep.src.structural" };
+// a node's W.F with what is under it one level down beside it: its child nodes', or else its activities' (owner's requirements 2026-10-22, item 9)
+const sumWf = (r, x) => {
+  if (r.kind !== "node") return "";
+  const v = r.item.children?.length ? r.item.childWf : r.item.activityWf;
+  return v == null ? "" : ` Σ${x.w(v)}`;
+};
+
 export const COLUMNS = [
   { key: "code", title: "Activity / WBS No.", width: 190, mono: true, hits: true, get: (r) => r.item.code },
   { key: "name", title: "ep.col.name", width: 230, hits: true, get: (r) => r.item.name },
@@ -17,8 +24,8 @@ export const COLUMNS = [
   { key: "activityNo", title: "Activity ID", width: 95, mono: true, hits: true, get: (r) => (r.kind === "act" ? r.item.activity_no || "" : "") },
   { key: "wfRate", title: "WF rate", width: 95, mono: true, get: (r, x) => (r.kind === "act" && r.item.wf_rate != null ? x.fmt(Number(r.item.wf_rate), 10) : "") },
   { key: "description", title: "ep.description", width: 200, hits: true, get: (r) => r.item.description || "" },
-  { key: "wf", title: "W.F %", width: 70, mono: true, get: (r, x) => (r.item.wf == null ? "" : x.fmt(r.item.wf, 4)) },
-  { key: "wv", title: "W.V %", width: 80, mono: true, get: (r, x) => (r.item.wv == null ? "" : x.fmt(r.item.wv, 5)) },
+  { key: "wf", title: "W.F", width: 80, mono: true, get: (r, x) => (r.item.wf == null ? "" : x.w(r.item.wf)) + sumWf(r, x) },
+  { key: "wv", title: "W.V", width: 95, mono: true, get: (r, x) => (r.item.wv == null ? "" : x.w(r.item.wv, 10)) },
   { key: "unit", title: "ep.unit", width: 55, get: (r) => r.item.unit || "" },
   { key: "volPlan", title: "ep.col.volPlan", width: 85, mono: true, get: (r, x) => x.fmt(r.kind === "act" ? r.item.volumePlan : r.item.volume_plan) },
   { key: "volActual", title: "ep.col.volActual", width: 85, mono: true, get: (r, x) => x.fmt(r.kind === "act" ? r.item.volumeActual : r.item.volume_actual) },
@@ -39,6 +46,16 @@ export const COLUMNS = [
     ? `${r.item.scope_removed ? "✗ " : "⛓ "}${x.t(SRC[r.item.scope.discipline] || "ep.src.platform")}` : x.t("ep.src.reports")) },
   { key: "manual", title: "ep.manualPct", width: 80, mono: true, get: (r, x) => (r.kind === "act" ? x.fmt(r.item.progress) : "") },
 ];
+
+/**
+ * W.F typed as a decimal fraction (0.4505) while the server keeps the
+ * percentage (45.05): `wIn` for a form's value, `wOut` for what is sent
+ * (blank stays blank; a value that is not a number is sent as typed, for the
+ * server to refuse).
+ */
+export const wIn = (p) => (p === null || p === undefined || p === "" ? "" : String(Math.round(Number(p) * 1e8) / 1e10));
+export const wOut = (f) => (f === null || f === undefined || String(f).trim() === "" ? null
+  : Number.isFinite(Number(String(f).replace(/[\u066C,]/g, ""))) ? Math.round(Number(String(f).replace(/[\u066C,]/g, "")) * 1e12) / 1e10 : f);
 
 /**
  * The PMS and the version the page opens (owner's requirements 2026-10-22):

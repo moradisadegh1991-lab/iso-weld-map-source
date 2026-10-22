@@ -5,6 +5,8 @@ import { useTreeDrag } from "../../../components/ui/treeDrag";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 
 import TableKit from "../../../components/ui/TableKit";
+import { useEpsFmt } from "../../../components/eps/ActivityDetail";
+import { wIn, wOut } from "../../../components/eps/shared";
 /**
  * Activity templates: a tree of templates, each with its activities — row
  * number (its code is the template's code and two digits), name, W.F and
@@ -29,6 +31,7 @@ export default function TemplatesPage() {
   const { projectId, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/eps?projectId=${id}&templates=1`, []);
   const { t: tx } = usePrefs();          // `t` is a template in this file
+  const { w } = useEpsFmt();
   const [sel, setSel] = useState(null);
   const [tf, setTf] = useState(null);
   const [af, setAf] = useState(BLANK_A);
@@ -66,7 +69,7 @@ export default function TemplatesPage() {
           aria-label={tx(shut.has(t.id) ? "ep.g.open" : "ep.close")} onClick={(e) => { e.stopPropagation(); flip(t.id); }}>{shut.has(t.id) ? "◂" : "▾"}</button>
         {may && <span className="muted" aria-hidden="true">⠿ </span>}<span className="mono">{t.code}</span></td>
       <td>{t.name}</td><td className="mono">{t.activities.length}</td>
-      <td className="mono" style={{ color: t.wfTotal > 100 ? "var(--bad)" : undefined }}>{t.activities.length ? `${t.wfTotal}%` : "—"}</td>
+      <td className="mono" style={{ color: t.wfTotal > 100 ? "var(--bad)" : undefined }}>{t.activities.length ? w(t.wfTotal) : "—"}</td>
       <td style={{ whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>{may && <>
         <button className="btn ghost sm" type="button" onClick={() => { setClip(t); setOk(tx("ep.tp.copied", { code: t.code })); }}>{tx("ep.tp.copy")}</button>
         {clip && clip.id !== t.id && <button className="btn ghost sm" type="button"
@@ -77,10 +80,10 @@ export default function TemplatesPage() {
     </tr>,
     ...(shut.has(t.id) ? [] : [
       ...t.activities.map((a) => (
-        <tr key={a.id} className="sm" data-tree-activity={a.code} onClick={() => { setSel(t.id); setAf({ id: a.id, number: String(a.number), name: a.name, wf: a.wf ?? "", description: a.description || "" }); }}
+        <tr key={a.id} className="sm" data-tree-activity={a.code} onClick={() => { setSel(t.id); setAf({ id: a.id, number: String(a.number), name: a.name, wf: wIn(a.wf), description: a.description || "" }); }}
           style={{ cursor: "pointer" }}>
           <td style={{ paddingInlineStart: 34 + depth * 20 }}><span className="mono muted">{a.code}</span></td><td className="muted">{a.name}</td><td />
-          <td className="mono muted">{a.wf ?? "—"}</td><td /></tr>)),
+          <td className="mono muted">{w(a.wf)}</td><td /></tr>)),
       ...rows(t.children, depth + 1)])]);
   const all = (ns) => ns.flatMap((t) => [t.id, ...all(t.children)]);
   const flat = data.templates;
@@ -88,7 +91,7 @@ export default function TemplatesPage() {
     <div className="page">
       <div className="pagehead"><h1>{tx("ep.tp.title")}</h1><span className="sub">{tx("ep.tp.sub")}</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {may && !tf && <p style={{ display: "flex", gap: 8 }}><button className="btn" type="button" onClick={() => setTf({ ...BLANK_T })}>{tx("ep.tp.new")}</button>
         {clip && <button className="btn ghost" type="button" onClick={() => post({ kind: "template-copy", id: clip.id, parentId: null }, (r) => tx("ep.tp.pastedTop", { code: r.row.code }))}>{tx("ep.tp.pasteTop", { code: clip.code })}</button>}</p>}
       {tf && (
@@ -120,17 +123,17 @@ export default function TemplatesPage() {
           <TableKit name="eps-templates-2"><table className="dtable">
             <thead><tr><th>{tx("ep.tp.row")}</th><th>{tx("ep.cd.code")}</th><th>{tx("ep.activityName")}</th><th>{tx("ep.tp.wf")}</th><th>{tx("ep.description")}</th>{may && <th />}</tr></thead>
             <tbody>{T.activities.map((a) => (
-              <tr key={a.id} data-template-activity={a.code}><td className="mono">{a.number}</td><td className="mono">{a.code}</td><td>{a.name}</td><td className="mono">{a.wf ?? "—"}</td>
+              <tr key={a.id} data-template-activity={a.code}><td className="mono">{a.number}</td><td className="mono">{a.code}</td><td>{a.name}</td><td className="mono">{w(a.wf)}</td>
                 <td className="sm">{a.description || "—"}</td>
-                {may && <td><button className="btn ghost sm" type="button" onClick={() => setAf({ id: a.id, number: String(a.number), name: a.name, wf: a.wf ?? "", description: a.description || "" })}>{tx("ep.edit")}</button>
+                {may && <td><button className="btn ghost sm" type="button" onClick={() => setAf({ id: a.id, number: String(a.number), name: a.name, wf: wIn(a.wf), description: a.description || "" })}>{tx("ep.edit")}</button>
                   <button className="btn ghost sm" type="button" onClick={() => post({ kind: "template-activity-remove", id: a.id }, () => tx("ep.removed"))}>{tx("ep.remove")}</button></td>}</tr>))}
-              {T.activities.length > 0 && <tr><td colSpan={3}><b>{tx("ep.total")}</b></td><td className="mono"><b>{T.wfTotal}%</b></td><td colSpan={may ? 2 : 1} /></tr>}</tbody></table></TableKit>
+              {T.activities.length > 0 && <tr><td colSpan={3}><b>{tx("ep.total")}</b></td><td className="mono"><b>{w(T.wfTotal)}</b></td><td colSpan={may ? 2 : 1} /></tr>}</tbody></table></TableKit>
           {may && (
             <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}
-              onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "template-activity", templateId: T.id, ...af }, () => tx(af.id ? "ep.tp.actEdited" : "ep.tp.actAdded"))) setAf(BLANK_A); }}>
+              onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "template-activity", templateId: T.id, ...af, wf: wOut(af.wf) }, () => tx(af.id ? "ep.tp.actEdited" : "ep.tp.actAdded"))) setAf(BLANK_A); }}>
               <div className="field" style={{ width: 90 }}><label htmlFor="ta-n">{tx("ep.tp.rowNext")}</label><input id="ta-n" dir="ltr" inputMode="numeric" value={af.number} onChange={(e) => setAf({ ...af, number: e.target.value })} /></div>
               <div className="field"><label htmlFor="ta-name">{tx("ep.activityName")}</label><input id="ta-name" required value={af.name} onChange={(e) => setAf({ ...af, name: e.target.value })} /></div>
-              <div className="field" style={{ width: 110 }}><label htmlFor="ta-wf">W.F %</label><input id="ta-wf" dir="ltr" inputMode="decimal" value={af.wf} onChange={(e) => setAf({ ...af, wf: e.target.value })} /></div>
+              <div className="field" style={{ width: 110 }}><label htmlFor="ta-wf">W.F</label><input id="ta-wf" dir="ltr" inputMode="decimal" value={af.wf} onChange={(e) => setAf({ ...af, wf: e.target.value })} /></div>
               <div className="field"><label htmlFor="ta-d">{tx("ep.description")}</label><input id="ta-d" value={af.description} onChange={(e) => setAf({ ...af, description: e.target.value })} /></div>
               <button className="btn" type="submit">{af.id ? tx("ep.save") : tx("ep.tp.addActivity")}</button>
               {af.id && <button className="btn ghost" type="button" onClick={() => setAf(BLANK_A)}>{tx("ep.cancel")}</button>}

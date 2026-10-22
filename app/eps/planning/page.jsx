@@ -105,7 +105,7 @@ export default function PlanningPage() {
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {may && <>
         <div className="toolbar-left" data-plan-bar>
           {field("startOn", t("ep.pl.start"), "date")}

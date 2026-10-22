@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FloatBox, rowEdgeDown, rowEdgeHover } from "../ui/float";
 import { createPortal } from "react-dom";
 import { filterTree, splitHits } from "../../lib/eps/activities.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
@@ -159,8 +160,10 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
     setEditing({ id: "__draft", draftOf: node, row: { kind: "draft", item: {} }, values: blank, orig: blank });
   });
   const run = async (fn) => { setBusy(true); try { return await fn(); } finally { setBusy(false); } };
-  const save = async () => {
+  // owner's requirements 2026-10-22, item 7: a row is written only once the person says so
+  const save = async (ask = true) => {
     if (!editing) return true;
+    if (ask && !window.confirm(t(editing.draftOf ? "gr.addAsk" : "gr.saveAsk"))) return false;
     const ok = await run(() => (editing.draftOf ? ops.create(editing.draftOf, editing.values) : ops.save(editing.row, editing.values)));
     if (ok) setEditing(null);
     return ok;
@@ -177,7 +180,10 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
     // a page may delete only some of what is picked (the activities page: activities, never their nodes)
     const gone = ops.removable ? ops.removable(list) : list;
     if (!gone.length) { window.alert(t("gr.nothingToDelete")); return; }
-    if (!window.confirm(t("gr.deleteAsk", { n: gone.length }))) return;
+    // what goes with a node goes too, and the question says how much
+    const inside = new Set(gone.flatMap((r) => (r.kind === "node" ? under(r.id).slice(1) : [])));
+    for (const r of gone) inside.delete(r.id);
+    if (!window.confirm(inside.size ? t("gr.deleteAskTree", { n: gone.length, k: inside.size }) : t("gr.deleteAsk", { n: gone.length }))) return;
     if (await run(() => ops.remove(list))) { setPicked(new Set()); setEditing(null); }
   };
   const pasteInto = async (node) => {
@@ -273,11 +279,18 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
         <span style={{ position: "relative" }}>
           <button type="button" className="btn ghost sm" onClick={() => setChooser(!chooser)} aria-expanded={chooser}>{t("ep.g.columns")} ▾</button>
           {chooser && (
-            <div className="p6-chooser card" role="dialog" aria-label={t("ep.g.chooseColumns")}>
+            <FloatBox className="p6-chooser card" role="dialog" aria-label={t("ep.g.chooseColumns")} onClose={() => setChooser(false)}>
               {[...shown, ...columns.filter((c) => !cols.includes(c.key))].map((c) => {
                 const on = cols.includes(c.key), i = cols.indexOf(c.key);
                 return (
-                  <div key={c.key} className="row" style={{ gap: 4, alignItems: "center" }}>
+                  <div key={c.key} className="row" style={{ gap: 4, alignItems: "center" }} data-chooser-col={c.key}>
+                    {on && <span className="sm muted" style={{ cursor: "grab", padding: "0 2px", touchAction: "none" }} aria-hidden="true" data-col-grip
+                      // dragged by this handle onto another shown column, it takes that one's place
+                      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); const up = (u) => { window.removeEventListener("pointerup", up);
+                        const k = document.elementFromPoint(u.clientX, u.clientY)?.closest?.("[data-chooser-col]")?.dataset.chooserCol;
+                        if (!k || k === c.key || !cols.includes(k)) return;
+                        const n = cols.filter((x) => x !== c.key); n.splice(n.indexOf(k) + (i < cols.indexOf(k) ? 1 : 0), 0, c.key); setCols(n); };
+                        window.addEventListener("pointerup", up); }}>⠿</span>}
                     <label style={{ flex: 1 }}><input type="checkbox" checked={on} onChange={() => setCols(on ? cols.filter((k) => k !== c.key) : [...cols, c.key])} /> {t(c.title)}</label>
                     {on && <>
                       <button type="button" className="btn ghost sm" disabled={i === 0} aria-label={t("ep.g.up")} onClick={() => { const n = [...cols]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; setCols(n); }}>▲</button>
@@ -286,7 +299,7 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
               })}
               <p className="row" style={{ gap: 4 }}><button type="button" className="btn ghost sm" onClick={() => { setCols(defaultCols); setWidths({}); }}>{t("ep.g.default")}</button>
                 <button type="button" className="btn sm" onClick={() => setChooser(false)}>{t("ep.close")}</button></p>
-            </div>)}
+            </FloatBox>)}
         </span>
         <button type="button" className="btn ghost sm" data-excel onClick={exportExcel}>{t("gr.excel")}</button>
         {ops && picked.size > 0 && (
@@ -301,7 +314,9 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
       </div>
       <div className="p6-panes" dir="ltr">
         <div className="p6-left" ref={left} onScroll={sync(left, right)} style={{ width: gantt ? leftW : "100%" }}>
-          <table className="p6-table" style={{ width: shown.reduce((s, c) => s + width(c), 0) + (ops ? 28 : 0) }}>
+          <table className="p6-table" style={{ width: shown.reduce((s, c) => s + width(c), 0) + (ops ? 28 : 0) }}
+            // rows take a height of their own only without the Gantt beside them, whose bars keep to the row grid
+            onPointerDownCapture={gantt ? undefined : (e) => rowEdgeDown(e)} onPointerMove={gantt ? undefined : rowEdgeHover}>
             <colgroup>{ops && <col style={{ width: 28 }} />}{shown.map((c) => <col key={c.key} style={{ width: width(c) }} />)}</colgroup>
             <thead><tr>{ops && <th className="p6-pick"><input type="checkbox" aria-label={t("gr.pickAll")} checked={rows.length > 0 && rows.every((r) => picked.has(r.id))}
               onChange={(e) => setPicked(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /></th>}{shown.map((c) => (
@@ -319,7 +334,9 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
                   onContextMenu={ops && r.kind !== "draft" ? (e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, row: r }); } : undefined}
                   style={{ height: ROW, background: r.kind === "node" ? tint(r.color) : undefined, fontWeight: r.kind === "node" ? 600 : undefined }}>
                   {ops && <td className="p6-pick">{r.kind !== "draft" && <input type="checkbox" aria-label={t("gr.pickRow", { code: r.item.code })}
-                    checked={r.kind === "node" ? under(r.id).every((x) => picked.has(x)) : picked.has(r.id)} onChange={() => pick(r)} />}</td>}
+                    checked={r.kind === "node" ? under(r.id).every((x) => picked.has(x)) : picked.has(r.id)} onChange={() => pick(r)}
+                    // part of a node's branch picked: half-ticked; a click then picks the whole branch
+                    ref={(el) => { if (el) el.indeterminate = r.kind === "node" && !under(r.id).every((x) => picked.has(x)) && under(r.id).some((x) => picked.has(x)); }} />}</td>}
                   {shown.map((c, ci) => (
                     <td key={c.key} className={c.mono ? "mono" : undefined} dir={c.dir || (c.mono ? "ltr" : "rtl")}
                       style={ci === 0 ? { paddingLeft: 4 + (r.level - 1) * 14, borderLeft: `3px solid ${r.color || "transparent"}` } : undefined}>
@@ -345,19 +362,19 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
           </table>
           {rows.length === 0 && <p className="empty-note">{t("ep.g.noRows")}</p>}
           {menu && typeof document !== "undefined" && createPortal(
-            <div className="p6-menu card" role="menu" aria-label={t("gr.menu")} style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} data-row-menu>
+            <FloatBox className="p6-menu card" role="menu" aria-label={t("gr.menu")} style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} data-row-menu>
               {fieldsOf(menu.row).length > 0 && <button type="button" role="menuitem" onClick={() => { setMenu(null); open(menu.row); }}>{t("gr.edit")}</button>}
               {ops.create && <button type="button" role="menuitem" onClick={() => { const n = nodeOf(menu.row); setMenu(null); if (n) addUnder(n); }}>{t("gr.addChild", { name: nodeOf(menu.row)?.item.name || "" })}</button>}
               <button type="button" role="menuitem" onClick={() => { copyOut(picked.has(menu.row.id) ? pickedRows : [menu.row], "copy"); setMenu(null); }}>{t("gr.copy")}</button>
               {ops.paste && <button type="button" role="menuitem" onClick={() => { copyOut(picked.has(menu.row.id) ? pickedRows : [menu.row], "cut"); setMenu(null); }}>{t("gr.cut")}</button>}
               {ops.paste && <button type="button" role="menuitem" disabled={!clip} onClick={() => { const n = nodeOf(menu.row); setMenu(null); pasteInto(n); }}>{t("gr.pasteInto", { name: nodeOf(menu.row)?.item.name || "" })}</button>}
               {ops.remove && <button type="button" role="menuitem" onClick={() => { const l = picked.has(menu.row.id) ? pickedRows : [menu.row]; setMenu(null); removeRows(l); }}>{t("gr.delete")}</button>}
-            </div>, document.body)}
+            </FloatBox>, document.body)}
           {ask && typeof document !== "undefined" && createPortal(
             <div className="p6-ask card" role="alertdialog" aria-label={t("gr.leaveTitle")} data-leave-ask>
               <b>{t("gr.leaveTitle")}</b>
               <p className="row" style={{ gap: 6, marginTop: 8 }}>
-                <button type="button" className="btn sm" onClick={async () => { const nx = ask.next; setAsk(null); if (await save()) nx(); }}>{t("gr.leaveSave")}</button>
+                <button type="button" className="btn sm" onClick={async () => { const nx = ask.next; setAsk(null); if (await save(false)) nx(); }}>{t("gr.leaveSave")}</button>
                 <button type="button" className="btn ghost sm" onClick={() => { const nx = ask.next; setAsk(null); setEditing(null); nx(); }}>{t("gr.leaveDrop")}</button></p>
             </div>, document.body)}
         </div>

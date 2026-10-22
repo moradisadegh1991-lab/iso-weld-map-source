@@ -46,7 +46,7 @@ async function contractOf(db, projectId, b) {
     case "import-plan": case "convert-legacy": return q(PMS, b.pmsId);
     case "version-master": return q(VERSION, b.id);
     case "eps-move": case "eps-remove": return b.epsKind === "version" ? q(VERSION, b.id) : q(PMS, b.id);
-    case "settings": case "node": case "node-move": case "node-copy": case "node-remove": return b.pmsId ? q(PMS, b.pmsId) : q(VERSION, b.versionId);
+    case "settings": case "refresh-weights": case "node": case "node-move": case "node-copy": case "node-remove": return b.pmsId ? q(PMS, b.pmsId) : q(VERSION, b.versionId);
     case "attach": case "activity": return q(NODE, b.nodeId);
     case "activity-remove": return q(ACTIVITY, b.id);
     default: return null;
@@ -122,6 +122,7 @@ export async function POST(request) {
         "eps-move": () => eps.moveEps(db, { ...a, kind: b.epsKind }),
         "eps-remove": () => eps.removeEps(db, { ...a, kind: b.epsKind }),
         settings: () => eps.saveSettings(db, a),
+        "refresh-weights": () => eps.refreshWeights(db, a),
         node: () => eps.saveNode(db, a),
         "node-move": () => eps.moveNode(db, a),
         "node-copy": () => eps.copyNode(db, a),

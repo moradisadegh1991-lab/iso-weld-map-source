@@ -112,7 +112,7 @@ export default function PlanningPreviewPage() {
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.roots.length === 0 ? <p className="empty-note">{t("ep.pl.empty")}</p> : (
         <div style={{ height }}>
           <ActivityGrid data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "pStart", "pDays", "pFinish", "pBefore", "pPlanned", "pDesc"]}

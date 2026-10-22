@@ -90,7 +90,7 @@ export default function EpsPage() {
       <div className="pagehead"><h1>{t("ep.link.board")}</h1>
         <span className="sub">{t("ep.bd.sub", { no: contract?.contract_no || "", title: contract?.title || "" })}</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {may && !pf && !vf && <p><button className="btn" type="button" onClick={() => setPf({ ...BLANK_PMS })}>{t("ep.bd.newPms")}</button>{" "}
         {data.pms.length > 0 && <button className="btn ghost" type="button" data-import-open onClick={() => setImp({ pmsId: data.pms[0].id, versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button>}</p>}
       {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} done={(m) => { setImp(null); setOk(m); reload(); }} fail={setMsg} />}

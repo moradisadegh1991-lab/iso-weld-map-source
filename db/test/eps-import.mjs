@@ -56,7 +56,7 @@ test("MS Project: summary tasks are WBS nodes, the tasks under them activities, 
     equal([r.nodes, r.activities, r.relations], [summaries.length + 1, leaves.length, leafLinks.length]);
     const { rows: [f110] } = await db.query("SELECT * FROM wbs_node WHERE pms_id = $1 AND code = '3.1'", [PM.id]);
     const t31 = S.tasks.find((t) => t.wbs === "3.1"), t3 = S.tasks.find((t) => t.wbs === "3");
-    equal([f110.name, Number(f110.wf)], [t31.name, Math.round((Number(t31.custom.WF) / Number(t3.custom.WF)) * 1e6) / 1e4]);
+    equal([f110.name, Number(f110.wf)], [t31.name, Math.round((Number(t31.custom.WF) / Number(t3.custom.WF)) * 1e12) / 1e10]);
     const v = await act.activityView(db, { projectId: P, versionId: r.version.id });
     assert(v.roots.length >= 2 && v.relations.length === leafLinks.length, `${v.roots.length} roots, ${v.relations.length} relations`);
     assert(r.problems.some((p) => p.includes("Summary")), "the links to summary tasks are said, not dropped silently");

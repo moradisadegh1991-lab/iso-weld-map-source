@@ -183,4 +183,21 @@ test("copy a node with its children and activities under another; the copy's cod
   });
 });
 
+test("update weights/budgets: the worked-out figure written into the stored one; manual has nothing to update; W.F keeps ten decimals", async () => {
+  await inP(async () => {
+    await db.query("UPDATE wbs_node SET wf = NULL WHERE code = 'PM01.C.03'");   // the copy test's 10% left the root over 100%
+    await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: w.DEFAULT_SETTINGS, userId: U.id });
+    await throws(() => eps.refreshWeights(db, { projectId: P, versionId: V.id, userId: U.id }), "دستی", "manual: nothing to bring up to date");
+    await db.query("UPDATE wbs_node SET wf = 39.8765432101 WHERE code = 'PM01.C.02'");
+    await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: { ...w.DEFAULT_SETTINGS, budgetMode: "wf_to_budget" }, userId: U.id });
+    await db.query("UPDATE wbs_node SET budget_plan = NULL WHERE code IN ('PM01.C.02', 'PM01.C.03')");
+    const r = await eps.refreshWeights(db, { projectId: P, versionId: V.id, userId: U.id });
+    const stored = async (code) => (await db.query("SELECT wf::text, budget_plan::float8 AS b FROM wbs_node WHERE code = $1", [code])).rows[0];
+    assert(r.updated >= 1, `nodes updated: ${r.updated}`);
+    equal(await stored("PM01.C.02"), { wf: "39.8765432101", b: 398.77 }, "ten decimals of W.F kept; the budget from it, of the root's 1000, now stored");
+    equal((await eps.refreshWeights(db, { projectId: P, versionId: V.id, userId: U.id })).updated, 0, "a second run has nothing left to change");
+    await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: w.DEFAULT_SETTINGS, userId: U.id });
+  });
+});
+
 await run();

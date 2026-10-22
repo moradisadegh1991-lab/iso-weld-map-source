@@ -29,7 +29,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function DailyReportPreviewPage() {
   const { projectId, contractId, call } = usePlatform();
   const { t } = usePrefs();
-  const { fmt, day, statusOf } = useEpsFmt();
+  const { fmt, day, statusOf, w } = useEpsFmt();
   const { pmsId, versionId, plan, picker } = useVersion(contractId);
   const [d0, setDay] = useState(today());
   const [reportId, setReportId] = useState("");
@@ -117,7 +117,7 @@ export default function DailyReportPreviewPage() {
   const body = () => {
     if (tab === "narrative") return <Narrative r={report.data} />;
     if (!a) return <p className="empty-note">{t("ep.pickActivity")}</p>;
-    if (tab === "pms") return <PmsTab data={tree.data} a={a} fmt={fmt} day={day} statusOf={statusOf} />;
+    if (tab === "pms") return <PmsTab data={tree.data} a={a} fmt={fmt} day={day} statusOf={statusOf} w={w} />;
     if (tab === "status") {
       if (!versionId) return <p className="empty-note">{t("ep.pl.pickVersion")}</p>;
       if (sub.error) return <p className="err">{sub.error}</p>;
@@ -134,7 +134,7 @@ export default function DailyReportPreviewPage() {
       {head}
       {bar}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.roots.length === 0 ? <p className="empty-note">{t("ep.dp.empty")}</p> : (
         <div style={{ height }}>
           <ActivityGrid data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "start", "finish", "dQty", "dMark", "dNotes"]}
@@ -151,7 +151,7 @@ export default function DailyReportPreviewPage() {
 }
 
 /** Image 8: the activities under the selected activity's parent node, as the reports make them right now, with totals. */
-function PmsTab({ data, a, fmt, day, statusOf }) {
+function PmsTab({ data, a, fmt, day, statusOf, w }) {
   const { t } = usePrefs();
   let node = null;
   const find = (n) => { if (n.activities.some((x) => x.id === a.id)) node = n; n.children.forEach(find); };
@@ -176,10 +176,10 @@ function PmsTab({ data, a, fmt, day, statusOf }) {
           <tr key={x.id} data-pms-row={x.code} style={{ fontWeight: x.id === a.id ? 600 : undefined }}>
             <td className="mono" dir="ltr">{node.code}</td>{Array.from({ length: 8 }, (_, i) => <td key={i} className="sm">{cats(x)[i] || ""}</td>)}
             <td className="mono" dir="ltr">{x.code}</td><td>{x.name}</td><td>{x.unit || ""}</td>
-            <td className="mono">{x.wf == null ? "—" : `${fmt(x.wf, 4)}%`}</td><td className="mono">{x.wv == null ? "—" : `${fmt(x.wv, 6)}%`}</td>
+            <td className="mono">{w(x.wf)}</td><td className="mono">{w(x.wv, 10)}</td>
             <td className="mono">{fmt(x.volumeActual)}</td><td className="mono"><b>{x.pct == null ? "—" : `${fmt(x.pct)}%`}</b></td><td className="mono">{fmt(x.done)}</td>
             <td>{statusOf(x)}</td><td className="mono">{day(x.plan_start)}</td><td className="mono">{fmt(x.planDays)}</td><td className="mono">{day(x.plan_end)}</td></tr>))}
-          <tr data-pms-total><td colSpan={12} /><td className="mono"><b>{fmt(wfSum, 4)}%</b></td><td className="mono"><b>{fmt(sum("wv"), 6)}%</b></td>
+          <tr data-pms-total><td colSpan={12} /><td className="mono"><b>{w(wfSum)}</b></td><td className="mono"><b>{w(sum("wv"), 10)}</b></td>
             <td className="mono"><b>{fmt(sum("volumeActual"))}</b></td><td className="mono"><b>{prog == null ? "—" : `${fmt(prog)}%`}</b></td><td className="mono"><b>{fmt(sum("done"))}</b></td><td colSpan={4} /></tr>
         </tbody></table></TableKit></div>
     </div>);

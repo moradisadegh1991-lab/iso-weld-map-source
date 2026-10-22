@@ -747,9 +747,17 @@ button.ghost.sm { padding: 2px 8px; font-size: 11px; }
 .tk table > tbody > tr:not(.tk-grp):not(.tk-edit) > td:first-child::before,
 .tk table > thead > tr > th:first-child::before{content:"";display:inline-block;width:12px;height:12px;border:1.5px solid var(--dim);border-radius:3px;
   margin-inline-end:7px;vertical-align:-2px;cursor:pointer;background:var(--surf)}
+/* picked: solid blue with a white tick; not picked: a dark frame on white (owner's requirements 2026-10-22, item 7) */
+.tk table > tbody > tr:not(.tk-grp):not(.tk-edit) > td:first-child::before,
+.tk table > thead > tr > th:first-child::before{border-color:#1b2631;background:#fff;color:#fff;font:700 10px/12px system-ui;text-align:center}
 .tk table > tbody > tr[data-tk-pick] > td:first-child::before,
-.tk table > thead > tr[data-tk-pick-all] > th:first-child::before{background:var(--cy);border-color:var(--cy);
-  box-shadow:inset 0 0 0 2px var(--surf)}
+.tk table > thead > tr[data-tk-pick-all] > th:first-child::before{content:"✓";background:#1f6fd1;border-color:#1f6fd1}
+/* the activity grid's boxes, the same; a node with only part of its branch picked: light blue */
+.p6-pick input[type=checkbox]{appearance:none;-webkit-appearance:none;width:14px;height:14px;margin:0;border:1.5px solid #1b2631;border-radius:3px;
+  background:#fff;display:inline-grid;place-content:center;cursor:pointer;vertical-align:middle}
+.p6-pick input[type=checkbox]:checked{background:#1f6fd1;border-color:#1f6fd1}
+.p6-pick input[type=checkbox]:checked::after{content:"✓";color:#fff;font:700 10px/1 system-ui}
+.p6-pick input[type=checkbox]:indeterminate{background:#a9cdf5;border-color:#1f6fd1}
 .tk table > tbody > tr[data-tk-pick] > td{background:var(--cy-soft)}
 .tk table > tbody > tr > td[colspan]:first-child:only-child::before{display:none}
 /* a row open for editing where it stands: framed and written in blue */
@@ -1032,3 +1040,24 @@ tr.p6-editing{outline:1.5px solid #1d6fd8;outline-offset:-1px}
 .iso-reader{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:8px 0}
 .iso-reader label{display:inline-flex;gap:5px;align-items:center}
 .iso-reader .muted:last-child{flex-basis:100%}
+
+/* the project's added columns (085): a cell opened for its value */
+.tk td.tk-custom{cursor:text;min-width:70px}
+.tk td.tk-custom .tk-custom-input{width:100%;min-width:90px;font:inherit}
+.tk .tk-dialog{position:relative;margin:6px 0;padding:8px 10px;max-width:760px}
+
+/* floating panels (item 8): moved by their grip, resized from the lower corner */
+.float-panel{resize:both;overflow:auto;min-width:160px;min-height:60px;max-height:calc(100vh - 16px)}
+.p6-chooser.float-panel{min-width:260px;max-height:min(360px,calc(100vh - 16px))}
+.float-grip{cursor:move;user-select:none;text-align:center;color:var(--dim);font-size:11px;line-height:12px;margin:-4px 0 4px;letter-spacing:2px}
+/* a table's headings stay in sight while its rows scroll, and its horizontal scrollbar stays under it (item 8) */
+.tablewrap{max-height:72vh;overflow:auto}
+.tablewrap .dtable thead th{position:sticky;top:0;z-index:3;background:var(--th-bg, var(--surf))}
+@media print{.tablewrap{max-height:none;overflow:visible}}
+/* a row's lower edge: dragged, it sets the row's height (item 7) */
+.tk tbody td.tk-row-edge,.p6-table tbody td.tk-row-edge{cursor:row-resize}
+/* EPS pages: what was done shows at the foot of the window for five seconds (owner's requirements 2026-10-22, item 7) */
+.okmsg.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:60;margin:0;max-width:min(560px,calc(100vw - 32px));
+  background:var(--surf);box-shadow:0 6px 24px rgba(0,0,0,.18);animation:toast-out .4s ease 5s forwards}
+@keyframes toast-out{to{opacity:0;visibility:hidden}}
+@media print{.okmsg.toast{display:none}}

@@ -111,12 +111,12 @@ export function Comments({ p, a, may, post }) {
 /** The status row (images 6 and 9): weights and progress against the version's plan, and what is held, by column. */
 export function Status({ p, a }) {
   const { t } = usePrefs();
-  const { fmt, day } = useEpsFmt();
+  const { fmt, day, w } = useEpsFmt();
   const s = p.status;
   const pct = (v) => (v == null ? "—" : `${fmt(v)}%`);
   const cells = [
     ["Scheduling Name", p.version.title], ["Scheduling NO.", p.version.code], ["ACTIVITY NO.", a.code], ["Description", a.name],
-    ["Original Start", day(s.start)], ["Orig. Durat", fmt(s.days)], ["Original Finish", day(s.end)], ["Percent", pct(s.percent)], ["W.F", s.wv == null ? "—" : `${fmt(s.wv, 6)}%`],
+    ["Original Start", day(s.start)], ["Orig. Durat", fmt(s.days)], ["Original Finish", day(s.end)], ["Percent", w(s.percent)], ["W.F", w(s.wv, 10)],
     ["Plan Progress", pct(s.planProgress)], ["Unit", s.unit || "—"], ["Original Weight", fmt(s.originalWeight, 4)], ["Actual Weight", fmt(s.actualWeight, 4)],
     ["Plan Weight", fmt(s.planWeight, 4)], ["Done Weight", fmt(s.doneWeight, 4)], ["Actual Progress", pct(s.actualProgress)], ["Remain Weight", fmt(s.remainWeight, 4)],
     ["Front Weight", fmt(s.frontWeight, 4)], ["Total Hold", fmt(s.totalHold, 4)],

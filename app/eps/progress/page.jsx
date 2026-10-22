@@ -96,7 +96,7 @@ export default function ProgressPage() {
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       <div className="toolbar-left" data-entry-bar>
         <span className="field"><label htmlFor="pg-day" className="sm">{t("pg.day")}</label><input id="pg-day" type="date" value={f.day} max={today()} onChange={(e) => setF({ ...f, day: e.target.value })} /></span>
         <span className="field"><label htmlFor="pg-rep" className="sm">{t("pg.reportNo")}</label>
