@@ -89,7 +89,7 @@ export default function PlanningPage() {
 
   const head = (
     <div className="pagehead"><h1>{t("ep.pl.title")}</h1>
-      <span className="sub">{picker} <Link href="/eps">{t("ep.link.board")}</Link> · <Link href={versionId ? `/eps/activities?version=${versionId}` : "/eps/activities"}>{t("ep.link.activities")}</Link> · <Link href="/eps/progress">{t("ep.link.entry")}</Link></span></div>);
+      <span className="sub">{picker} <Link href="/eps">{t("ep.link.board")}</Link> · <Link href={versionId ? `/eps/planning/preview?version=${versionId}` : "/eps/planning/preview"} data-preview-link>{t("ep.link.planPreview")}</Link> · <Link href={versionId ? `/eps/activities?version=${versionId}` : "/eps/activities"}>{t("ep.link.activities")}</Link> · <Link href="/eps/progress">{t("ep.link.entry")}</Link></span></div>);
   if (!contractId) return <div className="page"><div className="pagehead"><h1>{t("ep.pl.title")}</h1></div><p className="empty-note">{t("cs.pick")}</p></div>;
   if (tree.error || rows.error) return <div className="page">{head}<p className="err">{tree.error || rows.error}</p></div>;
   if (!pmsId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;

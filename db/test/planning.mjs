@@ -60,6 +60,33 @@ test("the planning sheet: headers in either language, ten decimals, a date it ca
   equal(pl.fromPlanSheet([["a", "b"], [1, 2]]).lines, []);
 });
 
+test("status: plan weight spread over the version's days, holds of unreleased requirements by column, front = remain − holds, never below zero", () => {
+  const act = { wf: 60, wv: 0.00037, unit: "m", volumeActual: 100, plan_start: "2026-01-01", plan_end: "2026-01-10", planDays: 10 };
+  const plan = { start_on: "2026-03-01", end_on: "2026-03-10", done_before: 20, volume_plan: 50 };
+  const reqs = [{ hold_group: "engineering", hold_weight: 5 }, { hold_group: "material", hold_weight: 7.5 }, { hold_group: "material", hold_weight: 3, done_date: "2026-03-02" },
+    { hold_group: "unknown", hold_weight: 1 }, { hold_group: "site", hold_weight: null }];
+  const r = pl.statusRow({ act, plan, total: 100, done: 30, requirements: reqs, today: "2026-03-04" });
+  equal([r.start, r.end, r.days, r.percent, r.originalWeight, r.planWeight, r.planProgress, r.doneWeight, r.actualProgress, r.remainWeight],
+    ["2026-03-01", "2026-03-10", 10, 60, 100, 40, 40, 30, 30, 70], "20 before + 50 × 4 of 10 days");
+  equal([r.holds, r.totalHold, r.frontWeight], [{ engineering: 5, material: 7.5, site: 0, others: 1, contractor: 0 }, 13.5, 56.5],
+    "a released requirement holds nothing; an unknown column counts as others; an unknown weight adds nothing");
+  equal(pl.statusRow({ act, plan, total: 100, done: 95, requirements: [{ hold_group: "site", hold_weight: 10 }], today: "2026-03-04" }).frontWeight, 0, "never below zero");
+  const u = pl.statusRow({ act: { ...act, volumeActual: null }, plan: { ...plan, volume_plan: null }, total: null, done: 0, today: "2026-03-04" });
+  equal([u.planWeight, u.planProgress, u.remainWeight, u.frontWeight, u.actualProgress], [null, null, null, null, null], "unknown inputs: unknown figures, not zero");
+  equal([pl.spanShare("2026-03-01", "2026-03-10", "2026-02-27"), pl.spanShare("2026-03-01", "2026-03-10", "2026-03-10"), pl.spanShare(null, "2026-03-10", "2026-03-05")], [0, 1, null]);
+});
+
+test("activity detail (image 1): duration, schedule and cost percentages from what is stored; total float left unknown", () => {
+  const a = { planDays: 10, plan_start: "2026-03-01", plan_end: "2026-03-10", actual_start: "2026-03-02", actual_end: null, budgetPlan: 1000, budgetActual: 300, pct: 40,
+    constraint_start: "2026-03-05", constraint_end: "2026-03-07" };
+  const f = pl.detailFigures(a, { today: "2026-03-06" });
+  equal([f.goneDays, f.durationPct, f.schedulePct, f.remainDays, f.atCompletionDays, f.constraintDays], [5, 50, 60, 5, 10, 3]);
+  equal([f.remainingCost, f.atCompletionCost, f.costPct, f.costOfBudgetPct, f.totalFloat], [600, 900, 33.33, 30, null]);
+  const done = pl.detailFigures({ ...a, actual_end: "2026-03-13", actualDays: 12 }, { today: "2026-03-20" });
+  equal([done.remainDays, done.atCompletionDays, done.originalPct, done.durationPct], [0, 12, 120, 100], "finished late: 12 of 10 planned days");
+  equal(pl.detailFigures({ ...a, pct: null }, { today: "2026-03-06" }).remainingCost, null, "no progress: no remaining cost");
+});
+
 // ── in the database ──────────────────────────────────────────────────────
 
 process.env.AUTH_MODE = "dev";
@@ -179,6 +206,67 @@ test("a planning sheet into a version: rows rewritten or added by activity code;
     const a = await one(V2.id, A.id);
     equal([a.plan_start, a.plan_end, a.volumePlan], ["2026-05-01", "2026-05-02", 33.3333333333]);
     equal((await one(V2.id, twin.id)).plan_start, "2026-06-01");
+  });
+});
+
+
+test("requirements of an activity in a version: the contract's kinds (the owner's five to start), one active at a time, the predecessor of the same PMS", async () => {
+  await inP(async () => {
+    const types = await plan.requirementTypes(db, { projectId: P, contractId: C.id });
+    equal(types.map((t) => [t.name, t.hold_group]), [["Engineering", "engineering"], ["Material", "material"], ["Site", "site"], ["Contractor", "contractor"], ["Others", "others"]]);
+    const T = Object.fromEntries(types.map((t) => [t.hold_group, t.id]));
+    const vend = await plan.saveRequirementType(db, { projectId: P, contractId: C.id, name: "Vendor data", holdGroup: "engineering" });
+    await throws(() => plan.saveRequirementType(db, { projectId: P, contractId: C.id, name: "Vendor data" }), "هست");
+    await throws(() => plan.saveRequirement(db, { projectId: P, versionId: V1.id, activityId: X.id, name: "x", typeId: T.site, userId: U.id }), "در برنامهٔ این نسخه نیست");
+    const r1 = await plan.saveRequirement(db, { projectId: P, versionId: V1.id, activityId: A.id, name: "IFC drawings", docNo: "DWG-1", typeId: vend.id, holdWeight: 20,
+      targetDate: "2026-01-05", active: true, predActivityId: B.id, userId: U.id });
+    const r2 = await plan.saveRequirement(db, { projectId: P, versionId: V1.id, activityId: A.id, name: "Pipe on site", typeId: T.material, holdWeight: 10, active: true, userId: U.id });
+    await plan.saveRequirement(db, { projectId: P, versionId: V1.id, activityId: A.id, name: "Front released", typeId: T.site, holdWeight: 15, doneDate: "2026-01-02", userId: U.id });
+    const { rows } = await db.query("SELECT id, active FROM activity_requirement WHERE activity_id = $1 ORDER BY seq", [A.id]);
+    equal(rows.map((x) => [x.id === r1.id ? "r1" : x.id === r2.id ? "r2" : "r3", x.active]), [["r1", false], ["r2", true], ["r3", false]], "making one active makes the other inactive");
+    await throws(() => db.query("UPDATE activity_requirement SET active = true WHERE id = $1", [r1.id]), "activity_requirement_one_active", "the database holds it too");
+    await throws(() => plan.saveRequirement(db, { projectId: P, versionId: V1.id, activityId: A.id, name: "x", typeId: T.site, predActivityId: X.id, userId: U.id }), "همین PMS");
+    await throws(() => plan.saveRequirement(db, { projectId: P, versionId: V1.id, activityId: A.id, name: "x", typeId: T.site, predActivityId: A.id, userId: U.id }), "خودش");
+    await throws(() => plan.removeRequirementType(db, { projectId: P, id: vend.id }), "به کار رفته");
+  });
+});
+
+test("comments and follow-up: numbered rows, an actor of the project, a known status", async () => {
+  await inP(async () => {
+    const c1 = await plan.saveComment(db, { projectId: P, versionId: V1.id, activityId: A.id, item: "تأخیر در تحویل لوله", actionBy: U.id, actionDate: "2026-01-04", department: "Procurement", userId: U.id });
+    const c2 = await plan.saveComment(db, { projectId: P, versionId: V1.id, activityId: A.id, item: "پیگیری مجوز کار", status: "in_progress", userId: U.id });
+    equal([c1.row_no, c2.row_no, c1.status], [1, 2, "open"]);
+    const stranger = await projects.ensureUser(db, { subject: "kc|plan-nobody", displayName: "nobody" });
+    await throws(() => plan.saveComment(db, { projectId: P, versionId: V1.id, activityId: A.id, item: "x", actionBy: stranger.id, userId: U.id }), "اعضای این پروژه");
+    await throws(() => plan.saveComment(db, { projectId: P, versionId: V1.id, activityId: A.id, item: "x", status: "maybe", userId: U.id }), "وضعیت");
+    await plan.saveComment(db, { projectId: P, versionId: V1.id, activityId: A.id, id: c2.id, item: "پیگیری مجوز کار", status: "done", doneDate: "2026-01-06", userId: U.id });
+    const d = await plan.previewDetail(db, { projectId: P, versionId: V1.id, activityId: A.id, today: "2026-01-04" });
+    equal(d.comments.map((c) => [c.row_no, c.status, c.action_by_name || null]), [[1, "open", "planner"], [2, "done", null]]);
+  });
+});
+
+test("the preview's status row: holds of this version's unreleased requirements by column; a planning row they hang on is not removed", async () => {
+  await inP(async () => {
+    const d = await plan.previewDetail(db, { projectId: P, versionId: V1.id, activityId: A.id, today: "2026-01-05" });
+    equal([d.status.holds.engineering, d.status.holds.material, d.status.holds.site, d.status.totalHold], [20, 10, 0, 30], "Vendor data counts as engineering; the released one holds nothing");
+    equal([d.status.originalWeight, d.status.remainWeight, d.status.frontWeight], [100, 100, 70]);
+    equal(d.requirements.map((q) => [q.name, q.type_name, q.pred_code || null]), [["IFC drawings", "Vendor data", B.code], ["Pipe on site", "Material", null], ["Front released", "Site", null]]);
+    const row = (await plan.planRows(db, { projectId: P, versionId: V1.id })).rows.find((x) => x.activity_id === A.id);
+    await throws(() => plan.removePlanRows(db, { projectId: P, ids: [row.id], userId: U.id }), "نیازمندی یا کامنت");
+    await throws(() => db.query("DELETE FROM activity_plan WHERE id = $1", [row.id]), "activity_requirement", "the database holds it too");
+  });
+});
+
+test("the activity-detail fields of image 1: kept when left out, a constraint finish before its start refused", async () => {
+  await inP(async () => {
+    await eps.saveActivity(db, { projectId: P, nodeId: N.id, id: A.id, name: A.name, wf: 60, statusText: "In progress", updateDate: "2026-01-04", suspended: true,
+      addToInvoice: true, scaleUpPct: 12.5, constraintStart: "2026-01-02", constraintEnd: "2026-01-04" });
+    await eps.saveActivity(db, { projectId: P, nodeId: N.id, id: A.id, name: A.name, wf: 60 });
+    const { rows: [a] } = await db.query("SELECT status_text, suspended, add_to_invoice, scale_up_pct, constraint_start FROM wbs_activity WHERE id = $1", [A.id]);
+    equal([a.status_text, a.suspended, a.add_to_invoice, Number(a.scale_up_pct), !!a.constraint_start], ["In progress", true, true, 12.5, true]);
+    await throws(() => eps.saveActivity(db, { projectId: P, nodeId: N.id, id: A.id, name: A.name, wf: 60, constraintEnd: "2026-01-01" }), "پیش از شروع");
+    const d = await act.activityDetail(db, { projectId: P, activityId: A.id, versionId: V1.id });
+    equal([d.figures.constraintDays, d.figures.totalFloat, d.currency, d.activity.status_text], [3, null, "USD", "In progress"]);
   });
 });
 

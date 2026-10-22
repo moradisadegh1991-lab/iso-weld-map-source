@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
@@ -36,6 +36,9 @@ export default function ActivitiesPage() {
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const { height, grip } = useSplit("p6-activities", 430);
+  // the loaders of this render, for the row operations kept in a memo: they reload the activity selected now
+  const live = useRef({});
+  live.current = { reload, detail };
   useEffect(() => {
     // a sub-form added since the choice was saved shows until it is unticked
     const known = read("p6-activities:known", PAGE_TABS.filter((k) => k !== "scope"));
@@ -54,8 +57,8 @@ export default function ActivitiesPage() {
     const send = ({ url = "/api/eps", ...body }) => call(url, { method: "POST", body: JSON.stringify({ projectId, pmsId, versionId, ...body }) });
     const batch = async (list, done) => {
       setMsg(null); setOk(null);
-      try { for (const b of list) await send(b); reload(); detail.reload(); if (done) setOk(done); return true; }
-      catch (e) { setMsg(e.message); reload(); return false; }
+      try { for (const b of list) await send(b); live.current.reload(); live.current.detail.reload(); if (done) setOk(done); return true; }
+      catch (e) { setMsg(e.message); live.current.reload(); return false; }
     };
     const own = (v) => ({ name: v.name, wf: v.wf === "" ? null : v.wf, volumeActual: v.volActual === "" ? null : v.volActual,
       actType: v.actType, activityNo: v.activityNo, wfRate: v.wfRate === "" ? null : v.wfRate, description: v.description });
