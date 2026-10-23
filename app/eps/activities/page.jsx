@@ -133,7 +133,7 @@ export default function ActivitiesPage() {
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>{t("ep.ac.problems")}</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
       <div style={{ height }}>
         <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "actType", "activityNo", "name", "wf", "wfRate", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur", "description"]}
-          storeKey="p6-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} ops={ops} />
+          storeKey="p6-activities" customKey="eps-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} ops={ops} />
       </div>
       {grip}
       <div className="p6-detail">

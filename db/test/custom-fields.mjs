@@ -5,6 +5,9 @@
  * project's for every member; values kept by the row's key in the column's
  * type — a value the type does not hold is refused, never guessed; the admin
  * defines, a member who is not a viewer fills in; another project sees none.
+ * And the Excel templates a person builds (migration 086): the columns
+ * kept under a name, the template's own rule checked; removed by its maker
+ * or the admin.
  */
 import { test, run, equal, throws, scratchDir } from "./harness.mjs";
 import { valueOf } from "../../lib/db/repos/custom-fields.mjs";
@@ -74,6 +77,27 @@ test("through the route: the admin defines, an engineer fills in, a viewer reads
   equal((await route.POST(req("viewer", { projectId: P, kind: "value", fieldId: F.id, rowKey: "row-9", value: "4" }))).status, 403, "a viewer does not fill in");
   equal((await route.POST(req("admin", { projectId: P, kind: "field-remove", id: F.id }))).status, 200);
   equal((await (await route.GET(req("admin"))).json()).fields.map((f) => f.label), ["Shift"], "removed with its values");
+});
+
+test("templates a person builds: saved under a name, the same name replaces, the rule checked; removed by its maker or the admin; through the route", async () => {
+  const it = await import("../../lib/db/repos/import-templates.mjs");
+  await withProject(db, P, async () => {
+    const a = await it.saveTemplate(db, { projectId: P, kind: "daily", name: " Site  crew ", columns: ["Qty", "Report No", "Activity code"], userId: U.eng.id });
+    equal([a.name, a.columns], ["Site crew", ["Report No", "Activity code", "Qty"]]);
+    await it.saveTemplate(db, { projectId: P, kind: "daily", name: "Site crew", columns: ["Report No", "Activity code", "Qty", "Notes"], userId: U.eng.id });
+    equal((await it.listTemplates(db, { projectId: P, kind: "daily" })).map((x) => [x.name, x.columns.length]), [["Site crew", 4]], "the same name replaces its columns");
+    await throws(() => it.saveTemplate(db, { projectId: P, kind: "daily", name: "No qty", columns: ["Report No", "Activity code"], userId: U.eng.id }), "لازم");
+    await throws(() => it.saveTemplate(db, { projectId: P, kind: "pms", name: "Positional", columns: ["Coding"], userId: U.eng.id }), "ستون‌انتخابی");
+    await throws(() => it.removeTemplate(db, { projectId: P, id: a.id, userId: U.viewer.id }), "سازنده");
+  });
+  await withProject(db, P2, async () => equal(await it.listTemplates(db, { projectId: P2, kind: "daily" }), [], "another project sees none"));
+  const route = await import("../../app/api/import-templates/route.js");
+  const req = (as, body) => new Request(body ? "http://x/api/import-templates" : `http://x/api/import-templates?projectId=${P}&kind=daily`,
+    { method: body ? "POST" : "GET", headers: { authorization: `Bearer kc|cf-${as}`, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const g = await (await route.GET(req("viewer"))).json();
+  equal([g.templates.length, g.may.save], [1, false]);
+  equal((await route.POST(req("viewer", { projectId: P, kind: "save", template: "daily", name: "V", columns: ["Report No", "Activity code", "Qty"] }))).status, 403, "a viewer does not save");
+  equal((await route.POST(req("admin", { projectId: P, kind: "remove", id: g.templates[0].id }))).status, 200, "the admin removes another's");
 });
 
 await run();

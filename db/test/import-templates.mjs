@@ -6,7 +6,7 @@
  */
 import { test, run, assert, equal } from "./harness.mjs";
 import * as XLSX from "xlsx";
-import { TEMPLATES } from "../../lib/import-templates.mjs";
+import { TEMPLATES, pickable, checkPick, templateOf } from "../../lib/import-templates.mjs";
 import { parseDelimited, guessMapping, toRegister, HEADER_PATTERNS } from "../../lib/truth/parse.mjs";
 import { parseEquipmentList } from "../../lib/equipment/parse.mjs";
 import { LIST_PATTERNS } from "../../lib/register/weld-list.mjs";
@@ -66,6 +66,29 @@ test("the daily work template reads back line by line: report, activity, quantit
   const bad = fromDailySheet([["Report No", "Activity code", "Qty", "Date"], ["", "A-1", 0, "1405/08/01"]]);
   assert(bad.problems.some((p) => p.includes("شمارهٔ گزارش")) && bad.problems.some((p) => p.includes("بزرگ‌تر از صفر")) && bad.problems.some((p) => p.includes("1405/08/01")),
     "a missing report, a zero and a date it cannot read are named");
+});
+
+test("a template a person builds: required columns cannot be left out, unknown ones are refused, and the cut-down file still reads", () => {
+  equal(Object.keys(TEMPLATES).filter((k) => pickable(k)), ["eps", "planning", "daily"]);
+  assert(/لازم/.test(checkPick("daily", ["Report No", "Qty"]).problem), "the activity code cannot be left out");
+  assert(/ناشناخته/.test(checkPick("daily", ["Report No", "Activity code", "Qty", "Crew"]).problem), "a column the importer does not read is refused");
+  equal(checkPick("daily", ["Qty", "Activity code", "Report No"]).columns, ["Report No", "Activity code", "Qty"], "kept in the template's own order");
+  const write = (t) => {
+    const wb = XLSX.utils.book_new();
+    for (const x of t.sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(x.rows), x.name);
+    return XLSX.read(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }), { type: "buffer", cellDates: true });
+  };
+  const rows = (wb) => XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null, blankrows: false });
+  const d = templateOf("daily", ["Report No", "Activity code", "Qty", "Notes"]);
+  equal(d.sheets[0].rows[0], ["Report No", "Activity code", "Qty", "Notes"]);
+  assert(d.guide.every((g, i) => i === 0 || !/^Date|^WBS code/.test(g[0])), "the guide names only the columns kept");
+  const r = fromDailySheet(rows(write(d)));
+  equal([r.problems, r.lines.map((l) => [l.reportNo, l.code, l.qty])], [[], [["CR-0012", "PM01.C.01.01.01", 12.5], ["CR-0012", "A-030", 3], ["CR-0013", "PM01.C.01.01.01", 0.1234567891]]]);
+  const p = fromPlanSheet(rows(write(templateOf("planning", ["Activity code", "Planned"]))));
+  equal([p.problems, p.lines.map((l) => [l.code, l.volumePlan])], [[], [["PM01.C.01.01.01", 120.5], ["PM01.C.01.01.02", null], ["A-030", 0.1234567891]]]);
+  const e = fromSheet(rows(write(templateOf("eps", ["Parent code", "Code", "Name", "W.F"]))));
+  equal([e.problems, e.nodes.map((n) => n.code), e.activities.map((a) => [a.code, a.wf])],
+    [[], ["01", "01.01", "01.02"], [["A-010", 60], ["A-020", 40], ["A-030", 100]]], "without Type: a row named as a parent is a node");
 });
 
 test("an EPS sheet without a Type column, as the tree's own export writes it, and what it cannot place", () => {

@@ -68,10 +68,10 @@ const C = (await mk("Hydrotest", 20, "2026-02-01", "2026-02-03", 3)).row;
 
 // the WBS page: a PMS only; its tree with no version
 await page.goto(`${BASE}/eps/wbs?pms=${pms.id}`, { waitUntil: "networkidle" });
-await page.locator("[data-wbs-table]").waitFor();
+await page.locator("[data-wbs-tree] .p6-table").waitFor();
 check(await page.locator("[data-plan-picker] select[data-pick=pms]").count() === 1 && await page.locator("[data-plan-picker] select[data-pick=version]").count() === 0,
   "the WBS page picks the PMS, not a version");
-check(await page.locator(`tr[data-wbs="${node.code}"]`).count() === 1, `the PMS's tree: ${node.code}`);
+check(await page.locator(`[data-wbs-tree] tr[data-kind=node][data-row="${node.code}"]`).count() === 1, `the PMS's tree: ${node.code}`);
 await page.screenshot({ path: `${SHOT}/370-wbs-on-pms-en.png` });
 
 // the planning page, version 1 (the master): pickers in order, PMS first

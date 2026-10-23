@@ -7,7 +7,7 @@
  *   - a planning figure is edited in the activity's own row (days → finish);
  *   - requirements: two added with «+», the second made active, which makes
  *     the first inactive; a requirement kind added to the contract's list;
- *   - comments: one added, numbered 1;
+ *   - comments: one added, numbered 1; copied and pasted as a new row, numbered 2;
  *   - status: the holds of the unreleased requirements by column, and the
  *     front weight = remain − holds;
  *   - planning detail lists the version; the activity detail (image 1)
@@ -29,7 +29,8 @@ const ctx = await b.newContext({ viewport: { width: 1500, height: 1000 } });
 const page = await ctx.newPage();
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 page.on("console", (m) => { if (m.type() === "error" && !/40[0-9]|Failed to load resource|Failed to fetch RSC payload/.test(m.text())) problems.push("console: " + m.text()); });
-page.on("dialog", (d) => d.accept());
+const asked = [];
+page.on("dialog", (d) => { asked.push(d.message()); d.accept(); });
 await page.goto(BASE, { waitUntil: "networkidle" });
 await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);
 await page.click("button[type=submit]"); await page.waitForSelector(".shell");
@@ -95,6 +96,17 @@ await page.locator('[data-sub=comments] input[aria-label="Item Discussed"]').fil
 await page.locator("[data-sub=comments] [data-tk-save]").click();
 await page.locator("[data-sub=comments] tr[data-comment='1']").waitFor({ timeout: 8000 }).catch(() => {});
 check(await page.locator("[data-sub=comments] tr[data-comment='1']").count() === 1, "a comment added, numbered 1");
+// copied and pasted: a table that adds rows takes the copy as a new row, its values as they were (owner's requirements 2026-10-22, item 4)
+{
+  const box = await page.locator("[data-sub=comments] tr[data-comment='1'] td").first().boundingBox();
+  await page.mouse.click(box.x + 10, box.y + box.height / 2);
+  await page.locator("[data-sub=comments] [data-tk-bulk] button", { hasText: "Copy" }).click();
+  asked.length = 0;
+  await page.locator("[data-sub=comments] [data-tk-paste]").click();
+  await page.locator("[data-sub=comments] tr[data-comment='2']").waitFor({ timeout: 8000 }).catch(() => {});
+  check(asked.includes("Paste 1 rows as new rows?") && (await page.locator("[data-sub=comments] tr[data-comment='2']").innerText()).includes("Late pipe delivery"),
+    `pasted as a new row, numbered 2, the same item (${asked.join(" / ")})`);
+}
 
 // status: holds 20 engineering + 10 material, front = 100 − 0 done − 30
 await page.locator("[data-tab=status]").click();
