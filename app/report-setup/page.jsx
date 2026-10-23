@@ -21,7 +21,7 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  * only says who holds them. A form's designer sees only the workflows their
  * forms follow; the forms, the duties and the tree are the project manager's.
  */
-const blankDuty = { id: null, code: "", name: "", description: "", permissions: ["view"] };
+const blankDuty = { id: null, code: "", name: "", description: "", permissions: ["view"], roleId: "" };
 
 export default function ReportSetupPage() {
   const { projectId, call } = usePlatform();
@@ -98,6 +98,8 @@ export default function ReportSetupPage() {
         {!may.types && <p className="sm muted">{tr("rs.formsOnly")}</p>}
       </div>
 
+      {may.duties && <Roles data={data} post={post} tr={tr} />}
+
       {may.duties && (
         <div className="card" data-duties>
           <h2>{tr("rs.duties")}</h2>
@@ -108,26 +110,30 @@ export default function ReportSetupPage() {
               rowEdit={{
                 fields: [{ col: tr("rs.code"), name: "code", type: "text" }, { col: tr("rs.duty"), name: "name", type: "text" }],
                 value: (id) => { const d = data.duties.find((x) => x.id === id); return { code: d?.code || "", name: d?.name || "" }; },
-                onSave: (id, v) => { const d = data.duties.find((x) => x.id === id); return post({ kind: "duty", id, code: v.code, name: v.name, description: d.description, permissions: d.permissions }, tr("rs.dutySaved")); },
+                onSave: (id, v) => { const d = data.duties.find((x) => x.id === id); return post({ kind: "duty", id, code: v.code, name: v.name, description: d.description, permissions: d.permissions, roleId: d.roleId }, tr("rs.dutySaved")); },
                 onAdd: (v) => post({ kind: "duty", code: v.code, name: v.name, permissions: ["view"] }, tr("rs.dutySaved")),
               }}><table className="dtable">
-              <thead><tr><th>{tr("rs.code")}</th><th>{tr("rs.duty")}</th><th>{tr("rs.h.rights")}</th><th>{tr("rs.holders")}</th><th>{tr("rs.usedIn")}</th><th /></tr></thead>
+              <thead><tr><th>{tr("rs.code")}</th><th>{tr("rs.duty")}</th><th>{tr("rs.role")}</th><th>{tr("rs.h.rights")}</th><th>{tr("rs.holders")}</th><th>{tr("rs.usedIn")}</th><th /></tr></thead>
               <tbody>{data.duties.map((d) => (
                 <tr key={d.id} data-key={d.id} data-duty={d.code || d.name}>
                   <td className="mono">{d.code || "—"}</td><td>{d.name}</td>
+                  <td className="sm">{d.roleName ? `${d.contractNo} › ${d.roleName}` : "—"}</td>
                   <td className="sm">{d.permissions.map(perm).join(tr("c.sep"))}</td>
                   <td><Holders duty={d} users={data.users} post={post} /></td>
                   <td className="sm">{d.usedIn.join(" · ") || "—"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <button className="btn ghost sm" type="button" onClick={() => setNd({ id: d.id, code: d.code || "", name: d.name, description: d.description || "", permissions: d.permissions })}>{tr("dr.edit")}</button>
+                    <button className="btn ghost sm" type="button" onClick={() => setNd({ id: d.id, code: d.code || "", name: d.name, description: d.description || "", permissions: d.permissions, roleId: d.roleId || "" })}>{tr("dr.edit")}</button>
                     <button className="btn ghost sm" type="button" onClick={() => post({ kind: "duty-remove", id: d.id })}>{tr("dr.remove")}</button></td>
                 </tr>))}</tbody></table></TableKit>)}
           <Fold title={nd.id ? tr("rs.editDuty", { name: nd.name }) : tr("rs.newDuty")} open={nd.id ? true : undefined} onClose={() => setNd(blankDuty)}>
-            <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "duty", ...nd }, tr("rs.dutySaved"))) setNd(blankDuty); }}>
+            <form onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "duty", ...nd, roleId: nd.roleId || null }, tr("rs.dutySaved"))) setNd(blankDuty); }}>
               <div className="grid2">
                 <div className="field"><label htmlFor="du-name">{tr("rs.duty")}</label><input id="du-name" required value={nd.name} onChange={(e) => setNd({ ...nd, name: e.target.value })} /></div>
                 <div className="field"><label htmlFor="du-code">{tr("rs.code")}</label><input id="du-code" dir="ltr" value={nd.code} onChange={(e) => setNd({ ...nd, code: e.target.value })} /></div>
                 <div className="field"><label htmlFor="du-desc">{tr("rs.desc")}</label><input id="du-desc" value={nd.description} onChange={(e) => setNd({ ...nd, description: e.target.value })} /></div>
+                <div className="field"><label htmlFor="du-role">{tr("rs.role")}</label>
+                  <select id="du-role" value={nd.roleId || ""} onChange={(e) => setNd({ ...nd, roleId: e.target.value })}>
+                    <option value="">{tr("rs.noRole")}</option>{data.roles.map((r) => <option key={r.id} value={r.id}>{r.contract_no} › {r.name}</option>)}</select></div>
               </div>
               <Rights value={nd.permissions} on={(p) => setNd({ ...nd, permissions: p })} data={data} perm={perm} tr={tr} label={tr("rs.dutyRights")} />
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -169,21 +175,49 @@ export default function ReportSetupPage() {
   );
 }
 
-/** Who holds a duty: a checklist of the project's people, saved as a whole. */
+/**
+ * Who holds a duty, each with their own access level and, for temporary
+ * access, the first and last day it counts (owner's requirements 2026-10-22,
+ * item 1). A holder's level is a choice among the duty's rights; none ticked:
+ * all of the duty's.
+ */
 function Holders({ duty, users, post }) {
-  const { t: tr } = usePrefs();
-  const [open, setOpen] = useState(false);
-  const [pick, setPick] = useState(duty.members.map((m) => m.userId));
+  const { t: tr, L } = usePrefs();
+  const blank = { userId: "", own: false, permissions: [...duty.permissions], temporary: false, startsOn: "", endsOn: "" };
+  const [f, setF] = useState(null);
+  const perm = (k) => L(`report.perm.${k}`, k);
+  const edit = (m) => setF({ userId: m.userId, own: !!m.permissions, permissions: m.permissions || [...duty.permissions], temporary: m.temporary, startsOn: m.startsOn || "", endsOn: m.endsOn || "" });
   return (
-    <div>
-      <span className="sm">{duty.members.map((m) => m.name).join(tr("c.sep")) || "—"}</span>{" "}
-      <button className="btn ghost sm" type="button" onClick={() => { setPick(duty.members.map((m) => m.userId)); setOpen(!open); }}>{tr("rs.holdersEdit")}</button>
-      {open && (
-        <div className="permgrid" role="group" aria-label={tr("rs.holdersOf", { name: duty.name })} style={{ marginTop: 6 }}>
-          {users.filter((u) => u.active).map((u) => (
-            <label key={u.id}><input type="checkbox" checked={pick.includes(u.id)} onChange={(e) => setPick(e.target.checked ? [...pick, u.id] : pick.filter((x) => x !== u.id))} /> {u.name}</label>))}
-          <button className="btn sm" type="button" onClick={async () => { if (await post({ kind: "duty-members", dutyId: duty.id, userIds: pick, name: duty.name })) setOpen(false); }}>{tr("rs.saveHolders")}</button>
-        </div>)}
+    <div data-holders={duty.code || duty.name}>
+      {duty.members.length === 0 && <span className="sm muted">—</span>}
+      {duty.members.map((m) => (
+        <div key={m.userId} className="sm" data-holder={m.name}>
+          <b>{m.name}</b>
+          {m.permissions && <span className="muted"> · {m.permissions.map(perm).join(tr("c.sep"))}</span>}
+          {m.temporary && <span className="chip" style={{ marginInlineStart: 4 }} data-temporary>{tr("rs.tempSpan", { from: m.startsOn, to: m.endsOn })}</span>}
+          {" "}<button className="btn ghost sm" type="button" onClick={() => edit(m)}>{tr("dr.edit")}</button>
+          <button className="btn ghost sm" type="button" onClick={() => { if (window.confirm(tr("rs.holderRemoveAsk", { name: m.name }))) post({ kind: "duty-member-remove", dutyId: duty.id, userId: m.userId }); }}>{tr("dr.remove")}</button>
+        </div>))}
+      {!f && <button className="btn ghost sm" type="button" data-holder-add onClick={() => setF(blank)}>{tr("rs.holderAdd")}</button>}
+      {f && (
+        <form className="permgrid" style={{ marginTop: 6 }} aria-label={tr("rs.holdersOf", { name: duty.name })} onSubmit={async (e) => {
+          e.preventDefault();
+          if (await post({ kind: "duty-member", dutyId: duty.id, userId: f.userId, permissions: f.own ? f.permissions : null, temporary: f.temporary,
+            startsOn: f.temporary ? f.startsOn : null, endsOn: f.temporary ? f.endsOn : null }, tr("rs.holderSaved"))) setF(null);
+        }}>
+          <select aria-label={tr("rs.user")} required value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })} data-holder-user>
+            <option value="">—</option>{users.filter((u) => u.active).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+          <label><input type="checkbox" checked={f.own} onChange={(e) => setF({ ...f, own: e.target.checked })} data-holder-own /> {tr("rs.ownLevel")}</label>
+          {f.own && duty.permissions.map((k) => (
+            <label key={k}><input type="checkbox" checked={f.permissions.includes(k)} data-holder-perm={k}
+              onChange={(e) => setF({ ...f, permissions: e.target.checked ? [...f.permissions, k] : f.permissions.filter((x) => x !== k) })} /> {perm(k)}</label>))}
+          <label><input type="checkbox" checked={f.temporary} onChange={(e) => setF({ ...f, temporary: e.target.checked })} data-holder-temp /> {tr("rs.temporary")}</label>
+          {f.temporary && <>
+            <label>{tr("rs.tempFrom")} <input type="date" required value={f.startsOn} onChange={(e) => setF({ ...f, startsOn: e.target.value })} data-holder-from /></label>
+            <label>{tr("rs.tempTo")} <input type="date" required value={f.endsOn} onChange={(e) => setF({ ...f, endsOn: e.target.value })} data-holder-to /></label></>}
+          <button className="btn sm" type="submit" data-holder-save>{tr("rs.saveHolders")}</button>
+          <button className="btn ghost sm" type="button" onClick={() => setF(null)}>{tr("common.cancel")}</button>
+        </form>)}
     </div>
   );
 }
@@ -229,7 +263,7 @@ function Workflow({ wf, data, post, perm, tr }) {
             <h3>{tr("rs.stage", { seq: st.seq, name: st.name })}
               {reports === 0 && <button className="btn ghost sm" type="button" style={{ marginInlineStart: 8 }}
                 onClick={() => post({ kind: "stage-remove", stageId: st.id })}>{tr("rs.removeStage")}</button>}</h3>
-            <StageApprover st={st} post={post} />
+            <StageApprover st={st} post={post} duties={data.duties} />
             {st.groups.length === 0 && <p className="muted sm">{tr("rs.noGroups")}</p>}
             {st.groups.map((g) => (
               <div className="groupbox" key={g.id}>
@@ -428,27 +462,79 @@ function ScopePicker({ value, on, trees, tr }) {
 }
 
 /**
- * Each stage's one final approver and their deputy, and the colour the
- * stage's changes are shown in. With an approver named, only they or the
- * deputy approve the stage; the deputy's signature shows «از طرف».
+ * Each stage's one final approver and their deputy — a person, or a duty
+ * whose holders act (owner's requirements 2026-10-22, item 2-a) — the colour
+ * the stage's changes are shown in, and its days to review: past them the
+ * stage counts as approved and the text shows where the signature would be.
  */
-function StageApprover({ st, post }) {
+function StageApprover({ st, post, duties }) {
   const signers = [...new Map(st.groups.flatMap((g) => g.members.filter((m) => m.permissions.includes("sign")).map((m) => [m.userId, m.name]))).entries()];
-  const [f, setF] = useState({ approverId: st.approverId || "", deputyId: st.deputyId || "", color: st.changeColor || "#c0392b" });
+  // the duties placed in this stage's groups with the right to sign
+  const signDuties = [...new Map(st.groups.flatMap((g) => g.duties.filter((d) => d.permissions.includes("sign")).map((d) => [d.dutyId, d.name]))).entries()];
+  const [f, setF] = useState({ by: st.approverDutyId ? "duty" : "person", approverId: st.approverId || "", deputyId: st.deputyId || "",
+    approverDutyId: st.approverDutyId || "", deputyDutyId: st.deputyDutyId || "", color: st.changeColor || "#c0392b" });
+  const [dl, setDl] = useState({ days: st.deadlineDays ?? "", text: st.deadlineText || "" });
   const { t } = usePrefs();
+  const list = f.by === "duty" ? signDuties : signers;
+  const [ak, dk] = f.by === "duty" ? ["approverDutyId", "deputyDutyId"] : ["approverId", "deputyId"];
   return (
-    <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap", marginBottom: 8 }}>
-      <div className="field"><label htmlFor={`ap-${st.id}`}>{t("rs.approver")}</label>
-        <select id={`ap-${st.id}`} value={f.approverId} onChange={(e) => setF({ ...f, approverId: e.target.value })}>
-          <option value="">{t("rs.anyApprover")}</option>{signers.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></div>
-      <div className="field"><label htmlFor={`dp-${st.id}`}>{t("rs.deputy")}</label>
-        <select id={`dp-${st.id}`} value={f.deputyId} disabled={!f.approverId} onChange={(e) => setF({ ...f, deputyId: e.target.value })}>
-          <option value="">—</option>{signers.filter(([id]) => id !== f.approverId).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></div>
-      <button className="btn ghost sm" type="button" onClick={() => post({ kind: "approver", stageId: st.id, approverId: f.approverId || null, deputyId: (f.approverId && f.deputyId) || null })}>{t("rs.saveApprover")}</button>
-      <div className="field"><label htmlFor={`cl-${st.id}`}>{t("rs.color")}</label>
-        <input id={`cl-${st.id}`} type="color" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} /></div>
-      <button className="btn ghost sm" type="button" onClick={() => post({ kind: "stage-color", stageId: st.id, color: f.color })}>{t("rs.saveColor")}</button>
-      {signers.length === 0 && <span className="sm muted">{t("rs.approverRule")}</span>}
+    <div style={{ marginBottom: 8 }} data-stage-setup={st.seq}>
+      <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}>
+        <div className="field"><label htmlFor={`apby-${st.id}`}>{t("rs.approverBy")}</label>
+          <select id={`apby-${st.id}`} value={f.by} onChange={(e) => setF({ ...f, by: e.target.value })} data-approver-by>
+            <option value="person">{t("rs.byPerson")}</option><option value="duty">{t("rs.byDuty")}</option></select></div>
+        <div className="field"><label htmlFor={`ap-${st.id}`}>{t("rs.approver")}</label>
+          <select id={`ap-${st.id}`} value={f[ak]} onChange={(e) => setF({ ...f, [ak]: e.target.value })} data-approver>
+            <option value="">{t("rs.anyApprover")}</option>{list.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></div>
+        <div className="field"><label htmlFor={`dp-${st.id}`}>{t("rs.deputy")}</label>
+          <select id={`dp-${st.id}`} value={f[dk]} disabled={!f[ak]} onChange={(e) => setF({ ...f, [dk]: e.target.value })} data-deputy>
+            <option value="">—</option>{list.filter(([id]) => id !== f[ak]).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></div>
+        <button className="btn ghost sm" type="button" data-approver-save onClick={() => post(f.by === "duty"
+          ? { kind: "approver", stageId: st.id, approverDutyId: f.approverDutyId || null, deputyDutyId: (f.approverDutyId && f.deputyDutyId) || null }
+          : { kind: "approver", stageId: st.id, approverId: f.approverId || null, deputyId: (f.approverId && f.deputyId) || null })}>{t("rs.saveApprover")}</button>
+        <div className="field"><label htmlFor={`cl-${st.id}`}>{t("rs.color")}</label>
+          <input id={`cl-${st.id}`} type="color" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} /></div>
+        <button className="btn ghost sm" type="button" onClick={() => post({ kind: "stage-color", stageId: st.id, color: f.color })}>{t("rs.saveColor")}</button>
+        {list.length === 0 && <span className="sm muted">{t(f.by === "duty" ? "rs.approverDutyRule" : "rs.approverRule")}</span>}
+      </div>
+      <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}>
+        <div className="field" style={{ width: 130 }}><label htmlFor={`dl-${st.id}`}>{t("rs.deadlineDays")}</label>
+          <input id={`dl-${st.id}`} type="number" min={1} max={365} dir="ltr" value={dl.days} onChange={(e) => setDl({ ...dl, days: e.target.value })} data-deadline-days /></div>
+        <div className="field" style={{ flex: 1, minWidth: 220 }}><label htmlFor={`dt-${st.id}`}>{t("rs.deadlineText")}</label>
+          <input id={`dt-${st.id}`} disabled={!dl.days} required={!!dl.days} value={dl.text} placeholder={t("rs.deadlineTextHint")}
+            onChange={(e) => setDl({ ...dl, text: e.target.value })} data-deadline-text /></div>
+        <button className="btn ghost sm" type="button" data-deadline-save
+          onClick={() => post({ kind: "stage-deadline", stageId: st.id, days: dl.days || null, text: dl.days ? dl.text : null }, t("rs.deadlineSaved"))}>{t("rs.saveDeadline")}</button>
+        <span className="sm muted">{t("rs.deadlineNote")}</span>
+      </div>
     </div>
   );
+}
+
+/** Roles under each contract (owner's requirements 2026-10-22, item 1): a role gathers the contract's duties. */
+function Roles({ data, post, tr }) {
+  const byId = new Map(data.roles.map((r) => [r.id, r]));
+  const contracts = data.contracts.map((k) => [k.id, `${k.contract_no} — ${k.title}`]);
+  return (
+    <div className="card" data-roles>
+      <h2>{tr("rs.roles")}</h2>
+      <p className="sm muted">{tr("rs.rolesNote")}</p>
+      <TableKit name="report-setup-roles" min={1}
+        onDelete={(id) => post({ kind: "role-remove", id }, tr("rs.roleRemoved"))}
+        rowEdit={{
+          fields: [{ col: tr("rs.contract"), name: "contractId", type: "select", options: contracts }, { col: tr("rs.role"), name: "name", type: "text" },
+            { col: tr("rs.desc"), name: "description", type: "text" }],
+          value: (id) => { const r = byId.get(id); return { contractId: r.contract_id, name: r.name, description: r.description || "" }; },
+          onSave: (id, v) => post({ kind: "role", id, ...v, seq: byId.get(id).seq }, tr("rs.roleSaved")),
+          // a role is a contract's: with no contract in the project there is nothing to add it under
+          onAdd: data.contracts.length ? (v) => post({ kind: "role", ...v, contractId: v.contractId || data.contracts[0].id }, tr("rs.roleSaved")) : undefined,
+        }}><table className="dtable">
+        <thead><tr><th>{tr("rs.contract")}</th><th>{tr("rs.role")}</th><th>{tr("rs.desc")}</th><th>{tr("rs.roleDuties")}</th></tr></thead>
+        <tbody>{data.roles.map((r) => (
+          <tr key={r.id} data-key={r.id} data-role={r.name}>
+            <td className="mono">{r.contract_no}</td><td>{r.name}</td><td className="sm">{r.description || ""}</td>
+            <td className="sm">{data.duties.filter((d) => d.roleId === r.id).map((d) => d.name).join(tr("c.sep")) || "—"}</td></tr>))}</tbody>
+      </table></TableKit>
+      {data.roles.length === 0 && <p className="empty-note">{tr(data.contracts.length ? "rs.noRoles" : "rs.noContracts")}</p>}
+    </div>);
 }

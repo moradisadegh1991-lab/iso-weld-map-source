@@ -25,13 +25,16 @@ export function Workflow({ v }) {
               <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: "#000", display: "inline-block" }} />{t("wf.current")}</span>}
             {s.approverName && <div className="sm muted" style={{ fontWeight: 400 }}>{t("wf.approver", { name: s.approverName })}{s.deputyName ? t("wf.deputy", { name: s.deputyName }) : ""}</div>}
           </div>
+          {boxes.get(s.seq)?.deadlineAt && <div className="sm" data-stage-deadline style={{ padding: "2px 10px", color: "var(--warn, #b26a00)" }}>
+            {t("wf.deadline", { date: date(boxes.get(s.seq).deadlineAt), n: boxes.get(s.seq).deadlineDays })}</div>}
           <div style={{ display: "flex", gap: 6, padding: 6, flexWrap: "wrap" }}>
             {(boxes.get(s.seq)?.groups || []).map((g) => (
               <div key={g.groupId} style={{ flex: "1 0 90px", border: "1px solid var(--rule, #ccd)", borderRadius: 6, padding: 4 }}>
                 <div className="sm"><b>{g.name}</b></div>
                 {g.due && <div className="sm" data-due={g.overdue ? "overdue" : "open"} style={{ color: g.overdue ? "var(--bad)" : "var(--muted, #667)" }}>
                   {g.overdue ? t("wf.overdue", { date: date(g.due) }) : t("wf.due", { date: date(g.due), n: g.reviewDays })}</div>}
-                {g.signatures.length === 0 ? <div className="sm muted">—</div> : g.signatures.map((x) => (
+                {g.autoText && !g.signatures.some((x) => x.current) ? <div className="sm" data-auto-text style={{ color: "var(--warn, #b26a00)" }}>{g.autoText}</div>
+                  : g.signatures.length === 0 ? <div className="sm muted">—</div> : g.signatures.map((x) => (
                   <div key={x.userId} className="sm" style={{ opacity: x.current ? 1 : 0.5 }} title={x.acceptChanges ? t("wf.acceptsTip") : undefined}>
                     ✓ {x.onBehalfOf ? t("wf.onBehalf", { name: x.onBehalfOf }) : ""}{x.name}{x.acceptChanges && <span className="muted" data-accepts> {t("wf.accepts")}</span>}</div>))}
               </div>))}

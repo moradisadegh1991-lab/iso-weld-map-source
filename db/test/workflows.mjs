@@ -5,6 +5,11 @@
  * a duty held by people and placed in a review group; a tree of workflows,
  * one of which a form follows; pages and tree rows a duty reaches; days to
  * review; and a form that is not written without a workflow.
+ * And (owner's requirements of 2026-10-22, items 1 and 2-a): roles under a
+ * contract gathering duties; a holder's own access level and temporary
+ * access between two days; the final approver and deputy named by a duty;
+ * a stage's deadline that approves it when the days run out, its text in
+ * place of the signature.
  */
 import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 
@@ -141,6 +146,101 @@ test("days to review: the group's deadline runs from the report's arrival at the
     const due = wf.reviewDue({ ...s, createdT: BigInt(Date.now() - 3 * 86_400_000) * 1000n }, 1).find((x) => x.groupId === G.site.id);
     assert(Date.parse(due.due) < Date.now(), "three days in, the two days are past");
     equal(wf.reviewDue(s, 2)[0].reviewDays, null, "a group without a duty's days has no deadline");
+  });
+});
+
+// ── 2026-10-22: roles, a holder's own access, temporary access, approver by duty, stage deadlines ──
+
+let K, role;
+test("roles under a contract gather its duties; a role with duties is not removed; the same name once per contract", async () => {
+  const ctr = await import("../../lib/db/repos/contracts.mjs");
+  await as(async () => {
+    K = await ctr.upsertContract(db, { projectId: P, contractNo: "WF-C1", title: "Piping", kind: "main", counterparty: "KPC", currency: "IRR", userId: pm.id });
+    await throws(() => wfs.saveRole(db, { projectId: P, contractId: K.id, name: " " }), "نام نقش");
+    role = await wfs.saveRole(db, { projectId: P, contractId: K.id, name: "نظارت کارگاه" });
+    await throws(() => wfs.saveRole(db, { projectId: P, contractId: K.id, name: "نظارت کارگاه" }), "در این قرارداد هست");
+    await wfs.saveDuty(db, { projectId: P, id: site.id, code: "SM", name: site.name, permissions: site.permissions, roleId: role.id });
+    const d = (await wfs.duties(db, { projectId: P })).find((x) => x.id === site.id);
+    equal([d.roleName, d.contractNo], ["نظارت کارگاه", "WF-C1"]);
+    await throws(() => wfs.removeRole(db, { projectId: P, id: role.id }), "۱ وظیفه".replace("۱", "1"));
+    equal((await wfs.roles(db, { projectId: P })).map((r) => [r.name, r.contract_no]), [["نظارت کارگاه", "WF-C1"]]);
+  });
+});
+
+test("a holder's own access level: of the duty's rights in the group, only theirs; unknown rights refused; cleared, all of the duty's again", async () => {
+  await as(async () => {
+    const ali1 = async () => (await rp.workflowOf(db, { projectId: P, workflowId: flow.id }))[0].groups[0].members.find((m) => m.userId === ali.id);
+    await throws(() => wfs.setDutyMember(db, { projectId: P, dutyId: site.id, userId: ali.id, permissions: ["fly"] }), "ناشناخته");
+    await throws(() => wfs.setDutyMember(db, { projectId: P, dutyId: site.id, userId: outsider.id }), "عضو پروژه");
+    await wfs.setDutyMember(db, { projectId: P, dutyId: site.id, userId: ali.id, permissions: ["view", "sign"] });
+    equal((await ali1()).permissions.sort(), ["sign", "view"], "the duty may approve and create; Ali, only view and sign");
+    equal((await wfs.duties(db, { projectId: P })).find((x) => x.id === site.id).members[0].permissions, ["view", "sign"]);
+    await wfs.setDutyMember(db, { projectId: P, dutyId: site.id, userId: ali.id, permissions: null });
+    assert((await ali1()).permissions.includes("approve"), "no level of his own: the duty's rights");
+  });
+});
+
+test("temporary access: both days required, the last not before the first; it counts only between them", async () => {
+  await as(async () => {
+    const sara1 = async () => (await rp.workflowOf(db, { projectId: P, workflowId: flow.id }))[0].groups[0].members.some((m) => m.userId === sara.id);
+    await throws(() => wfs.setDutyMember(db, { projectId: P, dutyId: clerk.id, userId: sara.id, temporary: true, startsOn: day(3) }), "تاریخ شروع و پایان");
+    await throws(() => wfs.setDutyMember(db, { projectId: P, dutyId: clerk.id, userId: sara.id, temporary: true, startsOn: day(1), endsOn: day(3) }), "پیش از شروع");
+    await wfs.setDutyMember(db, { projectId: P, dutyId: clerk.id, userId: sara.id, temporary: true, startsOn: day(10), endsOn: day(5) });
+    equal(await sara1(), false, "a holding that ended five days ago does not count");
+    await wfs.setDutyMember(db, { projectId: P, dutyId: clerk.id, userId: sara.id, temporary: true, startsOn: day(1), endsOn: day(-1) });
+    equal(await sara1(), true, "from yesterday to tomorrow: she holds it today");
+    const m = (await wfs.duties(db, { projectId: P })).find((x) => x.id === clerk.id).members[0];
+    equal([m.temporary, m.startsOn, m.endsOn], [true, day(1), day(-1)]);
+  });
+});
+
+test("the final approver and deputy named by a duty: its holders approve, no one else; a person or a duty, not both; the duty must sign at the stage", async () => {
+  await as(async () => {
+    const st1 = (await rp.workflowOf(db, { projectId: P, workflowId: flow.id }))[0];
+    await throws(() => rp.setStageApprover(db, { projectId: P, stageId: st1.id, approverId: ali.id, approverDutyId: site.id }), "نه هر دو");
+    await throws(() => rp.setStageApprover(db, { projectId: P, stageId: st1.id, deputyDutyId: clerk.id }), "جانشین بدون");
+    const other = await wfs.saveDuty(db, { projectId: P, code: "OT", name: "دیگر", permissions: ["view", "sign"] });
+    await throws(() => rp.setStageApprover(db, { projectId: P, stageId: st1.id, approverDutyId: other.id }), "با حق امضا");
+    await rp.setStageApprover(db, { projectId: P, stageId: st1.id, approverDutyId: site.id });
+    const r = await rp.createReport(db, { projectId: P, reportTypeId: A.id, reportDate: day(1), content: { a: 1 }, userId: reza.id });
+    let snap = (await rp.snapshotOf(db, { projectId: P, reportId: r.id })).snapshot;
+    equal(snap.stages[0].approverIds, [ali.id], "whoever holds the duty today");
+    assert(/تأییدکنندهٔ نهایی تعیین‌شده/.test(wf.checkApprove(snap, reza.id).reason), "Reza may sign but not approve");
+    await rp.signReport(db, { projectId: P, reportId: r.id, userId: ali.id });
+    snap = (await rp.snapshotOf(db, { projectId: P, reportId: r.id })).snapshot;
+    equal(wf.checkApprove(snap, ali.id).ok, true, "Ali, holding the duty, approves after signing");
+    equal((await rp.approveStage(db, { projectId: P, reportId: r.id, userId: ali.id })).stage_seq, 2);
+  });
+});
+
+test("a stage's deadline: days and text, both or neither; when they run out the stage is approved then, by no one, its text in place of the signature", async () => {
+  await as(async () => {
+    const [st1, st2] = await rp.workflowOf(db, { projectId: P, workflowId: flow.id });
+    await throws(() => rp.setStageDeadline(db, { projectId: P, stageId: st1.id, days: 2 }), "متنی که به جای امضا");
+    await throws(() => rp.setStageDeadline(db, { projectId: P, stageId: st1.id, days: 0, text: "x" }), "۱ تا ۳۶۵");
+    await rp.setStageDeadline(db, { projectId: P, stageId: st1.id, days: 2, text: "بررسی نشد؛ با گذشت مهلت تأییدشده" });
+    const r = await rp.createReport(db, { projectId: P, reportTypeId: A.id, reportDate: day(3), content: { d: 1 }, userId: reza.id });
+    let snap = (await rp.snapshotOf(db, { projectId: P, reportId: r.id })).snapshot;
+    equal([snap.stageSeq, wf.deadlinesPassed(snap, BigInt(Date.now()) * 1000n)], [1, []], "a fresh report has its two days");
+    await db.query("UPDATE report SET created_at = now() - interval '3 days' WHERE id = $1", [r.id]);
+    const v = await rp.reportView(db, { projectId: P, reportId: r.id, userId: reza.id });
+    equal([v.report.stage_seq, v.report.status], [2, "open"], "three days in, the first stage's two days ran out: on to the second");
+    const auto = v.decisions.find((d) => d.auto);
+    equal([auto.stageSeq, auto.by, auto.autoText], [1, null, "بررسی نشد؛ با گذشت مهلت تأییدشده"]);
+    assert(Math.abs(Date.parse(auto.at) - (Date.parse(v.report.created_at) + 2 * 86_400_000)) < 2000, `approved when the days ran out (${auto.at})`);
+    equal(v.signatureBoxes[0].auto.text, "بررسی نشد؛ با گذشت مهلت تأییدشده", "the text stands where the stage's signature would be");
+    equal(v.signatureBoxes[1].deadlineAt, null, "the second stage has no days");
+    // the last stage's days too: the report becomes the record, as it stood
+    await rp.setStageDeadline(db, { projectId: P, stageId: st2.id, days: 1, text: "نظارت بررسی نکرد" });
+    const r2 = await rp.createReport(db, { projectId: P, reportTypeId: A.id, reportDate: day(5), content: { d: 2 }, userId: reza.id });
+    await db.query("UPDATE report SET created_at = now() - interval '5 days' WHERE id = $1", [r2.id]);
+    const list = await rp.listReports(db, { projectId: P, reportTypeId: A.id, userId: reza.id });
+    equal(list.find((x) => x.id === r2.id).status, "approved", "listed: both stages' days ran out, the report is the record");
+    snap = (await rp.snapshotOf(db, { projectId: P, reportId: r2.id })).snapshot;
+    equal(snap.decisions.filter((d) => d.auto).map((d) => d.stageSeq), [1, 2]);
+    await rp.setStageDeadline(db, { projectId: P, stageId: st1.id, days: null, text: null });
+    await rp.setStageDeadline(db, { projectId: P, stageId: st2.id, days: null });
+    equal((await rp.workflowOf(db, { projectId: P, workflowId: flow.id })).map((x) => x.deadlineDays), [null, null], "no days, no limit");
   });
 });
 

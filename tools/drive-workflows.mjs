@@ -59,11 +59,13 @@ await page.fill("#du-name", "Site manager"); await page.fill("#du-code", "SM");
 for (const right of ["Create report", "Add content", "Edit content", "Sign", "Final stage approval"]) await duties.locator("label", { hasText: right }).first().locator("input").check();
 await duties.locator("button", { hasText: "Save duty" }).click();
 check(await ok("saved") === "saved", "a duty defined from the English form");
-await duties.locator("tr[data-duty=SM] button", { hasText: "Set holders" }).click();
-await duties.locator("tr[data-duty=SM] label", { hasText: "Drive admin" }).locator("input").check();
-await duties.locator("tr[data-duty=SM] button", { hasText: "Save holders" }).click();
+// a holder added on its own row (owner's requirements 2026-10-22, item 1: each holder with their own access)
+const meNow = await page.evaluate(async () => (await (await fetch("/api/auth/me")).json()).user);
+await duties.locator("tr[data-duty=SM] [data-holder-add]").click();
+await duties.locator("tr[data-duty=SM] [data-holder-user]").selectOption(meNow.id);
+await duties.locator("tr[data-duty=SM] [data-holder-save]").click();
 await page.waitForTimeout(600);
-check(await duties.locator("tr[data-duty=SM]").innerText().then((x) => x.includes("Drive admin")), "the duty's holder shown");
+check(await duties.locator("tr[data-duty=SM]").innerText().then((x) => x.includes(meNow.displayName)), `the duty's holder shown (${meNow.displayName})`);
 
 // a folder in the tree, and the workflow moved under it by dragging
 const tree = page.locator("[data-workflow-tree]");
@@ -92,11 +94,11 @@ await page.waitForTimeout(700);
 check(await pages.locator("tr[data-page]").count() === 2, "two pages on the workflow");
 const grp = page.locator("[data-group-duties]").first();
 await grp.locator("summary").first().click();
-await grp.locator("select").first().selectOption({ label: "Site manager (Drive admin)" });
+await grp.locator("select").first().selectOption({ label: `Site manager (${meNow.displayName})` });
 await grp.locator("input[type=number]").fill("2");
 await grp.locator("button", { hasText: "Save the duty in the group" }).click();
 await page.waitForTimeout(800);
-check(await page.locator(".groupbox").first().innerText().then((x) => x.includes("Drive admin") && x.includes("Site manager")), "the duty's holder is a member of the group through it");
+check(await page.locator(".groupbox").first().innerText().then((x) => x.includes(meNow.displayName) && x.includes("Site manager")), "the duty's holder is a member of the group through it");
 await page.screenshot({ path: `${SHOT}/350-workflow-setup-en.png`, fullPage: true });
 
 // a report through the duty; signed accepting the stage's changes
