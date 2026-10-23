@@ -194,7 +194,7 @@ const TRANSLATED = ["app/quality/page.jsx", "app/inspection/page.jsx", "app/ndt-
   "components/ui/Tabs.jsx", "app/equipment/page.jsx", "app/coating/page.jsx",
   "app/electrical/page.jsx", "app/instrumentation/page.jsx",
   "app/piping/overview/page.jsx", "app/piping/execution/page.jsx", "app/piping/welding/page.jsx", "app/piping/joint/page.jsx", "app/qc/page.jsx",
-  "app/piping/reports/page.jsx"];
+  "app/piping/reports/page.jsx", "app/desk/page.jsx", "app/notifications/page.jsx"];
 
 test("a translated page keeps no Persian of its own", async () => {
   const left = [];

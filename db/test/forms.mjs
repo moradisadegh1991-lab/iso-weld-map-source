@@ -28,8 +28,9 @@ test("a member narrowed to tiles: the menu shows those tiles only, the server an
   const qc = { role: "qc", areas: [], tiles: ["/piping/welding", "/forms/HO-PIP"] };
   const forms = [{ code: "HO-PIP", name: "تحویل پایپینگ", section: "piping" }, { code: "HO-CIV", name: "تحویل سیویل", section: "civil" }];
   const hrefs = navigationFor(qc, can, { forms }).flatMap((g) => g.items.flatMap((s) => s.tabs.map((t) => t.href)));
-  equal(hrefs.filter((h) => !h.startsWith("/log/")).sort(), ["/", "/forms/HO-PIP", "/piping/welding", "/signature"].sort(),
-    "their tiles, and the pages everyone keeps");
+  equal(hrefs.filter((h) => !h.startsWith("/log/")).sort(), ["/", "/desk", "/forms/HO-PIP", "/notifications", "/piping/welding", "/signature"].sort(),
+    "their tiles, and the pages everyone keeps (their desk and notifications among them, 2026-10-22)");
+  assert(apiAllowed(qc, "/api/desk") && apiAllowed(qc, "/api/notifications"), "and what those pages call");
   assert(hrefs.includes("/log/piping") && hrefs.includes("/log/handover") === false, "a section's log comes with a tile of it");
   assert(apiAllowed(qc, "/api/welds/abc") && apiAllowed(qc, "/api/forms") && apiAllowed(qc, "/api/auth/me"), "their pages' routes and the common ones");
   for (const p of ["/api/civil", "/api/hse", "/api/overview", "/api/contracts", "/api/users"]) assert(!apiAllowed(qc, p), `${p} is outside the tiles`);
