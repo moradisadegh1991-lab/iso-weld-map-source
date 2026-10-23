@@ -14,8 +14,15 @@ REPO_URL=https://github.com/moradisadegh1991-lab/iso-weld-map-source.git
 [ "$(id -u)" = 0 ] || { echo "با root اجرا کنید: sudo epc $*" >&2; exit 1; }
 
 # Run a command in the app directory as user epc, with the server's settings.
+# Without them a command would run against the defaults — a migration into an
+# empty .pglite in the app folder instead of the server's database — so a
+# settings file user epc cannot read stops it here.
 run() {
-  runuser -u epc -- bash -c 'set -a; . "$0"; set +a; cd "$1"; shift; exec "$@"' "$ENV_FILE" "$APP_DIR" "$@"
+  runuser -u epc -- test -r "$ENV_FILE" || {
+    echo "[ !! ] کاربر epc فایل تنظیمات $ENV_FILE را نمی‌تواند بخواند؛ هیچ کاری انجام نشد." >&2
+    echo "       درست کردن: chown root:epc /etc/epc /etc/epc/epc.env && chmod 750 /etc/epc && chmod 640 /etc/epc/epc.env" >&2
+    exit 1; }
+  runuser -u epc -- bash -c 'set -a; . "$0" || exit 1; set +a; cd "$1"; shift; exec "$@"' "$ENV_FILE" "$APP_DIR" "$@"
 }
 wait_up() {
   for _ in $(seq 1 60); do
