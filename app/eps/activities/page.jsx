@@ -1,16 +1,17 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
 import ActivityDetail, { useEpsFmt } from "../../../components/eps/ActivityDetail";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
-import { COLUMNS, useVersion } from "../../../components/eps/shared";
+import { COLUMNS, useVersion, wIn, wOut } from "../../../components/eps/shared";
 import { NodeScope } from "../../../components/eps/ScopePanel";
 
 import TableKit from "../../../components/ui/TableKit";
 /**
- * The activity view of a version, after Primavera P6: the WBS and its
+ * The activity view of a PMS as one of its versions plans it (the master
+ * plan unless another is picked), after Primavera P6: the WBS and its
  * activities as a tree table beside their Gantt chart, the details of the
  * selected activity below — the line between them dragged to share the
  * height. Activities are attached here from a template (only templates that
@@ -23,11 +24,11 @@ const PAGE_TABS = ["detail", "scope", "workfront", "groups", "relations", "progr
 
 export default function ActivitiesPage() {
   const { projectId, contractId, call } = usePlatform();
-  const { versionId, picker } = useVersion(contractId);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId);
   const { t } = usePrefs();
-  const { data, error, reload } = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}` : null), [versionId]);
+  const { data, error, reload } = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}` : null), [plan]);
   const [sel, setSel] = useState(null);                // the selected row {kind, id, item}
-  const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&activityId=${sel.id}` : null), [sel?.id]);
+  const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&activityId=${sel.id}${versionId ? `&versionId=${versionId}` : ""}` : null), [sel?.id, versionId]);
   const [tab, setTab] = useState("detail");
   const [tabs, setTabs] = useState(PAGE_TABS);
   const [pickTabs, setPickTabs] = useState(false);
@@ -35,6 +36,9 @@ export default function ActivitiesPage() {
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const { height, grip } = useSplit("p6-activities", 430);
+  // the loaders of this render, for the row operations kept in a memo: they reload the activity selected now
+  const live = useRef({});
+  live.current = { reload, detail };
   useEffect(() => {
     // a sub-form added since the choice was saved shows until it is unticked
     const known = read("p6-activities:known", PAGE_TABS.filter((k) => k !== "scope"));
@@ -44,30 +48,38 @@ export default function ActivitiesPage() {
   useEffect(() => { write("p6-activities:tabs", tabs); write("p6-activities:known", PAGE_TABS); if (!tabs.includes(tab) && tabs.length) setTab(tabs[0]); }, [tabs]); // eslint-disable-line react-hooks/exhaustive-deps
   async function post(url, body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) }); reload(); detail.reload(); if (done) setOk(done(r)); return r; }
+    try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, pmsId, versionId, ...body }) }); reload(); detail.reload(); if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; }
   }
   // editing rows in place, adding under a node, cut / copy / paste / delete (owner's requirements 2026-10-18, items 4, 7, 15)
   const ops = useMemo(() => {
     if (!data?.may?.edit) return null;
-    const send = (body) => call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) });
+    const send = ({ url = "/api/eps", ...body }) => call(url, { method: "POST", body: JSON.stringify({ projectId, pmsId, versionId, ...body }) });
     const batch = async (list, done) => {
       setMsg(null); setOk(null);
-      try { for (const b of list) await send(b); reload(); detail.reload(); if (done) setOk(done); return true; }
-      catch (e) { setMsg(e.message); reload(); return false; }
+      try { for (const b of list) await send(b); live.current.reload(); live.current.detail.reload(); if (done) setOk(done); return true; }
+      catch (e) { setMsg(e.message); live.current.reload(); return false; }
     };
-    const actBody = (v) => ({ name: v.name, wf: v.wf === "" ? null : v.wf, planStart: v.start || null, planEnd: v.finish || null,
-      volumePlan: v.volPlan === "" ? null : v.volPlan, volumeActual: v.volActual === "" ? null : v.volActual });
-    const valueOf = (it) => ({ name: it.name ?? "", wf: it.wf ?? "", volPlan: it.volumePlan ?? "", volActual: it.volumeActual ?? "",
-      start: it.plan_start ? String(it.plan_start).slice(0, 10) : "", finish: it.plan_end ? String(it.plan_end).slice(0, 10) : "" });
+    const own = (v) => ({ name: v.name, wf: wOut(v.wf), volumeActual: v.volActual === "" ? null : v.volActual,
+      actType: v.actType, activityNo: v.activityNo, wfRate: v.wfRate === "" ? null : v.wfRate, description: v.description });
+    const actBody = (v) => ({ ...own(v), planStart: v.start || null, planEnd: v.finish || null, volumePlan: v.volPlan === "" ? null : v.volPlan });
+    const valueOf = (it) => ({ name: it.name ?? "", wf: wIn(it.wf), volPlan: it.volumePlan ?? "", volActual: it.volumeActual ?? "",
+      start: it.plan_start ? String(it.plan_start).slice(0, 10) : "", finish: it.plan_end ? String(it.plan_end).slice(0, 10) : "",
+      actType: it.act_type ?? "", activityNo: it.activity_no ?? "", wfRate: it.wf_rate ?? "", description: it.description ?? "" });
+    // under a version that plans the activity, its dates and planned quantity are the version's row (owner's requirements 2026-10-22)
+    const planned = (row) => !!(versionId && row.item?.plan);
+    const toPlan = (row, v) => ({ url: "/api/eps/planning", kind: "plan-edit", id: row.item.plan.id, startOn: v.start || "", endOn: v.finish || "", volumePlan: v.volPlan });
     return {
-      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "wf", type: "number" }, { key: "volPlan", type: "number" },
-        { key: "volActual", type: "number" }, { key: "start", type: "date" }, { key: "finish", type: "date" }] : []),
+      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "actType", type: "text" }, { key: "activityNo", type: "text" },
+        { key: "wf", type: "number" }, { key: "wfRate", type: "number" }, { key: "volPlan", type: "number" },
+        { key: "volActual", type: "number" }, { key: "start", type: "date" }, { key: "finish", type: "date" }, { key: "description", type: "text" }] : []),
       value: (row) => valueOf(row.item),
-      save: (row, v) => batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...actBody(v) }]),
+      save: (row, v) => (planned(row) ? batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...own(v) }, toPlan(row, v)])
+        : batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...actBody(v) }])),
       create: (node, v) => batch([{ kind: "activity", nodeId: node.id, ...actBody(v) }]),
-      remove: (rows) => batch(rows.filter((x) => x.kind === "act").map((x) => ({ kind: "activity-remove", id: x.id }))
-        .concat(rows.filter((x) => x.kind === "node").reverse().map((x) => ({ kind: "node-remove", id: x.id })))),
+      // here a node picked for deletion takes only its activities: nodes are deleted on the WBS page (owner's requirements 2026-10-22)
+      removable: (rows) => rows.filter((x) => x.kind === "act"),
+      remove: (rows) => batch(rows.filter((x) => x.kind === "act").map((x) => ({ kind: "activity-remove", id: x.id }))),
       paste: (node, rows, mode) => {
         const nodes = rows.filter((x) => x.kind === "node"), inNode = new Set(nodes.flatMap((n) => [n.id]));
         // an activity whose node is pasted too travels with it
@@ -97,7 +109,7 @@ export default function ActivitiesPage() {
       <span className="sub">{picker} <Link href="/eps">{t("ep.link.board")}</Link> · <Link href="/eps/wbs">WBS</Link> · <Link href="/eps/codes">{t("ep.co.title")}</Link> · <Link href="/eps/scope">{t("ep.link.scope")}</Link> · <Link href="/eps/progress">{t("ep.link.entry")}</Link></span></div>);
   if (!contractId) return <div className="page"><div className="pagehead"><h1>{t("ep.ac.title")}</h1></div><p className="empty-note">{t("cs.pick")}</p></div>;
   if (error) return <div className="page">{head}<p className="err">{error}</p></div>;
-  if (!versionId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
+  if (!plan) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
   if (!data) return <div className="page">{head}<p className="muted">{t("common.loading")}</p></div>;
   const may = data.may.edit;
   const node = sel ? (sel.kind === "node" ? sel.item : null) : null;
@@ -112,7 +124,7 @@ export default function ActivitiesPage() {
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.autoApplied?.length > 0 && <div className="card" data-auto-applied><b>{t("ep.ac.autoTitle")}</b><ul className="sm">{data.autoApplied.map((x) => (
         <li key={x.ruleId}>{x.error ? <span className="err">{x.error}</span> : [t("ep.ac.autoItems", { added: x.added, removed: x.removed }),
           x.made ? t("ep.ac.autoMade", { n: x.made }) : "", x.dropped ? t("ep.ac.autoDropped", { n: x.dropped }) : "", x.kept ? t("ep.ac.autoKept", { n: x.kept }) : ""].filter(Boolean).join(t("ep.sep"))}</li>))}</ul></div>}
@@ -120,8 +132,8 @@ export default function ActivitiesPage() {
         {t("ep.ac.pendingLinks", { n: data.scope.filter((x) => !x.rule.auto_apply && (x.pending.any || x.firstApply)).length })} <Link href="/eps/scope">{t("ep.link.scope")}</Link></p>}
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>{t("ep.ac.problems")}</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
       <div style={{ height }}>
-        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "name", "wf", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur"]}
-          storeKey="p6-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} ops={ops} />
+        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "actType", "activityNo", "name", "wf", "wfRate", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur", "description"]}
+          storeKey="p6-activities" customKey="eps-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} ops={ops} />
       </div>
       {grip}
       <div className="p6-detail">
@@ -148,23 +160,23 @@ export default function ActivitiesPage() {
 
 function NodeSummary({ n }) {
   const { t } = usePrefs();
-  const { fmt, day } = useEpsFmt();
+  const { fmt, day, w } = useEpsFmt();
   return (
     <div className="p6-kv">
       <fieldset><legend>{t("ep.ac.wbsNode")}</legend>
         <div className="kv"><span>{t("ep.code")}</span><b dir="ltr">{n.code}</b></div><div className="kv"><span>{t("ep.name")}</span><b>{n.name}</b></div>
-        <div className="kv"><span>W.F / W.V</span><b>{fmt(n.wf, 4)}% / {fmt(n.wv, 5)}%</b></div>
+        <div className="kv"><span>W.F / W.V</span><b>{w(n.wf)} / {w(n.wv, 10)}</b></div>
         <div className="kv"><span>{t("ep.ac.weighted")}</span><b>{n.pct == null ? "—" : `${fmt(n.pct)}%`}</b></div></fieldset>
       <fieldset><legend>{t("ep.ac.plan")}</legend>
         <div className="kv"><span>{t("ep.ac.startEnd")}</span><b>{day(n.plan_start)} — {day(n.plan_end)}</b></div><div className="kv"><span>{t("ep.dur")}</span><b>{fmt(n.planDays)}</b></div>
-        <div className="kv"><span>{t("ep.ac.budget")}</span><b>{fmt(n.budgetPlan)}</b></div><div className="kv"><span>{t("ep.link.activities")}</span><b>{n.activities.length} (Σ W.F {fmt(n.activityWf, 4)}%)</b></div></fieldset>
+        <div className="kv"><span>{t("ep.ac.budget")}</span><b>{fmt(n.budgetPlan)}</b></div><div className="kv"><span>{t("ep.link.activities")}</span><b>{n.activities.length} (Σ W.F {w(n.activityWf)})</b></div></fieldset>
     </div>);
 }
 
 /** Attach from a template: only templates that have activities; each one's activities shown before it is chosen. */
 function Attach({ node, templates, post, close }) {
   const { t: tx } = usePrefs();          // `t` is the template here
-  const { fmt } = useEpsFmt();
+  const { fmt, w } = useEpsFmt();
   const [pick, setPick] = useState(templates[0]?.id || "");
   const t = templates.find((x) => x.id === pick);
   const sep = node.code.match(/[.\-/_]/)?.[0] || ".";
@@ -178,7 +190,7 @@ function Attach({ node, templates, post, close }) {
           {t && <TableKit name="eps-activities-1"><table className="dtable"><thead><tr><th>{tx("ep.ac.newCode")}</th><th>{tx("ep.col.template")}</th><th>{tx("ep.name")}</th><th>W.F</th><th>W.V</th><th>{tx("ep.ac.budget")}</th></tr></thead>
             <tbody>{t.activities.map((a) => (
               <tr key={a.id}><td className="mono" dir="ltr">{node.code}{sep}{String(a.number).slice(-2).padStart(2, "0")}</td><td className="mono">{a.code}</td><td>{a.name}</td>
-                <td className="mono">{fmt(a.wf, 4)}</td><td className="mono">{a.wf != null && node.wv != null ? fmt((a.wf * node.wv) / 100, 5) : "—"}</td>
+                <td className="mono">{w(a.wf)}</td><td className="mono">{a.wf != null && node.wv != null ? w((a.wf * node.wv) / 100, 10) : "—"}</td>
                 <td className="mono">{a.wf != null && node.budgetPlan != null ? fmt((a.wf * node.budgetPlan) / 100) : "—"}</td></tr>))}</tbody></table></TableKit>}
           <p className="sm muted">{tx("ep.ac.attachNote")}</p>
           <button className="btn" type="button" onClick={async () => { if (await post("/api/eps", { kind: "attach", nodeId: node.id, templateId: pick }, (r) => tx(r.row.skipped ? "ep.ac.attachedSkip" : "ep.ac.attached", { n: r.row.added, skipped: r.row.skipped }))) close(); }}>{tx("ep.ac.attachBtn")}</button></>}
@@ -192,12 +204,12 @@ function Manual({ node, post, close }) {
   const [f, setF] = useState({ code: "", name: "", wf: "", description: "" });
   return (
     <div className="p6-modal" role="dialog" aria-label={t("ep.ac.manualTitle")} onClick={close}>
-      <form className="card" onClick={(e) => e.stopPropagation()} onSubmit={async (e) => { e.preventDefault(); if (await post("/api/eps", { kind: "activity", nodeId: node.id, ...f }, (r) => t("ep.ac.manualAdded", { code: r.row.code }))) close(); }}>
+      <form className="card" onClick={(e) => e.stopPropagation()} onSubmit={async (e) => { e.preventDefault(); if (await post("/api/eps", { kind: "activity", nodeId: node.id, ...f, wf: wOut(f.wf) }, (r) => t("ep.ac.manualAdded", { code: r.row.code }))) close(); }}>
         <h2>{t("ep.ac.manualUnder")} <span className="mono" dir="ltr">{node.code}</span></h2>
         <div className="grid2">
           <div className="field"><label htmlFor="mn-code">{t("ep.ac.codeNext")}</label><input id="mn-code" dir="ltr" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} placeholder={`${node.code}.NN`} /></div>
           <div className="field"><label htmlFor="mn-name">{t("ep.activityName")}</label><input id="mn-name" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-          <div className="field"><label htmlFor="mn-wf">W.F %</label><input id="mn-wf" dir="ltr" value={f.wf} onChange={(e) => setF({ ...f, wf: e.target.value })} /></div>
+          <div className="field"><label htmlFor="mn-wf">W.F</label><input id="mn-wf" dir="ltr" value={f.wf} onChange={(e) => setF({ ...f, wf: e.target.value })} /></div>
           <div className="field"><label htmlFor="mn-d">{t("ep.description")}</label><input id="mn-d" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
         </div>
         <p className="sm muted">{t("ep.ac.manualNote")}</p>

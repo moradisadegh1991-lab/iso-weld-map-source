@@ -129,6 +129,7 @@ const act = await import("../../lib/db/repos/eps-activities.mjs");
 const rp = await import("../../lib/db/repos/reports.mjs");
 const cr = await import("../../lib/db/repos/contract-reports.mjs");
 const res = await import("../../lib/db/repos/resources.mjs");
+const cd = await import("../../lib/reports/contract-daily.mjs");
 const db = await getDb();
 const U = {};
 for (const k of ["planner", "sup", "client", "outsider"]) U[k] = await projects.ensureUser(db, { subject: `kc|ea-${k}`, displayName: k });
@@ -136,9 +137,10 @@ const P = (await projects.createProject(db, { code: "EA1", name: "E", ownerUserI
 for (const k of ["sup", "client", "outsider"]) await projects.addMember(db, { projectId: P, userId: U[k].id, role: "engineer" });
 const inP = (fn) => withProject(db, P, fn);
 const today = new Date().toISOString().slice(0, 10);
-let C, C2, PM, V1, V2, N, ACTS, T, TA, K1, K2, R;
+let C, C2, PM, PM2, V1, V2, VB, N, ACTS, T, TA, K1, K2, R;
 
 const view = (versionId = V1.id) => inP(() => act.activityView(db, { projectId: P, versionId }));
+const plan = await import("../../lib/db/repos/planning.mjs");
 const flat = (v) => { const out = []; const walk = (n) => { out.push(...n.activities); n.children.forEach(walk); }; v.roots.forEach(walk); return out; };
 
 await inP(async () => {
@@ -165,6 +167,9 @@ test("a PMS has a type and a description; one version of a PMS is its master pla
     equal(board[0].versions.map((v) => [v.code, v.master]), [["PM01-R0", false], ["PM01-R1", true]]);
     await throws(() => db.query("UPDATE eps_version SET master = true WHERE id = $1", [V1.id]), "eps_version_one_master", "the database holds it too");
     await eps.setMaster(db, { projectId: P, id: V1.id, userId: U.planner.id });
+    // a second PMS of the contract: a tree of its own (the WBS is the PMS's, 083)
+    PM2 = await eps.savePms(db, { projectId: P, contractId: C.id, code: "PM02", title: "دوم", userId: U.planner.id });
+    VB = await eps.saveVersion(db, { projectId: P, pmsId: PM2.id, code: "PM02-R0", title: "پایه", userId: U.planner.id });
   });
 });
 
@@ -172,7 +177,7 @@ test("template changes pushed onto the WBS: names, W.F and numbers follow; new t
   await inP(async () => {
     N = await eps.saveNode(db, { projectId: P, versionId: V1.id, name: "سیویل", wf: 100, volumeActual: 200, volumePlan: 180, unit: "m3",
       planStart: "2026-01-01", planEnd: "2026-01-20", budgetPlan: 1000 });
-    const N2 = await eps.saveNode(db, { projectId: P, versionId: V2.id, name: "سیویل", wf: 100, volumeActual: 200, planStart: "2026-01-01", planEnd: "2026-01-15" });
+    const N2 = await eps.saveNode(db, { projectId: P, pmsId: PM2.id, name: "سیویل", wf: 100, volumeActual: 200, planStart: "2026-01-01", planEnd: "2026-01-15" });
     await eps.attachTemplate(db, { projectId: P, nodeId: N.id, templateId: T.id });
     await eps.attachTemplate(db, { projectId: P, nodeId: N2.id, templateId: T.id });
     await eps.saveTemplateActivity(db, { projectId: P, templateId: T.id, id: TA[0].id, number: 5, name: "خاکبرداری با بیل", wf: 55 });
@@ -183,10 +188,11 @@ test("template changes pushed onto the WBS: names, W.F and numbers follow; new t
     await eps.syncTemplate(db, { projectId: P, templateId: T.id, userId: U.planner.id });
     equal(flat(await view()).map((a) => [a.code, a.name, a.wf]).sort(),
       [["PM01.C.01.02", "تسطیح", 30], ["PM01.C.01.05", "خاکبرداری با بیل", 55], ["PM01.C.01.06", "حمل", 10]]);
+    equal(flat(await view(V2.id)).map((a) => a.id).sort(), flat(await view()).map((a) => a.id).sort(), "the PMS's two versions read one tree");
     const hand = await eps.saveActivity(db, { projectId: P, nodeId: N.id, name: "دستی", wf: 5 });
     await eps.saveTemplateActivity(db, { projectId: P, templateId: T.id, id: TA[1].id, name: "تسطیح", wf: 35 });
     await throws(() => eps.syncTemplate(db, { projectId: P, templateId: T.id, userId: U.planner.id }), "بیش از ۱۰۰٪", "55 + 35 + 10 and the 5 by hand");
-    equal(flat(await view(V2.id)).find((a) => a.name === "تسطیح").wf, 30, "refused whole: not even the other version, which would hold, was written");
+    equal(flat(await view(VB.id)).find((a) => a.name === "تسطیح").wf, 30, "refused whole: not even the other PMS's tree, which would hold, was written");
     await eps.removeActivity(db, { projectId: P, id: hand.id });
     await eps.syncTemplate(db, { projectId: P, templateId: T.id, userId: U.planner.id });
     ACTS = Object.fromEntries(flat(await view()).map((a) => [a.name, a]));
@@ -194,7 +200,7 @@ test("template changes pushed onto the WBS: names, W.F and numbers follow; new t
   });
 });
 
-test("relations: within one version, no loops; free float shows in the view", async () => {
+test("relations: within one PMS, no loops; free float shows in the view", async () => {
   await inP(async () => {
     const [a, b, c] = [ACTS["خاکبرداری با بیل"], ACTS["حمل"], ACTS["تسطیح"]];
     await eps.saveActivity(db, { projectId: P, nodeId: N.id, id: a.id, name: a.name, wf: a.wf, planStart: "2026-01-01", planEnd: "2026-01-05" });
@@ -203,8 +209,8 @@ test("relations: within one version, no loops; free float shows in the view", as
     await act.saveRelation(db, { projectId: P, predId: b.id, succId: c.id, relType: "SS", userId: U.planner.id });
     await throws(() => act.saveRelation(db, { projectId: P, predId: c.id, succId: a.id, userId: U.planner.id }), "حلقه");
     await throws(() => act.saveRelation(db, { projectId: P, predId: a.id, succId: b.id, userId: U.planner.id }), "هست");
-    const other = flat(await view(V2.id))[0];
-    await throws(() => act.saveRelation(db, { projectId: P, predId: a.id, succId: other.id, userId: U.planner.id }), "یک نسخه");
+    const other = flat(await view(VB.id))[0];
+    await throws(() => act.saveRelation(db, { projectId: P, predId: a.id, succId: other.id, userId: U.planner.id }), "یک PMS");
     const v = flat(await view());
     equal(v.find((x) => x.id === a.id).freeFloat, 2, "6, 7 free: the 8th is the lag, the 9th the successor's start");
     equal((await view()).relations.length, 2);
@@ -257,9 +263,9 @@ test("work done enters the contract's daily report through its workflow: number,
     await throws(() => act.addProgress(db, { projectId: P, reportId: R.id, activityIds: [a.id], mode: "number", value: 151, userId: U.planner.id }), "بیش از حجم");
     await throws(() => act.addProgress(db, { projectId: P, reportId: R.id, activityIds: [a.id], mode: "number", value: 1, areaId: K2.id, userId: U.planner.id }),
       "شرکت‌های این قرارداد", "an area / contractor that is not the contract's");
-    const other = flat(await view(V2.id))[0];
+    const other = flat(await view(VB.id))[0];
     await act.addProgress(db, { projectId: P, reportId: R.id, activityIds: [other.id], mode: "number", value: 1, userId: U.planner.id });
-    equal(flat(await view(V2.id))[0].done, 1, "an activity of the contract's other version is the contract's too");
+    equal(flat(await view(VB.id))[0].done, 1, "an activity of the contract's other PMS is the contract's too");
     const v = flat(await view());
     equal([v.find((x) => x.id === a.id).done, v.find((x) => x.id === a.id).pct, v.find((x) => x.id === b.id).done], [50, 25, 20]);
     await act.addProgress(db, { projectId: P, reportId: R.id, activityIds: [a.id], mode: "remain", userId: U.planner.id });
@@ -287,14 +293,17 @@ test("work done enters the contract's daily report through its workflow: number,
   });
 });
 
-test("the detail: work front from the report's day, the versions carrying the activity's code, the delay against the master plan, the report lines", async () => {
+test("the detail: work front from the report's day, the versions planning the activity, the delay against the master plan, the report lines", async () => {
   await inP(async () => {
     const a = ACTS["خاکبرداری با بیل"];
+    await plan.addToPlan(db, { projectId: P, versionId: V1.id, activityIds: [a.id], userId: U.planner.id });
+    await plan.addToPlan(db, { projectId: P, versionId: V2.id, activityIds: [a.id], startOn: "2026-01-02", days: 3, userId: U.planner.id });
     await eps.saveActivity(db, { projectId: P, nodeId: N.id, id: a.id, name: a.name, wf: a.wf, actualStart: "2026-01-03", actualEnd: "2026-01-09" });
     await act.saveDelay(db, { projectId: P, activityId: a.id, description: "تأخیر تحویل زمین", delayCode: "D-01", acceptFinish: "2026-01-08", critical: true, userId: U.planner.id });
     const d = await act.activityDetail(db, { projectId: P, activityId: a.id });
     equal(d.workFront.rows.find((r) => r.date === today)?.done ?? null, 190, "the day's work in the work front");
-    equal(d.groups.map((g) => [g.code, g.current, g.master]), [["PM01-R0", true, true], ["PM01-R1", false, false]], "the same code in both versions");
+    equal(d.groups.map((g) => [g.code, g.current, g.master, g.plan_start, g.plan_end]),
+      [["PM01-R0", true, true, "2026-01-01", "2026-01-05"], ["PM01-R1", false, false, "2026-01-02", "2026-01-04"]], "each version that plans it, with its own dates; read under the master plan");
     equal([d.baseline.version, d.delays[0].finishDelay, d.delays[0].startDelay, d.delays[0].acceptDelay, d.delays[0].critical], ["PM01-R0", 4, 2, 3, true]);
     equal(d.reports.map((l) => [l.qty, l.areaName, l.mark]).sort(), [[150, null, null], [40, "آزمون فلز", "Z1"]].sort());
     await eps.setMaster(db, { projectId: P, id: V1.id, master: false, userId: U.planner.id });
@@ -309,6 +318,56 @@ test("the days as columns: activities with work on the chosen days, one column a
     equal([d.allDays, d.days], [[today], [today]]);
     equal(d.matrix[ACTS["خاکبرداری با بیل"].id], { byDay: { [today]: 190 }, total: 190 });
     equal(d.matrix[ACTS["حمل"].id], undefined, "a line removed at stage 2 is not work done");
+  });
+});
+
+test("a line edited where it stands names another activity, or moves to another report — the target checked before anything is written", async () => {
+  await inP(async () => {
+    const [a, b, c] = [ACTS["خاکبرداری با بیل"], ACTS["حمل"], ACTS["تسطیح"]];
+    const R2 = await cr.createContractReport(db, { projectId: P, contractId: C.id, reportDate: today, title: "دوم", userId: U.planner.id });
+    await act.addProgress(db, { projectId: P, reportId: R2.id, activityIds: [c.id], mode: "number", value: 3, userId: U.planner.id });
+    const line = (await rp.snapshotOf(db, { projectId: P, reportId: R2.id })).content.activities[0];
+    const doneOf = async (x) => flat(await view()).find((y) => y.id === x.id).done;
+    const [b0, c0] = [await doneOf(b), await doneOf(c)];
+    await act.editProgress(db, { projectId: P, reportId: R2.id, rowId: line.id, activityId: b.id, userId: U.planner.id });
+    equal([await doneOf(b), await doneOf(c)], [b0 + 3, c0 - 3], "the line now counts for the other activity");
+    await throws(() => act.editProgress(db, { projectId: P, reportId: R2.id, rowId: line.id, activityId: a.id, qty: 50, userId: U.planner.id }), "بیش از حجم",
+      "a line moved onto an activity it would take past its volume is refused");
+    // R is at its second stage, which the planner does not write: the move is refused and the line stays where it was
+    await throws(() => act.editProgress(db, { projectId: P, reportId: R2.id, rowId: line.id, toReportId: R.id, userId: U.planner.id }), "گزارش مقصد");
+    equal((await rp.snapshotOf(db, { projectId: P, reportId: R2.id })).content.activities.length, 1, "nothing was removed from the first report");
+    const R3 = await cr.createContractReport(db, { projectId: P, contractId: C.id, reportDate: today, title: "سوم", userId: U.planner.id });
+    await act.editProgress(db, { projectId: P, reportId: R2.id, rowId: line.id, toReportId: R3.id, userId: U.planner.id });
+    equal([(await rp.snapshotOf(db, { projectId: P, reportId: R2.id })).content.activities.length, cd.activityLines((await rp.snapshotOf(db, { projectId: P, reportId: R3.id })).content).map((l) => [l.activityId, l.qty])],
+      [0, [[b.id, 3]]], "moved: gone from the one, in the other");
+    equal(await doneOf(b), b0 + 3, "and counted once");
+  });
+});
+
+test("a daily work sheet into the reports: by report number and activity code; one bad line, or a total past the volume across reports, refuses the file", async () => {
+  await inP(async () => {
+    const [a, b, c] = [ACTS["خاکبرداری با بیل"], ACTS["حمل"], ACTS["تسطیح"]];
+    const { rows: reps } = await db.query("SELECT id, report_no FROM report WHERE contract_id = $1 AND title IN ('دوم', 'سوم') ORDER BY title DESC", [C.id]);
+    const [no2, no3] = reps.map((r) => r.report_no);
+    const doneOf = async (x) => flat(await view()).find((y) => y.id === x.id).done;
+    const c0 = await doneOf(c);
+    const line = (row, reportNo, code, qty, extra = {}) => ({ row, date: null, reportNo, wbs: null, code, qty, area: null, mark: null, notes: null, ...extra });
+    await throws(() => act.importProgressSheet(db, { projectId: P, contractId: C.id, userId: U.planner.id,
+      lines: [line(2, no2, c.code, 1), line(3, "NOPE", c.code, 1)] }), "NOPE");
+    await throws(() => act.importProgressSheet(db, { projectId: P, contractId: C.id, userId: U.planner.id,
+      lines: [line(2, no2, c.code, 1, { date: "2020-01-01" })] }), "یکی نیست");
+    await throws(() => act.importProgressSheet(db, { projectId: P, contractId: C.id, userId: U.planner.id,
+      lines: [line(2, no2, c.code, 1, { area: "NOBODY" })] }), "شرکت‌های این قرارداد");
+    const left = 200 - c0;
+    await throws(() => act.importProgressSheet(db, { projectId: P, contractId: C.id, userId: U.planner.id,
+      lines: [line(2, no2, c.code, left - 1), line(3, no3, c.code, 2)] }), "بیش از حجم", "each report alone holds; the two together do not");
+    equal(await doneOf(c), c0, "nothing of a refused file was written");
+    const { rows: [rr] } = await db.query("SELECT report_no FROM report WHERE id = $1", [R.id]);
+    await throws(() => act.importProgressSheet(db, { projectId: P, contractId: C.id, userId: U.planner.id, lines: [line(2, rr.report_no, c.code, 1)] }), rr.report_no,
+      "a report the user may not write to now is named");
+    const r = await act.importProgressSheet(db, { projectId: P, contractId: C.id, userId: U.planner.id,
+      lines: [line(2, no2, c.code, 1.5, { area: K1.code, mark: "Z9" }), line(3, no3, c.code, 2.5)] });
+    equal([r.added, r.reports.sort(), await doneOf(c)], [2, [no2, no3].sort(), c0 + 4]);
   });
 });
 
@@ -342,8 +401,8 @@ test("one WBS: a control account is a node of the master plan — code, title an
     equal((await controls.controlsBoard(db, { projectId: P })).accounts.find((x) => x.id === a.id).title, "سیویل — بازنامیده");
     await throws(() => controls.setBaseline(db, { projectId: P, accountId: a.id, points: [{ date: today, pct: 0 }], revision: "1", reason: "x" }), "برنامهٔ اصلی");
     await throws(() => controls.reportProgress(db, { projectId: P, accountId: a.id, asOf: today, pct: 5, source: "x" }), "پلتفرم");
-    const { rows: [other] } = await db.query("SELECT id FROM wbs_node WHERE version_id = $1 LIMIT 1", [V2.id]);
-    await throws(() => controls.upsertAccount(db, { projectId: P, wbsNodeId: other.id }), "Master", "a node of a version that is not the master plan is refused");
+    const { rows: [other] } = await db.query("SELECT id FROM wbs_node WHERE pms_id = $1 LIMIT 1", [PM2.id]);
+    await throws(() => controls.upsertAccount(db, { projectId: P, wbsNodeId: other.id }), "Master", "a node of a PMS with no master plan is refused");
     await throws(() => eps.removeNode(db, { projectId: P, versionId: V1.id, id: N.id }), "حساب کنترلی", "a node an account stands on is not deleted under it");
     await db.query("DELETE FROM control_account WHERE id = $1", [a.id]);
   });

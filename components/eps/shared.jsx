@@ -10,11 +10,22 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  * statusOf, t } so its value is written in the reader's language.
  */
 const SRC = { equipment: "ep.src.equipment", piping: "ep.src.piping", electrical: "ep.src.electrical", instrumentation: "ep.src.instrumentation", civil: "ep.src.civil", structural: "ep.src.structural" };
+// a node's W.F with what is under it one level down beside it: its child nodes', or else its activities' (owner's requirements 2026-10-22, item 9)
+const sumWf = (r, x) => {
+  if (r.kind !== "node") return "";
+  const v = r.item.children?.length ? r.item.childWf : r.item.activityWf;
+  return v == null ? "" : ` Σ${x.w(v)}`;
+};
+
 export const COLUMNS = [
   { key: "code", title: "Activity / WBS No.", width: 190, mono: true, hits: true, get: (r) => r.item.code },
   { key: "name", title: "ep.col.name", width: 230, hits: true, get: (r) => r.item.name },
-  { key: "wf", title: "W.F %", width: 70, mono: true, get: (r, x) => (r.item.wf == null ? "" : x.fmt(r.item.wf, 4)) },
-  { key: "wv", title: "W.V %", width: 80, mono: true, get: (r, x) => (r.item.wv == null ? "" : x.fmt(r.item.wv, 5)) },
+  { key: "actType", title: "Type", width: 110, get: (r) => (r.kind === "act" ? r.item.act_type || "" : "") },
+  { key: "activityNo", title: "Activity ID", width: 95, mono: true, hits: true, get: (r) => (r.kind === "act" ? r.item.activity_no || "" : "") },
+  { key: "wfRate", title: "WF rate", width: 95, mono: true, get: (r, x) => (r.kind === "act" && r.item.wf_rate != null ? x.fmt(Number(r.item.wf_rate), 10) : "") },
+  { key: "description", title: "ep.description", width: 200, hits: true, get: (r) => r.item.description || "" },
+  { key: "wf", title: "W.F", width: 80, mono: true, get: (r, x) => (r.item.wf == null ? "" : x.w(r.item.wf)) + sumWf(r, x) },
+  { key: "wv", title: "W.V", width: 95, mono: true, get: (r, x) => (r.item.wv == null ? "" : x.w(r.item.wv, 10)) },
   { key: "unit", title: "ep.unit", width: 55, get: (r) => r.item.unit || "" },
   { key: "volPlan", title: "ep.col.volPlan", width: 85, mono: true, get: (r, x) => x.fmt(r.kind === "act" ? r.item.volumePlan : r.item.volume_plan) },
   { key: "volActual", title: "ep.col.volActual", width: 85, mono: true, get: (r, x) => x.fmt(r.kind === "act" ? r.item.volumeActual : r.item.volume_actual) },
@@ -36,21 +47,55 @@ export const COLUMNS = [
   { key: "manual", title: "ep.manualPct", width: 80, mono: true, get: (r, x) => (r.kind === "act" ? x.fmt(r.item.progress) : "") },
 ];
 
-/** The version the page opens: ?version=…, else the master plan, else the first. */
-export function useVersion(contractId) {
-  const { t } = usePrefs();
-  const [versionId, setVersionId] = useState(null);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("version"); if (v) setVersionId(v); }, []);
-  const board = useProjectData((id) => (contractId ? `/api/eps?projectId=${id}&contractId=${contractId}` : null), [contractId]);
-  const versions = (board.data?.pms || []).flatMap((p) => p.versions.map((v) => ({ ...v, pmsCode: p.code })));
-  useEffect(() => {
-    if (!versions.length) return;
-    if (!versionId || !versions.some((v) => v.id === versionId)) setVersionId((versions.find((v) => v.master) || versions[0]).id);
-  }, [versions.length, contractId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const picker = (
-    <select aria-label={t("ep.version")} value={versionId || ""} onChange={(e) => setVersionId(e.target.value)}>
-      {versions.length === 0 && <option value="">{t("ep.noVersion")}</option>}
-      {versions.map((v) => <option key={v.id} value={v.id}>{v.pmsCode} › {v.code} — {v.title}{v.master ? " (Master)" : ""}</option>)}</select>);
-  return { versionId, picker, versions };
-}
+/**
+ * W.F typed as a decimal fraction (0.4505) while the server keeps the
+ * percentage (45.05): `wIn` for a form's value, `wOut` for what is sent
+ * (blank stays blank; a value that is not a number is sent as typed, for the
+ * server to refuse).
+ */
+export const wIn = (p) => (p === null || p === undefined || p === "" ? "" : String(Math.round(Number(p) * 1e8) / 1e10));
+export const wOut = (f) => (f === null || f === undefined || String(f).trim() === "" ? null
+  : Number.isFinite(Number(String(f).replace(/[\u066C,]/g, ""))) ? Math.round(Number(String(f).replace(/[\u066C,]/g, "")) * 1e12) / 1e10 : f);
 
+/**
+ * The PMS and the version the page opens (owner's requirements 2026-10-22):
+ * the PMS list holds only the contract's PMSs and comes first; the WBS is
+ * the PMS's, and the version — by default its master plan — decides the
+ * dates and planned quantities read over it. ?version=… or ?pms=… open one.
+ * `plan` is the query the activity routes take (versionId=… or pmsId=…).
+ * With `{ version: false }` only the PMS is picked (the WBS page).
+ */
+export function useVersion(contractId, { version: withVersion = true } = {}) {
+  const { t } = usePrefs();
+  const [pmsId, setPmsId] = useState(null);
+  const [versionId, setVersionId] = useState(null);
+  const [asked, setAsked] = useState(null);
+  useEffect(() => { const q = new URLSearchParams(window.location.search); setAsked({ version: q.get("version"), pms: q.get("pms") }); }, []);
+  const board = useProjectData((id) => (contractId ? `/api/eps?projectId=${id}&contractId=${contractId}` : null), [contractId]);
+  const pmsList = board.data?.pms || [];
+  const versions = pmsList.flatMap((p) => p.versions.map((v) => ({ ...v, pmsCode: p.code })));
+  const pick = (p, v = undefined) => {
+    setPmsId(p?.id || null);
+    const mine = p ? p.versions : [];
+    setVersionId(v !== undefined ? v : withVersion ? (mine.find((x) => x.master) || mine[0])?.id || null : null);
+  };
+  useEffect(() => {
+    if (!asked || !pmsList.length) return;
+    if (pmsId && pmsList.some((p) => p.id === pmsId)) return;
+    const byVersion = asked.version && pmsList.find((p) => p.versions.some((v) => v.id === asked.version));
+    if (byVersion) return pick(byVersion, withVersion ? asked.version : null);
+    pick(pmsList.find((p) => p.id === asked.pms) || pmsList.find((p) => p.versions.some((v) => v.master)) || pmsList[0]);
+  }, [asked, pmsList.length, contractId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cur = pmsList.find((p) => p.id === pmsId);
+  const picker = (
+    <span className="row" style={{ gap: 4, display: "inline-flex" }} data-plan-picker>
+      <select aria-label="PMS" value={pmsId || ""} onChange={(e) => pick(pmsList.find((p) => p.id === e.target.value))} data-pick="pms">
+        {pmsList.length === 0 && <option value="">{t("ep.noVersion")}</option>}
+        {pmsList.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select>
+      {withVersion && <select aria-label={t("ep.version")} value={versionId || ""} onChange={(e) => setVersionId(e.target.value || null)} data-pick="version">
+        <option value="">{t("ep.pl.noVersion")}</option>
+        {(cur?.versions || []).map((v) => <option key={v.id} value={v.id}>{v.code} — {v.title}{v.master ? " (Master)" : ""}</option>)}</select>}
+    </span>);
+  const plan = versionId ? `versionId=${versionId}` : pmsId ? `pmsId=${pmsId}` : null;
+  return { pmsId, versionId, plan, picker, versions, pms: cur || null, reloadBoard: board.reload };
+}

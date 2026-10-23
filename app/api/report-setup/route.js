@@ -39,7 +39,9 @@ export async function GET(request) {
       const workflows = await Promise.all(tree.map(async (w) => ({ ...w,
         stageList: await rp.workflowOf(db, { projectId, workflowId: w.id }), pages: await rp.pagesOf(db, { workflowId: w.id }) })));
       const scope = url.searchParams.get("trees") ? await scopeTrees(db, projectId) : null;
+      const contracts = admin ? (await db.query("SELECT id, contract_no, title FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId])).rows : [];
       return Response.json({ types, users, permissions: PERMISSIONS, workflows, duties: admin ? await wfs.duties(db, { projectId }) : (await wfs.duties(db, { projectId })).map((d) => ({ ...d, members: [] })),
+        roles: admin ? await wfs.roles(db, { projectId }) : [], contracts,
         sections: wfs.FORM_PARTS, scope, may: { types: admin, tree: admin, duties: admin } });
     });
   } catch (e) { return errorResponse(e); }
@@ -59,8 +61,8 @@ async function scopeTrees(db, projectId) {
     `SELECT r.id, r.category_id AS parent_id, r.name, k.contract_no FROM contract_resource r JOIN contract k ON k.id = r.contract_id
       WHERE k.project_id = $1 ORDER BY k.contract_no, r.name`, [projectId]);
   const { rows: wbs } = await db.query(
-    `SELECT n.id, n.parent_id, n.code, n.name, k.contract_no FROM wbs_node n JOIN eps_version v ON v.id = n.version_id JOIN eps_pms p ON p.id = v.pms_id
-       LEFT JOIN contract k ON k.id = p.contract_id WHERE p.project_id = $1 AND v.master ORDER BY n.code`, [projectId]);
+    `SELECT n.id, n.parent_id, n.code, n.name, k.contract_no FROM wbs_node n JOIN eps_pms p ON p.id = n.pms_id
+       LEFT JOIN contract k ON k.id = p.contract_id WHERE p.project_id = $1 AND EXISTS (SELECT 1 FROM eps_version v WHERE v.pms_id = p.id AND v.master) ORDER BY n.code`, [projectId]);
   return {
     narrative: cats.filter((c) => c.tree === "narrative").map((c) => ({ id: c.id, parentId: c.parent_id, name: c.name, group: c.contract_no })),
     resource: [...cats.filter((c) => c.tree === "resource").map((c) => ({ id: c.id, parentId: c.parent_id, name: c.name, group: c.contract_no })),
@@ -77,9 +79,11 @@ const LABEL = {
   workflow: (b) => `گردش کار «${b.name}»`, "workflow-remove": () => "حذف گره گردش کار", attach: () => "گردش کار فرم",
   page: (b) => `صفحهٔ ${b.pageNo} «${b.name}»`, "page-remove": () => "حذف صفحه",
   "group-duty": () => "وظیفه در گروه", "group-duty-remove": () => "برداشتن وظیفه از گروه",
+  role: (b) => `نقش «${b.name}»`, "role-remove": () => "حذف نقش", "duty-member": () => "دارندهٔ وظیفه و دسترسی او", "duty-member-remove": () => "برداشتن دارندهٔ وظیفه",
+  "stage-deadline": () => "مهلت مرحله",
 };
 // what only the project's manager decides: the duties, the tree, and which workflow a form follows
-const ADMIN_ONLY = ["type", "template", "duty", "duty-remove", "duty-members", "workflow", "workflow-remove", "attach"];
+const ADMIN_ONLY = ["type", "template", "duty", "duty-remove", "duty-members", "duty-member", "duty-member-remove", "role", "role-remove", "workflow", "workflow-remove", "attach"];
 
 export async function POST(request) {
   try {
@@ -120,11 +124,18 @@ export async function POST(request) {
         "page-remove": () => wfs.removePage(db, a),
         "group-duty": () => wfs.setGroupDuty(db, a),
         "group-duty-remove": () => wfs.removeGroupDuty(db, a),
+        role: () => wfs.saveRole(db, a),
+        "role-remove": () => wfs.removeRole(db, a),
+        "duty-member": () => wfs.setDutyMember(db, a).then(() => null),
+        "duty-member-remove": () => wfs.removeDutyMember(db, a).then(() => null),
+        "stage-deadline": () => rp.setStageDeadline(db, a),
       }[kind]();
       // who changed who may sign what is itself on the record
       await logEvent(db, { projectId, section: "reports", entityType: "report_setup", entityId: row?.id || null,
         label: LABEL[kind](body), action: kind.endsWith("remove") ? "cancelled" : "updated",
-        comment: ["member", "group-duty", "duty"].includes(kind) ? (body.permissions || []).map((p) => PERMISSIONS[p] || p).join("، ") || null : null, userId: user.id });
+        comment: ["member", "group-duty", "duty", "duty-member"].includes(kind) ? [(body.permissions || []).map((p) => PERMISSIONS[p] || p).join("، "),
+          kind === "duty-member" && body.temporary ? `موقت ${body.startsOn} تا ${body.endsOn}` : ""].filter(Boolean).join(" · ") || null
+          : kind === "stage-deadline" ? (body.days ? `${body.days} روز: ${body.text}` : "بی‌مهلت") : null, userId: user.id });
       return Response.json({ ok: true, row: row || null });
     });
   } catch (e) { return errorResponse(e); }

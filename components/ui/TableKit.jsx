@@ -2,6 +2,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePrefs } from "../../lib/client/prefs.mjs";
+import { usePlatformMaybe } from "../../lib/client/platform.mjs";
+import { useFloat, FloatBox, rowEdgeHover, rowEdgeDown } from "./float";
+import { useCustomColumns, CustomColumns, showCustom } from "./customColumns";
 
 /**
  * Search, filter, sort, export — and three ways to look at any table on the
@@ -60,8 +63,18 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  * has a box at the start of its first cell (and the heading one for all the
  * rows shown); Ctrl- or Shift-click picks too. The picked rows are copied
  * (tab-separated, as Excel pastes), cut or deleted together — cut and delete
- * when the page passes `onDelete`, paste when it passes `onPaste(rows)`. A
+ * when the page passes `onDelete`, paste when it passes `onPaste(rows)` — or,
+ * when it adds rows (`rowEdit.onAdd`), as new rows (see `pasteAsNew`). A
  * right click on a row opens the same actions for it.
+ *
+ * Columns the project adds (owner's requirements 2026-10-22, item 7;
+ * lib/db/repos/custom-fields.mjs): every table whose rows carry a
+ * `data-key` can take more columns — a heading and a type (text, number,
+ * date, yes/no, a list) — defined by the project's admin under «+ ستون»,
+ * seen by every member. They are cells this kit adds at the end of each row
+ * (kept last whatever React renders), so they sort, filter, export and show
+ * in the grid and the cards like the page's own; a click on one opens it for
+ * its value, saved on Enter or on leaving it.
  *
  * Editing a row in place, when the page passes `rowEdit`:
  *   { fields: [{ col: heading text, name, type: text|number|date|select, options: [[value, label]] }],
@@ -102,8 +115,20 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   const [clip, setClip] = useState(null);                 // rows copied or cut: [[cell…]…]
   const [ed, setEd] = useState(null);                     // a row open for editing: { row|null (new), key, values, orig, tr }
   const [leave, setLeave] = useState(null);               // leaving a changed row: { next }
+  const platform = usePlatformMaybe();
+  const { custom, reload: loadCustom, saveValue } = useCustomColumns(name);   // the project's columns for this table: { fields, values: Map, may }
+  const [colDlg, setColDlg] = useState(null);             // the «+ ستون» panel: { label, dataType, options }
+  // what a custom cell needs to save itself, read when it is clicked
+  st.current.custom = custom && {
+    ...custom, yes: t("tk.yes"), no: t("tk.no"),
+    save: async (field, rowKey, value) => {
+      try { await saveValue(field, rowKey, value); setErr(""); return true; } catch (e) { setErr(e.message); return false; }
+    },
+  };
 
   const heads = meta.heads;
+  // a table whose rows carry keys can take the project's columns
+  const keyed = !!box.current?.querySelector("tbody tr[data-key]") || meta.total > 0 && !!st.current.orig.some((r) => r.dataset?.key);
   const disp = useMemo(() => displayOrder(heads, lay), [heads, lay]);
 
   const apply = useCallback(() => {
@@ -122,6 +147,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     if (s.picks) for (const r of [...s.picks]) if (!inDom.has(r)) s.picks.delete(r);
     const have = new Set(s.orig);
     for (const r of tbody.rows) if (own(r) && !have.has(r)) s.orig.push(r);
+    syncCustom(table, s);
 
     const headCells = [...(table.tHead?.rows?.[0]?.cells || [])];
     const used = new Set();
@@ -268,7 +294,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
       obs.takeRecords();
       obs.observe(box.current, { childList: true, subtree: true, characterData: true });
     }
-  }, [q, col, val, filters, lay, mode, rich, collapsed, page, t, num]);
+  }, [q, col, val, filters, lay, mode, rich, collapsed, page, t, num, custom]);
 
   useEffect(() => {
     const s = st.current;
@@ -338,6 +364,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     setMenu({ key: hit.h.key, rect: hit.th.getBoundingClientRect() });
   }
   function onDown(e) {
+    if (rowEdgeDown(e)) return;                         // a row's lower edge: its height
     if (mode !== "grid" || e.button !== 0) return;
     const hit = headOf(e);
     if (!hit || zone(hit.th, e.clientX) !== "edge") return;
@@ -461,6 +488,9 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   const rowsText = (rows) => rows.map((r) => [...r.cells].map((c) => c.textContent.replace(/\s+/g, " ").trim()));
   function copyRows(rows) {
     const data = rowsText(rows);
+    // copied from a table that edits its rows: each row's own field values too, so a paste here takes them exactly
+    data.from = name;
+    data.values = rows.map((r) => (r.dataset.key && rowEdit?.value ? rowEdit.value(r.dataset.key) : null));
     setClip(data);
     try { navigator.clipboard?.writeText(data.map((x) => x.join("\t")).join("\n")); } catch { /* not allowed here */ }
   }
@@ -476,6 +506,38 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     finally { setBusy(false); }
   }
   const cutRows = async (rows) => { copyRows(rows); await deleteRows(rows); };
+  /**
+   * Paste where the page has none of its own but adds rows (owner's
+   * requirements 2026-10-22, item 4: paste in every form that edits): each
+   * row copied becomes a new row — its field values as they were when it
+   * came from this table, else its cells matched to the fields by heading.
+   * A cell a field cannot read (a date not written yyyy-mm-dd, a number that
+   * is not one, a choice not in the list) is left empty, never guessed.
+   */
+  const fromCells = (cells) => Object.fromEntries(rowEdit.fields.map((f) => {
+    const h = meta.heads.find((x) => x.key === f.col || x.label === f.col);
+    const v = h ? String(cells[h.i] ?? "").trim() : "";
+    if (!v) return [f.name, ""];
+    if (f.type === "number") { const n = Number(v.replace(/[\u066C,]/g, "")); return [f.name, Number.isFinite(n) ? String(n) : ""]; }
+    if (f.type === "date") return [f.name, /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ""];
+    if (f.type === "select") { const o = (f.options || []).find(([ov, l]) => String(l) === v || String(ov) === v); return [f.name, o ? o[0] : ""]; }
+    return [f.name, v];
+  }));
+  async function pasteAsNew(data) {
+    if (!window.confirm(t("tk.pasteAsk", { n: num(data.length) }))) return false;
+    setBusy(true); setErr("");
+    try {
+      for (let k = 0; k < data.length; k++) {
+        const same = data.from === name && data.values?.[k];
+        const v = same ? Object.fromEntries(Object.entries(data.values[k]).map(([x, y]) => [x, y ?? ""])) : fromCells(data[k]);
+        if (!(await rowEdit.onAdd(v))) throw new Error(t("tk.pasteStopped", { n: num(k), all: num(data.length) }));
+      }
+      clearPicks();
+      return true;
+    } catch (e) { setErr(e?.message || t("tk.saveError")); return false; }
+    finally { setBusy(false); }
+  }
+  const paste = onPaste || (rowEdit?.onAdd ? pasteAsNew : null);
   const picked = () => [...picksOf()].filter((r) => box.current?.contains(r));
 
   // ── editing a row where it stands ───────────────────────────────────────
@@ -502,8 +564,10 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     const v = row ? (rowEdit.value ? rowEdit.value(key) : {}) : Object.fromEntries(rowEdit.fields.map((f) => [f.name, ""]));
     setEd({ row, key, values: v || {}, orig: v || {}, tr });
   }
-  async function saveEdit() {
+  // owner's requirements 2026-10-22, item 7: a row is written only once the person says so
+  async function saveEdit(ask = true) {
     if (!ed) return true;
+    if (ask && !window.confirm(t(ed.row ? "tk.saveAsk" : "tk.addAsk"))) return false;
     setBusy(true); setErr("");
     try {
       const ok = ed.row ? await rowEdit.onSave(ed.key, ed.values) : await rowEdit.onAdd(ed.values);
@@ -512,12 +576,6 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     } catch (e) { setErr(e?.message || t("tk.saveError")); return false; }
     finally { setBusy(false); }
   }
-  useEffect(() => {
-    if (!rowMenu) return undefined;
-    const close = () => setRowMenu(null);
-    window.addEventListener("click", close); window.addEventListener("scroll", close, true);
-    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); };
-  }, [rowMenu]);
   // a click outside the row being edited, when it has changed, asks first
   useEffect(() => {
     if (!ed) return undefined;
@@ -643,6 +701,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
               </select>
             </>
           )}
+          {custom?.may?.define && keyed && <button type="button" data-tk-addcol onClick={() => setColDlg({ label: "", dataType: "text", options: "" })}>{t("tk.addColumn")}</button>}
           <button type="button" onClick={exportCsv} title={t("tk.exportTitle")}>{t("tk.exportCsv")}</button>
           <button type="button" onClick={exportXlsx} title={t("tk.exportTitle")}>{t("tk.exportXlsx")}</button>
           {picks > 0 && (
@@ -653,7 +712,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
               {onDelete && <button type="button" className="danger" data-tk-bulk-delete disabled={busy} onClick={() => deleteRows(picked())}>{deleteLabel}</button>}
               <button type="button" onClick={clearPicks}>{t("tk.unpick")}</button>
             </span>)}
-          {onPaste && clip && <button type="button" data-tk-paste onClick={async () => { if (await onPaste(clip)) setClip(null); }}>{t("tk.paste", { n: num(clip.length) })}</button>}
+          {paste && clip && <button type="button" data-tk-paste onClick={async () => { if (await paste(clip)) setClip(null); }}>{t("tk.paste", { n: num(clip.length) })}</button>}
           <span className="tk-acts">
             <button type="button" disabled={!sel} onClick={() => setDialog("view")}
                     title={sel ? t("tk.viewTitle") : t("tk.pickFirst")}>{t("tk.view")}</button>
@@ -669,11 +728,12 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
       )}
       {showBar && meta.total > 0 && meta.shown === 0 && <p className="empty-note">{t("tk.noMatch")}</p>}
       <div className="wrap" ref={box} onClick={(e) => { onHeadClick(e); pick(e); }} onDoubleClick={pick} onContextMenu={onContext}
-           onPointerDown={onDown} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop}
+           onPointerDown={onDown} onPointerMove={rowEdgeHover} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop}
            onDragEnd={() => box.current?.querySelectorAll("th.tk-drop").forEach((x) => x.classList.remove("tk-drop"))}>{children}</div>
       {rowEdit?.onAdd && !(ed && !ed.row) && (
         <button type="button" className="tk-add no-print" data-tk-add onClick={() => guard(() => openEdit(null))}>{t("tk.addRow")}</button>)}
       {err && !dialog && <p className="err sm no-print" role="alert">{err}</p>}
+      {colDlg && <CustomColumns custom={custom} dlg={colDlg} setDlg={setColDlg} platform={platform} name={name} reload={loadCustom} />}
       {ed && createPortal(heads.map((h, k) => {
         const f = rowEdit.fields.find((x) => x.col === h.key || x.col === h.label);
         const last = k === heads.length - 1;
@@ -699,11 +759,11 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
         <div className="tk-leave card" role="alertdialog" aria-label={t("tk.leaveTitle")} data-tk-leave>
           <b>{t("tk.leaveTitle")}</b>
           <p style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <button type="button" className="btn sm" onClick={async () => { const nx = leave.next; setLeave(null); if (await saveEdit()) nx(); }}>{t("tk.leaveSave")}</button>
+            <button type="button" className="btn sm" onClick={async () => { const nx = leave.next; setLeave(null); if (await saveEdit(false)) nx(); }}>{t("tk.leaveSave")}</button>
             <button type="button" className="btn ghost sm" onClick={() => { const nx = leave.next; setLeave(null); closeEdit(); nx(); }}>{t("tk.leaveDrop")}</button></p>
         </div>, document.body)}
       {rowMenu && createPortal(
-        <div className="tk-rowmenu card" role="menu" aria-label={t("tk.rowMenu")} style={{ left: rowMenu.x, top: rowMenu.y }} onClick={(e) => e.stopPropagation()} data-tk-rowmenu>
+        <RowMenu x={rowMenu.x} y={rowMenu.y} label={t("tk.rowMenu")} onClose={() => setRowMenu(null)}>
           {(() => {
             const r = rowMenu.row, k = r.dataset.key || null;
             const many = picksOf().has(r) ? picked() : [r];
@@ -715,11 +775,11 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
               {rowEdit?.onAdd && <button type="button" role="menuitem" onClick={() => { done(); guard(() => openEdit(null)); }}>{t("tk.add")}</button>}
               <button type="button" role="menuitem" onClick={() => { done(); copyRows(many); }}>{t("tk.copy")}</button>
               {onDelete && <button type="button" role="menuitem" onClick={() => { done(); cutRows(many); }}>{t("tk.cut")}</button>}
-              {onPaste && <button type="button" role="menuitem" disabled={!clip} onClick={async () => { done(); if (await onPaste(clip)) setClip(null); }}>{t("tk.pasteShort")}</button>}
+              {paste && <button type="button" role="menuitem" disabled={!clip} onClick={async () => { done(); if (await paste(clip)) setClip(null); }}>{t("tk.pasteShort")}</button>}
               {onDelete && <button type="button" role="menuitem" className="danger" onClick={() => { done(); deleteRows(many); }}>{deleteLabel}</button>}
             </>;
           })()}
-        </div>, document.body)}
+        </RowMenu>, document.body)}
       {rich && meta.pages > 1 && (
         <div className="tk-pager no-print">
           <button type="button" disabled={meta.pg === 0} onClick={() => setPage(meta.pg - 1)}>{t("tk.prev")}</button>
@@ -778,8 +838,17 @@ function FragmentPair({ h, v }) {
 }
 
 /** A popover beside a heading or a button, kept inside the window, closed by Escape or a click elsewhere. */
+/** The right-click menu: a floating panel, closed on a click outside it or Escape (not on a scroll or on dragging it by its grip). */
+function RowMenu({ x, y, label, onClose, children }) {
+  return (
+    <FloatBox className="tk-rowmenu card" role="menu" aria-label={label} style={{ left: x, top: y }} onClose={onClose} onClick={(e) => e.stopPropagation()} data-tk-rowmenu>
+      {children}
+    </FloatBox>);
+}
+
 function Pop({ rect, dir, width = 280, onClose, label, children }) {
-  const ref = useRef(null);
+  const f = useFloat();
+  const ref = f.ref;
   useEffect(() => {
     const down = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
     const key = (e) => { if (e.key === "Escape") onClose(); };
@@ -790,9 +859,9 @@ function Pop({ rect, dir, width = 280, onClose, label, children }) {
   const vw = typeof window === "undefined" ? 1200 : window.innerWidth;
   const left = Math.max(8, Math.min(vw - width - 8, dir === "rtl" ? rect.left : rect.right - width));
   return (
-    <div ref={ref} className="tk-pop" role="dialog" aria-label={label} dir={dir}
-         style={{ left, top: Math.min(rect.bottom + 4, (typeof window === "undefined" ? 800 : window.innerHeight) - 120), width }}>
-      {children}
+    <div ref={ref} className="tk-pop float-panel" role="dialog" aria-label={label} dir={dir}
+         style={{ left, top: Math.min(rect.bottom + 4, (typeof window === "undefined" ? 800 : window.innerHeight) - 120), width, ...f.style }}>
+      {f.grip}{children}
     </div>
   );
 }
@@ -1048,3 +1117,88 @@ function download(blob, file) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+// ── the project's columns (custom_field, migration 085) ─────────────────
+
+
+/**
+ * The project's columns as cells at the end of the heading and of every keyed
+ * row, in their order, and nowhere else (a detail row keeps its one cell).
+ * Runs inside `apply`, with the observer off, so moving them back to the end
+ * after React added a cell is not taken for a change of the page's own.
+ */
+function syncCustom(table, s) {
+  const c = s.custom;
+  const want = c && c.fields.length && s.orig.some((r) => r.dataset.key) ? c.fields : [];
+  const place = (row, make, fill) => {
+    for (const x of [...row.cells]) if (x.dataset.tkCustom && !want.some((f) => f.id === x.dataset.tkCustom)) x.remove();
+    const cells = want.map((f) => {
+      let x = [...row.cells].find((y) => y.dataset.tkCustom === f.id);
+      if (!x) { x = make(); x.dataset.tkCustom = f.id; }
+      fill(x, f);
+      return x;
+    });
+    // kept last and in order: moved only when they are not
+    const tail = [...row.cells].slice(row.cells.length - cells.length);
+    if (cells.some((x, k) => tail[k] !== x)) for (const x of cells) row.appendChild(x);
+  };
+  const head = table.tHead?.rows?.[0];
+  if (head) place(head, () => document.createElement("th"), (th, f) => { if (th.textContent !== f.label) th.textContent = f.label; th.dataset.tkType = f.data_type; });
+  for (const r of s.orig) {
+    if (isDetail(r) || r.classList.contains("tk-grp")) continue;
+    const key = r.dataset.key;
+    place(r, () => { const td = document.createElement("td"); td.className = "tk-custom"; return td; }, (td, f) => {
+      if (!td.dataset.tkWired) { td.dataset.tkWired = "1"; wireCustom(td, s); }
+      td.dataset.tkRow = key || "";
+      if (td.dataset.tkEditing) return;
+      const text = key ? showCustom(c, f, c.values.get(`${f.id}|${key}`)) : "";
+      if (td.textContent !== text) td.textContent = text;
+    });
+  }
+}
+
+/** A custom cell, clicked: its value in a field of its type; Enter or leaving saves, Escape cancels. Nothing of the click reaches the row. */
+function wireCustom(td, s) {
+  const stop = (e) => e.stopPropagation();
+  td.addEventListener("dblclick", stop);
+  td.addEventListener("pointerdown", stop);
+  td.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const c = s.custom;
+    const f = c?.fields.find((x) => x.id === td.dataset.tkCustom);
+    const key = td.dataset.tkRow;
+    if (!f || !key || !c.may?.fill || td.dataset.tkEditing) return;
+    const now = c.values.get(`${f.id}|${key}`) ?? "";
+    let input;
+    if (f.data_type === "list" || f.data_type === "bool") {
+      input = document.createElement("select");
+      const opts = f.data_type === "bool" ? [["", "—"], ["true", c.yes], ["false", c.no]] : [["", "—"], ...f.options.map((o) => [o, o])];
+      for (const [v, l] of opts) { const o = document.createElement("option"); o.value = v; o.textContent = l; input.appendChild(o); }
+    } else {
+      input = document.createElement("input");
+      input.type = f.data_type === "number" ? "number" : f.data_type === "date" ? "date" : "text";
+      if (f.data_type === "number") input.step = "any";
+    }
+    input.value = now;
+    input.setAttribute("aria-label", f.label);
+    input.className = "tk-custom-input";
+    td.dataset.tkEditing = "1";
+    td.textContent = "";
+    td.appendChild(input);
+    let done = false;
+    const finish = async (save) => {
+      if (done) return;
+      done = true;
+      const v = input.value;
+      if (save && v !== now) await c.save(f, key, v);
+      delete td.dataset.tkEditing;
+      td.textContent = showCustom(s.custom || c, f, (s.custom || c).values.get(`${f.id}|${key}`));
+    };
+    input.addEventListener("keydown", (k) => { k.stopPropagation(); if (k.key === "Enter") finish(true); if (k.key === "Escape") finish(false); });
+    input.addEventListener("blur", () => finish(true));
+    if (input.tagName === "SELECT") input.addEventListener("change", () => input.blur());
+    input.focus();
+  });
+}
+
+

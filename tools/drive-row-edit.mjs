@@ -20,6 +20,7 @@ let failed = 0;
 const check = (ok, what) => { console.log(ok ? "ok  " : "FAIL", what); if (!ok) failed++; };
 const page = await (await b.newContext({ viewport: { width: 1440, height: 950 } })).newPage();
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
+page.on("dialog", (d) => d.accept());
 page.on("console", (m) => { if (m.type() === "error" && !/40[0-9]|Failed to load resource|Failed to fetch RSC payload/.test(m.text())) problems.push("console: " + m.text()); });
 await page.goto(BASE, { waitUntil: "networkidle" });
 await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);

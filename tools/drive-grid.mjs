@@ -26,6 +26,7 @@ const check = (ok, what) => { console.log(ok ? "ok  " : "FAIL", what); if (!ok) 
 const ctx = await b.newContext({ viewport: { width: 1500, height: 950 }, acceptDownloads: true });
 const page = await ctx.newPage();
 page.on("dialog", (d) => d.accept());
+if (process.env.DRIVE_DEBUG) page.on("response", async (r) => { if (r.request().method() === "POST") console.log("POST", r.url(), r.status(), (await r.text()).slice(0, 300)); });
 page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
 page.on("console", (m) => { if (m.type() === "error" && !/40[0-9]|Failed to load resource|Failed to fetch RSC payload/.test(m.text())) problems.push("console: " + m.text()); });
 await page.goto(BASE, { waitUntil: "networkidle" });
@@ -45,14 +46,14 @@ const contractId = (await api(`/api/contract-reports?projectId=${projectId}`)).c
 await page.locator(".topbar select").selectOption(`c:${contractId}`); await page.waitForTimeout(500);
 
 // a small plan: node «Piping» with two activities
-const pms = (await api("/api/eps", { projectId, kind: "pms", contractId, code: "PMS-G", title: "Grid plan" })).row;
-const ver = (await api("/api/eps", { projectId, kind: "version", pmsId: pms.id, code: "V1", title: "Baseline" })).row;
+const pms = (await api("/api/eps", { projectId, kind: "pms", contractId, code: `PMS-G${Date.now().toString(36).slice(-4).toUpperCase()}`, title: "Grid plan" })).row;
+const ver = (await api("/api/eps", { projectId, kind: "version", pmsId: pms.id, code: `${pms.code}-V1`, title: "Baseline" })).row;
 const node = (await api("/api/eps", { projectId, kind: "node", versionId: ver.id, name: "Piping", wf: 100, unit: "m" })).row;
 await api("/api/eps", { projectId, kind: "activity", nodeId: node.id, name: "Spool erection", wf: 60, volumePlan: 100, volumeActual: 100 });
 await api("/api/eps", { projectId, kind: "activity", nodeId: node.id, name: "Support install", wf: 40, volumePlan: 50, volumeActual: 50 });
 const acts = async () => (await api(`/api/eps/activities?projectId=${projectId}&versionId=${ver.id}`)).roots[0].activities.map((a) => a.name).sort();
 
-await page.goto(`${BASE}/eps/activities`, { waitUntil: "networkidle" });
+await page.goto(`${BASE}/eps/activities?pms=${pms.id}&version=${ver.id}`, { waitUntil: "networkidle" });
 await page.locator("[data-p6-bar]").waitFor();
 const bar = await page.evaluate(() => {
   const el = document.querySelector("[data-p6-bar]"), f = el.querySelector(".p6-filter"), lv = el.querySelector(".p6-levels");
@@ -73,17 +74,17 @@ await page.locator("tr[data-kind=act]", { hasText: "Spool erection" }).click();
 check(await page.locator("tr.p6-editing").count() === 1, "a click opens the row for editing where it stands");
 const color = await page.locator("tr.p6-editing td").nth(2).evaluate((td) => getComputedStyle(td).color);
 check(color === "rgb(29, 111, 216)", `the row being edited is written in blue (${color})`);
-await page.locator("tr.p6-editing input.p6-in").first().fill("Spool erection & bolt-up");
+await page.locator('tr.p6-editing input.p6-in[aria-label="Task name"]').fill("Spool erection & bolt-up");
 await page.locator("tr[data-kind=act]", { hasText: "Support install" }).click();
 check(await page.locator("[data-leave-ask]").count() === 1, "leaving a changed row asks to save or discard");
 await page.locator("[data-leave-ask] button", { hasText: "Save the changes" }).click();
 await page.waitForTimeout(1200);
-check((await acts()).includes("Spool erection & bolt-up"), "saved from the prompt");
+check((await acts()).includes("Spool erection & bolt-up"), `saved from the prompt ${await page.locator(".err").allInnerTexts()}`);
 
 // a child added from the right-click menu
 await page.locator("tr[data-kind=node]").first().click({ button: "right" });
 await page.locator("[data-row-menu] button", { hasText: "Add a child" }).click();
-await page.locator("tr[data-kind=draft] input").first().fill("Hydrotest");
+await page.locator('tr[data-kind=draft] input[aria-label="Task name"]').fill("Hydrotest");
 await page.locator("tr[data-kind=draft] [data-row-save]").click();
 await page.waitForTimeout(1200);
 check((await acts()).includes("Hydrotest"), "a new activity typed in a draft row under its node");
@@ -108,7 +109,7 @@ check(pi >= 0 && ci === pi + 1 && child && child[pi] === sheet[1][ci], `the expo
 await page.screenshot({ path: `${SHOT}/370-tree-grid-en.png` });
 
 // a list table: the duties of workflow setup
-await api("/api/report-setup", { projectId, kind: "duty", code: "PL", name: "Planner", permissions: ["view"] });
+await api("/api/report-setup", { projectId, kind: "duty", code: `PL${Date.now().toString(36).slice(-3)}`, name: `Planner ${Date.now().toString(36).slice(-3)}`, permissions: ["view"] });
 await page.goto(`${BASE}/report-setup`, { waitUntil: "networkidle" });
 const duties = page.locator("[data-duties]");
 await duties.locator("[data-tk-add]").click();

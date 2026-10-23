@@ -79,7 +79,9 @@ await page.goto(`${BASE}/eps`, { waitUntil: "networkidle" });
 await page.locator("[data-import-open]").click();
 await page.selectOption("#im-pms", pms.id);
 await page.selectOption("#im-kind", "sheet");
-const eps = await grab(page.locator("[data-template=eps]"));
+// a template a person can cut down opens a menu (2026-10-22): its full template first
+await page.locator("[data-template=eps]").click();
+const eps = await grab(page.locator("[data-templates=eps] [data-template-full]"));
 const wb = XLSX.read(await readFile(eps.path));
 check(eps.name === "eps-wbs-template.xlsx" && wb.SheetNames.join() === "WBS,Guide", `the EPS template downloads with its guide (${eps.name}: ${wb.SheetNames.join(", ")})`);
 await page.fill("#im-code", `T${run}`);
@@ -93,7 +95,7 @@ await page.selectOption("#im-kind", "pms");
 const pmsT = await grab(page.locator("[data-template=pms]"));
 check(pmsT.name === "pms-template.xlsx", "the PMS workbook template offered for a PMS import");
 // each import sits where it always has: on a tab of its page, sometimes in a folded form
-for (const [path, kind, openers] of [["/contracts/design", "design", []], ["/equipment", "equipment", ["ورود لیست"]], ["/warehouse", "mesc", ["MESC", "کاتالوگ"]]]) {
+for (const [path, kind, openers] of [["/contracts/design", "design", []], ["/equipment", "equipment", ["Import the equipment list", "ورود لیست"]], ["/warehouse", "mesc", ["MESC", "atalogue", "کاتالوگ"]]]) {
   await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
   const btn = page.locator(`[data-template=${kind}]`);
   for (const o of openers) {
@@ -108,7 +110,9 @@ for (const [path, kind, openers] of [["/contracts/design", "design", []], ["/equ
 }
 
 // ── item 12: a link removed, an activity removed, from the scope page ──
-const ver = (await api("/api/eps", { projectId, kind: "version", pmsId: pms.id, code: `S${run}`, title: "Scope" })).row;
+// a PMS of its own: the WBS is the PMS's (083), and the template above already filled this one's
+const pmsS = (await api("/api/eps", { projectId, kind: "pms", contractId, code: `PMS-S${run}`, title: "Scope plan" })).row;
+const ver = (await api("/api/eps", { projectId, kind: "version", pmsId: pmsS.id, code: `S${run}`, title: "Scope" })).row;
 const node = (await api("/api/eps", { projectId, kind: "node", versionId: ver.id, name: "Mechanical", wf: 100 })).row;
 const a1 = (await api("/api/eps", { projectId, kind: "activity", nodeId: node.id, name: "Pump erection", wf: 50 })).row;
 const a2 = (await api("/api/eps", { projectId, kind: "activity", nodeId: node.id, name: "Tank erection", wf: 50 })).row;

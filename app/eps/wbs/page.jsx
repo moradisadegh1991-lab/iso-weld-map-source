@@ -1,145 +1,204 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
-import { useTreeDrag } from "../../../components/ui/treeDrag";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 import { useEpsFmt } from "../../../components/eps/ActivityDetail";
+import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
 import { SEPARATOR_NAMES } from "../../../lib/eps/wbs.mjs";
+import { COLUMNS, useVersion, wIn, wOut } from "../../../components/eps/shared";
 
 import TableKit from "../../../components/ui/TableKit";
 /**
- * A version's WBS. Part one: the settings — a colour per level, how each
- * level is numbered and the separator, and how budget and weight relate
- * (typed by hand / budget from W.F / W.F from budget). Part two: the tree
- * under the PMS code — nodes added, edited, moved under another node by drag
- * and drop or above / below a sibling, copied with everything under them,
- * opened and closed by level — and each node's activities, from a template
- * or by hand. Every derived figure comes from the server's rules
- * (lib/eps/wbs.mjs); this page only shows them.
+ * A PMS's WBS — one tree for all its versions (083); a version plans its
+ * activities on the planning page. The tree is the activities page's own
+ * (owner's requirements 2026-10-22: «ساختار صفحه WBS & activities دقیقا شبیه
+ * بخش ساختار درختی صفحه activities»): nodes and their activities with W.F,
+ * W.V, budgets, volumes and dates, a node's row edited where it stands, a
+ * child node added under it from the right-click menu, copied / cut / pasted
+ * with everything under it, moved above or below its sibling, deleted with
+ * its activities. Below the tree, its sub-forms: PMS DETAIL (the PMS and the
+ * root's budget), WBS DETAIL (the node picked, every field), the node's
+ * activities (from a template or by hand) and the WBS settings — a colour
+ * per level, how each level is numbered, how budget and weight relate.
+ * Every derived figure comes from the server's rules (lib/eps/wbs.mjs).
  */
 const BLANK_NODE = { name: "", code: "", budgetPlan: "", budgetActual: "", qty: "", unit: "", volumePlan: "", volumeActual: "", wf: "",
   planStart: "", planEnd: "", actualStart: "", actualEnd: "", description: "", templateId: "" };
 const toForm = (n) => ({ id: n.id, parentId: n.parent_id, code: n.code, name: n.name, budgetPlan: n.budget_plan ?? "", budgetActual: n.budget_actual ?? "",
-  qty: n.qty ?? "", unit: n.unit || "", volumePlan: n.volume_plan ?? "", volumeActual: n.volume_actual ?? "", wf: n.wf_typed ?? n.wf ?? "",
+  qty: n.qty ?? "", unit: n.unit || "", volumePlan: n.volume_plan ?? "", volumeActual: n.volume_actual ?? "", wf: wIn(n.wf_typed ?? n.wf),
   planStart: n.plan_start || "", planEnd: n.plan_end || "", actualStart: n.actual_start || "", actualEnd: n.actual_end || "",
   description: n.description || "", templateId: n.template_id || "" });
+const TABS = ["pms", "wbs", "acts", "settings"];
+const DEFAULT_COLS = ["code", "name", "wf", "wv", "budget", "budgetA", "unit", "volPlan", "volActual", "start", "finish", "dur", "aStart", "aFinish", "tpl", "description"];
 
 export default function WbsPage() {
   const { projectId, contractId, call } = usePlatform();
-  const [versionId, setVersionId] = useState(null);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("version"); if (v) setVersionId(v); }, []);
-  const board = useProjectData((id) => (contractId ? `/api/eps?projectId=${id}&contractId=${contractId}` : null), [contractId]);
-  const { data, error, reload } = useProjectData((id) => (versionId ? `/api/eps?projectId=${id}&versionId=${versionId}` : null), [versionId]);
+  const { pmsId, picker, reloadBoard } = useVersion(contractId, { version: false });
+  const { data, error, reload } = useProjectData((id) => (pmsId ? `/api/eps?projectId=${id}&pmsId=${pmsId}` : null), [pmsId]);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
-  const [closed, setClosed] = useState(new Set());
-  const [openActs, setOpenActs] = useState(new Set());
-  const [form, setForm] = useState(null);           // { mode: "add"|"edit", parentId, ...fields }
-  const [clip, setClip] = useState(null);
+  const [sel, setSel] = useState(null);                 // the selected row {kind, id, item}
+  const [adding, setAdding] = useState(null);           // a new node's full form: { parentId, code }
+  const [tab, setTab] = useState("wbs");
   const { t } = usePrefs();
-  const { fmt, day } = useEpsFmt();
+  const { w } = useEpsFmt();
+  const { height, grip } = useSplit("p6-wbs", 430);
+  const live = useRef({});
+  live.current = { reload, reloadBoard };
   async function post(body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, versionId, ...body }) }); reload(); board.reload(); if (done) setOk(done(r)); return r; }
+    try { const r = await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, pmsId, ...body }) }); reload(); reloadBoard(); if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; }
   }
-  const dnd = useTreeDrag((d, to, zone) => post(zone === "inside" ? { kind: "node-move", id: d.id, parentId: to.id === "root" ? null : to.id }
-    : { kind: "node-move", id: d.id, parentId: to.parentId, [zone === "before" ? "beforeId" : "afterId"]: to.id }, () => t("ep.wb.moved")),
-  { sibling: (d, to) => to.id !== "root" });
-  const versions = (board.data?.pms || []).flatMap((p) => p.versions.map((v) => ({ ...v, pmsCode: p.code })));
-  useEffect(() => { if (!versionId && versions.length) setVersionId(versions[0].id); }, [versions.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mode = data?.settings?.budgetMode;
+  // the rows in place: a node's own fields, an activity's name, W.F and description; a row added under a node is a child node
+  const ops = useMemo(() => {
+    if (!data?.may?.edit) return null;
+    const send = (body) => call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, pmsId, ...body }) });
+    const batch = async (list, done) => {
+      setMsg(null); setOk(null);
+      try { for (const b of list) await send(b); live.current.reload(); live.current.reloadBoard(); if (done) setOk(done); return true; }
+      catch (e) { setMsg(e.message); live.current.reload(); return false; }
+    };
+    const num = (v) => (v === "" || v === undefined ? null : v);
+    // a field the budget mode works out is not typed; the stored value is sent back as it was
+    const nodeBody = (it, v) => ({ kind: "node", id: it.id, parentId: it.parent_id || null, code: it.code, templateId: it.template_id || null, qty: it.qty ?? null,
+      name: v.name, wf: v.wf === undefined ? it.wf_typed ?? null : wOut(v.wf), budgetPlan: v.budget === undefined ? it.budget_plan ?? null : num(v.budget),
+      budgetActual: num(v.budgetA), unit: v.unit, volumePlan: num(v.volPlan), volumeActual: num(v.volActual),
+      planStart: v.start || null, planEnd: v.finish || null, actualStart: v.aStart || null, actualEnd: v.aFinish || null, description: v.description });
+    const actBody = (a, v) => ({ kind: "activity", id: a.id, nodeId: a.node_id, code: a.code, name: v.name, wf: wOut(v.wf), progress: a.progress ?? null, description: v.description });
+    const siblings = (it) => {
+      const find = (ns) => { for (const n of ns) { if (n.id === it.parent_id) return n.children; const c = find(n.children); if (c) return c; } return null; };
+      return it.parent_id ? find(data.roots) || [] : data.roots;
+    };
+    return {
+      draftKind: "node",
+      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "wf", type: "number" }, { key: "description", type: "text" }]
+        : [{ key: "name", type: "text" }, ...(mode === "budget_to_wf" ? [] : [{ key: "wf", type: "number" }]), ...(mode === "wf_to_budget" ? [] : [{ key: "budget", type: "number" }]),
+          { key: "budgetA", type: "number" }, { key: "unit", type: "text" }, { key: "volPlan", type: "number" }, { key: "volActual", type: "number" },
+          { key: "start", type: "date" }, { key: "finish", type: "date" }, { key: "aStart", type: "date" }, { key: "aFinish", type: "date" }, { key: "description", type: "text" }]),
+      value: (row) => {
+        const it = row.item;
+        if (row.kind === "act") return { name: it.name ?? "", wf: wIn(it.wf), description: it.description ?? "" };
+        const v = { name: it.name ?? "", budgetA: it.budget_actual ?? "", unit: it.unit ?? "", volPlan: it.volume_plan ?? "", volActual: it.volume_actual ?? "",
+          start: it.plan_start || "", finish: it.plan_end || "", aStart: it.actual_start || "", aFinish: it.actual_end || "", description: it.description ?? "" };
+        if (mode !== "budget_to_wf") v.wf = wIn(it.wf_typed ?? it.wf);
+        if (mode !== "wf_to_budget") v.budget = it.budget_plan ?? "";
+        return v;
+      },
+      save: (row, v) => batch([row.kind === "act" ? actBody(row.item, v) : nodeBody(row.item, v)], t("ep.wb.saved", { code: row.item.code })),
+      create: (node, v) => batch([{ ...nodeBody({ parent_id: node.id }, v), id: null, code: null }], t("ep.wb.added")),
+      remove: (rows) => {
+        const nodes = rows.filter((x) => x.kind === "node"), gone = new Set(nodes.map((n) => n.id));
+        // an activity goes with its node; nodes go deepest first, so a branch picked whole goes
+        return batch([...rows.filter((x) => x.kind === "act" && !gone.has(x.parentId)).map((x) => ({ kind: "activity-remove", id: x.id })),
+          ...[...nodes].sort((a, b) => b.level - a.level).map((n) => ({ kind: "node-remove", id: n.id }))], t("ep.removed"));
+      },
+      paste: (node, rows, how) => {
+        const nodes = rows.filter((x) => x.kind === "node"), inNode = new Set(nodes.map((n) => n.id));
+        const top = nodes.filter((n) => !inNode.has(n.parentId)), lone = rows.filter((x) => x.kind === "act" && !inNode.has(x.parentId));
+        return batch([
+          ...top.map((n) => (how === "cut" ? { kind: "node-move", id: n.id, parentId: node.id } : { kind: "node-copy", id: n.id, parentId: node.id })),
+          ...lone.map((a) => ({ kind: "activity", nodeId: node.id, name: a.item.name, wf: a.item.wf, description: a.item.description || null })),
+          ...(how === "cut" ? lone.map((a) => ({ kind: "activity-remove", id: a.id })) : []),
+        ], t("ep.wb.pastedN", { n: rows.length }));
+      },
+      reorder: (row, dir) => {
+        const sib = siblings(row.item), i = sib.findIndex((x) => x.id === row.id), to = sib[i + dir];
+        if (!to) return true;
+        return batch([{ kind: "node-move", id: row.id, parentId: row.item.parent_id || null, [dir < 0 ? "beforeId" : "afterId"]: to.id }], t("ep.wb.moved"));
+      },
+    };
+  }, [data, projectId, pmsId, call, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  // keep the selection's figures current after a reload
+  useEffect(() => {
+    if (!sel || !data) return;
+    const find = (ns) => { for (const n of ns) { if (n.id === sel.id) return n; const a = n.activities.find((x) => x.id === sel.id); if (a) return a; const c = find(n.children); if (c) return c; } return null; };
+    const it = find(data.roots);
+    if (!it) setSel(null); else if (it !== sel.item) setSel({ ...sel, item: it });
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!contractId) return <div className="page"><div className="pagehead"><h1>{t("ep.wb.title")}</h1></div><p className="empty-note">{t("cs.pick")}</p></div>;
   const head = (
     <div className="pagehead"><h1>{t("ep.wb.title")}</h1>
-      <span className="sub"><select aria-label={t("ep.version")} value={versionId || ""} onChange={(e) => { setVersionId(e.target.value); setForm(null); }}>
-        {versions.length === 0 && <option value="">{t("ep.noVersion")}</option>}
-        {versions.map((v) => <option key={v.id} value={v.id}>{v.pmsCode} › {v.code} — {v.title}</option>)}</select>
-        {" "}<Link href="/eps">{t("ep.link.board")}</Link> · <Link href="/eps/templates">{t("ep.tp.title")}</Link></span></div>);
+      <span className="sub">{picker}
+        {" "}<Link href="/eps">{t("ep.link.board")}</Link> · <Link href="/eps/activities">{t("ep.link.activities")}</Link> · <Link href="/eps/templates">{t("ep.tp.title")}</Link></span></div>);
   if (error) return <div className="page">{head}<p className="err">{error}</p></div>;
-  if (!versionId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
+  if (!pmsId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
   if (!data) return <div className="page">{head}<p className="muted">{t("common.loading")}</p></div>;
   const may = data.may.edit;
   const S = data.settings;
-  const mode = S.budgetMode;
-  const maxLevel = (function deep(ns, l) { return ns.reduce((m, n) => Math.max(m, deep(n.children, l + 1)), ns.length ? l : l - 1); })(data.roots, 1);
-  const openTo = (lvl) => {
-    const c = new Set();
-    const walk = (ns) => ns.forEach((n) => { if (n.level >= lvl) c.add(n.id); walk(n.children); });
-    walk(data.roots); setClosed(c);
-  };
-  const flip = (set, setter, id) => { const n = new Set(set); n.has(id) ? n.delete(id) : n.add(id); setter(n); };
   const withActs = data.templates.filter((x) => x.activities.length > 0);
-  const tint = (c) => `${c}1a`;
-
+  const findNode = (id) => { const f = (ns) => { for (const n of ns) { if (n.id === id) return n; const c = f(n.children); if (c) return c; } return null; }; return f(data.roots); };
+  const node = sel ? (sel.kind === "node" ? sel.item : findNode(sel.item.node_id)) : null;
   async function openAdd(parentId) {
     let code = "";
-    try { code = (await call(`/api/eps?projectId=${projectId}&versionId=${versionId}&suggest=1${parentId ? `&parentId=${parentId}` : ""}`)).code; } catch { /* typed by hand */ }
-    setForm({ mode: "add", parentId, ...BLANK_NODE, code });
+    try { code = (await call(`/api/eps?projectId=${projectId}&pmsId=${pmsId}&suggest=1${parentId ? `&parentId=${parentId}` : ""}`)).code; } catch { /* typed by hand */ }
+    setAdding({ parentId, code }); setTab("wbs");
   }
-  const nodeRow = (n) => {
-    const kids = n.children.length > 0, isClosed = closed.has(n.id);
-    return [
-      <tr key={n.id} data-wbs={n.code} {...(may ? { ...dnd.source({ id: n.id }), ...dnd.target({ id: n.id, parentId: n.parent_id || null }) } : {})}
-        style={{ background: tint(n.color), borderInlineStart: `4px solid ${n.color}`, cursor: may ? "grab" : undefined, ...dnd.look({ id: n.id }) }}>
-        <td style={{ paddingInlineStart: 6 + (n.level - 1) * 18, whiteSpace: "nowrap" }}>
-          <button type="button" className="btn ghost sm" aria-label={t(isClosed ? "ep.g.open" : "ep.close")} disabled={!kids} onClick={() => flip(closed, setClosed, n.id)}
-            style={{ visibility: kids ? "visible" : "hidden", padding: "0 4px" }}>{isClosed ? "◂" : "▾"}</button>
-          <span className="mono" style={{ color: n.color, fontWeight: 600 }}>{n.code}</span></td>
-        <td>{n.name}{n.description && <div className="sm muted">{n.description}</div>}</td>
-        <td className="mono">{fmt(n.budgetPlan)}</td><td className="mono">{fmt(n.budgetActual)}</td>
-        <td className="mono">{fmt(n.qty)}</td><td className="mono">{fmt(n.volume_plan)} / {fmt(n.volume_actual)} {n.unit || ""}</td>
-        <td className="mono">{n.wf == null ? "—" : `${fmt(n.wf, 4)}%`}{kids && <div className="sm muted" title={t("ep.wb.childWf")}>Σ {fmt(n.childWf, 4)}%</div>}</td>
-        <td className="mono">{n.wv == null ? "—" : `${fmt(n.wv, 4)}%`}</td>
-        <td className="mono sm">{day(n.plan_start)} — {day(n.plan_end)}{n.planDays && <div className="muted">{t("ep.wb.days", { n: fmt(n.planDays) })}</div>}</td>
-        <td className="mono sm">{day(n.actual_start)} — {day(n.actual_end)}{n.actualDays && <div className="muted">{t("ep.wb.days", { n: fmt(n.actualDays) })}</div>}</td>
-        <td className="sm">{n.template_id ? <span className="mono">{data.templates.find((x) => x.id === n.template_id)?.code}</span> : "—"}
-          <div><button type="button" className="btn ghost sm" onClick={() => flip(openActs, setOpenActs, n.id)} data-acts={n.code}>{t("ep.g.count", { n: n.activities.length })} {openActs.has(n.id) ? "▴" : "▾"}</button></div></td>
-        <td style={{ whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>{may && <>
-          <button className="btn ghost sm" type="button" onClick={() => openAdd(n.id)} title={t("ep.wb.child")}>+</button>
-          <button className="btn ghost sm" type="button" onClick={() => setForm({ mode: "edit", ...toForm(n) })}>{t("ep.edit")}</button>
-          <button className="btn ghost sm" type="button" onClick={() => { setClip(n); setOk(t("ep.wb.copied", { code: n.code })); }}>{t("ep.tp.copy")}</button>
-          {clip && clip.id !== n.id && <button className="btn ghost sm" type="button" onClick={() => post({ kind: "node-copy", id: clip.id, parentId: n.id }, (r) => t("ep.wb.pasted", { code: r.row.code }))}>{t("ep.tp.paste")}</button>}
-          <button className="btn ghost sm" type="button" onClick={() => post({ kind: "node-remove", id: n.id }, () => t("ep.removed"))}>{t("ep.remove")}</button></>}</td>
-      </tr>,
-      openActs.has(n.id) && <tr key={`${n.id}-acts`}><td colSpan={12} style={{ background: "var(--surf, #fff)" }}><Activities n={n} may={may} post={post} templates={withActs} /></td></tr>,
-      ...(isClosed ? [] : n.children.flatMap(nodeRow)),
-    ];
-  };
+  const toolbar = may && <>
+    <button type="button" className="btn sm" data-add-top onClick={() => openAdd(null)}>{t("ep.wb.addTop")}</button>
+    <button type="button" className="btn ghost sm" disabled={!node} data-add-child onClick={() => node && openAdd(node.id)}>+ {t("ep.wb.child")}</button>
+    {S.budgetMode !== "manual" && <button className="btn ghost sm" type="button" data-refresh-weights
+      title={t(S.budgetMode === "wf_to_budget" ? "ep.wb.refreshBudgetTip" : "ep.wb.refreshWfTip")}
+      onClick={() => { if (window.confirm(t("ep.wb.refreshAsk"))) post({ kind: "refresh-weights" }, (r) => t("ep.wb.refreshed", { n: r.row.updated })); }}>{t("ep.wb.refresh")}</button>}
+    <span className="sm muted" data-root-wf>{t("ep.wb.rootSum", { code: data.version.pms_code, wf: data.rootWf == null ? "—" : w(data.rootWf) })}</span></>;
   return (
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>{t("ep.ac.problems")}</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
-      <Settings S={S} labels={data.labels} may={may} post={post} pmsCode={data.version.pms_code} />
-      {form && <NodeForm form={form} setForm={setForm} mode={mode} templates={withActs} post={post} />}
-      <div className="card">
-        <h2>{t("ep.wb.structure", { pms: data.version.pms_code })} <span className="sm muted">{t("ep.wb.rootBudget", { code: data.version.code, budget: fmt(data.version.budget_plan) })}</span></h2>
-        <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
-          <span className="sm">{t("ep.g.levels")}:</span>
-          {Array.from({ length: Math.max(maxLevel, 1) }, (_, i) => i + 1).map((l) => <button key={l} className="btn ghost sm" type="button" onClick={() => openTo(l)}>{l}</button>)}
-          <button className="btn ghost sm" type="button" onClick={() => setClosed(new Set())}>{t("ep.wb.all")}</button>
-          {clip && <span className="sm">{t("ep.wb.clip")} <b className="mono">{clip.code}</b> <button className="btn ghost sm" type="button" onClick={() => setClip(null)}>×</button></span>}
+      <div style={{ height }} data-wbs-tree>
+        <ActivityGrid data={data} columns={COLUMNS} defaultCols={DEFAULT_COLS} storeKey="p6-wbs" customKey="eps-wbs" selected={sel?.id} onSelect={(r) => { setSel(r); setAdding(null); }}
+          toolbar={toolbar} ops={ops} />
+      </div>
+      {grip}
+      <div className="p6-detail">
+        <div className="p6-tabs" role="tablist">
+          {TABS.map((k) => <button key={k} type="button" role="tab" data-wbs-tab={k} aria-selected={tab === k} className={tab === k ? "on" : undefined} onClick={() => setTab(k)}>{t(`ep.wb.tab.${k}`)}</button>)}
         </div>
-        <div className="tablewrap"><TableKit name="eps-wbs-1"><table className="dtable" data-wbs-table="">
-          <thead><tr><th>{t("ep.wb.code")}</th><th>{t("ep.wb.name")}</th><th>{t("ep.wb.budgetPlan")}</th><th>{t("ep.d.budgetActual")}</th><th>{t("ep.wb.qty")}</th><th>{t("ep.wb.volumes")}</th><th>W.F</th><th>W.V</th>
-            <th>{t("ep.wb.planned")}</th><th>{t("ep.wb.actual")}</th><th>{t("ep.wb.tplActs")}</th><th /></tr></thead>
-          <tbody>
-            <tr data-wbs-root="" {...(may ? dnd.target({ id: "root" }) : {})} style={{ fontWeight: 700, ...dnd.look({ id: "root" }) }}>
-              <td className="mono">{data.version.pms_code}</td><td>{data.version.pms_title} — {data.version.title}</td>
-              <td className="mono">{fmt(data.version.budget_plan)}</td><td className="mono">{fmt(data.version.budget_actual)}</td><td /><td />
-              <td className="mono sm">Σ {fmt(data.rootWf, 4)}%</td><td className="mono">{fmt(100)}%</td>
-              <td className="mono sm">{day(data.version.start_on)} — {day(data.version.end_on)}</td><td /><td />
-              <td style={{ whiteSpace: "nowrap" }}>{may && <><button className="btn sm" type="button" onClick={() => openAdd(null)}>{t("ep.wb.addTop")}</button>
-                {clip && <button className="btn ghost sm" type="button" onClick={() => post({ kind: "node-copy", id: clip.id, parentId: null }, (r) => t("ep.wb.pasted", { code: r.row.code }))}>{t("ep.tp.paste")}</button>}</>}</td>
-            </tr>
-            {data.roots.flatMap(nodeRow)}
-          </tbody></table></TableKit></div>
-        {may && <p className="sm muted">{t("ep.wb.dragHint")}</p>}
+        {tab === "pms" && <PmsDetail p={data.pms} labels={data.labels} rootWf={data.rootWf} may={may} post={post} contractId={contractId} />}
+        {tab === "wbs" && (adding ? <NodeForm key={`add-${adding.parentId}`} init={{ mode: "add", ...BLANK_NODE, parentId: adding.parentId, code: adding.code }} mode={S.budgetMode}
+            templates={withActs} post={post} may={may} close={() => setAdding(null)} parent={adding.parentId ? findNode(adding.parentId) : null} />
+          : node ? <NodeForm key={node.id} init={{ mode: "edit", ...toForm(node) }} n={node} mode={S.budgetMode} templates={data.templates} post={post} may={may} />
+          : <p className="empty-note">{t("ep.wb.pickNode")}</p>)}
+        {tab === "acts" && (node ? <Activities n={node} may={may} post={post} templates={withActs} /> : <p className="empty-note">{t("ep.wb.pickNode")}</p>)}
+        {tab === "settings" && <Settings S={S} labels={data.labels} may={may} post={post} pmsCode={data.version.pms_code} />}
       </div>
     </div>
   );
+}
+
+/** PMS DETAIL: the PMS itself — its code, title, type, dates and the root's budget (083: the budget modes take a child's share of it). */
+function PmsDetail({ p, labels, rootWf, may, post, contractId }) {
+  const { t } = usePrefs();
+  const { w } = useEpsFmt();
+  const init = () => ({ id: p.id, contractId, code: p.code, title: p.title, pmsType: p.pms_type || "", description: p.description || "", registeredOn: p.registered_on || "",
+    planStart: p.plan_start || "", planEnd: p.plan_end || "", actualStart: p.actual_start || "", actualEnd: p.actual_end || "", budgetPlan: p.budget_plan ?? "", budgetActual: p.budget_actual ?? "" });
+  const [f, setF] = useState(init);
+  useEffect(() => setF(init()), [p]); // eslint-disable-line react-hooks/exhaustive-deps
+  const F = (k, l, type = "text", extra = {}) => (
+    <div className="field" key={k}><label htmlFor={`pd-${k}`}>{l}</label>
+      <input id={`pd-${k}`} type={type} dir={type === "text" && k !== "title" && k !== "description" ? "ltr" : undefined} value={f[k] ?? ""} onChange={(e) => setF({ ...f, [k]: e.target.value })} {...extra} /></div>);
+  return (
+    <form data-pms-detail onSubmit={async (e) => { e.preventDefault(); if (window.confirm(t("gr.saveAsk"))) await post({ kind: "pms", ...f }, () => t("ep.bd.pmsSaved", { code: f.code })); }}>
+      <fieldset disabled={!may} style={{ border: 0, padding: 0, margin: 0 }}>
+        <div className="grid2">
+          {F("code", t("ep.bd.pmsCode"), "text", { required: true })}{F("title", t("ep.bd.pmsTitle"), "text", { required: true })}
+          <div className="field"><label htmlFor="pd-pmsType">{t("ep.bd.pmsType")}</label>
+            <input id="pd-pmsType" dir="ltr" list="pd-types" value={f.pmsType} onChange={(e) => setF({ ...f, pmsType: e.target.value })} />
+            <datalist id="pd-types">{(labels.pmsTypes || []).map((x) => <option key={x} value={x} />)}</datalist></div>
+          {F("description", t("ep.bd.pmsDesc"))}{F("registeredOn", t("ep.bd.registered"), "date")}
+          {F("planStart", t("ep.planStart"), "date")}{F("planEnd", t("ep.planEnd"), "date")}
+          {F("actualStart", t("ep.actualStart"), "date")}{F("actualEnd", t("ep.actualEnd"), "date")}
+          {F("budgetPlan", t("ep.bd.rootBudget"), "text", { inputMode: "decimal" })}{F("budgetActual", t("ep.d.budgetActual"), "text", { inputMode: "decimal" })}
+        </div>
+        <p className="sm muted">{t("ep.wb.rootWfNote", { wf: w(rootWf) })}</p>
+        {may && <button className="btn" type="submit" data-pms-save>{t("ep.save")}</button>}
+      </fieldset>
+    </form>);
 }
 
 function Settings({ S, labels, may, post, pmsCode }) {
@@ -152,8 +211,8 @@ function Settings({ S, labels, may, post, pmsCode }) {
   // what the codes will look like, from the settings as they stand in the form
   const sample = s.levels.reduce((acc, l, i) => [...acc, [acc[i] || pmsCode, ...(l.prefix ? [l.prefix] : []), "1".padStart(l.digits, "0")].join(s.separator)], []);
   return (
-    <details className="card" open={false}>
-      <summary><b>{t("ep.ws.title")}</b> <span className="sm muted">— {mode(S.budgetMode)} · {t("ep.ws.summary", { sep: S.separator, n: S.levels.length })}</span></summary>
+    <div data-wbs-settings>
+      <p className="sm"><b>{t("ep.ws.title")}</b> <span className="muted">— {mode(S.budgetMode)} · {t("ep.ws.summary", { sep: S.separator, n: S.levels.length })}</span></p>
       <fieldset disabled={!may} style={{ border: 0, padding: 0, margin: "8px 0 0" }}>
         <div role="radiogroup" aria-label={t("ep.ws.budgetMode")} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {Object.keys(labels.budgetModes).map((k) => (
@@ -174,50 +233,74 @@ function Settings({ S, labels, may, post, pmsCode }) {
         <button className="btn ghost sm" type="button" onClick={() => setS({ ...s, levels: [...s.levels, { prefix: "", digits: 2, color: "#566573" }] })}>{t("ep.ws.addLevel")}</button>
         {may && <p><button className="btn" type="button" onClick={() => post({ kind: "settings", settings: s }, () => t("ep.ws.saved"))}>{t("ep.ws.save")}</button></p>}
       </fieldset>
-    </details>
+    </div>
   );
 }
 
-function NodeForm({ form, setForm, mode, templates, post }) {
+/**
+ * WBS DETAIL: the node picked, every field of it, with what the server works
+ * out from them beside (W.F and budget under the budget mode, W.V, the
+ * children's W.F, durations); or a new node's form, its code suggested.
+ */
+function NodeForm({ init, n = null, parent = null, mode, templates, post, may, close = null }) {
   const { t } = usePrefs();
+  const { fmt, w } = useEpsFmt();
+  const [form, setForm] = useState(init);
   const code = useRef(null);
-  // the suggested code is selected, so typing replaces it and leaving it keeps it
-  useEffect(() => { code.current?.focus(); code.current?.select(); }, [form.mode, form.parentId, form.id]);
+  // a new node's suggested code is selected, so typing replaces it and leaving it keeps it
+  useEffect(() => { if (init.mode === "add") { code.current?.focus(); code.current?.select(); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const F = (k, l, extra = {}) => (
     <div className="field" key={k}><label htmlFor={`nf-${k}`}>{l}</label>
       <input id={`nf-${k}`} value={form[k] ?? ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} {...extra} /></div>);
   const save = async (e) => {
     e.preventDefault();
+    if (!window.confirm(t(form.mode === "add" ? "gr.addAsk" : "gr.saveAsk"))) return;
     const { mode: m, ...b } = form;
-    if (await post({ kind: "node", ...b, templateId: b.templateId || null }, (r) => t("ep.wb.saved", { code: r.row.code }))) setForm(null);
+    const r = await post({ kind: "node", ...b, wf: wOut(b.wf), templateId: b.templateId || null }, (x) => t("ep.wb.saved", { code: x.row.code }));
+    if (r && close) close();
+  };
+  // its activities go with it, and the question counts them (a node with child nodes is refused by the server)
+  const remove = () => {
+    if (window.confirm(n.activities.length ? t("ep.wb.removeAskActs", { code: n.code, acts: n.activities.length }) : t("ep.wb.removeAsk", { code: n.code }))) post({ kind: "node-remove", id: n.id }, () => t("ep.removed"));
   };
   return (
-    <form className="card" onSubmit={save}>
-      <h2>{form.mode === "add" ? t("ep.wb.new") : t("ep.wb.edit", { code: form.code })}</h2>
-      <div className="grid2">
-        {F("code", t("ep.wb.codeField"), { ref: code, dir: "ltr", required: true })}
-        {F("name", t("ep.wb.name"), { required: true })}
-        {F("budgetPlan", t(mode === "wf_to_budget" ? "ep.wb.budgetFromWf" : "ep.wb.budgetPlan"), { dir: "ltr", inputMode: "decimal", disabled: mode === "wf_to_budget" })}
-        {F("budgetActual", t("ep.d.budgetActual"), { dir: "ltr", inputMode: "decimal" })}
-        {F("wf", t(mode === "budget_to_wf" ? "ep.wb.wfFromBudget" : "ep.wb.wf"), { dir: "ltr", inputMode: "decimal", disabled: mode === "budget_to_wf" })}
-        {F("qty", t("ep.wb.qty"), { dir: "ltr", inputMode: "decimal" })}{F("unit", t("ep.unit"))}
-        {F("volumePlan", t("ep.wb.volPlan"), { dir: "ltr", inputMode: "decimal" })}{F("volumeActual", t("ep.volActual"), { dir: "ltr", inputMode: "decimal" })}
-        {F("planStart", t("ep.planStart"), { type: "date" })}{F("planEnd", t("ep.planEnd"), { type: "date" })}
-        {F("actualStart", t("ep.actualStart"), { type: "date" })}{F("actualEnd", t("ep.actualEnd"), { type: "date" })}
-        <div className="field"><label htmlFor="nf-tpl">{t("ep.wb.template")}</label>
-          <select id="nf-tpl" value={form.templateId} onChange={(e) => setForm({ ...form, templateId: e.target.value })}>
-            <option value="">—</option>{templates.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name} ({t("ep.g.count", { n: x.activities.length })})</option>)}</select></div>
-        {F("description", t("ep.description"))}
-      </div>
-      <p className="sm muted">{t("ep.wb.wvNote")}</p>
-      <button className="btn" type="submit">{t("ep.save")}</button> <button className="btn ghost" type="button" onClick={() => setForm(null)}>{t("ep.cancel")}</button>
+    <form onSubmit={save} data-wbs-detail={form.mode === "add" ? "new" : n?.code}>
+      <h3 style={{ margin: "0 0 6px" }}>{form.mode === "add" ? (parent ? t("ep.wb.newUnder", { code: parent.code }) : t("ep.wb.new")) : t("ep.wb.edit", { code: form.code })}</h3>
+      <fieldset disabled={!may} style={{ border: 0, padding: 0, margin: 0 }}>
+        <div className="grid2">
+          {F("code", t("ep.wb.codeField"), { ref: code, dir: "ltr", required: true })}
+          {F("name", t("ep.wb.name"), { required: true })}
+          {F("budgetPlan", t(mode === "wf_to_budget" ? "ep.wb.budgetFromWf" : "ep.wb.budgetPlan"), { dir: "ltr", inputMode: "decimal", disabled: mode === "wf_to_budget" })}
+          {F("budgetActual", t("ep.d.budgetActual"), { dir: "ltr", inputMode: "decimal" })}
+          {F("wf", t(mode === "budget_to_wf" ? "ep.wb.wfFromBudget" : "ep.wb.wf"), { dir: "ltr", inputMode: "decimal", disabled: mode === "budget_to_wf" })}
+          {F("qty", t("ep.wb.qty"), { dir: "ltr", inputMode: "decimal" })}{F("unit", t("ep.unit"))}
+          {F("volumePlan", t("ep.wb.volPlan"), { dir: "ltr", inputMode: "decimal" })}{F("volumeActual", t("ep.volActual"), { dir: "ltr", inputMode: "decimal" })}
+          {F("planStart", t("ep.planStart"), { type: "date" })}{F("planEnd", t("ep.planEnd"), { type: "date" })}
+          {F("actualStart", t("ep.actualStart"), { type: "date" })}{F("actualEnd", t("ep.actualEnd"), { type: "date" })}
+          <div className="field"><label htmlFor="nf-tpl">{t("ep.wb.template")}</label>
+            <select id="nf-tpl" value={form.templateId} onChange={(e) => setForm({ ...form, templateId: e.target.value })}>
+              <option value="">—</option>{templates.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name} ({t("ep.g.count", { n: x.activities.length })})</option>)}</select></div>
+          {F("description", t("ep.description"))}
+        </div>
+        {n && <div className="p6-kv" data-worked-out>
+          <fieldset><legend>{t("ep.wb.workedOut")}</legend>
+            <div className="kv"><span>W.F / W.V</span><b dir="ltr">{w(n.wf)} / {w(n.wv, 10)}</b></div>
+            <div className="kv"><span>{t("ep.wb.childWf")}</span><b dir="ltr">{n.children.length ? w(n.childWf) : "—"}</b></div>
+            <div className="kv"><span>{t("ep.wb.actWf")}</span><b dir="ltr">{n.activities.length ? w(n.activityWf) : "—"}</b></div>
+            <div className="kv"><span>{t("ep.wb.budgetPlan")}</span><b dir="ltr">{fmt(n.budgetPlan)}</b></div>
+            <div className="kv"><span>{t("ep.dur")}</span><b dir="ltr">{fmt(n.planDays)} / {fmt(n.actualDays)}</b></div></fieldset></div>}
+        <p className="sm muted">{t("ep.wb.wvNote")}</p>
+        {may && <p className="row" style={{ gap: 6 }}><button className="btn" type="submit" data-node-save>{t("ep.save")}</button>
+          {close && <button className="btn ghost" type="button" onClick={close}>{t("ep.cancel")}</button>}
+          {n && <button className="btn ghost danger" type="button" data-node-remove onClick={remove}>{t("ep.remove")}</button>}</p>}
+      </fieldset>
     </form>
   );
 }
 
 function Activities({ n, may, post, templates }) {
   const { t } = usePrefs();
-  const { fmt, day } = useEpsFmt();
+  const { fmt, day, w } = useEpsFmt();
   const [tpl, setTpl] = useState(n.template_id || "");
   const [f, setF] = useState(null);
   return (
@@ -227,14 +310,14 @@ function Activities({ n, may, post, templates }) {
           <th>{t("ep.wb.planned")}</th><th>{t("ep.wb.actual")}</th><th>{t("ep.col.pct")}</th>{may && <th />}</tr></thead>
         <tbody>{n.activities.map((a) => (
           <tr key={a.id} data-activity={a.code}><td className="mono">{a.code}</td><td className="mono sm">{a.template_code || t("ep.wb.manual")}</td><td>{a.name}</td>
-            <td className="mono">{a.wf == null ? "—" : `${fmt(a.wf, 4)}%`}</td><td className="mono">{a.wv == null ? "—" : `${fmt(a.wv, 4)}%`}</td>
+            <td className="mono">{w(a.wf)}</td><td className="mono">{w(a.wv, 10)}</td>
             <td className="mono">{fmt(a.budgetPlan)} / {fmt(a.budgetActual)}</td><td className="mono">{fmt(a.volumePlan)} / {fmt(a.volumeActual)} {a.unit || ""}</td>
             <td className="mono sm">{day(a.plan_start)} — {day(a.plan_end)}</td><td className="mono sm">{day(a.actual_start)} — {day(a.actual_end)}</td>
             <td className="mono">{a.progress == null ? "—" : `${fmt(a.progress)}%`}</td>
             {may && <td style={{ whiteSpace: "nowrap" }}>
-              <button className="btn ghost sm" type="button" onClick={() => setF({ id: a.id, code: a.code, name: a.name, wf: a.wf ?? "", progress: a.progress ?? "", description: a.description || "" })}>{t("ep.edit")}</button>
-              <button className="btn ghost sm" type="button" onClick={() => post({ kind: "activity-remove", id: a.id }, () => t("ep.removed"))}>{t("ep.remove")}</button></td>}</tr>))}
-          {n.activities.length > 0 && <tr><td colSpan={3}><b>{t("ep.total")}</b></td><td className="mono"><b>{fmt(n.activityWf, 4)}%</b></td><td colSpan={may ? 7 : 6} /></tr>}</tbody></table></TableKit>
+              <button className="btn ghost sm" type="button" onClick={() => setF({ id: a.id, code: a.code, name: a.name, wf: wIn(a.wf), progress: a.progress ?? "", description: a.description || "" })}>{t("ep.edit")}</button>
+              <button className="btn ghost sm" type="button" onClick={() => { if (window.confirm(t("ep.wb.removeActAsk", { code: a.code }))) post({ kind: "activity-remove", id: a.id }, () => t("ep.removed")); }}>{t("ep.remove")}</button></td>}</tr>))}
+          {n.activities.length > 0 && <tr><td colSpan={3}><b>{t("ep.total")}</b></td><td className="mono"><b>{w(n.activityWf)}</b></td><td colSpan={may ? 7 : 6} /></tr>}</tbody></table></TableKit>
       {n.activities.length === 0 && <p className="sm muted">{t("ep.wb.noActivities")}</p>}
       {may && (
         <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap", marginTop: 6 }}>
@@ -247,10 +330,10 @@ function Activities({ n, may, post, templates }) {
         </div>)}
       {f && (
         <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", marginTop: 6 }}
-          onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "activity", nodeId: n.id, ...f }, () => t(f.id ? "ep.activitySaved" : "ep.tp.actAdded"))) setF(null); }}>
+          onSubmit={async (e) => { e.preventDefault(); if (!window.confirm(t(f.id ? "gr.saveAsk" : "gr.addAsk"))) return; if (await post({ kind: "activity", nodeId: n.id, ...f, wf: wOut(f.wf) }, () => t(f.id ? "ep.activitySaved" : "ep.tp.actAdded"))) setF(null); }}>
           <div className="field" style={{ width: 170 }}><label htmlFor={`af-c-${n.id}`}>{t("ep.ac.codeNext")}</label><input id={`af-c-${n.id}`} dir="ltr" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
           <div className="field"><label htmlFor={`af-n-${n.id}`}>{t("ep.activityName")}</label><input id={`af-n-${n.id}`} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-          <div className="field" style={{ width: 100 }}><label htmlFor={`af-w-${n.id}`}>W.F %</label><input id={`af-w-${n.id}`} dir="ltr" inputMode="decimal" value={f.wf} onChange={(e) => setF({ ...f, wf: e.target.value })} /></div>
+          <div className="field" style={{ width: 100 }}><label htmlFor={`af-w-${n.id}`}>W.F</label><input id={`af-w-${n.id}`} dir="ltr" inputMode="decimal" value={f.wf} onChange={(e) => setF({ ...f, wf: e.target.value })} /></div>
           <div className="field" style={{ width: 100 }}><label htmlFor={`af-p-${n.id}`}>{t("ep.col.pct")}</label><input id={`af-p-${n.id}`} dir="ltr" inputMode="decimal" value={f.progress} onChange={(e) => setF({ ...f, progress: e.target.value })} /></div>
           <div className="field"><label htmlFor={`af-d-${n.id}`}>{t("ep.description")}</label><input id={`af-d-${n.id}`} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
           <button className="btn sm" type="submit">{t("ep.save")}</button><button className="btn ghost sm" type="button" onClick={() => setF(null)}>{t("ep.cancel")}</button>

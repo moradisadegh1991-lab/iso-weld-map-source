@@ -38,6 +38,8 @@ export default function ContractReportsPage() {
   const { projectId, contractId, contract, call } = usePlatform();
   const { t } = usePrefs();
   const [openId, setOpenId] = useState(null);
+  // a request named in the link (the desk's «open», owner's requirements 2026-10-22, item 14) opens at once
+  useEffect(() => { const r = new URLSearchParams(window.location.search).get("report"); if (r) setOpenId(r); }, []);
   const { data, error, reload } = useProjectData((id) => `/api/contract-reports?projectId=${id}${contractId ? `&contractId=${contractId}` : ""}`, [contractId]);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);

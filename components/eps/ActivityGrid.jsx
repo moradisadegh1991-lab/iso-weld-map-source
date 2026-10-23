@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FloatBox, rowEdgeDown, rowEdgeHover } from "../ui/float";
 import { createPortal } from "react-dom";
 import { filterTree, splitHits } from "../../lib/eps/activities.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 import { useEpsFmt } from "./ActivityDetail";
+import { useCustomColumns, CustomColumns, showCustom } from "../ui/customColumns";
 
 /**
  * The activity view after Primavera P6: on the left a tree table of the WBS
@@ -20,19 +22,26 @@ import { useEpsFmt } from "./ActivityDetail";
  *   defaultCols the keys shown at first
  *   storeKey    where the layout (columns, widths, pane width) is remembered in this browser
  *   selected    the selected row's id; onSelect(row)
+ *   onOpen      a double click on an activity row: onOpen(row) (the planning page adds it, as «add item single»)
  *   keep        optional (activity) → bool: only these activities (and the nodes above them) are shown
  *   onVisible   gets the activities shown now (after filter, keep and closing) whenever they change
  *   gantt       false to leave the chart out
  *   toolbar     extra elements for the toolbar
  *   persist     false: the columns follow `defaultCols` (they change with the data) and are not remembered
+ *   customKey   the table's name for the project's own columns (components/ui/customColumns.jsx): shown after
+ *               the page's, typed in with the row, «+ ستون» for the project's admin
  *   ops         what the page lets a person do to rows in place (owner's requirements 2026-10-18,
  *               items 4, 7, 9, 15) — every member optional:
  *                 fields(row)            the columns editable on this row: [{ key: column key, type: text|number|date }]
+ *                 removable(rows)        of the rows picked, those `remove` deletes (the count the question names)
  *                 value(row)             the row's current values, by column key
  *                 save(row, values)      → truthy when saved
  *                 create(nodeRow, values) a new activity under a node, typed in a draft row
  *                 remove(rows)           delete
  *                 paste(nodeRow, rows, mode)  copy ("copy") or move ("cut") rows under a node
+ *                 draftKind              "node": a row added under a node is a child node (the WBS page); else an activity
+ *                 reorder(row, ±1)       a row moved above (−1) or below (+1) its sibling, from the row menu
+ *                 reorderable(row)       which rows `reorder` takes (default: nodes)
  *               With `ops`, rows carry a checkbox (a node's takes its whole branch), a click
  *               opens the row for editing in place (leaving it changed asks to save or
  *               discard), and a right click opens copy / cut / paste / delete / add / edit.
@@ -59,9 +68,17 @@ export function Hl({ text, q }) {
   return <>{splitHits(text, q).map((p, i) => (p.hit ? <mark key={i} style={{ background: "#ffe14d", color: "#111", padding: 0 }}>{p.text}</mark> : <span key={i}>{p.text}</span>))}</>;
 }
 
-export default function ActivityGrid({ data, columns, defaultCols, storeKey, selected, onSelect, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null }) {
+export default function ActivityGrid({ data, columns: own, defaultCols, storeKey, selected, onSelect, onOpen = null, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null, customKey = null }) {
   const all = useMemo(() => flatRows(data.roots), [data]);
   const { t, locale } = usePrefs();
+  // the project's own columns (owner's requirements 2026-10-22, item 7): shown after the page's, unless unticked; a row's value kept by its id
+  const cc = useCustomColumns(customKey);
+  const [colDlg, setColDlg] = useState(null);
+  const [cfOff, setCfOff] = useState([]);
+  const yesNo = { yes: t("tk.yes"), no: t("tk.no") };
+  const cfCols = (cc.custom?.fields || []).map((f) => ({ key: `cf:${f.id}`, title: f.label, width: 110, mono: f.data_type === "number" || f.data_type === "date", field: f,
+    get: (r) => (r.kind === "draft" ? "" : showCustom(yesNo, f, cc.custom.values.get(`${f.id}|${r.id}`))) }));
+  const columns = [...own, ...cfCols];
   // what a column's get(row, x) writes with: numbers, dates and words in the reader's language
   const x = { ...useEpsFmt(), t };
   const [picked, setPicked] = useState(() => new Set());
@@ -81,13 +98,14 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
   useEffect(() => {
     const s = persist ? read(storeKey, null) : null;
     if (s) {
-      if (Array.isArray(s.cols)) setCols(s.cols.filter((k) => columns.some((c) => c.key === k)));
+      if (Array.isArray(s.cols)) setCols(s.cols.filter((k) => k.startsWith("cf:") || columns.some((c) => c.key === k)));
+      if (Array.isArray(s.cfOff)) setCfOff(s.cfOff);
       if (s.widths) setWidths(s.widths);
       if (s.leftW) setLeftW(s.leftW);
       if (s.zoom) setZoom(s.zoom);
     }
   }, [storeKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (persist) write(storeKey, { cols, widths, leftW, zoom }); }, [persist, storeKey, cols, widths, leftW, zoom]);
+  useEffect(() => { if (persist) write(storeKey, { cols, widths, leftW, zoom, cfOff }); }, [persist, storeKey, cols, widths, leftW, zoom, cfOff]);
 
   // which rows: kept activities and the nodes above them; the filter's matches and the rows above them; closed nodes hide what is under them
   const kept = useMemo(() => {
@@ -143,23 +161,41 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
   const pickedRows = all.filter((r) => picked.has(r.id));
   const dirty = !!editing && JSON.stringify(editing.values) !== JSON.stringify(editing.orig);
   const guard = (next) => (dirty ? setAsk({ next }) : next());
-  const fieldsOf = (r) => (ops?.fields ? ops.fields(r) || [] : []);
+  // a row's project columns are typed in with the rest, when the member may fill them
+  const cfFields = (r) => (r.kind === "draft" || !cc.custom?.may?.fill ? [] : cfCols.map(({ key, field: f }) => (f.data_type === "list" || f.data_type === "bool"
+    ? { key, type: "select", options: f.data_type === "bool" ? [["true", t("tk.yes")], ["false", t("tk.no")]] : f.options.map((o) => [o, o]) }
+    : { key, type: f.data_type === "number" ? "number" : f.data_type === "date" ? "date" : "text" })));
+  const fieldsOf = (r) => (ops?.fields ? [...(ops.fields(r) || []), ...cfFields(r)] : []);
   const edit = (r) => {
     if (!ops?.fields || !fieldsOf(r).length) { setEditing(null); return; }
-    const v = ops.value ? ops.value(r) : {};
+    const v = { ...(ops.value ? ops.value(r) : {}), ...Object.fromEntries(cfFields(r).map((f) => [f.key, cc.custom.values.get(`${f.key.slice(3)}|${r.id}`) ?? ""])) };
     setEditing({ id: r.id, row: r, values: v, orig: v });
   };
   const open = (r) => guard(() => { onSelect && onSelect(r); edit(r); });
   const addUnder = (node) => guard(() => {
     if (!ops?.create) return;
     setShut((s) => { const n = new Set(s); n.delete(node.id); return n; });
-    const blank = Object.fromEntries((ops.fields({ kind: "act", item: {} }) || []).map((f) => [f.key, ""]));
+    const blank = Object.fromEntries((ops.fields({ kind: ops.draftKind || "act", item: {} }) || []).map((f) => [f.key, ""]));
     setEditing({ id: "__draft", draftOf: node, row: { kind: "draft", item: {} }, values: blank, orig: blank });
   });
   const run = async (fn) => { setBusy(true); try { return await fn(); } finally { setBusy(false); } };
-  const save = async () => {
+  // owner's requirements 2026-10-22, item 7: a row is written only once the person says so
+  const save = async (ask = true) => {
     if (!editing) return true;
-    const ok = await run(() => (editing.draftOf ? ops.create(editing.draftOf, editing.values) : ops.save(editing.row, editing.values)));
+    if (ask && !window.confirm(t(editing.draftOf ? "gr.addAsk" : "gr.saveAsk"))) return false;
+    const { values, orig } = editing;
+    const own = Object.fromEntries(Object.entries(values).filter(([k]) => !k.startsWith("cf:")));
+    const ownChanged = Object.keys(own).some((k) => own[k] !== orig[k]);
+    const ok = await run(async () => {
+      if (editing.draftOf) return ops.create(editing.draftOf, own);
+      // the project's columns first, each on its own; then the row, if anything of its own changed
+      for (const [k, v] of Object.entries(values)) {
+        if (!k.startsWith("cf:") || v === orig[k]) continue;
+        try { await cc.saveValue(cc.custom.fields.find((f) => f.id === k.slice(3)), editing.row.id, v); }
+        catch (e) { window.alert(e.message); return false; }
+      }
+      return ownChanged ? ops.save(editing.row, own) : true;
+    });
     if (ok) setEditing(null);
     return ok;
   };
@@ -172,7 +208,13 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
   };
   const removeRows = async (list) => {
     if (!list.length || !ops?.remove) return;
-    if (!window.confirm(t("gr.deleteAsk", { n: list.length }))) return;
+    // a page may delete only some of what is picked (the activities page: activities, never their nodes)
+    const gone = ops.removable ? ops.removable(list) : list;
+    if (!gone.length) { window.alert(t("gr.nothingToDelete")); return; }
+    // what goes with a node goes too, and the question says how much
+    const inside = new Set(gone.flatMap((r) => (r.kind === "node" ? under(r.id).slice(1) : [])));
+    for (const r of gone) inside.delete(r.id);
+    if (!window.confirm(inside.size ? t("gr.deleteAskTree", { n: gone.length, k: inside.size }) : t("gr.deleteAsk", { n: gone.length }))) return;
     if (await run(() => ops.remove(list))) { setPicked(new Set()); setEditing(null); }
   };
   const pasteInto = async (node) => {
@@ -191,12 +233,6 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
     XLSX.utils.book_append_sheet(wb, ws, "WBS");
     XLSX.writeFile(wb, `${storeKey || "tree"}.xlsx`);
   };
-  useEffect(() => {
-    if (!menu) return undefined;
-    const close = () => setMenu(null);
-    window.addEventListener("click", close); window.addEventListener("scroll", close, true);
-    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); };
-  }, [menu]);
 
   // the two panes scroll together
   const left = useRef(null), right = useRef(null), syncing = useRef(false);
@@ -214,7 +250,10 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
   };
-  const shown = cols.map((k) => columns.find((c) => c.key === k)).filter(Boolean);
+  const shown = [...cols.map((k) => columns.find((c) => c.key === k)).filter(Boolean), ...cfCols.filter((c) => !cols.includes(c.key) && !cfOff.includes(c.key))];
+  const shownKeys = shown.map((c) => c.key);
+  // the chooser sets the shown list as a whole: a project column left out is remembered as unticked
+  const setShown = (n) => { setCols(n); setCfOff(cfCols.map((c) => c.key).filter((k) => !n.includes(k))); };
   const width = (c) => widths[c.key] || c.width || 100;
 
   // the chart's span: every date of every row, a few days either side
@@ -268,22 +307,30 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
         <span style={{ position: "relative" }}>
           <button type="button" className="btn ghost sm" onClick={() => setChooser(!chooser)} aria-expanded={chooser}>{t("ep.g.columns")} ▾</button>
           {chooser && (
-            <div className="p6-chooser card" role="dialog" aria-label={t("ep.g.chooseColumns")}>
-              {[...shown, ...columns.filter((c) => !cols.includes(c.key))].map((c) => {
-                const on = cols.includes(c.key), i = cols.indexOf(c.key);
+            <FloatBox className="p6-chooser card" role="dialog" aria-label={t("ep.g.chooseColumns")} onClose={() => setChooser(false)}>
+              {[...shown, ...columns.filter((c) => !shownKeys.includes(c.key))].map((c) => {
+                const on = shownKeys.includes(c.key), i = shownKeys.indexOf(c.key);
                 return (
-                  <div key={c.key} className="row" style={{ gap: 4, alignItems: "center" }}>
-                    <label style={{ flex: 1 }}><input type="checkbox" checked={on} onChange={() => setCols(on ? cols.filter((k) => k !== c.key) : [...cols, c.key])} /> {t(c.title)}</label>
+                  <div key={c.key} className="row" style={{ gap: 4, alignItems: "center" }} data-chooser-col={c.key}>
+                    {on && <span className="sm muted" style={{ cursor: "grab", padding: "0 2px", touchAction: "none" }} aria-hidden="true" data-col-grip
+                      // dragged by this handle onto another shown column, it takes that one's place
+                      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); const up = (u) => { window.removeEventListener("pointerup", up);
+                        const k = document.elementFromPoint(u.clientX, u.clientY)?.closest?.("[data-chooser-col]")?.dataset.chooserCol;
+                        if (!k || k === c.key || !shownKeys.includes(k)) return;
+                        const n = shownKeys.filter((x) => x !== c.key); n.splice(n.indexOf(k) + (i < shownKeys.indexOf(k) ? 1 : 0), 0, c.key); setShown(n); };
+                        window.addEventListener("pointerup", up); }}>⠿</span>}
+                    <label style={{ flex: 1 }}><input type="checkbox" checked={on} onChange={() => setShown(on ? shownKeys.filter((k) => k !== c.key) : [...shownKeys, c.key])} /> {t(c.title)}</label>
                     {on && <>
-                      <button type="button" className="btn ghost sm" disabled={i === 0} aria-label={t("ep.g.up")} onClick={() => { const n = [...cols]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; setCols(n); }}>▲</button>
-                      <button type="button" className="btn ghost sm" disabled={i === cols.length - 1} aria-label={t("ep.g.down")} onClick={() => { const n = [...cols]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; setCols(n); }}>▼</button></>}
+                      <button type="button" className="btn ghost sm" disabled={i === 0} aria-label={t("ep.g.up")} onClick={() => { const n = [...shownKeys]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; setShown(n); }}>▲</button>
+                      <button type="button" className="btn ghost sm" disabled={i === shownKeys.length - 1} aria-label={t("ep.g.down")} onClick={() => { const n = [...shownKeys]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; setShown(n); }}>▼</button></>}
                   </div>);
               })}
-              <p className="row" style={{ gap: 4 }}><button type="button" className="btn ghost sm" onClick={() => { setCols(defaultCols); setWidths({}); }}>{t("ep.g.default")}</button>
+              <p className="row" style={{ gap: 4 }}><button type="button" className="btn ghost sm" onClick={() => { setCols(defaultCols); setCfOff([]); setWidths({}); }}>{t("ep.g.default")}</button>
                 <button type="button" className="btn sm" onClick={() => setChooser(false)}>{t("ep.close")}</button></p>
-            </div>)}
+            </FloatBox>)}
         </span>
         <button type="button" className="btn ghost sm" data-excel onClick={exportExcel}>{t("gr.excel")}</button>
+        {customKey && cc.custom?.may?.define && <button type="button" className="btn ghost sm" data-tk-addcol onClick={() => setColDlg(colDlg ? null : { label: "", dataType: "text", options: "" })}>{t("tk.addColumn")}</button>}
         {ops && picked.size > 0 && (
           <span className="p6-bulk" data-bulk>
             <b className="sm">{t("gr.picked", { n: picked.size })}</b>
@@ -294,9 +341,12 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
         {ops && clip && <span className="sm muted" data-clip>{t("gr.clipped", { n: clip.rows.length, mode: t(clip.mode === "cut" ? "gr.cut" : "gr.copy") })}</span>}
         {toolbar}
       </div>
+      {colDlg && <CustomColumns custom={cc.custom} dlg={colDlg} setDlg={setColDlg} platform={cc.platform} name={customKey} reload={cc.reload} />}
       <div className="p6-panes" dir="ltr">
         <div className="p6-left" ref={left} onScroll={sync(left, right)} style={{ width: gantt ? leftW : "100%" }}>
-          <table className="p6-table" style={{ width: shown.reduce((s, c) => s + width(c), 0) + (ops ? 28 : 0) }}>
+          <table className="p6-table" style={{ width: shown.reduce((s, c) => s + width(c), 0) + (ops ? 28 : 0) }}
+            // rows take a height of their own only without the Gantt beside them, whose bars keep to the row grid
+            onPointerDownCapture={gantt ? undefined : (e) => rowEdgeDown(e)} onPointerMove={gantt ? undefined : rowEdgeHover}>
             <colgroup>{ops && <col style={{ width: 28 }} />}{shown.map((c) => <col key={c.key} style={{ width: width(c) }} />)}</colgroup>
             <thead><tr>{ops && <th className="p6-pick"><input type="checkbox" aria-label={t("gr.pickAll")} checked={rows.length > 0 && rows.every((r) => picked.has(r.id))}
               onChange={(e) => setPicked(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /></th>}{shown.map((c) => (
@@ -305,15 +355,18 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
             <tbody>{shownRows.map((r) => {
               const isSel = r.id === selected;
               const ed = editing && editing.id === r.id ? editing : null;
-              const fs = ed ? (r.kind === "draft" ? ops.fields({ kind: "act", item: {} }) : fieldsOf(r)) : [];
+              const fs = ed ? (r.kind === "draft" ? ops.fields({ kind: ops.draftKind || "act", item: {} }) : fieldsOf(r)) : [];
               const field = (key) => fs.find((f) => f.key === key);
               return (
                 <tr key={r.id} data-row={r.item.code || (r.kind === "draft" ? "__draft" : "")} data-kind={r.kind} className={[isSel ? "sel" : "", ed ? "p6-editing" : ""].join(" ").trim() || undefined}
                   onClick={(e) => { if (e.target.closest("input,select,button,textarea")) return; if (r.kind === "draft" || ed) return; ops ? open(r) : onSelect && onSelect(r); }}
+                  onDoubleClick={onOpen ? (e) => { if (e.target.closest("input,select,button,textarea") || r.kind !== "act") return; onOpen(r); } : undefined}
                   onContextMenu={ops && r.kind !== "draft" ? (e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, row: r }); } : undefined}
                   style={{ height: ROW, background: r.kind === "node" ? tint(r.color) : undefined, fontWeight: r.kind === "node" ? 600 : undefined }}>
                   {ops && <td className="p6-pick">{r.kind !== "draft" && <input type="checkbox" aria-label={t("gr.pickRow", { code: r.item.code })}
-                    checked={r.kind === "node" ? under(r.id).every((x) => picked.has(x)) : picked.has(r.id)} onChange={() => pick(r)} />}</td>}
+                    checked={r.kind === "node" ? under(r.id).every((x) => picked.has(x)) : picked.has(r.id)} onChange={() => pick(r)}
+                    // part of a node's branch picked: half-ticked; a click then picks the whole branch
+                    ref={(el) => { if (el) el.indeterminate = r.kind === "node" && !under(r.id).every((x) => picked.has(x)) && under(r.id).some((x) => picked.has(x)); }} />}</td>}
                   {shown.map((c, ci) => (
                     <td key={c.key} className={c.mono ? "mono" : undefined} dir={c.dir || (c.mono ? "ltr" : "rtl")}
                       style={ci === 0 ? { paddingLeft: 4 + (r.level - 1) * 14, borderLeft: `3px solid ${r.color || "transparent"}` } : undefined}>
@@ -321,7 +374,10 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
                         ? <button type="button" className="p6-tog" aria-label={t(shut.has(r.id) ? "ep.g.open" : "ep.close")} onClick={(e) => { e.stopPropagation(); flip(r.id); }}
                           style={{ visibility: hasKids.has(r.id) ? "visible" : "hidden" }}>{shut.has(r.id) && !filt ? "▸" : "▾"}</button>
                         : <span className="p6-tog" aria-hidden="true">·</span>)}
-                      {ed && field(c.key) ? (
+                      {ed && field(c.key)?.type === "select" ? (
+                        <select className="p6-in" aria-label={t(c.title)} value={ed.values[c.key] ?? ""} onChange={(e) => setEditing({ ...ed, values: { ...ed.values, [c.key]: e.target.value } })}>
+                          <option value="">—</option>{field(c.key).options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+                      ) : ed && field(c.key) ? (
                         <input className="p6-in" aria-label={t(c.title)} type={field(c.key).type === "number" ? "number" : field(c.key).type === "date" ? "date" : "text"}
                           step="any" dir={field(c.key).type === "text" ? "auto" : "ltr"} value={ed.values[c.key] ?? ""}
                           onChange={(e) => setEditing({ ...ed, values: { ...ed.values, [c.key]: e.target.value } })}
@@ -339,19 +395,22 @@ export default function ActivityGrid({ data, columns, defaultCols, storeKey, sel
           </table>
           {rows.length === 0 && <p className="empty-note">{t("ep.g.noRows")}</p>}
           {menu && typeof document !== "undefined" && createPortal(
-            <div className="p6-menu card" role="menu" aria-label={t("gr.menu")} style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} data-row-menu>
+            <FloatBox className="p6-menu card" role="menu" aria-label={t("gr.menu")} style={{ left: menu.x, top: menu.y }} onClose={() => setMenu(null)} onClick={(e) => e.stopPropagation()} data-row-menu>
               {fieldsOf(menu.row).length > 0 && <button type="button" role="menuitem" onClick={() => { setMenu(null); open(menu.row); }}>{t("gr.edit")}</button>}
               {ops.create && <button type="button" role="menuitem" onClick={() => { const n = nodeOf(menu.row); setMenu(null); if (n) addUnder(n); }}>{t("gr.addChild", { name: nodeOf(menu.row)?.item.name || "" })}</button>}
+              {ops.reorder && (ops.reorderable ? ops.reorderable(menu.row) : menu.row.kind === "node") && <>
+                <button type="button" role="menuitem" data-move-up onClick={() => { const r = menu.row; setMenu(null); run(() => ops.reorder(r, -1)); }}>{t("gr.moveUp")}</button>
+                <button type="button" role="menuitem" data-move-down onClick={() => { const r = menu.row; setMenu(null); run(() => ops.reorder(r, 1)); }}>{t("gr.moveDown")}</button></>}
               <button type="button" role="menuitem" onClick={() => { copyOut(picked.has(menu.row.id) ? pickedRows : [menu.row], "copy"); setMenu(null); }}>{t("gr.copy")}</button>
               {ops.paste && <button type="button" role="menuitem" onClick={() => { copyOut(picked.has(menu.row.id) ? pickedRows : [menu.row], "cut"); setMenu(null); }}>{t("gr.cut")}</button>}
               {ops.paste && <button type="button" role="menuitem" disabled={!clip} onClick={() => { const n = nodeOf(menu.row); setMenu(null); pasteInto(n); }}>{t("gr.pasteInto", { name: nodeOf(menu.row)?.item.name || "" })}</button>}
               {ops.remove && <button type="button" role="menuitem" onClick={() => { const l = picked.has(menu.row.id) ? pickedRows : [menu.row]; setMenu(null); removeRows(l); }}>{t("gr.delete")}</button>}
-            </div>, document.body)}
+            </FloatBox>, document.body)}
           {ask && typeof document !== "undefined" && createPortal(
             <div className="p6-ask card" role="alertdialog" aria-label={t("gr.leaveTitle")} data-leave-ask>
               <b>{t("gr.leaveTitle")}</b>
               <p className="row" style={{ gap: 6, marginTop: 8 }}>
-                <button type="button" className="btn sm" onClick={async () => { const nx = ask.next; setAsk(null); if (await save()) nx(); }}>{t("gr.leaveSave")}</button>
+                <button type="button" className="btn sm" onClick={async () => { const nx = ask.next; setAsk(null); if (await save(false)) nx(); }}>{t("gr.leaveSave")}</button>
                 <button type="button" className="btn ghost sm" onClick={() => { const nx = ask.next; setAsk(null); setEditing(null); nx(); }}>{t("gr.leaveDrop")}</button></p>
             </div>, document.body)}
         </div>

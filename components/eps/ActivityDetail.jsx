@@ -6,6 +6,7 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
 import { BUDGET_UNITS as BUDGET_FA, ROLE_STATUS as ROLE_FA } from "../../lib/eps/activities.mjs";
 
 import TableKit from "../ui/TableKit";
+import { wIn, wOut } from "./shared";
 /**
  * The detail sub-forms under the activity view, for the selected activity
  * (owner's «PMS» document: images 1–9 and 11–12). Every figure comes from the
@@ -38,6 +39,8 @@ export function useEpsFmt() {
   const { num, date, t } = usePrefs();
   return useMemo(() => ({
     fmt: (v, d = 2) => (v == null || v === "" ? "—" : num(Number(v), { maximumFractionDigits: d })),
+    // W.F and W.V are kept as percentages and shown as decimal fractions, 45.05% → 0.4505 (owner's requirements 2026-10-22, item 8)
+    w: (v, d = 8) => (v == null || v === "" ? "—" : num(Number(v) / 100, { maximumFractionDigits: d })),
     // a bare day is a local day, not UTC midnight
     day: (d) => (d ? date(/^\d{4}-\d\d-\d\d$/.test(d) ? `${d}T00:00:00` : d) : "—"),
     statusOf: (a) => t(statusKey(a)),
@@ -45,16 +48,16 @@ export function useEpsFmt() {
 }
 const KV = ({ k, v }) => <div className="kv"><span>{k}</span><b>{v}</b></div>;
 
-export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null }) {
+export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null, history = false, reportList = [] }) {
   const a = d.activity;
   switch (tab) {
-    case "detail": return <Detail a={a} may={may && !readOnly} post={post} />;
+    case "detail": return <Detail d={d} a={a} may={may && !readOnly} post={post} />;
     case "workfront": return <WorkFront wf={d.workFront} unit={a.unit} />;
     case "groups": return <Groups groups={d.groups} />;
     case "relations": return <Relations d={d} may={may && !readOnly} post={post} acts={acts} />;
     case "progress": return <Progress a={a} codes={d.codes} />;
     case "roles": return <Roles d={d} may={may && !readOnly} post={post} resources={resources} />;
-    case "reports": return <Reports d={d} post={post} companies={companies} />;
+    case "reports": return <Reports d={d} post={post} companies={companies} readOnly={history} acts={acts} reportList={reportList} />;
     case "codes": return <Codes d={d} may={may && !readOnly} post={post} codes={codes} />;
     case "overall": return <Overall d={d} may={may && !readOnly} post={post} />;
     case "docs": return <Docs d={d} projectId={projectId} />;
@@ -63,53 +66,67 @@ export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [
   }
 }
 
-function Detail({ a, may, post }) {
+/**
+ * The activity detail of image 1: the original and actual status, the
+ * middle column (update date, status, add to invoice, suspend, scale up),
+ * the constraint, the budget, the float and the weights. A click on the
+ * panel opens what a person types for editing in place; every other figure
+ * is worked out on the server (lib/eps/planning.mjs detailFigures).
+ */
+function Detail({ d, a, may, post }) {
   const { t } = usePrefs();
-  const { fmt, day, statusOf } = useEpsFmt();
+  const { fmt, day, statusOf, w } = useEpsFmt();
   const [f, setF] = useState(null);
-  const open = () => setF({ name: a.name, wf: a.wf ?? "", description: a.description || "", progress: a.progress ?? "",
+  const x = d.figures || {};
+  const open = () => setF({ name: a.name, wf: wIn(a.wf), description: a.description || "", progress: a.progress ?? "",
     planStart: a.own?.plan_start || "", planEnd: a.own?.plan_end || "", actualStart: a.own?.actual_start || "", actualEnd: a.own?.actual_end || "",
-    volumePlan: a.own?.volume_plan ?? "", volumeActual: a.own?.volume_actual ?? "" });
-  const costDone = a.budgetPlan != null && a.pct != null ? (a.budgetPlan * a.pct) / 100 : null;
+    volumePlan: a.own?.volume_plan ?? "", volumeActual: a.own?.volume_actual ?? "", updateDate: a.update_date || "", statusText: a.status_text || "",
+    addToInvoice: !!a.add_to_invoice, suspended: !!a.suspended, scaleUpPct: a.scale_up_pct ?? "", constraintStart: a.constraint_start || "", constraintEnd: a.constraint_end || "" });
+  const pct = (v) => (v == null ? "—" : `${fmt(v)}%`);
+  const I = (k, type = "text") => (
+    <input aria-label={k} type={type} dir="ltr" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} style={{ width: type === "date" ? 140 : 110 }} />);
+  const C = (k) => <input aria-label={k} type="checkbox" checked={!!f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />;
+  // the field is built only while editing: `edit` is a function, called with the form open
+  const V = (show, edit) => (f ? edit() : show);
+  const save = async (e) => { e.preventDefault(); if (await post("/api/eps", { kind: "activity", nodeId: a.node_id, id: a.id, ...f, wf: wOut(f.wf) }, () => t("ep.activitySaved"))) setF(null); };
   return (
-    <div>
-      <p className="row" style={{ gap: 12, alignItems: "center" }}><b className="mono" dir="ltr">{a.code}</b> <span>{a.name}</span>
+    <form onSubmit={save} data-detail={a.code}>
+      <div className="row" style={{ gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <span className="sm">ACTIVITY NO.:</span><b className="mono" dir="ltr">{a.activity_no || a.code}</b>
+        <span className="sm">ACTIVITY NAME:</span>{V(<b>{a.name}</b>, () => <input aria-label="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />)}
+        <span className="sm">Currency Name:</span><b className="mono">{d.currency || "—"}</b>
         <span className="sm muted">{t("ep.node")} <span className="mono" dir="ltr">{a.node_code}</span> — {a.node_name}</span>
-        {a.template_code && <span className="sm muted">{t("ep.template")} <span className="mono">{a.template_code}</span></span>}
-        {may && !f && <button className="btn ghost sm" type="button" onClick={open}>{t("ep.editActivity")}</button>}</p>
-      <div className="p6-kv">
-        <fieldset><legend>{t("ep.d.original")}</legend>
-          <KV k={t("ep.start")} v={day(a.plan_start)} /><KV k={t("ep.durDays")} v={fmt(a.planDays)} /><KV k={t("ep.finish")} v={day(a.plan_end)} />
-          <KV k={t("ep.d.remainDays")} v={fmt(a.remainDays)} /></fieldset>
-        <fieldset><legend>{t("ep.d.actual")}</legend>
-          <KV k={t("ep.start")} v={day(a.actual_start)} /><KV k={t("ep.durDays")} v={fmt(a.actualDays)} /><KV k={t("ep.finish")} v={day(a.actual_end)} />
-          <KV k={t("ep.status")} v={statusOf(a)} /><KV k={t(a.scopeLinked ? "ep.d.pctPlatform" : "ep.d.pctReports")} v={a.pct == null ? t("ep.d.pctUnknown") : `${fmt(a.pct)}%`} />
-          <KV k={t("ep.manualPct")} v={a.progress == null ? "—" : `${fmt(a.progress)}%`} /></fieldset>
-        <fieldset><legend>{t("ep.d.budget")}</legend>
-          <KV k={t("ep.d.budgetPlan")} v={fmt(a.budgetPlan)} /><KV k={t("ep.d.budgetActual")} v={fmt(a.budgetActual)} />
-          <KV k={t("ep.d.costDone")} v={fmt(costDone)} /></fieldset>
-        <fieldset><legend>{t("ep.d.weight")}</legend>
-          <KV k="W.F" v={a.wf == null ? "—" : `${fmt(a.wf, 4)}%`} /><KV k="W.V" v={a.wv == null ? "—" : `${fmt(a.wv, 6)}%`} />
-          <KV k={t("ep.d.volPlan", { unit: a.unit || "" })} v={fmt(a.volumePlan)} /><KV k={t("ep.d.volActual")} v={fmt(a.volumeActual)} />
-          <KV k={t("ep.d.done")} v={fmt(a.done)} /><KV k={t("ep.d.remain")} v={fmt(a.remain)} /></fieldset>
-        <fieldset><legend>Float</legend><KV k={t("ep.d.freeFloat")} v={fmt(a.freeFloat)} /></fieldset>
+        {d.version && <span className="chip">{d.version.code}{d.version.master ? " · Master" : ""}</span>}
+        {may && !f && <button className="btn ghost sm" type="button" onClick={open} data-detail-edit>{t("ep.editActivity")}</button>}
+        {f && <><button className="btn sm" type="submit">{t("ep.save")}</button><button className="btn ghost sm" type="button" onClick={() => setF(null)}>{t("ep.cancel")}</button></>}
+      </div>
+      <div className="p6-kv" onDoubleClick={() => { if (may && !f) open(); }} title={may && !f ? t("ep.d.clickToEdit") : undefined}>
+        <fieldset><legend>Original Status</legend>
+          <KV k="Start Date" v={V(day(a.plan_start), () => I("planStart", "date"))} /><KV k="Duration" v={fmt(a.planDays)} /><KV k="Finish Date" v={V(day(a.plan_end), () => I("planEnd", "date"))} />
+          <KV k="Remain Duration" v={fmt(a.remainDays)} /><KV k="Duration % Complete" v={pct(x.durationPct)} />
+          <KV k="Schedule % Complete" v={pct(x.schedulePct)} /><KV k="Duration of Original (%)" v={pct(x.originalPct)} /></fieldset>
+        <fieldset><legend>Actual Status</legend>
+          <KV k="Start Date" v={V(day(a.actual_start), () => I("actualStart", "date"))} /><KV k="Duration" v={fmt(a.actualDays)} /><KV k="Finish Date" v={V(day(a.actual_end), () => I("actualEnd", "date"))} />
+          <KV k="Remain Duration" v={fmt(x.remainDays)} /><KV k="Activity Complete (%)" v={pct(a.pct)} /><KV k="At Completion Duration" v={fmt(x.atCompletionDays)} />
+          <KV k="Performance Complete (%)" v={pct(a.pct)} /><KV k="Physical % Complete" v={V(pct(a.progress ?? a.pct), () => I("progress"))} /></fieldset>
+        <fieldset><legend>{t("ep.status")}</legend>
+          <KV k="Update Date" v={V(day(a.update_date), () => I("updateDate", "date"))} /><KV k="Status" v={V(a.status_text || statusOf(a), () => I("statusText"))} />
+          <KV k="Add To Invoice" v={V(a.add_to_invoice ? "✓" : "—", () => C("addToInvoice"))} /><KV k="Suspend" v={V(a.suspended ? "✓" : "—", () => C("suspended"))} />
+          <KV k="Scale up dur." v={V(a.scale_up_pct == null ? "—" : `${fmt(a.scale_up_pct)}%`, () => I("scaleUpPct"))} /></fieldset>
+        <fieldset><legend>Constrain Status</legend>
+          <KV k="Start Date" v={V(day(a.constraint_start), () => I("constraintStart", "date"))} /><KV k="Duration" v={fmt(x.constraintDays)} />
+          <KV k="Finish Date" v={V(day(a.constraint_end), () => I("constraintEnd", "date"))} /></fieldset>
+        <fieldset><legend>Budget</legend>
+          <KV k="Budgeted Total Cost" v={fmt(x.bac)} /><KV k="Actual Cost" v={fmt(x.actualCost)} /><KV k="Remaining Total Cost" v={fmt(x.remainingCost)} />
+          <KV k="At Completion Total Cost" v={fmt(x.atCompletionCost)} /><KV k="Cost % Complete" v={pct(x.costPct)} /><KV k="Cost % of Budget" v={pct(x.costOfBudgetPct)} /></fieldset>
+        <fieldset><legend>Float</legend><KV k="Free Float" v={fmt(a.freeFloat)} /><KV k="Total Float" v={<span title={t("ep.d.totalFloatTip")}>—</span>} /></fieldset>
+        <fieldset><legend>Weight</legend>
+          <KV k="Estimate Weight" v={V(fmt(a.volumePlan), () => I("volumePlan"))} /><KV k="Actual Weight" v={V(fmt(a.volumeActual), () => I("volumeActual"))} />
+          <KV k="Total Worked" v={fmt(a.done)} /><KV k="Remain Weight" v={fmt(a.remain)} /><KV k="W.F / W.V" v={`${w(a.wf)} / ${w(a.wv, 10)}`} /></fieldset>
       </div>
       {a.description && <p className="sm">{a.description}</p>}
-      {f && (
-        <form className="card" onSubmit={async (e) => { e.preventDefault(); if (await post("/api/eps", { kind: "activity", nodeId: a.node_id, id: a.id, ...f }, () => t("ep.activitySaved"))) setF(null); }}>
-          <div className="grid2">
-            {[["name", t("ep.activityName")], ["wf", "W.F %"], ["progress", t("ep.manualPctField")], ["description", t("ep.description")]].map(([k, l]) => (
-              <div className="field" key={k}><label htmlFor={`ad-${k}`}>{l}</label><input id={`ad-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} required={k === "name"} /></div>))}
-          </div>
-          <p className="sm muted">{t("ep.d.ownHint")}</p>
-          <div className="grid2">
-            {[["planStart", t("ep.planStart"), "date"], ["planEnd", t("ep.planEnd"), "date"], ["actualStart", t("ep.actualStart"), "date"], ["actualEnd", t("ep.actualEnd"), "date"],
-              ["volumePlan", t("ep.volPlan"), "text"], ["volumeActual", t("ep.volActual"), "text"]].map(([k, l, ty]) => (
-              <div className="field" key={k}><label htmlFor={`ad-${k}`}>{l}</label><input id={`ad-${k}`} type={ty} dir="ltr" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></div>))}
-          </div>
-          <button className="btn" type="submit">{t("ep.save")}</button> <button className="btn ghost" type="button" onClick={() => setF(null)}>{t("ep.cancel")}</button>
-        </form>)}
-    </div>);
+      {f && <p className="sm muted">{t("ep.d.ownHint")}</p>}
+    </form>);
 }
 
 function WorkFront({ wf, unit }) {
@@ -132,18 +149,21 @@ function WorkFront({ wf, unit }) {
 
 function Groups({ groups }) {
   const { t } = usePrefs();
-  const { fmt, day } = useEpsFmt();
+  const { fmt, day, statusOf } = useEpsFmt();
   return (
     <div className="tablewrap"><TableKit name="eps-activitydetail-2" min={8}><table className="dtable">
-      <thead><tr><th>PMS</th><th>{t("ep.g.version")}</th><th>{t("ep.title")}</th><th>{t("ep.description")}</th><th>{t("ep.g.registered")}</th><th>{t("ep.start")}</th><th>{t("ep.dur")}</th><th>{t("ep.finish")}</th><th>{t("ep.g.lastWork")}</th>
-        <th>{t("ep.volume")}</th><th>W.V</th><th>{t("ep.done")}</th><th>{t("ep.remain")}</th><th>{t("ep.progress")}</th></tr></thead>
+      <thead><tr><th>EPS NO.</th><th>Scheduling NO.</th><th>Scheduling Name</th><th>{t("ep.description")}</th><th>Schedule Date</th><th>{t("ep.start")}</th><th>{t("ep.dur")}</th><th>{t("ep.finish")}</th>
+        <th>{t("ep.progress")}</th><th>{t("ep.status")}</th><th>Active Master</th><th>Actual Start</th><th>Actual Finish</th><th>Act. Dur.</th><th>{t("ep.g.lastWork")}</th>
+        <th>{t("ep.pl.planned")}</th><th>{t("ep.done")}</th><th>{t("ep.remain")}</th><th>Remark</th></tr></thead>
       <tbody>{groups.map((g) => (
         <tr key={g.versionId} style={{ fontWeight: g.current ? 600 : undefined }} data-group={g.code}>
-          <td className="mono">{g.pms}</td><td className="mono">{g.code}{g.master && <span className="chip" style={{ marginInlineStart: 4 }}>Master</span>}{g.current && <span className="sm muted"> {t("ep.g.this")}</span>}</td>
-          <td>{g.title}</td><td className="sm">{g.description || "—"}</td><td className="mono">{day(g.registered)}</td>
-          <td className="mono">{day(g.plan_start)}</td><td className="mono">{fmt(g.planDays)}</td><td className="mono">{day(g.plan_end)}</td><td className="mono">{day(g.lastWork)}</td>
-          <td className="mono">{fmt(g.volumeActual)}</td><td className="mono">{g.wv == null ? "—" : `${fmt(g.wv, 6)}%`}</td><td className="mono">{fmt(g.done)}</td>
-          <td className="mono">{fmt(g.remain)}</td><td className="mono">{g.pct == null ? "—" : `${fmt(g.pct)}%`}</td></tr>))}</tbody></table></TableKit></div>);
+          <td className="mono">{g.pms}</td><td className="mono">{g.code}{g.current && <span className="sm muted"> {t("ep.g.this")}</span>}</td>
+          <td style={{ background: "rgba(255,230,0,.18)" }}>{g.title}</td><td className="sm">{g.description || "—"}</td><td className="mono">{day(g.registered)}</td>
+          <td className="mono">{day(g.plan_start)}</td><td className="mono">{fmt(g.planDays)}</td><td className="mono">{day(g.plan_end)}</td>
+          <td className="mono">{g.pct == null ? "—" : `${fmt(g.pct)}%`}</td><td>{statusOf(g)}</td><td>{g.master ? "◉" : "○"}</td>
+          <td className="mono">{day(g.actual_start)}</td><td className="mono">{day(g.actual_end)}</td><td className="mono">{fmt(g.actualDays)}</td><td className="mono">{day(g.lastWork)}</td>
+          <td className="mono">{fmt(g.plan?.volume_plan, 10)}</td><td className="mono">{fmt(g.done)}</td><td className="mono">{fmt(g.remain)}</td><td className="sm">{g.plan?.description || ""}</td></tr>))}
+        {groups.length === 0 && <tr><td colSpan={19} className="muted sm">{t("ep.g.none")}</td></tr>}</tbody></table></TableKit></div>);
 }
 
 function Relations({ d, may, post, acts }) {
@@ -184,15 +204,15 @@ function Relations({ d, may, post, acts }) {
 
 function Progress({ a, codes }) {
   const { t } = usePrefs();
-  const { fmt, day, statusOf } = useEpsFmt();
+  const { fmt, day, statusOf, w } = useEpsFmt();
   const cats = codes[0]?.categories || [];
   return (
     <div className="tablewrap"><TableKit name="eps-activitydetail-4" min={8}><table className="dtable">
       <thead><tr>{["A", "B", "C", "D", "E", "F", "G", "H"].map((x) => <th key={x}>Category {x}</th>)}<th>Activity No.</th><th>Description</th><th>Unit</th>
         <th>W.F</th><th>W.V</th><th>Actual weight</th><th>Progress</th><th>Total work</th><th>Status</th><th>Original start</th><th>Orig. dur.</th><th>Original finish</th></tr></thead>
       <tbody><tr data-progress={a.code}>{Array.from({ length: 8 }, (_, i) => <td key={i} className="sm">{cats[i] || "—"}</td>)}
-        <td className="mono" dir="ltr">{a.code}</td><td>{a.name}</td><td>{a.unit || "—"}</td><td className="mono">{a.wf == null ? "—" : `${fmt(a.wf, 4)}%`}</td>
-        <td className="mono">{a.wv == null ? "—" : `${fmt(a.wv, 6)}%`}</td><td className="mono">{fmt(a.volumeActual)}</td>
+        <td className="mono" dir="ltr">{a.code}</td><td>{a.name}</td><td>{a.unit || "—"}</td><td className="mono">{w(a.wf)}</td>
+        <td className="mono">{w(a.wv, 10)}</td><td className="mono">{fmt(a.volumeActual)}</td>
         <td className="mono"><b>{a.pct == null ? t("ep.unknown") : `${fmt(a.pct)}%`}</b></td><td className="mono">{fmt(a.done)}</td><td>{statusOf(a)}</td>
         <td className="mono">{day(a.plan_start)}</td><td className="mono">{fmt(a.planDays)}</td><td className="mono">{day(a.plan_end)}</td></tr></tbody></table></TableKit>
       <p className="sm muted">{t("ep.pr.note")}</p></div>);
@@ -237,7 +257,14 @@ function Roles({ d, may, post, resources }) {
     </div>);
 }
 
-function Reports({ d, post, companies }) {
+/**
+ * The activity's lines in the daily reports, each edited where it stands as
+ * its report's workflow allows: quantity, area, mark — and, as list boxes,
+ * the report number (the line moves to another report of the contract) and
+ * the activity code (only activities are offered; owner's requirements
+ * 2026-10-22, item 29).
+ */
+function Reports({ d, post, companies, readOnly = false, acts = [], reportList = [] }) {
   const { t } = usePrefs();
   const { fmt, day } = useEpsFmt();
   const [edit, setEdit] = useState(null);
@@ -247,22 +274,28 @@ function Reports({ d, post, companies }) {
     <div className="tablewrap"><table className="dtable">
       <thead><tr><th>{t("ep.activity")}</th><th>{t("ep.rp.area")}</th><th>Mark</th><th>{t("ep.unit")}</th><th>{t("ep.rp.qty")}</th><th>{t("ep.rp.report")}</th><th>{t("ep.date")}</th><th>{t("ep.rp.stage")}</th><th>{t("ep.remark")}</th><th /></tr></thead>
       <tbody>{d.reports.map((l) => {
-        const m = d.reportMay?.[l.reportId];
+        // the daily report's history on the planning preview is read only (owner's requirements 2026-10-22, item 13)
+        const m = readOnly ? null : d.reportMay?.[l.reportId];
         const mine = edit && edit.rowId === l.rowId && edit.reportId === l.reportId;
         return (
           <tr key={`${l.reportId}-${l.rowId}`} data-line={`${l.reportNo}`}>
-            <td className="sm"><span className="mono" dir="ltr">{a.code}</span> {a.name}</td>
+            <td className="sm">{mine && acts.length ? <select aria-label={t("ep.rp.activityCode")} value={edit.activityId} onChange={(e) => setEdit({ ...edit, activityId: e.target.value })}>
+              {acts.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}</select> : <><span className="mono" dir="ltr">{a.code}</span> {a.name}</>}</td>
             <td>{mine ? <select aria-label={t("ep.rp.areaShort")} value={edit.areaId || ""} onChange={(e) => setEdit({ ...edit, areaId: e.target.value })}><option value="">—</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select> : l.areaName || "—"}</td>
             <td>{mine ? <input aria-label="Mark" value={edit.mark || ""} onChange={(e) => setEdit({ ...edit, mark: e.target.value })} style={{ width: 80 }} /> : l.mark || "—"}</td>
             <td>{a.unit || "—"}</td>
             <td className="mono">{mine ? <input aria-label={t("ep.qty")} dir="ltr" value={edit.qty} onChange={(e) => setEdit({ ...edit, qty: e.target.value })} style={{ width: 90 }} /> : <b>{fmt(l.qty, 4)}</b>}</td>
-            <td className="mono"><Link href={`/contract-reports?id=${l.reportId}`}>{l.reportNo}</Link></td><td className="mono">{day(l.date)}</td>
+            <td className="mono">{mine && reportList.length ? <select aria-label={t("ep.rp.reportNo")} value={edit.toReportId} onChange={(e) => setEdit({ ...edit, toReportId: e.target.value })}>
+              {reportList.map((r) => <option key={r.id} value={r.id}>{r.report_no} — {day(String(r.report_date).slice(0, 10))}</option>)}</select>
+              : <Link href={`/contract-reports?id=${l.reportId}`}>{l.reportNo}</Link>}</td><td className="mono">{day(l.date)}</td>
             <td className="sm">{l.status === "approved" ? t("ep.rp.approved") : l.stageName || "—"}</td><td className="sm">{l.notes || ""}</td>
             <td style={{ whiteSpace: "nowrap" }}>{m?.edit ? (mine ? <>
-              <button className="btn sm" type="button" onClick={async () => { if (await post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, qty: edit.qty, areaId: edit.areaId, mark: edit.mark }, () => t("ep.rp.saved"))) setEdit(null); }}>{t("ep.save")}</button>
+              <button className="btn sm" type="button" data-line-save onClick={async () => { if (await post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, qty: edit.qty, areaId: edit.areaId, mark: edit.mark,
+                activityId: edit.activityId !== a.id ? edit.activityId : undefined, toReportId: edit.toReportId !== l.reportId ? edit.toReportId : undefined }, () => t("ep.rp.saved"))) setEdit(null); }}>{t("ep.save")}</button>
               <button className="btn ghost sm" type="button" onClick={() => setEdit(null)}>{t("ep.cancel")}</button></> : <>
-              <button className="btn ghost sm" type="button" onClick={() => setEdit({ reportId: l.reportId, rowId: l.rowId, qty: String(l.qty), areaId: l.areaId || "", mark: l.mark || "" })}>{t("ep.edit")}</button>
+              <button className="btn ghost sm" type="button" data-line-edit onClick={() => setEdit({ reportId: l.reportId, rowId: l.rowId, qty: String(l.qty), areaId: l.areaId || "", mark: l.mark || "",
+                activityId: a.id, toReportId: l.reportId })}>{t("ep.edit")}</button>
               <button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, remove: true }, () => t("ep.rp.rowRemoved"))}>{t("ep.remove")}</button></>)
               : <span className="sm muted" title={m?.why || ""}>{t("ep.viewOnly")}</span>}</td>
           </tr>);

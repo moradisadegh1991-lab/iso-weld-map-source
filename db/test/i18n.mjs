@@ -187,14 +187,14 @@ const TRANSLATED = ["app/quality/page.jsx", "app/inspection/page.jsx", "app/ndt-
   "app/contract-reports/page.jsx", "components/reports/WorkflowPanel.jsx", "app/report-setup/page.jsx", "app/report-print-setup/page.jsx",
   "app/signature/page.jsx", "app/daily-reports/page.jsx",
   "app/eps/page.jsx", "app/eps/wbs/page.jsx", "app/eps/templates/page.jsx", "app/eps/codes/page.jsx", "app/eps/activities/page.jsx",
-  "app/eps/progress/page.jsx", "app/eps/progress/days/page.jsx", "app/eps/scope/page.jsx",
+  "app/eps/progress/page.jsx", "app/eps/progress/days/page.jsx", "app/eps/scope/page.jsx", "app/eps/planning/page.jsx", "app/eps/planning/preview/page.jsx", "app/eps/progress/preview/page.jsx",
   "components/eps/ActivityDetail.jsx", "components/eps/ActivityGrid.jsx", "components/eps/ScopePanel.jsx", "components/eps/shared.jsx",
   "app/procurement/page.jsx", "app/procurement/Tender.jsx", "app/procurement/Vendors.jsx",
   "app/warehouse/page.jsx", "app/warehouse/Stores.jsx", "app/warehouse/Mesc.jsx", "app/hse/page.jsx", "app/hse/SafeWork.jsx",
   "components/ui/Tabs.jsx", "app/equipment/page.jsx", "app/coating/page.jsx",
   "app/electrical/page.jsx", "app/instrumentation/page.jsx",
   "app/piping/overview/page.jsx", "app/piping/execution/page.jsx", "app/piping/welding/page.jsx", "app/piping/joint/page.jsx", "app/qc/page.jsx",
-  "app/piping/reports/page.jsx"];
+  "app/piping/reports/page.jsx", "app/desk/page.jsx", "app/notifications/page.jsx"];
 
 test("a translated page keeps no Persian of its own", async () => {
   const left = [];

@@ -66,7 +66,9 @@ function Footer({ layout, boxes, signatureUrl }) {
               <div key={box.groupId} className="rp-box" style={{ flex: `0 0 ${100 / row.length}%` }}>
                 {head.map((e) => line(e, box))}
                 <div className="rp-third">
-                  {(sigs.length ? sigs : [null]).map((s, j) => <div key={j} className="rp-signer">{each.map((e) => line(e, box, s))}</div>)}
+                  {/* a stage its deadline approved: its text where the signatures would be (owner's requirements 2026-10-22, item 2-a) */}
+                  {!sigs.length && box.autoText ? <div className="rp-signer" data-auto-text>{box.autoText}</div>
+                    : (sigs.length ? sigs : [null]).map((s, j) => <div key={j} className="rp-signer">{each.map((e) => line(e, box, s))}</div>)}
                 </div>
               </div>
             );
@@ -80,7 +82,7 @@ function Footer({ layout, boxes, signatureUrl }) {
 /**
  * @param layout      a checked layout
  * @param values      the header's {placeholders}
- * @param boxes       signature boxes: [{groupId, stageName, name, title, description, signatures:[{signatureId,name,at,current}]}]
+ * @param boxes       signature boxes: [{groupId, stageName, name, title, description, signatures:[{signatureId,name,at,current}], autoText?}]
  * @param children    the body
  * @param mode        "print" | "preview"
  * @param scale       preview only: how much to shrink the page

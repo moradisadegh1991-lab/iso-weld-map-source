@@ -74,7 +74,7 @@ test("the EPS: PMSs of a contract and their versions, with durations; a version 
     const { rows: [k] } = await db.query("INSERT INTO contractor (project_id, code, name) VALUES ($1, 'K', 'K') RETURNING id", [P]);
     C = await ctr.upsertContract(db, { projectId: P, contractNo: "SC-1", title: "x", kind: "subcontract", contractorId: k.id, currency: "USD", userId: U.id });
     C2 = await ctr.upsertContract(db, { projectId: P, contractNo: "SC-2", title: "y", kind: "subcontract", contractorId: k.id, currency: "USD", userId: U.id });
-    PM = await eps.savePms(db, { projectId: P, contractId: C.id, code: "pm01", title: "برنامهٔ اصلی", planStart: "2026-01-01", planEnd: "2026-12-31", userId: U.id });
+    PM = await eps.savePms(db, { projectId: P, contractId: C.id, code: "pm01", title: "برنامهٔ اصلی", planStart: "2026-01-01", planEnd: "2026-12-31", budgetPlan: 1000, userId: U.id });
     const pm2 = await eps.savePms(db, { projectId: P, contractId: C.id, code: "PM02", title: "دوم", userId: U.id });
     const other = await eps.savePms(db, { projectId: P, contractId: C2.id, code: "PM09", title: "قرارداد دیگر", userId: U.id });
     await throws(() => eps.savePms(db, { projectId: P, contractId: C.id, code: "PM01", title: "x" }), "ثبت شده");
@@ -123,7 +123,7 @@ test("budget modes in the database: a mode that would break the 100% rule is ref
   await inP(async () => {
     await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: { ...w.DEFAULT_SETTINGS, budgetMode: "wf_to_budget" }, userId: U.id });
     let view = await eps.wbsView(db, { projectId: P, versionId: V.id });
-    equal(view.roots.find((n) => n.code === "PM01.C.02").budgetPlan, 400, "40% of the version's 1000");
+    equal(view.roots.find((n) => n.code === "PM01.C.02").budgetPlan, 400, "40% of the PMS's 1000 (the root budget is the PMS's, 083)");
     await eps.saveNode(db, { projectId: P, versionId: V.id, name: "بی‌بودجه", wf: 0 });
     await db.query("UPDATE wbs_node SET budget_plan = 900 WHERE code = 'PM01.C.03'");
     await throws(() => eps.saveSettings(db, { projectId: P, versionId: V.id, settings: { ...w.DEFAULT_SETTINGS, budgetMode: "budget_to_wf" } }), "بیش از ۱۰۰٪");
@@ -180,6 +180,23 @@ test("copy a node with its children and activities under another; the copy's cod
     equal([c.code, t.children[0].children.map((x) => x.code), t.children[0].children[0].activities.map((a) => a.code)],
       ["PM01.C.03.01", ["PM01.C.03.01.01"], ["PM01.C.03.01.01.01", "PM01.C.03.01.01.02", "PM01.C.03.01.01.05"]]);
     equal(after.roots.find((x) => x.code === "PM01.C.02").children.length, 1, "the original stays");
+  });
+});
+
+test("update weights/budgets: the worked-out figure written into the stored one; manual has nothing to update; W.F keeps ten decimals", async () => {
+  await inP(async () => {
+    await db.query("UPDATE wbs_node SET wf = NULL WHERE code = 'PM01.C.03'");   // the copy test's 10% left the root over 100%
+    await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: w.DEFAULT_SETTINGS, userId: U.id });
+    await throws(() => eps.refreshWeights(db, { projectId: P, versionId: V.id, userId: U.id }), "دستی", "manual: nothing to bring up to date");
+    await db.query("UPDATE wbs_node SET wf = 39.8765432101 WHERE code = 'PM01.C.02'");
+    await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: { ...w.DEFAULT_SETTINGS, budgetMode: "wf_to_budget" }, userId: U.id });
+    await db.query("UPDATE wbs_node SET budget_plan = NULL WHERE code IN ('PM01.C.02', 'PM01.C.03')");
+    const r = await eps.refreshWeights(db, { projectId: P, versionId: V.id, userId: U.id });
+    const stored = async (code) => (await db.query("SELECT wf::text, budget_plan::float8 AS b FROM wbs_node WHERE code = $1", [code])).rows[0];
+    assert(r.updated >= 1, `nodes updated: ${r.updated}`);
+    equal(await stored("PM01.C.02"), { wf: "39.8765432101", b: 398.77 }, "ten decimals of W.F kept; the budget from it, of the root's 1000, now stored");
+    equal((await eps.refreshWeights(db, { projectId: P, versionId: V.id, userId: U.id })).updated, 0, "a second run has nothing left to change");
+    await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: w.DEFAULT_SETTINGS, userId: U.id });
   });
 });
 

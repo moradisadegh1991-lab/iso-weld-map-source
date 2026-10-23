@@ -29,6 +29,8 @@ export default function FormReportsPage() {
   const { projectId, call } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/forms?projectId=${id}&code=${encodeURIComponent(code)}`, [code]);
   const [openId, setOpenId] = useState(null);
+  // a request named in the link (the desk's «open», owner's requirements 2026-10-22, item 14) opens at once
+  useEffect(() => { const r = new URLSearchParams(window.location.search).get("report"); if (r) setOpenId(r); }, []);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   useEffect(() => { const id = new URLSearchParams(window.location.search).get("id"); if (id) setOpenId(id); }, []);

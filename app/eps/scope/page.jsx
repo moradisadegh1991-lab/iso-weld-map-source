@@ -19,11 +19,11 @@ const NO_LABELS = { disciplines: {}, measures: {} };
 
 export default function ScopePage() {
   const { projectId, contractId, call } = usePlatform();
-  const { versionId, picker } = useVersion(contractId);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId);
   const { t } = usePrefs();
   const { fmt } = useEpsFmt();
-  const v = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}` : null), [versionId]);
-  const u = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}&unplanned=1` : null), [versionId]);
+  const v = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}` : null), [plan]);
+  const u = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}&unplanned=1` : null), [plan]);
   const [open, setOpen] = useState(null);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
@@ -58,7 +58,7 @@ export default function ScopePage() {
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {ok && <p className="okmsg" role="status">{ok}</p>}
+      {ok && <p className="okmsg toast" role="status">{ok}</p>}
       <div className="card">
         <h2>{t("ep.sp.links")}</h2>
         {v.data.scope.length === 0 ? <p className="empty-note">{t("ep.sp.none")}</p> : (

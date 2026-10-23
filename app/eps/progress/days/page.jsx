@@ -28,12 +28,12 @@ const PERIOD_COLS = [
 ];
 export default function DaysPage() {
   const { contractId } = usePlatform();
-  const { versionId, picker } = useVersion(contractId);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId);
   const [days, setDays] = useState([]);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(new Set());
   const [find, setFind] = useState("");
-  const { data, error } = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}&days=${days.join(",")}` : null), [versionId, days.join(",")]);
+  const { data, error } = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}&days=${days.join(",")}` : null), [plan, days.join(",")]);
   const [sel, setSel] = useState(null);
   const { t } = usePrefs();
   const { day } = useEpsFmt();
@@ -54,7 +54,7 @@ export default function DaysPage() {
       <span className="sub">{picker} <Link href="/eps/progress">{t("ep.link.entry")}</Link> · <Link href="/eps/activities">{t("ep.link.activities")}</Link></span></div>);
   if (!contractId) return <div className="page"><div className="pagehead"><h1>{t("ep.days.title")}</h1></div><p className="empty-note">{t("cs.pick")}</p></div>;
   if (error) return <div className="page">{head}<p className="err">{error}</p></div>;
-  if (!versionId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
+  if (!plan) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
   if (!data) return <div className="page">{head}<p className="muted">{t("common.loading")}</p></div>;
   const all = data.allDays || [];
   const shown = all.filter((d) => !find || d.includes(find) || day(d).includes(find));

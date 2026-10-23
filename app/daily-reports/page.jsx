@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { localToday, DayHint } from "../../components/ui/WorkDate";
 
@@ -132,6 +132,8 @@ export default function DailyReportsPage() {
   const { data, error, reload } = useProjectData((id) => `/api/daily-reports?projectId=${id}`, []);
   const [msg, setMsg] = useState(null);
   const [openId, setOpenId] = useState(null);
+  // a request named in the link (the desk's «open», owner's requirements 2026-10-22, item 14) opens at once
+  useEffect(() => { const r = new URLSearchParams(window.location.search).get("report"); if (r && projectId) open(r); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [view, setView] = useState(null);
   const [draft, setDraft] = useState(null);          // a new report being written
   const [date, setDate] = useState(localToday());
