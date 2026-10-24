@@ -27,7 +27,8 @@ export async function GET(request, ctx) {
 
     return await withProject(db, projectId, async () => {
       const { rows: [run] } = await db.query(
-        `SELECT r.*, d.doc_no, d.revision, d.sheet_no, d.file_sha256,
+        `SELECT r.*, d.doc_no, d.revision, d.sheet_no, d.file_sha256, d.content_type AS file_type,
+                (d.storage_uri NOT LIKE 'pending://%' AND d.storage_uri NOT LIKE 'none://%') AS has_file,
                 u.display_name AS approved_by_name
            FROM extraction_run r
            JOIN document d ON d.id = r.document_id
@@ -44,6 +45,8 @@ export async function GET(request, ctx) {
           approvedAt: run.approved_at, approvedBy: run.approved_by_name,
           approvedSha256: run.approved_sha256,
           docNo: run.doc_no, revision: run.revision, sheetNo: run.sheet_no,
+          // the sheet itself, when its bytes were stored: GET /api/documents?projectId&file=<documentId>
+          documentId: run.document_id, hasFile: Boolean(run.has_file), fileType: run.file_type || null,
           checks: run.validation_checks,
         },
         payload: run.payload,

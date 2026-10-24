@@ -14,6 +14,7 @@ import TabNav from "../../components/TabNav";
 import TruthBar from "../../components/TruthBar";
 import EquipmentBar from "../../components/EquipmentBar";
 import WeldListEntry from "../../components/WeldListEntry";
+import CutList from "../../components/CutList";
 import { StageRail } from "../../components/PlatformShell";
 import { STAGES } from "../../lib/platform/workflow.mjs";
 import ReviewQueue from "../../components/ReviewQueue";
@@ -65,6 +66,34 @@ export default function Page() {
   const [pdfPage, setPdfPage] = useState(null);
   const fileRef = useRef(null);
   const session = useSession();
+  // the sheet of a saved run, fetched from the server for the review beside it
+  const [runSheet, setRunSheet] = useState(null);
+  useEffect(() => {
+    setRunSheet(null);
+    const r = openRun?.run;
+    if (!r?.hasFile || !r.documentId || !session.projectId) return;
+    let gone = false, url = null;
+    (async () => {
+      try {
+        const res = await fetch(`/api/documents?projectId=${session.projectId}&file=${r.documentId}`, { credentials: "same-origin" });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const page = openRun.payload?.weldMarkup?.page || 1;
+        let src;
+        if ((r.fileType || blob.type) === "application/pdf") {
+          const { doc } = await openPdf(blob);
+          const { canvas } = await renderPage(doc, page, { dpi: 150 });
+          src = canvas.toDataURL("image/jpeg", 0.8);
+        } else src = url = URL.createObjectURL(blob);
+        if (!gone) setRunSheet({ src, page });
+      } catch { /* no sheet to show: the rows are reviewed without it */ }
+    })();
+    return () => { gone = true; if (url) URL.revokeObjectURL(url); };
+  }, [openRun, session.projectId]);
+  // where each joint of a saved run stands on site: welded and its NDT accepted, welded, or not yet
+  const progress = useMemo(() => openRun?.register?.length
+    ? Object.fromEntries(openRun.register.map((w) => [String(w.weld_no).trim(), w.is_accepted ? "done" : w.is_welded ? "inspection" : "open"]))
+    : null, [openRun]);
 
 
   /* Open a persisted run for review: its payload becomes what is on screen. */
@@ -356,8 +385,9 @@ export default function Page() {
   async function readLocal(index, source) {
     try {
       setBusy(`خواندن برگ ${index} بدون مدل (OCR روی سرور)…`);
-      const { canvas } = await renderPage(source.doc, index, { dpi: 100 });
-      setPreview(canvas.toDataURL("image/jpeg", 0.6));
+      // the sheet the rows are reviewed beside: sharp enough to read a weld number at a zoom
+      const { canvas } = await renderPage(source.doc, index, { dpi: 150 });
+      setPreview(canvas.toDataURL("image/jpeg", 0.8));
       setPdfPage(index);
       const pdfBase64 = base64FromBuffer(new Uint8Array(await source.file.arrayBuffer()));
       const r = await session.call("/api/read-local", { method: "POST",
@@ -366,11 +396,15 @@ export default function Page() {
       const meta = { drawingNo: title.drawingNo || "", rev: title.rev || "", sheet: title.sheet || "", lineNo: "", unit: "", pipingClass: "", nps: null, schedule: "" };
       // which reader produced the markers travels with them: the review says so, and the saved run keeps
       // it, with what the title block read (OCR, for a person to check — not verified data)
-      const weldMarks = { marks: r.marks, reader: "local", readerVersion: r.reader, titleRead: title };
+      const weldMarks = { marks: r.marks.map(({ at, ...m }) => m), reader: "local", readerVersion: r.reader, titleRead: title };
+      // where each number was read on the sheet, for the review beside it; a person moves or adds the rest
+      const placed = Object.fromEntries(r.marks.filter((m) => Array.isArray(m.at) && String(m.outline || "").toLowerCase() !== "dashed")
+        .map((m) => [String(m.no).trim(), { x: m.at[0], y: m.at[1], src: "reader" }]));
       const conv = weldListFromMarks({ meta, bom: [], weldMarks },
         { shop: profile.data?.project?.weld_symbol_shop, field: profile.data?.project?.weld_symbol_field,
           thdLabelled: Boolean(profile.data?.project?.weld_thd_labelled) });
-      const final = { meta, bom: [], nodes: [], edges: [], notes: [], weldMarks, weldList: conv.weldList };
+      const final = { meta, bom: [], nodes: [], edges: [], notes: [], weldMarks, weldList: conv.weldList,
+        ...(Object.keys(placed).length ? { weldMarkup: { page: index, marks: placed } } : {}) };
       setMarksInfo(conv);
       setData(final);
       setEditing(JSON.stringify(final, null, 2));
@@ -565,7 +599,8 @@ export default function Page() {
       )}
 
       {data && listed && (
-        <section className="stage">
+        // one column: the weld list (and the drawing beside its rows) takes the page's width
+        <section className="stage listed">
           {data.weldMarks && marksInfo && (
             <div className="pane" data-weld-marks>
               {data.weldMarks.reader === "local" ? (<>
@@ -589,6 +624,8 @@ export default function Page() {
           )}
           <div className="pane">
             <WeldListEntry key={openRun?.run?.id || "new"} session={session} initial={data} run={openRun}
+              sheet={openRun ? runSheet : preview ? { src: preview, page: pdfPage || 1, file: sourceFile } : null}
+              progress={openRun ? progress : null}
               onSaved={openRunForReview} onClose={() => { setData(null); setOpenRun(null); }} />
           </div>
           {data.weldMarks && (
@@ -715,7 +752,7 @@ export default function Page() {
                   </tbody>
                 </table>
                 <div className="row">
-                  <button className="ghost" onClick={() => exportWorkbook(model, data)}>دانلود Excel (۵ شیت)</button>
+                  <button className="ghost" onClick={() => exportWorkbook(model, data)}>دانلود Excel (۶ شیت)</button>
                   <button className="ghost" onClick={download}>CSV</button>
                 </div>
                 <SaveBar session={session} data={data} model={model} sourceFile={sourceFile}
@@ -771,6 +808,8 @@ export default function Page() {
                   ))}</tbody></table>
               </div>
             )}
+
+            {tab === "cut" && !model.error && <CutList model={model} data={data} />}
 
             {tab === "review" && (
               <div className="pane">

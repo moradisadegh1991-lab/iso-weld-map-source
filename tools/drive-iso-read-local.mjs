@@ -63,7 +63,7 @@ check(/بدون مدل و بدون توکن/.test(await page.locator("[data-weld
 check(calls.includes("/api/read-local") && !calls.some((c) => c.startsWith("/api/extract")), `read on the server with no model: /api/read-local, never /api/extract (${secs}s)`);
 await settle();
 const rows = await page.locator(".wl-table tbody tr").evaluateAll((trs) => trs.map((tr) =>
-  [...tr.querySelectorAll("input")].map((i) => i.value)));
+  [...tr.querySelectorAll('input:not([type="checkbox"])')].map((i) => i.value)));    // the row's fields, not its tick against the drawing
 const got = new Map(rows.map((r) => [r[0], r]));
 check(rows.length === GOLD.length && GOLD.every((g) => got.has(g.no)), `every printed joint number, nothing more (${rows.length} of ${GOLD.length})`);
 const locOk = GOLD.filter((g) => got.get(g.no)?.[2] === g.loc).length;

@@ -21,6 +21,7 @@ const TABS = [
   { k: "check",  label: "اعتبارسنجی",  hint: "تطابق هندسه با MTO" },
   { k: "line",   label: "Line Data",   hint: "مشخصات خط" },
   { k: "mto",    label: "MTO",         hint: "لیست متریال" },
+  { k: "cut",    label: "لیست برش",    hint: "قطعه‌های لوله برای کارگاه" },
   { k: "json",   label: "JSON",        hint: "دادهٔ خام و ویرایش" },
   { k: "equip",  label: "لیست تجهیزات", hint: "استخراج تگ و زیرسیستم" },
   { k: "truth",  label: "حقیقت مرجع",  hint: "رجیستر پیمانکار و دقت" },

@@ -86,7 +86,7 @@ const reg = await p.evaluate(async (pid) => {
   const d = await (await fetch(`/api/documents?projectId=${pid}&docNo=DMW-ISO-7002`)).json();
   const r = await (await fetch(`/api/runs?projectId=${pid}&documentId=${d.document.id}`)).json();
   return { uri: d.document.storage_uri, status: r.run.status, welds: r.register.map((w) => `${w.weld_no}:${w.shop_field}:${w.spool_no || "-"}:${w.ndt_requirement}`) };
-}, v);
+}, v.replace(/^p:/, ""));    // the picker's value is «p:<id>» since contracts joined it
 check(reg.status === "approved" && reg.welds.length === 5 && reg.uri.startsWith("none://"), `stored: ${JSON.stringify(reg)}`);
 log(`\nproblems: ${problems.length ? "\n  " + problems.join("\n  ") : "none"}`);
 await b.close();
