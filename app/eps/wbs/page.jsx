@@ -5,7 +5,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 import { useEpsFmt } from "../../../components/eps/ActivityDetail";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
-import { SEPARATOR_NAMES } from "../../../lib/eps/wbs.mjs";
+import { SEPARATOR_NAMES, fitTo100 } from "../../../lib/eps/wbs.mjs";
 import { COLUMNS, useVersion, wIn, wOut } from "../../../components/eps/shared";
 
 import TableKit from "../../../components/ui/TableKit";
@@ -13,11 +13,15 @@ import TableKit from "../../../components/ui/TableKit";
  * A PMS's WBS — one tree for all its versions (083); a version plans its
  * activities on the planning page. The tree is the activities page's own
  * (owner's requirements 2026-10-22: «ساختار صفحه WBS & activities دقیقا شبیه
- * بخش ساختار درختی صفحه activities»): nodes and their activities with W.F,
- * W.V, budgets, volumes and dates, a node's row edited where it stands, a
- * child node added under it from the right-click menu, copied / cut / pasted
- * with everything under it, moved above or below its sibling, deleted with
- * its activities. Below the tree, its sub-forms: PMS DETAIL (the PMS and the
+ * بخش ساختار درختی صفحه activities») with the WBS nodes only (2026-10-24: «فقط
+ * ردیف های جدول WBS نمایش داده شود»; the activities are the activities
+ * page's): W.F, W.V, budgets, volumes and dates, a node's row edited where
+ * it stands, a child node added under it from the right-click menu, copied /
+ * cut / pasted with everything under it onto another node, moved above or
+ * below its sibling, deleted with its activities. «W.F بالای ۱۰۰٪» lists
+ * every node whose children (nodes and activities together) pass 100%, and
+ * the PMS itself when its top nodes do, and brings them down to 100% in
+ * proportion (lib/eps/wbs.mjs fitTo100). Below the tree, its sub-forms: PMS DETAIL (the PMS and the
  * root's budget), WBS DETAIL (the node picked, every field), the node's
  * activities (from a template or by hand) and the WBS settings — a colour
  * per level, how each level is numbered, how budget and weight relate.
@@ -41,6 +45,13 @@ export default function WbsPage() {
   const [sel, setSel] = useState(null);                 // the selected row {kind, id, item}
   const [adding, setAdding] = useState(null);           // a new node's full form: { parentId, code }
   const [tab, setTab] = useState("wbs");
+  const [overOpen, setOverOpen] = useState(false);
+  // the tree as the grid shows it: the WBS nodes, without their activities
+  const nodesOnly = useMemo(() => {
+    if (!data) return null;
+    const strip = (n) => ({ ...n, activities: [], children: n.children.map(strip) });
+    return { ...data, roots: data.roots.map(strip) };
+  }, [data]);
   const { t } = usePrefs();
   const { w } = useEpsFmt();
   const { height, grip } = useSplit("p6-wbs", 430);
@@ -90,10 +101,13 @@ export default function WbsPage() {
       save: (row, v) => batch([row.kind === "act" ? actBody(row.item, v) : nodeBody(row.item, v)], t("ep.wb.saved", { code: row.item.code })),
       create: (node, v) => batch([{ ...nodeBody({ parent_id: node.id }, v), id: null, code: null }], t("ep.wb.added")),
       remove: (rows) => {
-        const nodes = rows.filter((x) => x.kind === "node"), gone = new Set(nodes.map((n) => n.id));
-        // an activity goes with its node; nodes go deepest first, so a branch picked whole goes
-        return batch([...rows.filter((x) => x.kind === "act" && !gone.has(x.parentId)).map((x) => ({ kind: "activity-remove", id: x.id })),
-          ...[...nodes].sort((a, b) => b.level - a.level).map((n) => ({ kind: "node-remove", id: n.id }))], t("ep.removed"));
+        const nodes = rows.filter((x) => x.kind === "node");
+        // the activities are not on this page, but they go with their node: the question counts them
+        const full = (id) => { const f = (ns) => { for (const n of ns) { if (n.id === id) return n; const c = f(n.children); if (c) return c; } return null; }; return f(data.roots); };
+        const acts = nodes.reduce((k, n) => k + (full(n.id)?.activities.length || 0), 0);
+        if (acts && !window.confirm(t("ep.wb.removeWithActs", { nodes: nodes.length, acts }))) return false;
+        // nodes go deepest first, so a branch picked whole goes
+        return batch([...nodes].sort((a, b) => b.level - a.level).map((n) => ({ kind: "node-remove", id: n.id })), t("ep.removed"));
       },
       paste: (node, rows, how) => {
         const nodes = rows.filter((x) => x.kind === "node"), inNode = new Set(nodes.map((n) => n.id));
@@ -131,7 +145,8 @@ export default function WbsPage() {
   const S = data.settings;
   const withActs = data.templates.filter((x) => x.activities.length > 0);
   const findNode = (id) => { const f = (ns) => { for (const n of ns) { if (n.id === id) return n; const c = f(n.children); if (c) return c; } return null; }; return f(data.roots); };
-  const node = sel ? (sel.kind === "node" ? sel.item : findNode(sel.item.node_id)) : null;
+  // the node picked, as the server sent it (with its activities: the grid's rows leave them out)
+  const node = sel ? findNode(sel.kind === "node" ? sel.id : sel.item.node_id) : null;
   async function openAdd(parentId) {
     let code = "";
     try { code = (await call(`/api/eps?projectId=${projectId}&pmsId=${pmsId}&suggest=1${parentId ? `&parentId=${parentId}` : ""}`)).code; } catch { /* typed by hand */ }
@@ -144,15 +159,20 @@ export default function WbsPage() {
       title={t(S.budgetMode === "wf_to_budget" ? "ep.wb.refreshBudgetTip" : "ep.wb.refreshWfTip")}
       onClick={() => { if (window.confirm(t("ep.wb.refreshAsk"))) post({ kind: "refresh-weights" }, (r) => t("ep.wb.refreshed", { n: r.row.updated })); }}>{t("ep.wb.refresh")}</button>}
     <span className="sm muted" data-root-wf>{t("ep.wb.rootSum", { code: data.version.pms_code, wf: data.rootWf == null ? "—" : w(data.rootWf) })}</span></>;
+  const overBtn = (
+    <button type="button" className={`btn sm ${data.overflows.length ? "danger" : "ghost"}`} data-over-open aria-expanded={overOpen}
+      onClick={() => setOverOpen(!overOpen)}>{t("ep.wb.over", { n: data.overflows.length })}</button>);
   return (
     <div className="page">
       {head}
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>{t("ep.ac.problems")}</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
+      {overOpen && <Overflows list={data.overflows} pmsCode={data.version.pms_code} may={may} mode={S.budgetMode} post={post} close={() => setOverOpen(false)}
+        pick={(id) => { const n = findNode(id); if (n) { setSel({ kind: "node", id, item: n }); setTab("wbs"); } }} />}
       <div style={{ height }} data-wbs-tree>
-        <ActivityGrid data={data} columns={COLUMNS} defaultCols={DEFAULT_COLS} storeKey="p6-wbs" customKey="eps-wbs" selected={sel?.id} onSelect={(r) => { setSel(r); setAdding(null); }}
-          toolbar={toolbar} ops={ops} />
+        <ActivityGrid data={nodesOnly} columns={COLUMNS} defaultCols={DEFAULT_COLS} storeKey="p6-wbs" customKey="eps-wbs" selected={sel?.id} onSelect={(r) => { setSel(r); setAdding(null); }}
+          toolbar={<>{toolbar}{overBtn}</>} ops={ops} />
       </div>
       {grip}
       <div className="p6-detail">
@@ -169,6 +189,52 @@ export default function WbsPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * Where the W.F of a node's children (its child nodes and its activities
+ * together), or of the PMS's top nodes, add up past 100% — each with its
+ * children as they are and as «fit to 100%» would leave them: every one
+ * brought down in proportion to its own, so they total exactly 100%.
+ */
+function Overflows({ list, pmsCode, may, mode, post, close, pick }) {
+  const { t } = usePrefs();
+  const { w } = useEpsFmt();
+  const [open, setOpen] = useState(() => new Set());
+  const fit = async (o) => {
+    if (!window.confirm(t("ep.wb.fitAsk", { code: o.code || pmsCode, sum: w(o.sum) }))) return;
+    await post({ kind: "wf-fit", nodeId: o.id }, (r) => t("ep.wb.fitted", { code: o.code || pmsCode, n: r.row.updated }));
+  };
+  const fitAll = async () => {
+    if (!window.confirm(t("ep.wb.fitAllAsk", { n: list.length }))) return;
+    for (const o of list) if (!(await post({ kind: "wf-fit", nodeId: o.id }, () => t("ep.wb.fittedAll", { n: list.length })))) return;
+  };
+  return (
+    <div className="card" data-overflows>
+      <h2>{t("ep.wb.overTitle")} <button className="btn ghost sm" type="button" onClick={close}>{t("ep.close")}</button></h2>
+      <p className="sm muted">{t("ep.wb.overNote")}</p>
+      {mode === "budget_to_wf" && <p className="sm" style={{ color: "var(--warn)" }}>{t("ep.wb.overBudgetMode")}</p>}
+      {list.length === 0 ? <p className="empty-note" data-over-none>{t("ep.wb.overNone")}</p> : <>
+        {may && <p><button className="btn" type="button" data-fit-all onClick={fitAll}>{t("ep.wb.fitAll", { n: list.length })}</button></p>}
+        <table className="dtable"><thead><tr><th>{t("ep.code")}</th><th>{t("ep.name")}</th><th>{t("ep.wb.overSum")}</th><th>{t("ep.wb.overKids")}</th><th /></tr></thead>
+          <tbody>{list.map((o) => {
+            const key = o.id || "root", after = new Map(fitTo100(o.children).map((k) => [k.id, k.wf]));
+            return [
+              <tr key={key} data-over={o.code || "PMS"}>
+                <td className="mono">{o.id ? <button type="button" className="btn ghost sm mono" onClick={() => pick(o.id)}>{o.code}</button> : <b>{pmsCode}</b>}</td>
+                <td>{o.id ? o.name : t("ep.wb.overRoot")}</td>
+                <td className="mono" style={{ color: "var(--bad)" }} data-over-sum>{w(o.sum)}</td>
+                <td><button type="button" className="btn ghost sm" onClick={() => setOpen((x) => { const n = new Set(x); n.has(key) ? n.delete(key) : n.add(key); return n; })}>
+                  {t("ep.wb.overKidsN", { n: o.children.length })} {open.has(key) ? "▾" : "◂"}</button></td>
+                <td>{may && <button className="btn sm" type="button" data-fit={o.code || "PMS"} onClick={() => fit(o)}>{t("ep.wb.fit")}</button>}</td>
+              </tr>,
+              ...(open.has(key) ? o.children.map((k) => (
+                <tr key={`${key}:${k.id}`} className="sm muted">
+                  <td className="mono" style={{ paddingInlineStart: 24 }}>{k.code}</td><td>{k.kind === "activity" ? `▸ ${k.name}` : k.name}</td>
+                  <td className="mono" colSpan={2}>{w(k.wf)}{after.has(k.id) ? ` → ${w(after.get(k.id))}` : ""}</td><td /></tr>)) : []),
+            ];
+          })}</tbody></table></>}
+    </div>);
 }
 
 /** PMS DETAIL: the PMS itself — its code, title, type, dates and the root's budget (083: the budget modes take a child's share of it). */

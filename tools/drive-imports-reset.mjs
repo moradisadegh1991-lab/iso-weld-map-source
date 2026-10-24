@@ -2,7 +2,8 @@
  * Drive the last part of the owner's requirements of 2026-10-18 (items 8, 11,
  * 12, 13, 16) on the DM-pump scenario played to the end, in English:
  *   - every import page offers its Excel template; the EPS template, filled as
- *     it comes, imports back as a new version (round trip through the page);
+ *     it comes, imports back into a PMS, replacing what it held (round trip
+ *     through the page; a file is a PMS, not a version, since 2026-10-24);
  *   - a link of an activity to the platform's items is removed on the scope
  *     page, and an activity removed from there with its link;
  *   - the daily report's resources are filtered by name, and to what the
@@ -77,6 +78,7 @@ const run = Date.now().toString(36).slice(-4).toUpperCase();   // the drive can 
 const pms = (await api("/api/eps", { projectId, kind: "pms", contractId, code: `PMS-T${run}`, title: "Template plan" })).row;
 await page.goto(`${BASE}/eps`, { waitUntil: "networkidle" });
 await page.locator("[data-import-open]").click();
+await page.locator('[data-im-mode="replace"]').check();
 await page.selectOption("#im-pms", pms.id);
 await page.selectOption("#im-kind", "sheet");
 // a template a person can cut down opens a menu (2026-10-22): its full template first
@@ -84,12 +86,11 @@ await page.locator("[data-template=eps]").click();
 const eps = await grab(page.locator("[data-templates=eps] [data-template-full]"));
 const wb = XLSX.read(await readFile(eps.path));
 check(eps.name === "eps-wbs-template.xlsx" && wb.SheetNames.join() === "WBS,Guide", `the EPS template downloads with its guide (${eps.name}: ${wb.SheetNames.join(", ")})`);
-await page.fill("#im-code", `T${run}`);
 await page.setInputFiles("#im-file", eps.path);
 await page.locator("[data-import-plan] button[type=submit]").click();
 await page.locator(".okmsg, .err").first().waitFor();
 const said = await page.locator(".okmsg, .err").first().innerText();
-check(/3 گره، 3 فعالیت|3 nodes?, 3 activit|۳ گره، ۳ فعالیت/.test(said), `the template, as downloaded, imports as a version (${said})`);
+check(/3 گره، 3 فعالیت|3 nodes?, 3 activit|۳ گره، ۳ فعالیت/.test(said), `the template, as downloaded, imports into the PMS (${said})`);
 await page.locator("[data-import-open]").click();      // the form closes on a successful import
 await page.selectOption("#im-kind", "pms");
 const pmsT = await grab(page.locator("[data-template=pms]"));
