@@ -50,7 +50,7 @@ async function uploadDirect(call, { projectId, sha256, byteSize, contentType, bu
   return true;
 }
 
-export default function SaveBar({ session, data, model, sourceFile, strictBom, onSaved }) {
+export default function SaveBar({ session, data, model, sourceFile, strictBom, onSaved, beforeSave }) {
   const { projectId, identity, call } = session;
   const [state, setState] = useState({ phase: "idle" });
   const [saved, setSaved] = useState(null);
@@ -63,6 +63,8 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
     if (!docNo || !revision) {
       return setState({ phase: "error", msg: "شماره نقشه و رویژن لازم است — در تب JSON پرشان کنید." });
     }
+    // the page's own last word before anything is sent (e.g. rows nobody has checked against the drawing yet)
+    if (beforeSave && !(await beforeSave())) return;
 
     setState({ phase: "busy", msg: "ثبت سند…" });
     try {

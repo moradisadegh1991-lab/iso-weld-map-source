@@ -59,6 +59,7 @@ header .sub{font-size:11px;color:var(--dim)}
 
 /* stage */
 .stage{flex:1;display:flex;min-height:0;flex-direction:row-reverse}
+.stage.listed{flex-direction:column}
 .canvas{position:relative;flex:1;min-width:0;min-height:420px}
 .viewer{position:absolute;inset:0;cursor:grab}
 .labels{position:absolute;inset:0;overflow:hidden;pointer-events:none}
@@ -835,6 +836,14 @@ ol.timeline li.bad::before{background:var(--bad)}
 .weldlist .wl-f{display:flex;flex-direction:column;gap:3px}
 .weldlist .wl-table{overflow-x:auto;max-width:100%}
 .weldlist .wl-table input{width:100%;min-width:70px}
+/* the drawing beside the rows (components/SheetReview.jsx) */
+.weldlist .wl-review{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;align-items:start}
+.weldlist .wl-review .wl-sheet{position:sticky;top:8px}
+.weldlist .wl-review .wl-table{max-height:700px;overflow:auto}
+.weldlist .wl-table tr.sel td{background:rgba(255,214,0,.18)}
+.sheet-review .sheet-box{border:1px solid var(--line,#ccc);border-radius:6px}
+.sheet-review .dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle}
+@media (max-width:1100px){.weldlist .wl-review{grid-template-columns:1fr}.weldlist .wl-review .wl-sheet{position:static}}
 .weldlist .err ul{margin:4px 0 0;padding-inline-start:18px}
 
 /* Logs and trails (components/ui/EntityLog.jsx, app/log). */

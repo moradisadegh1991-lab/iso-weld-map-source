@@ -48,6 +48,19 @@ test("activities read their node: W.V, budgets from W.F, volumes and dates; with
   assert(t.problems.some((p) => p.includes("فعالیت‌ها") && p.includes("105")));
 });
 
+test("W.F over 100%: every node whose children (nodes and activities together) pass it, and the PMS itself; fitted in proportion to exactly 100", async () => {
+  const t = w.computeTree({ version: { budget_plan: 1000 }, settings: S,
+    nodes: [N("A", null, { wf: 70 }), N("B", null, { wf: 50 }), N("A1", "A", { wf: 60 }), N("B1", "B", { wf: 100 })],
+    activities: [{ id: "x", node_id: "A", code: "A.01", wf: 60, seq: 1 }, { id: "y", node_id: "B1", code: "B1.01", wf: 100, seq: 1 }] });
+  equal(w.wfOverflows(t).map((o) => [o.id, o.sum, o.children.length]), [[null, 120, 2], ["A", 120, 2]], "the PMS (70 + 50) and A (node 60 + activity 60); B and B1 are at 100");
+  const fit = w.fitTo100(w.wfOverflows(t)[1].children);
+  equal(fit.map((k) => [k.id, k.kind, k.wf]), [["A1", "node", 50], ["x", "activity", 50]]);
+  const thirds = w.fitTo100([{ id: 1, kind: "node", wf: 50 }, { id: 2, kind: "node", wf: 50 }, { id: 3, kind: "node", wf: 50 }, { id: 4, kind: "activity", wf: null }]);
+  equal(Math.round(thirds.reduce((s2, k) => s2 + k.wf, 0) * 1e10) / 1e10, 100, "thirds sum to exactly 100");
+  equal(thirds.length, 3, "a child with no W.F is left without one");
+  equal(w.fitTo100([{ id: 1, kind: "node", wf: 40 }, { id: 2, kind: "node", wf: 60 }]), [], "at 100 nothing changes");
+});
+
 test("order and codes: reorder before / after; a code follows its moved prefix, a hand-typed one keeps its own", async () => {
   equal(w.reorder(["a", "b", "c", "d"], "d", { beforeId: "b" }), ["a", "d", "b", "c"]);
   equal(w.reorder(["a", "b", "c"], "a", { afterId: "c" }), ["b", "c", "a"]);
@@ -197,6 +210,33 @@ test("update weights/budgets: the worked-out figure written into the stored one;
     equal(await stored("PM01.C.02"), { wf: "39.8765432101", b: 398.77 }, "ten decimals of W.F kept; the budget from it, of the root's 1000, now stored");
     equal((await eps.refreshWeights(db, { projectId: P, versionId: V.id, userId: U.id })).updated, 0, "a second run has nothing left to change");
     await eps.saveSettings(db, { projectId: P, versionId: V.id, settings: w.DEFAULT_SETTINGS, userId: U.id });
+  });
+});
+
+test("fit to 100% in the database: a tree over 100% (as a file can bring it) is listed, fitted where asked, and the 100% rule then holds; W.F from budgets is not overwritten", async () => {
+  await inP(async () => {
+    const Q = await eps.savePms(db, { projectId: P, contractId: C.id, code: "FIT", title: "fit", budgetPlan: 1000, userId: U.id });
+    const n1 = await eps.saveNode(db, { projectId: P, pmsId: Q.id, name: "a", wf: 60 });
+    const n2 = await eps.saveNode(db, { projectId: P, pmsId: Q.id, name: "b", wf: 40 });
+    const a1 = await eps.saveActivity(db, { projectId: P, nodeId: n1.id, name: "x", wf: 70 });
+    const a2 = await eps.saveActivity(db, { projectId: P, nodeId: n1.id, name: "y", wf: 30 });
+    await db.query("UPDATE wbs_node SET wf = 90 WHERE id = $1", [n2.id]);          // the PMS: 60 + 90
+    await db.query("UPDATE wbs_activity SET wf = 90 WHERE id = $1", [a1.id]);      // node a: 90 + 30
+    let v = await eps.wbsView(db, { projectId: P, pmsId: Q.id });
+    equal(v.overflows.map((o) => [o.code, o.sum]), [[null, 150], [n1.code, 120]]);
+    equal(await eps.fitWf(db, { projectId: P, pmsId: Q.id, nodeId: n1.id, userId: U.id }), { updated: 2, from: 120 });
+    const wf = async (t, id) => Number((await db.query(`SELECT wf FROM ${t} WHERE id = $1`, [id])).rows[0].wf);
+    equal([await wf("wbs_activity", a1.id), await wf("wbs_activity", a2.id)], [75, 25], "in proportion: 90:30 → 75:25");
+    await eps.fitWf(db, { projectId: P, pmsId: Q.id, nodeId: null, userId: U.id });
+    equal([await wf("wbs_node", n1.id), await wf("wbs_node", n2.id)], [40, 60], "the PMS's top nodes: 60:90 → 40:60");
+    v = await eps.wbsView(db, { projectId: P, pmsId: Q.id });
+    equal([v.overflows, v.problems.filter((p) => p.includes("بیش از ۱۰۰"))], [[], []], "nothing over 100% now");
+    equal(await eps.fitWf(db, { projectId: P, pmsId: Q.id, nodeId: n1.id, userId: U.id }), { updated: 0 }, "at 100: nothing to do");
+    // under budget_to_wf a node's W.F is its budget's share: refused rather than written over
+    await eps.saveSettings(db, { projectId: P, pmsId: Q.id, settings: { ...w.DEFAULT_SETTINGS, budgetMode: "budget_to_wf" }, userId: U.id });
+    await db.query("UPDATE wbs_node SET budget_plan = 800 WHERE id = $1", [n1.id]);
+    await db.query("UPDATE wbs_node SET budget_plan = 700 WHERE id = $1", [n2.id]);
+    await throws(() => eps.fitWf(db, { projectId: P, pmsId: Q.id, nodeId: null, userId: U.id }), "بودجه");
   });
 });
 

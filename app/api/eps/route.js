@@ -21,11 +21,13 @@ import { logEvent } from "../../../lib/db/repos/log.mjs";
  *   GET ?projectId&pmsId                   a PMS's WBS with every derived figure, and the templates
  *   GET ?projectId&versionId               the same tree as a version plans it
  *   GET ?projectId&(pmsId|versionId)&suggest=1[&parentId]   the code a new node would get
+ *   GET ?projectId&pmsId&contents=1        what is under the PMS, and what stops deleting it
  *   GET ?projectId&templates=1             the activity templates
  *   POST {kind: pms | pms-budget | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
  *         attach | activity | activity-remove | template | template-move | template-copy | template-remove |
  *         template-activity | template-activity-remove | template-sync | convert-legacy}
- *   POST multipart {kind: import-plan, pmsId, versionCode, fileKind: mspdi | pms | sheet, file}
+ *   POST multipart {kind: import-plan, mode: replace (pmsId) | new (contractId, pmsCode, title?), fileKind: mspdi | pms | sheet, file}
+ *   POST {kind: wf-fit, pmsId, nodeId?}    the children's W.F of a node (or of the PMS) brought down to 100%
  *        a plan file (MS Project XML or the PMS workbook) as a new version of a PMS
  */
 const LABELS = { budgetModes: BUDGET_MODES, separators: SEPARATORS, pmsTypes: PMS_TYPES };
@@ -43,7 +45,8 @@ async function contractOf(db, projectId, b) {
     case "pms": return b.id ? q(PMS, b.id) : b.contractId || null;
     case "pms-budget": return q(PMS, b.id);
     case "version": return b.id ? q(VERSION, b.id) : q(PMS, b.pmsId);
-    case "import-plan": case "convert-legacy": return q(PMS, b.pmsId);
+    case "import-plan": return b.mode === "new" ? b.contractId || null : q(PMS, b.pmsId);
+    case "convert-legacy": case "wf-fit": return q(PMS, b.pmsId);
     case "version-master": return q(VERSION, b.id);
     case "eps-move": case "eps-remove": return b.epsKind === "version" ? q(VERSION, b.id) : q(PMS, b.id);
     case "settings": case "refresh-weights": case "node": case "node-move": case "node-copy": case "node-remove": return b.pmsId ? q(PMS, b.pmsId) : q(VERSION, b.versionId);
@@ -71,6 +74,8 @@ export async function GET(request) {
         if (!contractId) throw notFound();
         const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
         if (q("suggest")) return Response.json({ code: await eps.suggestNodeCode(db, { projectId, pmsId, versionId, parentId: q("parentId") }) });
+        // what deleting (or replacing) the PMS takes with it, and what stops it — asked before the question is put
+        if (q("contents")) return Response.json(await eps.pmsContents(db, { projectId, id: pmsId }));
         return Response.json({ ...(await eps.wbsView(db, { projectId, pmsId, versionId })), labels: LABELS, may: { edit: access !== "view" } });
       }
       const contractId = q("contractId");
@@ -123,6 +128,7 @@ export async function POST(request) {
         "eps-remove": () => eps.removeEps(db, { ...a, kind: b.epsKind }),
         settings: () => eps.saveSettings(db, a),
         "refresh-weights": () => eps.refreshWeights(db, a),
+        "wf-fit": () => eps.fitWf(db, { ...a, nodeId: b.nodeId || null }),
         node: () => eps.saveNode(db, a),
         "node-move": () => eps.moveNode(db, a),
         "node-copy": () => eps.copyNode(db, a),
@@ -139,8 +145,10 @@ export async function POST(request) {
         "template-sync": () => eps.syncTemplate(db, a),
         "import-plan": async () => {
           if (!file) throw Object.assign(new Error("فایل برنامه را انتخاب کنید."), { status: 400 });
-          const r = await importPlan(db, { ...a, kind: b.fileKind, versionCode: b.versionCode, title: b.title || null, sourceName: fileName, content: file });
-          await logEvent(db, { projectId, section: "controls", entityType: "eps_version", entityId: r.version.id, label: `نسخهٔ ${r.version.code} از ${fileName}`,
+          const r = await importPlan(db, { ...a, mode: b.mode, pmsId: b.pmsId || null, pmsCode: b.pmsCode || null, kind: b.fileKind, title: b.title || null,
+            sourceName: fileName, content: file });
+          await logEvent(db, { projectId, section: "controls", entityType: "eps_pms", entityId: r.pms.id,
+            label: `PMS ${r.pms.code} ${b.mode === "new" ? "تازه" : "جایگزین‌شده"} از ${fileName}`,
             action: "imported", comment: `${r.nodes} گره، ${r.activities} فعالیت، ${r.relations} رابطه`, userId: user.id });
           return r;
         },

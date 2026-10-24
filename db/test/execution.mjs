@@ -144,7 +144,7 @@ const db = await getDb();
 const alice = await projects.ensureUser(db, { subject: "kc|alice" });
 const proj = await projects.createProject(db, { code: "K110", name: "K110", ownerUserId: alice.id });
 const other = await projects.createProject(db, { code: "OTHER", name: "O", ownerUserId: alice.id });
-let lineId, spools, welds;
+let lineId, spools, welds, runId;
 
 await withProject(db, proj.id, async () => {
   const { rows: [line] } = await db.query(
@@ -157,6 +157,7 @@ await withProject(db, proj.id, async () => {
   const r = await runs.createRun(db, { projectId: proj.id, documentId: doc.id, lineId,
     payload: DEMO, validationChecks: model.checks });
   await runs.saveRegister(db, { projectId: proj.id, runId: r.id, documentId: doc.id, lineId, model });
+  runId = r.id;
   spools = (await db.query("SELECT id, spool_no FROM spool WHERE project_id = $1 ORDER BY spool_no",
     [proj.id])).rows;
   welds = (await db.query(
@@ -326,6 +327,20 @@ test("a rejected shot keeps shop NDT open — in the chain and in SQL — until 
     }
     s = await js();
     equal([s.steps.find((x) => x.code === "shop_ndt").status, s.headline, await stage()], [DONE, "shop_ndt", "shop_ndt"], "repaired and accepted");
+  });
+});
+
+test("the run's register says where each joint stands on site: welded, and its NDT accepted (the sheet's colours)", async () => {
+  await withProject(db, proj.id, async () => {
+    const reg = await runs.getRegister(db, { projectId: proj.id, runId });
+    const facts = new Map((await db.query("SELECT weld_uid, is_welded, is_accepted FROM reporting.fact_weld WHERE project_key = $1", [proj.id])).rows
+      .map((f) => [f.weld_uid, f]));
+    for (const w of reg) {
+      const f = facts.get(w.weld_uid);
+      equal([w.is_welded, w.is_accepted], [f.is_welded, f.is_welded && f.is_accepted], `${w.weld_no}: as the weld record and its NDT say`);
+    }
+    assert(reg.some((w) => w.is_welded && w.is_accepted), "some joints are welded and accepted by now");
+    assert(reg.some((w) => !w.is_welded), "and some not yet welded");
   });
 });
 

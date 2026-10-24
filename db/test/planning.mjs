@@ -274,12 +274,55 @@ test("a version with planning rows is not deleted nor moved to another PMS; its 
   await inP(async () => {
     await throws(() => eps.removeEps(db, { projectId: P, kind: "version", id: V2.id }), "ردیف برنامه");
     await throws(() => eps.moveEps(db, { projectId: P, kind: "version", id: V2.id, pmsId: PM2.id }), "PMS دیگری نمی‌رود");
-    await throws(() => eps.removeEps(db, { projectId: P, kind: "pms", id: PM2.id }), "نسخه");
     const ids = (await plan.planRows(db, { projectId: P, versionId: V2.id })).rows.map((x) => x.id);
     equal(await plan.removePlanRows(db, { projectId: P, ids, userId: U.id }), { removed: ids.length });
     await eps.moveEps(db, { projectId: P, kind: "version", id: V2.id, pmsId: PM2.id });
     await eps.removeEps(db, { projectId: P, kind: "version", id: V2.id });
     equal((await one(V1.id, A.id)).plan.volume_plan, 100, "the other version's plan is untouched");
+  });
+});
+
+test("a PMS deleted takes everything under it — versions, planning rows and their sub-forms, nodes at every depth, activities, relations, its own column values — and nothing of another PMS", async () => {
+  await inP(async () => {
+    const PM3 = await eps.savePms(db, { projectId: P, contractId: C.id, code: "PM03", title: "حذفی", userId: U.id });
+    const V3 = await eps.saveVersion(db, { projectId: P, pmsId: PM3.id, code: "PM03-R1", title: "یک", userId: U.id });
+    const top = await eps.saveNode(db, { projectId: P, pmsId: PM3.id, name: "بالا", wf: 100 });
+    const mid = await eps.saveNode(db, { projectId: P, pmsId: PM3.id, parentId: top.id, name: "میانه", wf: 100 });
+    const leaf = await eps.saveNode(db, { projectId: P, pmsId: PM3.id, parentId: mid.id, name: "برگ", wf: 100 });
+    const a1 = await eps.saveActivity(db, { projectId: P, nodeId: leaf.id, name: "یک", wf: 50 });
+    const a2 = await eps.saveActivity(db, { projectId: P, nodeId: leaf.id, name: "دو", wf: 50 });
+    await db.query("INSERT INTO activity_relation (project_id, pred_id, succ_id) VALUES ($1,$2,$3)", [P, a1.id, a2.id]);
+    await plan.addToPlan(db, { projectId: P, versionId: V3.id, activityIds: [a1.id, a2.id], userId: U.id });
+    const ty = await plan.saveRequirementType(db, { projectId: P, contractId: C.id, name: `نقشه ${Date.now()}` });
+    await plan.saveRequirement(db, { projectId: P, versionId: V3.id, activityId: a1.id, name: "IFC", typeId: ty.id, userId: U.id });
+    await plan.saveComment(db, { projectId: P, versionId: V3.id, activityId: a2.id, item: "یادداشت", userId: U.id });
+    const { rows: [f] } = await db.query("INSERT INTO custom_field (project_id, form_key, label, data_type) VALUES ($1,'eps-wbs','ستون','text') RETURNING id", [P]);
+    await db.query("INSERT INTO custom_value (project_id, field_id, row_key, value) VALUES ($1,$2,$3,'x'),($1,$2,$4,'y')", [P, f.id, leaf.id, N.id]);
+    const c = await eps.pmsContents(db, { projectId: P, id: PM3.id });
+    equal([c.counts.versions, c.counts.plans, c.counts.nodes, c.counts.activities, c.counts.relations, c.blockers], [1, 2, 3, 2, 1, []]);
+    const others = async () => (await db.query("SELECT (SELECT count(*) FROM wbs_node WHERE pms_id <> $1)::int + (SELECT count(*) FROM eps_version WHERE pms_id <> $1)::int AS n", [PM3.id])).rows[0].n;
+    const before = await others();
+    await eps.removeEps(db, { projectId: P, kind: "pms", id: PM3.id, userId: U.id });
+    const left = (await db.query(
+      `SELECT (SELECT count(*) FROM eps_pms WHERE id = $1)::int + (SELECT count(*) FROM eps_version WHERE pms_id = $1)::int
+            + (SELECT count(*) FROM wbs_node WHERE pms_id = $1)::int + (SELECT count(*) FROM wbs_activity WHERE id = ANY($2::uuid[]))::int
+            + (SELECT count(*) FROM activity_plan WHERE version_id = $3)::int + (SELECT count(*) FROM activity_requirement WHERE version_id = $3)::int
+            + (SELECT count(*) FROM activity_comment WHERE version_id = $3)::int + (SELECT count(*) FROM activity_relation WHERE pred_id = $4)::int AS n`,
+      [PM3.id, [a1.id, a2.id], V3.id, a1.id])).rows[0].n;
+    equal(left, 0, "nothing of it is left");
+    equal((await db.query("SELECT row_key FROM custom_value WHERE field_id = $1", [f.id])).rows.map((r) => r.row_key), [N.id], "its column values went; another PMS's stayed");
+    equal(await others(), before, "the other PMSs untouched");
+  });
+});
+
+test("a PMS a control account is measured on is not deleted", async () => {
+  await inP(async () => {
+    const PM4 = await eps.savePms(db, { projectId: P, contractId: C.id, code: "PM04", title: "کنترلی", userId: U.id });
+    const n = await eps.saveNode(db, { projectId: P, pmsId: PM4.id, name: "گره", wf: 100 });
+    await db.query("INSERT INTO control_account (project_id, code, title, wbs_node_id) VALUES ($1,'CA-PM04','x',$2)", [P, n.id]);
+    equal((await eps.pmsContents(db, { projectId: P, id: PM4.id })).blockers.length, 1);
+    await throws(() => eps.removeEps(db, { projectId: P, kind: "pms", id: PM4.id }), "CA-PM04");
+    equal((await db.query("SELECT count(*)::int AS n FROM wbs_node WHERE pms_id = $1", [PM4.id])).rows[0].n, 1, "nothing removed");
   });
 });
 

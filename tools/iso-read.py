@@ -3,8 +3,10 @@
     python3 -I tools/iso-read.py <sheet.pdf|.png|.jpg> [--page 1] [--dpi 200] [--debug out.png]
 
 Prints one JSON object: { "orientation", "meta": {drawingNo, sheet, rev},
-"marks": [ {no, shape, outline, label, box} ], "rejected": [...] }. `meta` is
-the title block (read_title; any part not read for certain is null). The
+"marks": [ {no, shape, outline, label, box, at} ], "rejected": [...] }. `meta` is
+the title block (read_title; any part not read for certain is null); `box`
+is in the upright page's pixels, `at` the marker's centre as fractions of
+the page as rendered (before it was turned upright). The
 same `marks` a model's `welds` pass
 reports (lib/register/weld-marks.mjs), and nothing more: shop or field, the
 joint type and the register are decided there, by the project's declared
@@ -487,6 +489,19 @@ def main():
         if k not in seen:
             seen.add(k)
             out.append(m)
+    # where each marker sits on the page as rendered (before the turn above), as
+    # fractions of its width and height: the reviewer's drawing is that page
+    H0, W0 = g0.shape[:2]
+    for m in out:
+        b = m["box"]
+        x, y = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+        if rot == 180:
+            x, y = W0 - x, H0 - y
+        elif rot == 90:      # turned clockwise: x' = H0 - y, y' = x
+            x, y = y, H0 - x
+        elif rot == 270:     # turned counter-clockwise: x' = y, y' = W0 - x
+            x, y = W0 - y, x
+        m["at"] = [round(x / W0, 4), round(y / H0, 4)]
     if debug:
         dbg = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
         for t in tables:

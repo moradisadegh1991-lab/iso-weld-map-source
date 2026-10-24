@@ -19,7 +19,7 @@
  */
 import { chromium } from "playwright";
 import * as XLSX from "xlsx";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const SHOT = process.env.SHOT_DIR || "/tmp/shots";
@@ -100,7 +100,8 @@ await page.screenshot({ path: `${SHOT}/410-eps-tree-en.png` });
 await page.goto(`${BASE}/eps/wbs?pms=${pms.id}`, { waitUntil: "networkidle" });
 const tree = "[data-wbs-tree]";
 await row(tree, node.code).waitFor();
-check((await row(tree, `${node.code}.01`).innerText()).includes("0.6"), "the tree shows W.F as a fraction");
+check(await page.locator(`${tree} tr[data-kind=act]`).count() === 0 && (await row(tree, node.code).innerText()).includes("1"),
+  "the WBS tree shows its nodes only (W.F as a fraction), not their activities");
 // a child node from the menu
 await row(tree, node.code).click({ button: "right" });
 await page.locator("[data-row-menu] button", { hasText: "Add a child" }).click();
@@ -163,6 +164,82 @@ asked.length = 0;
 await page.locator(`[data-wbs-detail="${civil.code}"] [data-node-remove]`).click();
 await page.waitForTimeout(1000);
 check(asked[0] === `Delete node ${civil.code}?` && !(await api(`/api/eps?projectId=${projectId}&pmsId=${pms.id}`)).roots.some((r) => r.name === "Civil"), "a node deleted from WBS DETAIL, asked first");
+
+// ── a plan file: a new PMS, then replacing it ────────────────────────────
+// an EPS sheet whose W.F pass 100% (as a file can): the PMS's top nodes 60 + 90, node A's children 90 + 30
+const sheet = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(sheet, XLSX.utils.aoa_to_sheet([
+  ["Type", "Parent code", "Code", "Name", "W.F"],
+  ["WBS", "", "A", "Mechanical", 60], ["WBS", "", "B", "Electrical", 90], ["WBS", "A", "A1", "Pumps", 90],
+  ["Activity", "A", "A.01", "Pump set", 30], ["Activity", "A1", "A1.01", "Alignment", 100], ["Activity", "B", "B.01", "Cabling", 100],
+]), "EPS");
+const sheetFile = `${SHOT}/eps-over-${tag}.xlsx`;
+await writeFile(sheetFile, XLSX.write(sheet, { type: "buffer", bookType: "xlsx" }));
+await page.goto(`${BASE}/eps`, { waitUntil: "networkidle" });
+await page.locator("[data-import-open]").first().click();
+await page.locator('[data-im-mode="new"]').check();
+const newCode = `IM-${tag}`;
+await page.fill("#im-newcode", newCode);
+await page.fill("#im-newtitle", "Imported plan");
+await page.selectOption("#im-kind", "sheet");
+await page.setInputFiles("#im-file", sheetFile);
+await page.locator("[data-im-go]").click();
+await page.locator(".okmsg").waitFor();
+const imported = (await api(`/api/eps?projectId=${projectId}&contractId=${contractId}`)).pms.find((p) => p.code === newCode);
+check(Boolean(imported) && imported.versions.length === 0 && imported.nodes === 3, `the file as a new PMS ${newCode}: ${imported?.nodes} nodes, no version`);
+
+// ── W.F over 100% on its WBS ─────────────────────────────────────────────
+await page.goto(`${BASE}/eps/wbs?pms=${imported.id}`, { waitUntil: "networkidle" });
+await row(tree, "A").waitFor();
+const overBtn = page.locator("[data-over-open]");
+check(/\(2\)/.test(await overBtn.innerText()), `the over-100% button counts two places (${await overBtn.innerText()})`);
+await overBtn.click();
+const over = page.locator("[data-overflows]");
+await over.waitFor();
+check(await over.locator("tr[data-over=PMS]").count() === 1 && await over.locator("tr[data-over=A]").count() === 1, "listed: the PMS (its top nodes) and node A (a child node and an activity together)");
+check((await over.locator("tr[data-over=A] [data-over-sum]").innerText()).includes("1.2"), "A's children add up to 1.2 (120%)");
+await page.screenshot({ path: `${SHOT}/413-wf-over-en.png` });
+asked.length = 0;
+await over.locator("[data-fit=A]").click();
+await page.waitForTimeout(1200);
+check(/A's children/.test(asked[0] || ""), `asked before fitting A (${asked[0]})`);
+let wbs = await api(`/api/eps?projectId=${projectId}&pmsId=${imported.id}`);
+const nA = wbs.roots.find((r) => r.code === "A");
+check(Math.abs(nA.children[0].wf - 75) < 1e-6 && Math.abs(nA.activities[0].wf - 25) < 1e-6, `A's children in proportion: ${nA.children[0].wf} + ${nA.activities[0].wf}`);
+await over.locator("[data-fit-all]").click();
+await page.waitForTimeout(1500);
+wbs = await api(`/api/eps?projectId=${projectId}&pmsId=${imported.id}`);
+check(wbs.overflows.length === 0 && Math.abs(wbs.rootWf - 100) < 1e-6, `all fitted: the PMS's top nodes now ${wbs.roots.map((r) => r.wf).join(" + ")}`);
+await page.locator("[data-overflows] [data-over-none]").waitFor();
+check(true, "the list says nothing is over 100% now");
+
+// ── replacing that PMS from the file, then deleting it with everything under it ──
+await page.goto(`${BASE}/eps`, { waitUntil: "networkidle" });
+await page.locator("[data-import-open]").first().click();
+await page.locator('[data-im-mode="replace"]').check();
+await page.selectOption("#im-pms", imported.id);
+await page.selectOption("#im-kind", "sheet");
+await page.setInputFiles("#im-file", sheetFile);
+asked.length = 0;
+await page.locator("[data-im-go]").click();
+await page.locator(".okmsg").waitFor();
+check(/Clear what PMS .* holds.*3 WBS nodes, 3 activities/.test(asked[0] || ""), `replacing asks first, naming what goes (${(asked[0] || "").slice(0, 120)})`);
+wbs = await api(`/api/eps?projectId=${projectId}&pmsId=${imported.id}`);
+check(wbs.overflows.length === 2, "replaced from the file: its figures as the file has them again (the fit undone)");
+await row("[data-eps-tree]", newCode).click();
+await page.locator(`[data-pms-form="${newCode}"] [data-pms-remove]`).waitFor();
+asked.length = 0;
+await page.locator(`[data-pms-form="${newCode}"] [data-pms-remove]`).click();
+await page.waitForTimeout(1500);
+check(/with everything under it\? 0 versions .*3 WBS nodes, 3 activities/.test(asked[0] || ""), `deleting the PMS names what goes with it (${(asked[0] || "").slice(0, 120)})`);
+check(!(await api(`/api/eps?projectId=${projectId}&contractId=${contractId}`)).pms.some((p) => p.code === newCode), "the PMS is gone with everything under it");
+// the drive's own PMS, with two versions and a node, goes too
+await row("[data-eps-tree]", pms.code).click();
+asked.length = 0;
+await page.locator(`[data-pms-form="${pms.code}"] [data-pms-remove]`).click();
+await page.waitForTimeout(1500);
+check(/3 versions/.test(asked[0] || "") && !(await api(`/api/eps?projectId=${projectId}&contractId=${contractId}`)).pms.some((p) => p.id === pms.id),
+  `a PMS with versions and WBS is deleted whole (${(asked[0] || "").slice(0, 80)})`);
 
 // ── a template of chosen columns ─────────────────────────────────────────
 await page.goto(`${BASE}/eps/planning?version=${v1.id}`, { waitUntil: "networkidle" });

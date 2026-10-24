@@ -93,11 +93,17 @@ export async function POST(request) {
   }
 }
 
-/** The revision currently in force for a drawing sheet. */
+/**
+ * The revision currently in force for a drawing sheet — or, with `file`
+ * (a document id), that sheet's own bytes, for the review beside the drawing
+ * (app/piping). Its name is its hash, so it never changes.
+ */
 export async function GET(request) {
   try {
     const url = new URL(request.url);
     const projectId = url.searchParams.get("projectId");
+    const fileOf = url.searchParams.get("file");
+    if (projectId && fileOf) return await sheetFile(request, projectId, fileOf);
     const docNo = url.searchParams.get("docNo");
     const sheetNo = url.searchParams.get("sheetNo") || "1/1";
     if (!projectId || !docNo) {
@@ -117,3 +123,23 @@ export async function GET(request) {
 }
 
 const extFor = (ct) => ({ "image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf" }[ct] || "");
+
+const SHEET_TYPES = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp"]);
+
+async function sheetFile(request, projectId, documentId) {
+  if (!/^[0-9a-f-]{36}$/i.test(documentId)) return Response.json({ error: "not found" }, { status: 404 });
+  const { db, membership } = await authenticate(request, { projectId });
+  if (!membership) return Response.json({ error: "not found" }, { status: 404 });
+  assertCan(membership, ACTIONS.VIEW_PROJECT);
+  const doc = await withProject(db, projectId, async () =>
+    (await db.query("SELECT file_sha256, storage_uri, content_type FROM document WHERE id = $1 AND project_id = $2", [documentId, projectId])).rows[0]);
+  if (!doc) return Response.json({ error: "not found" }, { status: 404 });
+  if (/^(pending|none):\/\//.test(doc.storage_uri)) return Response.json({ error: "فایل این نقشه در سامانه نیست." }, { status: 404 });
+  const bytes = await (await getStore()).get(doc.storage_uri);
+  const type = SHEET_TYPES.has(doc.content_type) ? doc.content_type : "application/octet-stream";
+  return new Response(bytes, { headers: {
+    "Content-Type": type, "Content-Length": String(bytes.length),
+    "Cache-Control": "private, max-age=31536000, immutable", "ETag": `"${doc.file_sha256}"`,
+    "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox",
+  } });
+}

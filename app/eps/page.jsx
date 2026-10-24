@@ -60,6 +60,15 @@ export default function EpsPage() {
     catch (e) { setMsg(e.message); return null; }
   }
   const tree = useMemo(() => (data ? asTree(data.pms) : null), [data]);
+  // a PMS goes with everything under it: what that is, and what would stop it, asked of the server before the question is put
+  async function askRemovePms(p) {
+    setMsg(null);
+    let c;
+    try { c = await call(`/api/eps?projectId=${projectId}&pmsId=${p.id}&contents=1`); } catch (e) { setMsg(e.message); return false; }
+    if (c.blockers.length) { setMsg(t("ep.bd.removePmsBlocked", { code: p.code, why: c.blockers.join(" ") })); return false; }
+    return window.confirm(t("ep.bd.removePmsAll", { code: p.code, ...c.counts }));
+  }
+  live.current.askRemovePms = askRemovePms;
   const ops = useMemo(() => {
     if (!data?.may?.edit) return null;
     const send = (body) => call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, contractId, ...body }) });
@@ -86,8 +95,13 @@ export default function EpsPage() {
       save: (row, v) => batch([row.kind === "node" ? pmsBody(row.item, v) : verBody(row.item, v)], t("ep.bd.saved", { code: row.item.code })),
       // a row typed under a PMS is a new version of it, numbered after the last
       create: (node, v) => batch([{ ...verBody({ pms_id: node.id, code: `${node.item.code}-R${node.item.activities.length + 1}` }, v), id: null }], t("ep.bd.verSaved", { code: `${node.item.code}-R${node.item.activities.length + 1}` })),
-      remove: (rows) => batch([...rows.filter((x) => x.kind === "act" && !rows.some((p) => p.id === x.parentId)).map((x) => ({ kind: "eps-remove", epsKind: "version", id: x.id })),
-        ...rows.filter((x) => x.kind === "node").map((x) => ({ kind: "eps-remove", epsKind: "pms", id: x.id }))], t("ep.removed")),
+      remove: async (rows) => {
+        const pmsRows = rows.filter((x) => x.kind === "node");
+        // each PMS picked: what it takes with it, said before it goes
+        for (const x of pmsRows) if (!(await live.current.askRemovePms(x.item))) return false;
+        return batch([...rows.filter((x) => x.kind === "act" && !rows.some((p) => p.id === x.parentId)).map((x) => ({ kind: "eps-remove", epsKind: "version", id: x.id })),
+          ...pmsRows.map((x) => ({ kind: "eps-remove", epsKind: "pms", id: x.id }))], t("ep.removed"));
+      },
       // versions cut onto another PMS move there; a copy of a version is made on the planning page (copy between versions)
       paste: async (node, rows, how) => {
         if (how !== "cut") { setMsg(t("ep.bd.copyNo")); return false; }
@@ -113,7 +127,7 @@ export default function EpsPage() {
   const may = data.may.edit;
   const toolbar = may && <>
     <button className="btn sm" type="button" data-new-pms onClick={() => { setAdding(true); setSel(null); }}>{t("ep.bd.newPms")}</button>
-    {data.pms.length > 0 && <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ pmsId: data.pms[0].id, versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button>}</>;
+    <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.length ? "replace" : "new", pmsId: data.pms[0]?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></>;
   const pickedPms = sel?.kind === "node" ? data.pms.find((p) => p.id === sel.id) : null;
   const pickedVer = sel?.kind === "act" ? data.pms.flatMap((p) => p.versions.map((v) => ({ v, p }))).find((x) => x.v.id === sel.id) : null;
   return (
@@ -122,8 +136,9 @@ export default function EpsPage() {
         <span className="sub">{t("ep.bd.sub", { no: contract?.contract_no || "", title: contract?.title || "" })}</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
-      {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} done={(m) => { setImp(null); setOk(m); reload(); }} fail={setMsg} />}
-      {data.pms.length === 0 && !adding ? <div className="card"><p className="empty-note">{t("ep.bd.none")}</p>{may && <p><button className="btn" type="button" data-new-pms onClick={() => setAdding(true)}>{t("ep.bd.newPms")}</button></p>}</div> : <>
+      {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} contractId={contractId} call={call} done={(m) => { setImp(null); setOk(m); reload(); }} fail={setMsg} />}
+      {data.pms.length === 0 && !adding ? <div className="card"><p className="empty-note">{t("ep.bd.none")}</p>{may && <p className="row" style={{ gap: 6 }}><button className="btn" type="button" data-new-pms onClick={() => setAdding(true)}>{t("ep.bd.newPms")}</button>
+        <button className="btn ghost" type="button" data-import-open onClick={() => setImp({ mode: "new", pmsId: "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></p>}</div> : <>
         <div style={{ height }} data-eps-tree>
           <ActivityGrid data={tree} columns={EPS_COLUMNS} defaultCols={DEFAULT_COLS} storeKey="p6-eps" customKey="eps-board" selected={sel?.id}
             onSelect={(r) => { setSel(r); setAdding(false); }} toolbar={toolbar} ops={ops} />
@@ -131,7 +146,7 @@ export default function EpsPage() {
         {grip}</>}
       <div className="p6-detail" data-eps-detail>
         {adding ? <PmsForm init={{ ...BLANK_PMS }} labels={data.labels} post={post} close={() => setAdding(false)} />
-          : pickedPms ? <PmsForm key={`${pickedPms.id}|${pickedPms.title}|${pickedPms.budget_plan}`} p={pickedPms} labels={data.labels} post={post} may={may} />
+          : pickedPms ? <PmsForm key={`${pickedPms.id}|${pickedPms.title}|${pickedPms.budget_plan}`} p={pickedPms} labels={data.labels} post={post} may={may} askRemove={askRemovePms} />
           : pickedVer ? <VersionForm key={pickedVer.v.id} v={pickedVer.v} p={pickedVer.p} post={post} may={may} />
           : data.pms.length > 0 && <p className="empty-note">{t("ep.bd.pick")}</p>}
       </div>
@@ -144,7 +159,7 @@ const field = (st, set, k, l, type = "text", extra = {}) => (
     <input id={`ep-${k}`} type={type} dir={type === "text" && k !== "title" && k !== "description" ? "ltr" : undefined} value={st[k] ?? ""} onChange={(e) => set({ ...st, [k]: e.target.value })} {...extra} /></div>);
 
 /** A PMS: new, or the one picked — its WBS opens from here. */
-function PmsForm({ p = null, init = null, labels, post, may = true, close = null }) {
+function PmsForm({ p = null, init = null, labels, post, may = true, close = null, askRemove = null }) {
   const { t } = usePrefs();
   const { fmt } = useEpsFmt();
   const [pf, setPf] = useState(() => init || { id: p.id, code: p.code, title: p.title, pmsType: p.pms_type || "", description: p.description || "", registeredOn: p.registered_on || "",
@@ -170,7 +185,7 @@ function PmsForm({ p = null, init = null, labels, post, may = true, close = null
         <p className="sm muted">{t("ep.bd.spans", { plan: fmt(span(pf.planStart, pf.planEnd)), actual: fmt(span(pf.actualStart, pf.actualEnd)) })}</p>
         {may && <p className="row" style={{ gap: 6 }}><button className="btn" type="submit">{t("ep.save")}</button>
           {close && <button className="btn ghost" type="button" onClick={close}>{t("ep.cancel")}</button>}
-          {p && <button className="btn ghost danger" type="button" onClick={() => { if (window.confirm(t("ep.bd.removePmsAsk", { code: p.code }))) post({ kind: "eps-remove", epsKind: "pms", id: p.id }, () => t("ep.removed")); }}>{t("ep.remove")}</button>}</p>}
+          {p && <button className="btn ghost danger" type="button" data-pms-remove onClick={async () => { if (await askRemove(p)) post({ kind: "eps-remove", epsKind: "pms", id: p.id }, () => t("ep.bd.pmsRemoved", { code: p.code })); }}>{t("ep.remove")}</button>}</p>}
       </fieldset>
     </form>);
 }
@@ -202,26 +217,37 @@ function VersionForm({ v, p, post, may }) {
 }
 
 /**
- * A plan file as a new version of a PMS: the MS Project schedule (Save As ◄
- * XML) or the PMS workbook. The plan lives in the EPS — there is no second
- * schedule page beside it. What was imported before (into the old «برنامه و
- * PMS» page) is carried over from here too, without the file.
+ * A plan file as a PMS of the contract (owner's request 2026-10-24: «یا
+ * جایگزین PMS گردد یا به عنوان PMS جدید ذخیره شود، نه به عنوان نسخه
+ * جدید»): the MS Project schedule (Save As ◄ XML), the PMS workbook or the
+ * EPS sheet replaces what a PMS holds — asked first, with what goes — or
+ * becomes a new PMS. What was imported before (into the old «برنامه و PMS»
+ * page) is still carried over from here as a version, without the file.
  */
-function ImportPlan({ data, imp, setImp, projectId, done, fail }) {
+function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail }) {
   const { t } = usePrefs();
   const [busy, setBusy] = useState(false);
   const pms = data.pms.find((p) => p.id === imp.pmsId);
   async function send(e) {
-    e.preventDefault(); setBusy(true); fail(null);
+    e.preventDefault(); fail(null);
+    if (imp.mode === "replace") {
+      // replacing takes what the PMS holds: said first, and refused here already when something stops it
+      let c;
+      try { c = await call(`/api/eps?projectId=${projectId}&pmsId=${imp.pmsId}&contents=1`); } catch (e2) { fail(e2.message); return; }
+      if (c.blockers.length) { fail(t("ep.im.replaceBlocked", { code: pms?.code, why: c.blockers.join(" ") })); return; }
+      if (!window.confirm(t("ep.im.replaceAsk", { code: pms?.code, ...c.counts }))) return;
+    }
+    setBusy(true);
     try {
       const form = new FormData();
-      for (const [k, v] of Object.entries({ projectId, kind: "import-plan", pmsId: imp.pmsId, versionCode: imp.versionCode, fileKind: imp.fileKind })) form.set(k, v);
+      const fields = imp.mode === "new" ? { contractId, pmsCode: imp.pmsCode, title: imp.title } : { pmsId: imp.pmsId };
+      for (const [k, v] of Object.entries({ projectId, kind: "import-plan", mode: imp.mode, fileKind: imp.fileKind, ...fields })) form.set(k, v);
       form.set("file", imp.file);
       const res = await fetch("/api/eps", { method: "POST", body: form, credentials: "same-origin" });
       const b = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(b.error || t("ep.im.status", { n: res.status }));
       const r = b.row;
-      done(t("ep.im.done", { code: r.version.code, nodes: r.nodes, acts: r.activities, rels: r.relations })
+      done(t(imp.mode === "new" ? "ep.im.doneNew" : "ep.im.doneReplace", { code: r.pms.code, nodes: r.nodes, acts: r.activities, rels: r.relations })
         + (r.problems.length ? ` · ${t("ep.im.notes", { n: r.problems.length })} ${r.problems.slice(0, 3).join(" · ")}` : ""));
     } catch (e2) { fail(e2.message); } finally { setBusy(false); }
   }
@@ -242,13 +268,23 @@ function ImportPlan({ data, imp, setImp, projectId, done, fail }) {
     <form className="card" onSubmit={send} data-import-plan>
       <h2>{t("ep.im.title")}</h2>
       <p className="sm muted">{t("ep.im.note")}</p>
+      <div role="radiogroup" aria-label={t("ep.im.mode")} className="row" style={{ gap: 14, marginBottom: 6 }}>
+        <label className="sm"><input type="radio" name="im-mode" value="replace" data-im-mode="replace" disabled={!data.pms.length} checked={imp.mode === "replace"}
+          onChange={() => setImp({ ...imp, mode: "replace" })} /> {t("ep.im.modeReplace")}</label>
+        <label className="sm"><input type="radio" name="im-mode" value="new" data-im-mode="new" checked={imp.mode === "new"}
+          onChange={() => setImp({ ...imp, mode: "new" })} /> {t("ep.im.modeNew")}</label>
+      </div>
       <div className="grid2">
-        <div className="field"><label htmlFor="im-pms">PMS</label>
-          <select id="im-pms" value={imp.pmsId} onChange={(e) => setImp({ ...imp, pmsId: e.target.value })}>
-            {data.pms.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
-        <div className="field"><label htmlFor="im-code">{t("ep.im.code")}</label>
-          <input id="im-code" dir="ltr" required value={imp.versionCode} placeholder={`${pms?.code || "PM01"}-R${(pms?.versions.length || 0) + 1}`}
-            onChange={(e) => setImp({ ...imp, versionCode: e.target.value })} /></div>
+        {imp.mode === "replace" ? (
+          <div className="field"><label htmlFor="im-pms">{t("ep.im.replaceWhich")}</label>
+            <select id="im-pms" value={imp.pmsId} onChange={(e) => setImp({ ...imp, pmsId: e.target.value })}>
+              {data.pms.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
+        ) : <>
+          <div className="field"><label htmlFor="im-newcode">{t("ep.bd.pmsCode")}</label>
+            <input id="im-newcode" dir="ltr" required value={imp.pmsCode} placeholder={`PM${String(data.pms.length + 1).padStart(2, "0")}`}
+              onChange={(e) => setImp({ ...imp, pmsCode: e.target.value.toUpperCase() })} /></div>
+          <div className="field"><label htmlFor="im-newtitle">{t("ep.im.newTitle")}</label>
+            <input id="im-newtitle" value={imp.title} onChange={(e) => setImp({ ...imp, title: e.target.value })} /></div></>}
         <div className="field"><label htmlFor="im-kind">{t("ep.im.kind")}</label>
           <select id="im-kind" value={imp.fileKind} onChange={(e) => setImp({ ...imp, fileKind: e.target.value })}>
             <option value="mspdi">MS Project (XML — Save As ◄ XML Format)</option>
@@ -258,12 +294,20 @@ function ImportPlan({ data, imp, setImp, projectId, done, fail }) {
           <input id="im-file" type="file" required accept={imp.fileKind === "mspdi" ? ".xml" : ".xlsx,.xls"} onChange={(e) => setImp({ ...imp, file: e.target.files?.[0] || null })} />
           {imp.fileKind !== "mspdi" && <TemplateButton kind={imp.fileKind === "sheet" ? "eps" : "pms"} />}</div>
       </div>
-      <button className="btn" type="submit" disabled={busy || !imp.file || !imp.versionCode}>{busy ? t("ep.im.busy") : t("ep.im.go")}</button>{" "}
+      <button className="btn" type="submit" data-im-go disabled={busy || !imp.file || (imp.mode === "new" ? !imp.pmsCode : !imp.pmsId)}>
+        {busy ? t("ep.im.busy") : t(imp.mode === "new" ? "ep.im.goNew" : "ep.im.goReplace")}</button>{" "}
       <button className="btn ghost" type="button" onClick={() => setImp(null)}>{t("ep.cancel")}</button>
       {(legacy.schedules.length > 0 || legacy.pms.length > 0) && (
         <div style={{ marginTop: 12 }} data-legacy>
           <h3>{t("ep.im.legacy")}</h3>
           <p className="sm muted">{t("ep.im.legacyNote")}</p>
+          <div className="grid2">
+            <div className="field"><label htmlFor="im-lpms">PMS</label>
+              <select id="im-lpms" value={imp.pmsId} onChange={(e) => setImp({ ...imp, pmsId: e.target.value })}>
+                {data.pms.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
+            <div className="field"><label htmlFor="im-code">{t("ep.im.code")}</label>
+              <input id="im-code" dir="ltr" value={imp.versionCode} placeholder={`${pms?.code || "PM01"}-R${(pms?.versions.length || 0) + 1}`}
+                onChange={(e) => setImp({ ...imp, versionCode: e.target.value })} /></div></div>
           <ul className="sm">
             {legacy.schedules.map((s) => <li key={s.id}>{t("ep.im.legacySchedule", { name: s.source_name, n: s.task_count })} <button type="button" className="btn ghost sm" disabled={busy}
               onClick={() => convert("schedule", s.id, s.source_name)}>{t("ep.im.convert")}</button></li>)}

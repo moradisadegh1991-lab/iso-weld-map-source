@@ -20,7 +20,7 @@ const run = promisify(execFile);
  * (tools/iso-read.py; measured on the golden sheets by eval/reader-report.mjs).
  *
  * Only what is printed comes back: at each marker its number, frame shape
- * and outline and the label beside it; from the title block the isometric
+ * and outline, the label beside it and where on the page it is; from the title block the isometric
  * number, sheet and revision, each null when it was not read for certain. Shop or field, the joint type and the
  * register are decided in the page by lib/register/weld-marks.mjs, exactly
  * as for a model's reading, and a person completes what was not printed.
@@ -59,7 +59,8 @@ export async function POST(request) {
     const r = JSON.parse(out);
     // in weld-number order (1, 2, … 4, 4-1, 5), not the order they were found on the page
     const key = (no) => String(no).split("-").map(Number);
-    const marks = r.marks.map(({ no, shape, outline, label }) => ({ no, shape, outline, label }))
+    // `at`: the marker's centre as fractions of the page as rendered, for the review beside the drawing
+    const marks = r.marks.map(({ no, shape, outline, label, at }) => ({ no, shape, outline, label, ...(Array.isArray(at) ? { at } : {}) }))
       .sort((a, b) => { const [x, y] = [key(a.no), key(b.no)]; return x[0] - y[0] || (x[1] || 0) - (y[1] || 0); });
     // the title block: a field not read for certain is null, and stays for the person
     const meta = { drawingNo: r.meta?.drawingNo ?? null, sheet: r.meta?.sheet ?? null, rev: r.meta?.rev ?? null };
