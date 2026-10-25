@@ -240,4 +240,50 @@ test("fit to 100% in the database: a tree over 100% (as a file can bring it) is 
   });
 });
 
+test("a template's activity carries the activity table's fields and the project's own columns, and hands them on: copy, paste, attach, apply", async () => {
+  await inP(async () => {
+    const { rows: [f] } = await db.query("INSERT INTO custom_field (project_id, form_key, label, data_type) VALUES ($1, $2, 'Crew', 'text') RETURNING id", [P, eps.ACTIVITY_FORM]);
+    const col = async (row) => (await db.query("SELECT value FROM custom_value WHERE field_id = $1 AND row_key = $2", [f.id, String(row)])).rows[0]?.value ?? null;
+    const setCol = (row, v) => db.query("INSERT INTO custom_value (project_id, field_id, row_key, value) VALUES ($1,$2,$3,$4) ON CONFLICT (field_id, row_key) DO UPDATE SET value = EXCLUDED.value", [P, f.id, String(row), v]);
+    const TT = await eps.saveTemplate(db, { projectId: P, code: "TF", name: "fields" });
+    const ta = await eps.saveTemplateActivity(db, { projectId: P, templateId: TT.id, name: "Erect", wf: 40, actType: "Task Dependent", activityNo: "A100", wfRate: 0.0000123456, volumePlan: 12.5 });
+    equal([ta.act_type, ta.activity_no, Number(ta.wf_rate), Number(ta.volume_plan)], ["Task Dependent", "A100", 0.0000123456, 12.5], "typed as on an activity");
+    await setCol(ta.id, "4 men");
+    const kept = await eps.saveTemplateActivity(db, { projectId: P, templateId: TT.id, id: ta.id, name: "Erect", wf: 40 });
+    equal([kept.act_type, kept.activity_no], ["Task Dependent", "A100"], "left out of a save: kept");
+
+    // pasted onto another template: a copy with its fields and columns, or the row itself moved
+    const T2x = await eps.saveTemplate(db, { projectId: P, code: "TG", name: "other" });
+    const cp = await eps.placeTemplateActivity(db, { projectId: P, id: ta.id, templateId: T2x.id });
+    equal([cp.code, cp.act_type, await col(cp.id)], ["TG01", "Task Dependent", "4 men"]);
+    const mv = await eps.placeTemplateActivity(db, { projectId: P, id: cp.id, templateId: TT.id, move: true });
+    equal([mv.id, mv.code, await col(mv.id)], [cp.id, "TF02", "4 men"], "moved: the same row, its column with it");
+    await eps.removeTemplateActivity(db, { projectId: P, id: mv.id });
+    equal(await col(mv.id), null, "deleted: its column values go with it");
+    // a template copied: its activities' fields and columns too
+    const c2 = await eps.copyTemplate(db, { projectId: P, id: TT.id, parentId: null });
+    const { rows: [ca] } = await db.query("SELECT * FROM template_activity WHERE template_id = $1", [c2.id]);
+    equal([ca.activity_no, Number(ca.volume_plan), await col(ca.id)], ["A100", 12.5, "4 men"]);
+
+    // attached to a WBS node: the activity takes them all
+    const Q = await eps.savePms(db, { projectId: P, contractId: C.id, code: "TFP", title: "fields", userId: U.id });
+    const n = await eps.saveNode(db, { projectId: P, pmsId: Q.id, name: "n", wf: 100 });
+    await eps.attachTemplate(db, { projectId: P, nodeId: n.id, templateId: TT.id });
+    const act = async () => (await db.query("SELECT * FROM wbs_activity WHERE node_id = $1 AND template_activity_id = $2", [n.id, ta.id])).rows[0];
+    let a = await act();
+    equal([a.act_type, a.activity_no, Number(a.wf_rate), Number(a.volume_plan), await col(a.id)], ["Task Dependent", "A100", 0.0000123456, 12.5, "4 men"]);
+    // the template changed and applied: the activity follows, its column too
+    await eps.saveTemplateActivity(db, { projectId: P, templateId: TT.id, id: ta.id, name: "Erect", wf: 40, activityNo: "A200", volumePlan: 20 });
+    await setCol(ta.id, "6 men");
+    const dry = await eps.syncTemplate(db, { projectId: P, templateId: TT.id, dryRun: true, userId: U.id });
+    equal(dry.updated, 1);
+    await eps.syncTemplate(db, { projectId: P, templateId: TT.id, userId: U.id });
+    a = await act();
+    equal([a.activity_no, Number(a.volume_plan), await col(a.id)], ["A200", 20, "6 men"]);
+    equal((await eps.syncTemplate(db, { projectId: P, templateId: TT.id, dryRun: true, userId: U.id })).updated, 0, "nothing left to apply");
+    await setCol(ta.id, "7 men");
+    equal((await eps.syncTemplate(db, { projectId: P, templateId: TT.id, dryRun: true, userId: U.id })).updated, 1, "a column changed alone is a change to apply");
+  });
+});
+
 await run();

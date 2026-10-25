@@ -9,8 +9,11 @@ import { wIn, wOut } from "../../../components/eps/shared";
  * Activity templates, built as the activities page's tree table is (owner's
  * request 2026-10-24: «الگو … مطابق لیست جدول فعالیت ها قابل ساختن باشد»): the
  * templates as the tree's nodes, each with its activities under it — row
- * number (its code is the template's code and two digits), name, W.F and
- * description. A row is edited where it stands; an activity is typed into a
+ * number (its code is the template's code and two digits), name, W.F,
+ * description, and the activity table's own fields (2026-10-25: type,
+ * Activity ID, WF rate, planned volume, and every column the project added
+ * to the activities table, «eps-activities»), which the activities made from
+ * it take (lib/db/repos/eps.mjs attachTemplate, syncTemplate). A row is edited where it stands; an activity is typed into a
  * new row under its template from the right-click menu; templates and
  * activities are copied, cut and pasted onto another template (a template
  * with everything under it), moved above or below their sibling, and
@@ -20,15 +23,22 @@ import { wIn, wOut } from "../../../components/eps/shared";
  */
 const BLANK_T = { id: null, parentId: "", code: "", name: "", description: "" };
 const COLORS = ["#1f6f8b", "#7d3c98", "#b9770e", "#566573"];
+// the activity table's columns (components/eps/shared.jsx COLUMNS), as far as a template's activity carries them
 const TPL_COLUMNS = [
-  { key: "code", title: "ep.code", width: 170, mono: true, hits: true, get: (r) => r.item.code },
-  { key: "name", title: "ep.name", width: 260, hits: true, get: (r) => r.item.name },
-  { key: "number", title: "ep.tp.row", width: 60, mono: true, get: (r) => (r.kind === "act" ? r.item.number : "") },
-  { key: "wf", title: "W.F", width: 110, mono: true, get: (r, x) => (r.kind === "act" ? x.w(r.item.wf) : r.item.activities.length ? x.w(r.item.wfTotal) : "") },
-  { key: "count", title: "ep.activity", width: 80, mono: true, get: (r) => (r.kind === "node" ? r.item.activities.length || "" : "") },
-  { key: "description", title: "ep.description", width: 240, hits: true, get: (r) => r.item.description || "" },
+  { key: "code", title: "Activity / WBS No.", width: 170, mono: true, hits: true, get: (r) => r.item.code },
+  { key: "name", title: "ep.col.name", width: 240, hits: true, get: (r) => r.item.name },
+  { key: "number", title: "ep.tp.row", width: 55, mono: true, get: (r) => (r.kind === "act" ? r.item.number : "") },
+  { key: "actType", title: "Type", width: 110, get: (r) => (r.kind === "act" ? r.item.act_type || "" : "") },
+  { key: "activityNo", title: "Activity ID", width: 95, mono: true, hits: true, get: (r) => (r.kind === "act" ? r.item.activity_no || "" : "") },
+  { key: "wf", title: "W.F", width: 100, mono: true, get: (r, x) => (r.kind === "act" ? x.w(r.item.wf) : r.item.activities.length ? `Σ${x.w(r.item.wfTotal)}` : "") },
+  { key: "wfRate", title: "WF rate", width: 95, mono: true, get: (r, x) => (r.kind === "act" && r.item.wf_rate != null ? x.fmt(Number(r.item.wf_rate), 10) : "") },
+  { key: "volPlan", title: "ep.col.volPlan", width: 85, mono: true, get: (r, x) => (r.kind === "act" && r.item.volume_plan != null ? x.fmt(Number(r.item.volume_plan)) : "") },
+  { key: "count", title: "ep.activity", width: 70, mono: true, get: (r) => (r.kind === "node" ? r.item.activities.length || "" : "") },
+  { key: "description", title: "ep.description", width: 220, hits: true, get: (r) => r.item.description || "" },
 ];
-const DEFAULT_COLS = ["code", "name", "number", "wf", "count", "description"];
+const DEFAULT_COLS = ["code", "name", "number", "actType", "activityNo", "wf", "wfRate", "volPlan", "count", "description"];
+const ACT_FIELDS = [{ key: "name", type: "text" }, { key: "actType", type: "text" }, { key: "activityNo", type: "text" }, { key: "wf", type: "number" },
+  { key: "wfRate", type: "number" }, { key: "volPlan", type: "number" }, { key: "description", type: "text" }];
 // the templates as the grid's tree: a template is a node, its activities the rows under it
 const asTree = (rows) => {
   const by = new Map(rows.map((r) => [r.id, { ...r, children: [], activities: r.activities.map((a) => ({ ...a, node_id: r.id })) }]));
@@ -64,12 +74,15 @@ export default function TemplatesPage() {
       try { for (const b of list) await send(b); live.current.reload(); if (done) setOk(done); return true; }
       catch (e) { setMsg(e.message); live.current.reload(); return false; }
     };
-    const actBody = (templateId, v, it = {}) => ({ kind: "template-activity", id: it.id || null, templateId, number: it.number ?? null, name: v.name, wf: wOut(v.wf), description: v.description || null });
+    const blank = (x) => (x === "" || x === undefined ? null : x);
+    const actBody = (templateId, v, it = {}) => ({ kind: "template-activity", id: it.id || null, templateId, number: it.number ?? null, name: v.name, wf: wOut(v.wf),
+      description: v.description || null, actType: v.actType ?? null, activityNo: v.activityNo ?? null, wfRate: blank(v.wfRate), volumePlan: blank(v.volPlan) });
     const siblings = (row) => data.templates.filter((x) => (x.parent_id || null) === (row.item.parent_id || null)).sort((a, b) => a.seq - b.seq || a.code.localeCompare(b.code));
     return {
-      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "wf", type: "number" }, { key: "description", type: "text" }]
+      fields: (row) => (row.kind === "act" ? ACT_FIELDS
         : [{ key: "code", type: "text" }, { key: "name", type: "text" }, { key: "description", type: "text" }]),
-      value: (row) => (row.kind === "act" ? { name: row.item.name ?? "", wf: wIn(row.item.wf), description: row.item.description ?? "" }
+      value: (row) => (row.kind === "act" ? { name: row.item.name ?? "", actType: row.item.act_type ?? "", activityNo: row.item.activity_no ?? "", wf: wIn(row.item.wf),
+        wfRate: row.item.wf_rate ?? "", volPlan: row.item.volume_plan ?? "", description: row.item.description ?? "" }
         : { code: row.item.code ?? "", name: row.item.name ?? "", description: row.item.description ?? "" }),
       save: (row, v) => batch([row.kind === "act" ? actBody(row.item.node_id, v, row.item)
         : { kind: "template", id: row.id, parentId: row.item.parent_id || null, code: String(v.code || "").toUpperCase(), name: v.name, description: v.description || null }],
@@ -85,10 +98,10 @@ export default function TemplatesPage() {
       paste: (node, rows, how) => {
         const nodes = rows.filter((x) => x.kind === "node"), inNode = new Set(nodes.map((n) => n.id));
         const top = nodes.filter((n) => !inNode.has(n.parentId)), lone = rows.filter((x) => x.kind === "act" && !inNode.has(x.parentId));
+        // an activity goes with its fields and its project-column values: copied as a new row, or moved as itself
         return batch([
           ...top.map((n) => (how === "cut" ? { kind: "template-move", id: n.id, parentId: node.id } : { kind: "template-copy", id: n.id, parentId: node.id })),
-          ...lone.map((a) => actBody(node.id, { name: a.item.name, wf: wIn(a.item.wf), description: a.item.description })),
-          ...(how === "cut" ? lone.map((a) => ({ kind: "template-activity-remove", id: a.id })) : []),
+          ...lone.map((a) => ({ kind: "template-activity-place", id: a.id, templateId: node.id, move: how === "cut" })),
         ], t("ep.tp.pastedN", { n: rows.length, code: node.item.code }));
       },
       reorder: (row, dir) => {
@@ -137,7 +150,7 @@ export default function TemplatesPage() {
       {data.templates.length === 0 && !tf ? <div className="card"><p className="empty-note">{t("ep.tp.none")}</p>
         {may && <p><button className="btn" type="button" data-tpl-new onClick={() => setTf({ ...BLANK_T })}>{t("ep.tp.new")}</button></p>}</div> : data.templates.length > 0 && <>
         <div style={{ height }} data-templates-tree>
-          <ActivityGrid data={tree} columns={TPL_COLUMNS} defaultCols={DEFAULT_COLS} storeKey="p6-templates" selected={sel?.id} onSelect={setSel}
+          <ActivityGrid data={tree} columns={TPL_COLUMNS} defaultCols={DEFAULT_COLS} storeKey="p6-templates-2" customKey="eps-activities" selected={sel?.id} onSelect={setSel}
             gantt={false} toolbar={toolbar} ops={ops} />
         </div>
         {grip}

@@ -165,6 +165,38 @@ await page.locator(`[data-wbs-detail="${civil.code}"] [data-node-remove]`).click
 await page.waitForTimeout(1000);
 check(asked[0] === `Delete node ${civil.code}?` && !(await api(`/api/eps?projectId=${projectId}&pmsId=${pms.id}`)).roots.some((r) => r.name === "Civil"), "a node deleted from WBS DETAIL, asked first");
 
+// ── dragged and dropped, and the display order ───────────────────────────
+await api("/api/eps", { projectId, kind: "node", pmsId: pms.id, name: "Electrical" });
+await api("/api/eps", { projectId, kind: "node", pmsId: pms.id, name: "Paint" });
+await page.goto(`${BASE}/eps/wbs?pms=${pms.id}`, { waitUntil: "networkidle" });
+let top = (await api(`/api/eps?projectId=${projectId}&pmsId=${pms.id}`)).roots;
+const byName = (n) => top.find((r) => r.name === n);
+await row(tree, byName("Paint").code).waitFor();
+check(await page.locator("[data-drag-hint]").count() === 1 && await row(tree, byName("Paint").code).getAttribute("draggable") === "true", "a node's row can be dragged");
+// Paint dropped onto the middle of Piping: under it
+const target = await row(tree, byName("Piping").code).boundingBox();
+await row(tree, byName("Paint").code).dragTo(row(tree, byName("Piping").code), { targetPosition: { x: 40, y: target.height / 2 } });
+await page.waitForTimeout(1500);
+top = (await api(`/api/eps?projectId=${projectId}&pmsId=${pms.id}`)).roots;
+const pip = top.find((r) => r.name === "Piping");
+check(pip.children.some((c) => c.name === "Paint") && !top.some((r) => r.name === "Paint"), `dropped onto the middle of Piping: under it (${pip.children.map((c) => c.name).join(", ")})`);
+// Electrical dropped onto the top edge of the first node: before it
+const first = top[0];
+await row(tree, byName("Electrical").code).dragTo(row(tree, first.code), { targetPosition: { x: 40, y: 3 } });
+await page.waitForTimeout(1500);
+top = (await api(`/api/eps?projectId=${projectId}&pmsId=${pms.id}`)).roots;
+check(top[0].name === "Electrical", `dropped onto a row's top edge: before it (${top.map((r) => r.name).join(", ")})`);
+// the display order column: Piping typed to place 1
+const orderAt = (await page.locator(`${tree} .p6-table thead th`).evaluateAll((ths) => ths.map((th) => th.textContent.trim()))).indexOf("Display order");
+check(orderAt > 0 && (await row(tree, top[0].code).locator("td").nth(orderAt).innerText()).trim() === "1", "the display order column shows each node's place");
+await row(tree, top.find((r) => r.name === "Piping").code).locator("td").nth(orderAt + 2).click();
+await page.locator('tr.p6-editing input[aria-label="Display order"]').fill("1");
+await page.locator("tr.p6-editing [data-row-save]").click();
+await page.waitForTimeout(1500);
+top = (await api(`/api/eps?projectId=${projectId}&pmsId=${pms.id}`)).roots;
+check(top[0].name === "Piping", `«display order» 1 typed: first (${top.map((r) => r.name).join(", ")})`);
+await page.screenshot({ path: `${SHOT}/414-wbs-drag-order-en.png` });
+
 // ── a plan file: a new PMS, then replacing it ────────────────────────────
 // an EPS sheet whose W.F pass 100% (as a file can): the PMS's top nodes 60 + 90, node A's children 90 + 30
 const sheet = XLSX.utils.book_new();

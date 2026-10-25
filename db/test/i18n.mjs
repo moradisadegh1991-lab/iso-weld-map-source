@@ -17,7 +17,7 @@
  *     a second sign-in, not kept in one browser.
  */
 import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import base from "../../lib/i18n/fa.mjs";
 import quality from "../../lib/i18n/sections/quality.mjs";
 import contracts from "../../lib/i18n/sections/contracts.mjs";
@@ -76,6 +76,15 @@ const holes = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort
 // the dictionaries as the page reads them: the platform's and every section's
 const dict = (lang) => Object.fromEntries(keysOf(lang).map((k) => [k, translate(lang, k)]));
 const fa = dict("fa"), en = dict("en"), ar = dict("ar");
+
+test("no key is written twice in a section's dictionary: the later one would silently win", async () => {
+  const dir = new URL("../../lib/i18n/sections/", import.meta.url);
+  for (const f of (await readdir(dir)).filter((x) => x.endsWith(".mjs"))) {
+    const keys = [...(await readFile(new URL(f, dir), "utf8")).matchAll(/^ {2}"([^"]+)":/gm)].map((m) => m[1]);
+    const twice = [...new Set(keys.filter((k, j) => keys.indexOf(k) !== j))];
+    equal(twice, [], `${f}: written twice`);
+  }
+});
 
 test("the three dictionaries hold the same keys, none empty", () => {
   const F = Object.keys(fa);

@@ -25,7 +25,7 @@ import { logEvent } from "../../../lib/db/repos/log.mjs";
  *   GET ?projectId&templates=1             the activity templates
  *   POST {kind: pms | pms-budget | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
  *         attach | activity | activity-remove | template | template-move | template-copy | template-remove |
- *         template-activity | template-activity-remove | template-sync | convert-legacy}
+ *         template-activity | template-activity-remove | template-activity-place | template-sync | convert-legacy}
  *   POST multipart {kind: import-plan, mode: replace (pmsId) | new (contractId, pmsCode, title?), fileKind: mspdi | pms | sheet, file}
  *   POST {kind: wf-fit, pmsId, nodeId?}    the children's W.F of a node (or of the PMS) brought down to 100%
  *        a plan file (MS Project XML or the PMS workbook) as a new version of a PMS
@@ -142,6 +142,7 @@ export async function POST(request) {
         "template-remove": () => eps.removeTemplate(db, a),
         "template-activity": () => eps.saveTemplateActivity(db, a),
         "template-activity-remove": () => eps.removeTemplateActivity(db, a),
+        "template-activity-place": () => eps.placeTemplateActivity(db, { ...a, move: b.move === true }),
         "template-sync": () => eps.syncTemplate(db, a),
         "import-plan": async () => {
           if (!file) throw Object.assign(new Error("فایل برنامه را انتخاب کنید."), { status: 400 });
