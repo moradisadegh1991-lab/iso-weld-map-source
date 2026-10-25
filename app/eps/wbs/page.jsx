@@ -18,7 +18,9 @@ import TableKit from "../../../components/ui/TableKit";
  * page's): W.F, W.V, budgets, volumes and dates, a node's row edited where
  * it stands, a child node added under it from the right-click menu, copied /
  * cut / pasted with everything under it onto another node, moved above or
- * below its sibling, deleted with its activities. «W.F بالای ۱۰۰٪» lists
+ * below its sibling, dragged by its row and dropped before, after or into
+ * another node (2026-10-25), its place among its siblings typed in the
+ * «display order» column, deleted with its activities. «W.F بالای ۱۰۰٪» lists
  * every node whose children (nodes and activities together) pass 100%, and
  * the PMS itself when its top nodes do, and brings them down to 100% in
  * proportion (lib/eps/wbs.mjs fitTo100). Below the tree, its sub-forms: PMS DETAIL (the PMS and the
@@ -34,7 +36,14 @@ const toForm = (n) => ({ id: n.id, parentId: n.parent_id, code: n.code, name: n.
   planStart: n.plan_start || "", planEnd: n.plan_end || "", actualStart: n.actual_start || "", actualEnd: n.actual_end || "",
   description: n.description || "", templateId: n.template_id || "" });
 const TABS = ["pms", "wbs", "acts", "settings"];
-const DEFAULT_COLS = ["code", "name", "wf", "wv", "budget", "budgetA", "unit", "volPlan", "volActual", "start", "finish", "dur", "aStart", "aFinish", "tpl", "description"];
+const DEFAULT_COLS = ["order", "code", "name", "wf", "wv", "budget", "budgetA", "unit", "volPlan", "volActual", "start", "finish", "dur", "aStart", "aFinish", "tpl", "description"];
+// a node's place among its siblings, 1…n — what «display order» shows and takes
+const positions = (roots) => {
+  const out = new Map();
+  const walk = (list) => list.forEach((n, i) => { out.set(n.id, i + 1); walk(n.children); });
+  walk(roots);
+  return out;
+};
 
 export default function WbsPage() {
   const { projectId, contractId, call } = usePlatform();
@@ -47,6 +56,8 @@ export default function WbsPage() {
   const [tab, setTab] = useState("wbs");
   const [overOpen, setOverOpen] = useState(false);
   // the tree as the grid shows it: the WBS nodes, without their activities
+  const pos = useMemo(() => (data ? positions(data.roots) : new Map()), [data]);
+  const columns = useMemo(() => [{ key: "order", title: "ep.wb.order", width: 60, mono: true, get: (r) => (r.kind === "node" ? pos.get(r.id) ?? "" : "") }, ...COLUMNS], [pos]);
   const nodesOnly = useMemo(() => {
     if (!data) return null;
     const strip = (n) => ({ ...n, activities: [], children: n.children.map(strip) });
@@ -83,10 +94,11 @@ export default function WbsPage() {
       const find = (ns) => { for (const n of ns) { if (n.id === it.parent_id) return n.children; const c = find(n.children); if (c) return c; } return null; };
       return it.parent_id ? find(data.roots) || [] : data.roots;
     };
+    const positionOf = (it) => siblings(it).findIndex((x) => x.id === it.id) + 1;
     return {
       draftKind: "node",
       fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "wf", type: "number" }, { key: "description", type: "text" }]
-        : [{ key: "name", type: "text" }, ...(mode === "budget_to_wf" ? [] : [{ key: "wf", type: "number" }]), ...(mode === "wf_to_budget" ? [] : [{ key: "budget", type: "number" }]),
+        : [...(row.kind === "node" ? [{ key: "order", type: "number" }] : []), { key: "name", type: "text" }, ...(mode === "budget_to_wf" ? [] : [{ key: "wf", type: "number" }]), ...(mode === "wf_to_budget" ? [] : [{ key: "budget", type: "number" }]),
           { key: "budgetA", type: "number" }, { key: "unit", type: "text" }, { key: "volPlan", type: "number" }, { key: "volActual", type: "number" },
           { key: "start", type: "date" }, { key: "finish", type: "date" }, { key: "aStart", type: "date" }, { key: "aFinish", type: "date" }, { key: "description", type: "text" }]),
       value: (row) => {
@@ -96,9 +108,25 @@ export default function WbsPage() {
           start: it.plan_start || "", finish: it.plan_end || "", aStart: it.actual_start || "", aFinish: it.actual_end || "", description: it.description ?? "" };
         if (mode !== "budget_to_wf") v.wf = wIn(it.wf_typed ?? it.wf);
         if (mode !== "wf_to_budget") v.budget = it.budget_plan ?? "";
+        if (row.kind === "node") v.order = String(positionOf(row.item));
         return v;
       },
-      save: (row, v) => batch([row.kind === "act" ? actBody(row.item, v) : nodeBody(row.item, v)], t("ep.wb.saved", { code: row.item.code })),
+      save: (row, v) => {
+        const { order, ...rest } = v;
+        const list = [row.kind === "act" ? actBody(row.item, rest) : nodeBody(row.item, rest)];
+        // a new place typed in «display order»: before the sibling that holds it now, or after the last
+        const want = Math.round(Number(order)), now = row.kind === "node" ? positionOf(row.item) : null;
+        if (row.kind === "node" && Number.isFinite(want) && want >= 1 && want !== now) {
+          const sib = siblings(row.item).filter((x) => x.id !== row.id);
+          const to = sib[Math.min(want, sib.length + 1) - 1];
+          list.push({ kind: "node-move", id: row.id, parentId: row.item.parent_id || null, ...(to ? { beforeId: to.id } : { afterId: sib[sib.length - 1]?.id }) });
+        }
+        return batch(list, t("ep.wb.saved", { code: row.item.code }));
+      },
+      // dragged by its row: before / after another node (its sibling there) or into it (its child)
+      drop: (row, target, zone) => batch([zone === "inside" ? { kind: "node-move", id: row.id, parentId: target.id }
+        : { kind: "node-move", id: row.id, parentId: target.item.parent_id || null, [zone === "before" ? "beforeId" : "afterId"]: target.id }],
+      zone === "inside" ? t("ep.wb.droppedInto", { code: row.item.code, under: target.item.code }) : t("ep.wb.moved")),
       create: (node, v) => batch([{ ...nodeBody({ parent_id: node.id }, v), id: null, code: null }], t("ep.wb.added")),
       remove: (rows) => {
         const nodes = rows.filter((x) => x.kind === "node");
@@ -171,10 +199,11 @@ export default function WbsPage() {
       {overOpen && <Overflows list={data.overflows} pmsCode={data.version.pms_code} may={may} mode={S.budgetMode} post={post} close={() => setOverOpen(false)}
         pick={(id) => { const n = findNode(id); if (n) { setSel({ kind: "node", id, item: n }); setTab("wbs"); } }} />}
       <div style={{ height }} data-wbs-tree>
-        <ActivityGrid data={nodesOnly} columns={COLUMNS} defaultCols={DEFAULT_COLS} storeKey="p6-wbs" customKey="eps-wbs" selected={sel?.id} onSelect={(r) => { setSel(r); setAdding(null); }}
+        <ActivityGrid data={nodesOnly} columns={columns} defaultCols={DEFAULT_COLS} storeKey="p6-wbs-2" customKey="eps-wbs" selected={sel?.id} onSelect={(r) => { setSel(r); setAdding(null); }}
           toolbar={<>{toolbar}{overBtn}</>} ops={ops} />
       </div>
       {grip}
+      {may && <p className="sm muted" data-drag-hint>{t("ep.wb.dragHint")}</p>}
       <div className="p6-detail">
         <div className="p6-tabs" role="tablist">
           {TABS.map((k) => <button key={k} type="button" role="tab" data-wbs-tab={k} aria-selected={tab === k} className={tab === k ? "on" : undefined} onClick={() => setTab(k)}>{t(`ep.wb.tab.${k}`)}</button>)}

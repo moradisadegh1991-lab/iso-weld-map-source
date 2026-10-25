@@ -6,6 +6,7 @@ import { filterTree, splitHits } from "../../lib/eps/activities.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 import { useEpsFmt } from "./ActivityDetail";
 import { useCustomColumns, CustomColumns, showCustom } from "../ui/customColumns";
+import { useTreeDrag } from "../ui/treeDrag";
 
 /**
  * The activity view after Primavera P6: on the left a tree table of the WBS
@@ -42,6 +43,9 @@ import { useCustomColumns, CustomColumns, showCustom } from "../ui/customColumns
  *                 draftKind              "node": a row added under a node is a child node (the WBS page); else an activity
  *                 reorder(row, ±1)       a row moved above (−1) or below (+1) its sibling, from the row menu
  *                 reorderable(row)       which rows `reorder` takes (default: nodes)
+ *                 drop(row, target, zone) a node dragged onto another node's row: "before" / "after" it
+ *                                        (its sibling, in that place) or "inside" it (its child) — the
+ *                                        WBS page; never onto a node under itself
  *               With `ops`, rows carry a checkbox (a node's takes its whole branch), a click
  *               opens the row for editing in place (leaving it changed asks to save or
  *               discard), and a right click opens copy / cut / paste / delete / add / edit.
@@ -159,6 +163,10 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
     return n;
   });
   const pickedRows = all.filter((r) => picked.has(r.id));
+  // a node dragged by its row and dropped before, after or into another (with `ops.drop`); never into its own branch
+  const notMine = (d, target) => !under(d.id).includes(target.id);
+  const dnd = useTreeDrag((d, target, zone) => run(() => ops.drop(d, target, zone)), { inside: notMine, sibling: notMine });
+  const dragProps = (r, ed) => (ops?.drop && r.kind === "node" && !ed && !busy ? { ...dnd.source(r), ...dnd.target(r), "data-draggable": "" } : {});
   const dirty = !!editing && JSON.stringify(editing.values) !== JSON.stringify(editing.orig);
   const guard = (next) => (dirty ? setAsk({ next }) : next());
   // a row's project columns are typed in with the rest, when the member may fill them
@@ -359,10 +367,12 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
               const field = (key) => fs.find((f) => f.key === key);
               return (
                 <tr key={r.id} data-row={r.item.code || (r.kind === "draft" ? "__draft" : "")} data-kind={r.kind} className={[isSel ? "sel" : "", ed ? "p6-editing" : ""].join(" ").trim() || undefined}
+                  {...dragProps(r, ed)}
                   onClick={(e) => { if (e.target.closest("input,select,button,textarea")) return; if (r.kind === "draft" || ed) return; ops ? open(r) : onSelect && onSelect(r); }}
                   onDoubleClick={onOpen ? (e) => { if (e.target.closest("input,select,button,textarea") || r.kind !== "act") return; onOpen(r); } : undefined}
                   onContextMenu={ops && r.kind !== "draft" ? (e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, row: r }); } : undefined}
-                  style={{ height: ROW, background: r.kind === "node" ? tint(r.color) : undefined, fontWeight: r.kind === "node" ? 600 : undefined }}>
+                  style={{ height: ROW, background: r.kind === "node" ? tint(r.color) : undefined, fontWeight: r.kind === "node" ? 600 : undefined,
+                    ...(ops?.drop && r.kind === "node" ? { cursor: "grab", ...dnd.look(r) } : {}) }}>
                   {ops && <td className="p6-pick">{r.kind !== "draft" && <input type="checkbox" aria-label={t("gr.pickRow", { code: r.item.code })}
                     checked={r.kind === "node" ? under(r.id).every((x) => picked.has(x)) : picked.has(r.id)} onChange={() => pick(r)}
                     // part of a node's branch picked: half-ticked; a click then picks the whole branch

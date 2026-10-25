@@ -5,7 +5,10 @@
  * numbered and coded after the template; a row edited where it stands
  * (asked first); a template copied with its activities under another, an
  * activity cut onto another template; a template moved above its sibling;
- * an activity and a template deleted.
+ * an activity and a template deleted; the activity table's fields (type,
+ * Activity ID, WF rate, planned volume) and a column the project added to
+ * the activities table typed on a template's activity, and handed to the
+ * activity made from it on a WBS node (2026-10-25).
  *   BASE_URL=http://localhost:3000 DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-templates.mjs
  */
 import { chromium } from "playwright";
@@ -62,7 +65,7 @@ check(asked.length === 1 && await row(T1).getAttribute("data-kind") === "node", 
 for (const [name, wf] of [["Spool erection", "0.6"], ["Support install", "0.3"]]) {
   await row(T1).click({ button: "right" });
   await page.locator("[data-row-menu] button", { hasText: "Add a child" }).click();
-  await page.locator('tr[data-kind=draft] input[aria-label="Name"]').fill(name);
+  await page.locator('tr[data-kind=draft] input[aria-label="Task name"]').fill(name);
   await page.locator('tr[data-kind=draft] input[aria-label="W.F"]').fill(wf);
   await page.locator("tr[data-kind=draft] [data-row-save]").click();
   await settle();
@@ -82,6 +85,34 @@ t1 = (await tpls()).find((x) => x.code === T1);
 check(asked[0] === "Save this row's changes?" && Number(t1.activities[1].wf) === 40 && t1.activities[1].name === "Support install",
   `an activity's W.F edited in its row, asked first (${t1.activities[1].name}: ${t1.activities[1].wf})`);
 await page.screenshot({ path: `${SHOT}/470-templates-tree-en.png` });
+
+// the activity table's fields, and a column the project added to the activities table
+const crew = `Crew ${tag}`;
+const field = (await api("/api/custom-fields", { projectId, kind: "field", formKey: "eps-activities", label: crew, dataType: "text" })).row;
+await page.reload({ waitUntil: "networkidle" });
+await row(T1).waitFor();
+const heads = await page.locator(`${tree} thead th`).evaluateAll((ths) => ths.map((th) => th.textContent.trim()));
+check(["Type", "Activity ID", "WF rate", crew].every((h) => heads.some((x) => x.startsWith(h))), `the activity table's fields and the project's own column offered (${heads.filter(Boolean).join(", ")})`);
+await row(`${T1}02`).locator("td").nth(3).click();
+await page.locator('tr.p6-editing input[aria-label="Type"]').fill("Task Dependent");
+await page.locator('tr.p6-editing input[aria-label="Activity ID"]').fill("A300");
+await page.locator(`tr.p6-editing input[aria-label="${crew}"]`).fill("4 welders");
+await page.locator("tr.p6-editing [data-row-save]").click();
+await settle();
+t1 = (await tpls()).find((x) => x.code === T1);
+const vals = (await api(`/api/custom-fields?projectId=${projectId}&form=eps-activities`)).values;
+check(t1.activities[1].act_type === "Task Dependent" && t1.activities[1].activity_no === "A300"
+  && vals.some((v) => v.field_id === field.id && v.row_key === t1.activities[1].id && v.value === "4 welders"), "typed on the template's activity in its row, the project's column too");
+// attached to a WBS node, the activity takes them
+const contractId = (await api(`/api/contract-reports?projectId=${projectId}`)).contracts[0].id;
+const P = (await api("/api/eps", { projectId, kind: "pms", contractId, code: `TP-${tag}`, title: "Template use" })).row;
+const N = (await api("/api/eps", { projectId, kind: "node", pmsId: P.id, name: "Piping", wf: 100 })).row;
+await api("/api/eps", { projectId, kind: "attach", nodeId: N.id, templateId: t1.id });
+const made = (await api(`/api/eps?projectId=${projectId}&pmsId=${P.id}`)).roots[0].activities.find((a) => a.template_activity_id === t1.activities[1].id);
+const vals2 = (await api(`/api/custom-fields?projectId=${projectId}&form=eps-activities`)).values;
+check(made?.act_type === "Task Dependent" && made?.activity_no === "A300" && vals2.some((v) => v.field_id === field.id && v.row_key === made.id && v.value === "4 welders"),
+  "the activity made from it on a WBS node takes the fields and the column");
+await page.screenshot({ path: `${SHOT}/471-templates-fields-en.png` });
 
 // copied with its activities under the other template
 await page.keyboard.press("Escape");
