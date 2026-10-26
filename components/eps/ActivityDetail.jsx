@@ -7,6 +7,7 @@ import { BUDGET_UNITS as BUDGET_FA, ROLE_STATUS as ROLE_FA } from "../../lib/eps
 
 import TableKit from "../ui/TableKit";
 import { wIn, wOut } from "./shared";
+import { COST_FIELDS, costPercents, costValues } from "../../lib/eps/costs.mjs";
 /**
  * The detail sub-forms under the activity view, for the selected activity
  * (owner's «PMS» document: images 1–9 and 11–12). Every figure comes from the
@@ -48,10 +49,18 @@ export function useEpsFmt() {
 }
 const KV = ({ k, v }) => <div className="kv"><span>{k}</span><b>{v}</b></div>;
 
-export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null, history = false, reportList = [] }) {
+/** A sub-form's change, asked before it is sent (owner's requirements 2026-10-26, item 2): a removal as one, anything else as a save. */
+const REMOVAL = /-remove$/;
+export function useAskFirst(post) {
+  const { t } = usePrefs();
+  return (url, body, done) => (window.confirm(t(REMOVAL.test(body.kind || "") || body.remove ? "ep.d.removeAsk" : "ep.d.saveAsk")) ? post(url, body, done) : Promise.resolve(null));
+}
+
+export default function ActivityDetail({ d, tab, may, post: send, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null, history = false, reportList = [], planCosts = false }) {
   const a = d.activity;
+  const post = useAskFirst(send);
   switch (tab) {
-    case "detail": return <Detail d={d} a={a} may={may && !readOnly} post={post} />;
+    case "detail": return <Detail d={d} a={a} may={may && !readOnly} post={send} planCosts={planCosts} />;
     case "workfront": return <WorkFront wf={d.workFront} unit={a.unit} />;
     case "groups": return <Groups groups={d.groups} />;
     case "relations": return <Relations d={d} may={may && !readOnly} post={post} acts={acts} />;
@@ -73,12 +82,15 @@ export default function ActivityDetail({ d, tab, may, post, acts = [], codes = [
  * panel opens what a person types for editing in place; every other figure
  * is worked out on the server (lib/eps/planning.mjs detailFigures).
  */
-function Detail({ d, a, may, post }) {
+function Detail({ d, a, may, post, planCosts = false }) {
   const { t } = usePrefs();
   const { fmt, day, statusOf, w } = useEpsFmt();
   const [f, setF] = useState(null);
   const x = d.figures || {};
-  const open = () => setF({ name: a.name, wf: wIn(a.wf), description: a.description || "", progress: a.progress ?? "",
+  // the cost and float: the version's plan row in the planning preview (its two percentages worked out), else the activity's own
+  const plan = planCosts ? a.plan : null;
+  const costs = planCosts ? plan : a;
+  const open = () => setF({ code: a.code, activityNo: a.activity_no || "", ...costValues(costs), name: a.name, wf: wIn(a.wf), description: a.description || "", progress: a.progress ?? "",
     planStart: a.own?.plan_start || "", planEnd: a.own?.plan_end || "", actualStart: a.own?.actual_start || "", actualEnd: a.own?.actual_end || "",
     volumePlan: a.own?.volume_plan ?? "", volumeActual: a.own?.volume_actual ?? "", updateDate: a.update_date || "", statusText: a.status_text || "",
     addToInvoice: !!a.add_to_invoice, suspended: !!a.suspended, scaleUpPct: a.scale_up_pct ?? "", constraintStart: a.constraint_start || "", constraintEnd: a.constraint_end || "" });
@@ -88,11 +100,28 @@ function Detail({ d, a, may, post }) {
   const C = (k) => <input aria-label={k} type="checkbox" checked={!!f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />;
   // the field is built only while editing: `edit` is a function, called with the form open
   const V = (show, edit) => (f ? edit() : show);
-  const save = async (e) => { e.preventDefault(); if (await post("/api/eps", { kind: "activity", nodeId: a.node_id, id: a.id, ...f, wf: wOut(f.wf) }, () => t("ep.activitySaved"))) setF(null); };
+  const save = async (e) => {
+    e.preventDefault();
+    if (!window.confirm(t("ep.d.saveAsk"))) return;
+    const own = Object.fromEntries(Object.entries(f).filter(([k]) => !planCosts || !COST_FIELDS.some((c) => c.key === k)));
+    if (!(await post("/api/eps", { kind: "activity", nodeId: a.node_id, id: a.id, ...own, wf: wOut(f.wf) }, () => t("ep.activitySaved")))) return;
+    if (plan && !(await post("/api/eps/planning", { kind: "plan-edit", id: plan.id, ...Object.fromEntries(COST_FIELDS.filter((c) => !c.derived).map((c) => [c.key, f[c.key]])) },
+      () => t("ep.activitySaved")))) return;
+    setF(null);
+  };
+  // the two percentages of a plan row, as they will be once the costs typed are saved
+  const live = planCosts && f ? costPercents(f) : null;
+  const costKV = (c) => {
+    const shown = !costs ? "—" : c.derived ? pct(costs[c.col]) : fmt(costs[c.col]);
+    if (!f || (planCosts && !plan)) return <KV key={c.key} k={c.head} v={shown} />;
+    if (planCosts && c.derived) return <KV key={c.key} k={c.head} v={<span title={t("ep.d.costAuto")} data-cost-auto={c.key}>{pct(live[c.key])}</span>} />;
+    return <KV key={c.key} k={c.head} v={I(c.key)} />;
+  };
   return (
     <form onSubmit={save} data-detail={a.code}>
       <div className="row" style={{ gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <span className="sm">ACTIVITY NO.:</span><b className="mono" dir="ltr">{a.activity_no || a.code}</b>
+        <span className="sm">ACTIVITY CODE:</span>{V(<b className="mono" dir="ltr">{a.code}</b>, () => <input aria-label="code" dir="ltr" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required style={{ width: 150 }} />)}
+        <span className="sm">ACTIVITY NO.:</span>{V(<b className="mono" dir="ltr">{a.activity_no || "—"}</b>, () => I("activityNo"))}
         <span className="sm">ACTIVITY NAME:</span>{V(<b>{a.name}</b>, () => <input aria-label="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />)}
         <span className="sm">Currency Name:</span><b className="mono">{d.currency || "—"}</b>
         <span className="sm muted">{t("ep.node")} <span className="mono" dir="ltr">{a.node_code}</span> — {a.node_name}</span>
@@ -116,10 +145,12 @@ function Detail({ d, a, may, post }) {
         <fieldset><legend>Constrain Status</legend>
           <KV k="Start Date" v={V(day(a.constraint_start), () => I("constraintStart", "date"))} /><KV k="Duration" v={fmt(x.constraintDays)} />
           <KV k="Finish Date" v={V(day(a.constraint_end), () => I("constraintEnd", "date"))} /></fieldset>
-        <fieldset><legend>Budget</legend>
-          <KV k="Budgeted Total Cost" v={fmt(x.bac)} /><KV k="Actual Cost" v={fmt(x.actualCost)} /><KV k="Remaining Total Cost" v={fmt(x.remainingCost)} />
-          <KV k="At Completion Total Cost" v={fmt(x.atCompletionCost)} /><KV k="Cost % Complete" v={pct(x.costPct)} /><KV k="Cost % of Budget" v={pct(x.costOfBudgetPct)} /></fieldset>
-        <fieldset><legend>Float</legend><KV k="Free Float" v={fmt(a.freeFloat)} /><KV k="Total Float" v={<span title={t("ep.d.totalFloatTip")}>—</span>} /></fieldset>
+        <fieldset data-costs={planCosts ? "plan" : "activity"}><legend>{planCosts ? t("ep.d.budgetVersion", { code: d.version?.code || "" }) : "Budget"}</legend>
+          {COST_FIELDS.filter((c) => !c.col.includes("float")).map(costKV)}
+          {planCosts && !plan && <p className="sm muted">{t("ep.d.notPlanned")}</p>}
+          <p className="sm muted" title={t("ep.d.fromRolesTip")}>{t("ep.d.fromRoles")}: {fmt(x.bac)} / {fmt(x.actualCost)} / {fmt(x.remainingCost)} / {fmt(x.atCompletionCost)}</p></fieldset>
+        <fieldset><legend>Float</legend>{COST_FIELDS.filter((c) => c.col.includes("float")).map(costKV)}
+          <KV k="Free Float (d)" v={fmt(a.freeFloat)} /></fieldset>
         <fieldset><legend>Weight</legend>
           <KV k="Estimate Weight" v={V(fmt(a.volumePlan), () => I("volumePlan"))} /><KV k="Actual Weight" v={V(fmt(a.volumeActual), () => I("volumeActual"))} />
           <KV k="Total Worked" v={fmt(a.done)} /><KV k="Remain Weight" v={fmt(a.remain)} /><KV k="W.F / W.V" v={`${w(a.wf)} / ${w(a.wv, 10)}`} /></fieldset>

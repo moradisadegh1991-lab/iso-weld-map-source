@@ -34,6 +34,7 @@ import { useTreeDrag } from "../ui/treeDrag";
  *   ops         what the page lets a person do to rows in place (owner's requirements 2026-10-18,
  *               items 4, 7, 9, 15) — every member optional:
  *                 fields(row)            the columns editable on this row: [{ key: column key, type: text|number|date }]
+ *                 asks                   true: remove() puts its own question; the grid does not confirm first
  *                 removable(rows)        of the rows picked, those `remove` deletes (the count the question names)
  *                 value(row)             the row's current values, by column key
  *                 save(row, values)      → truthy when saved
@@ -222,7 +223,8 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
     // what goes with a node goes too, and the question says how much
     const inside = new Set(gone.flatMap((r) => (r.kind === "node" ? under(r.id).slice(1) : [])));
     for (const r of gone) inside.delete(r.id);
-    if (!window.confirm(inside.size ? t("gr.deleteAskTree", { n: gone.length, k: inside.size }) : t("gr.deleteAsk", { n: gone.length }))) return;
+    // a page that puts its own question (ops.asks) is not asked twice
+    if (!ops.asks && !window.confirm(inside.size ? t("gr.deleteAskTree", { n: gone.length, k: inside.size }) : t("gr.deleteAsk", { n: gone.length }))) return;
     if (await run(() => ops.remove(list))) { setPicked(new Set()); setEditing(null); }
   };
   const pasteInto = async (node) => {

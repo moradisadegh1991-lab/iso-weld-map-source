@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useProjectData } from "../../lib/client/platform.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
+import { COST_FIELDS } from "../../lib/eps/costs.mjs";
 
 /**
  * What the activity pages share: the columns the grid offers, and the version
@@ -45,7 +46,12 @@ export const COLUMNS = [
   { key: "src", title: "ep.col.source", width: 120, get: (r, x) => (r.kind !== "act" ? "" : r.item.scope
     ? `${r.item.scope_removed ? "✗ " : "⛓ "}${x.t(SRC[r.item.scope.discipline] || "ep.src.platform")}` : x.t("ep.src.reports")) },
   { key: "manual", title: "ep.manualPct", width: 80, mono: true, get: (r, x) => (r.kind === "act" ? x.fmt(r.item.progress) : "") },
+  // the activity's own cost and float, as P6 names them (owner's requirements 2026-10-26, item 3)
+  ...COST_FIELDS.map((f) => ({ key: f.key, title: f.head, width: 120, mono: true, get: (r, x) => (r.kind === "act" && r.item[f.col] != null ? x.fmt(Number(r.item[f.col]), 4) : "") })),
 ];
+/** The cost and float of the version's plan row (item 4), as columns keyed `p<Key>`; the two percentages are the database's. */
+export const PLAN_COST_COLUMNS = COST_FIELDS.map((f) => ({ key: `p${f.key[0].toUpperCase()}${f.key.slice(1)}`, field: f, title: f.head, width: 120, mono: true,
+  get: (r, x) => (r.kind === "act" && r.item.plan && r.item.plan[f.col] != null ? x.fmt(Number(r.item.plan[f.col]), 4) : "") }));
 
 /**
  * W.F typed as a decimal fraction (0.4505) while the server keeps the
@@ -72,7 +78,8 @@ export function useVersion(contractId, { version: withVersion = true } = {}) {
   const [asked, setAsked] = useState(null);
   useEffect(() => { const q = new URLSearchParams(window.location.search); setAsked({ version: q.get("version"), pms: q.get("pms") }); }, []);
   const board = useProjectData((id) => (contractId ? `/api/eps?projectId=${id}&contractId=${contractId}` : null), [contractId]);
-  const pmsList = board.data?.pms || [];
+  // only the PMSs the contract uses now are offered (owner's requirements 2026-10-26, item 5)
+  const pmsList = useMemo(() => (board.data?.pms || []).filter((p) => p.active !== false), [board.data]);
   const versions = pmsList.flatMap((p) => p.versions.map((v) => ({ ...v, pmsCode: p.code })));
   const pick = (p, v = undefined) => {
     setPmsId(p?.id || null);

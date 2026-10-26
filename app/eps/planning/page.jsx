@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
 import { useEpsFmt } from "../../../components/eps/ActivityDetail";
-import { COLUMNS, useVersion } from "../../../components/eps/shared";
+import { COLUMNS, PLAN_COST_COLUMNS, useVersion } from "../../../components/eps/shared";
+import { COST_FIELDS, PLAN_COST_FIELDS, costValues } from "../../../lib/eps/costs.mjs";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 import { PLAN_HEAD } from "../../../lib/eps/planning.mjs";
 import TemplateButton from "../../../components/ui/TemplateButton";
@@ -85,6 +86,8 @@ export default function PlanningPage() {
     { key: "pFinish", title: t("ep.pl.finish"), width: 90, mono: true, get: (r, x) => (plan.get(r.id) ? x.day(plan.get(r.id).end_on) : "") },
     { key: "pBefore", title: t("ep.pl.doneBefore"), width: 90, mono: true, get: (r, x) => (plan.get(r.id) ? x.fmt(plan.get(r.id).done_before, 10) : "") },
     { key: "pPlanned", title: t("ep.pl.planned"), width: 90, mono: true, get: (r, x) => (plan.get(r.id) ? x.fmt(plan.get(r.id).volume_plan, 10) : "") },
+    // the version's cost and float, read from its planning rows (item 4)
+    ...PLAN_COST_COLUMNS.map((c) => ({ ...c, get: (r, x) => (plan.get(r.id)?.[c.field.col] != null ? x.fmt(plan.get(r.id)[c.field.col], 4) : "") })),
   ], [plan, t]);
 
   const head = (
@@ -155,15 +158,18 @@ function PlanRows({ data, may, sel, post, fmt, day }) {
   const byId = new Map(data.rows.map((r) => [r.id, r]));
   const rowEdit = may ? {
     fields: [{ col: H.start, name: "startOn", type: "date" }, { col: H.days, name: "days", type: "number" }, { col: H.finish, name: "endOn", type: "date" },
-      { col: H.before, name: "doneBefore", type: "number" }, { col: H.planned, name: "volumePlan", type: "number" }, { col: H.desc, name: "description", type: "text" }],
-    value: (k) => { const r = byId.get(k); return { startOn: r.start_on || "", days: r.days ?? "", endOn: r.end_on || "", doneBefore: r.done_before ?? "", volumePlan: r.volume_plan ?? "", description: r.description || "" }; },
+      { col: H.before, name: "doneBefore", type: "number" }, { col: H.planned, name: "volumePlan", type: "number" }, { col: H.desc, name: "description", type: "text" },
+      // the cost and float typed; the two percentages are worked out (item 4 g, h)
+      ...PLAN_COST_FIELDS.map((f) => ({ col: f.head, name: f.key, type: "number" }))],
+    value: (k) => { const r = byId.get(k); return { startOn: r.start_on || "", days: r.days ?? "", endOn: r.end_on || "", doneBefore: r.done_before ?? "", volumePlan: r.volume_plan ?? "", description: r.description || "", ...costValues(r) }; },
     onSave: (k, v) => {
       const r = byId.get(k);
       // a finish typed stands; else a start or days changed move the finish with them (start + days − 1)
       const endChanged = (v.endOn || "") !== (r.end_on || "");
       const byDays = !endChanged && String(v.days).trim() !== "" && (String(v.days) !== String(r.days ?? "") || (v.startOn || "") !== (r.start_on || ""));
       return post({ kind: "plan-edit", id: k, startOn: v.startOn, endOn: byDays ? undefined : v.endOn, days: byDays ? v.days : undefined,
-        doneBefore: v.doneBefore, volumePlan: v.volumePlan, description: v.description }, () => t("ep.pl.saved", { code: r.code }));
+        doneBefore: v.doneBefore, volumePlan: v.volumePlan, description: v.description, ...Object.fromEntries(PLAN_COST_FIELDS.map((f) => [f.key, v[f.key]])) },
+        () => t("ep.pl.saved", { code: r.code }));
     },
   } : undefined;
   if (!data.rows.length) return <p className="empty-note">{t("ep.pl.empty")}</p>;
@@ -171,12 +177,14 @@ function PlanRows({ data, may, sel, post, fmt, day }) {
     <div className="tablewrap"><TableKit name="eps-planning-rows" rowEdit={rowEdit} onDelete={may ? (k) => post({ kind: "plan-remove", ids: [k] }, () => t("ep.pl.removed")) : undefined}>
       <table className="dtable">
         <thead><tr><th>WBS</th><th>{t("ep.code")}</th><th>Activity ID</th><th>{t("ep.name")}</th><th>{t("ep.unit")}</th><th>{H.start}</th><th>{H.days}</th><th>{H.finish}</th>
-          <th>{H.before}</th><th>{H.planned}</th><th>{t("ep.pl.total")}</th><th>{t("ep.pl.after")}</th><th>{t("ep.done")}</th><th>{H.desc}</th></tr></thead>
+          <th>{H.before}</th><th>{H.planned}</th><th>{t("ep.pl.total")}</th><th>{t("ep.pl.after")}</th><th>{t("ep.done")}</th><th>{H.desc}</th>
+          {COST_FIELDS.map((f) => <th key={f.key} title={f.derived ? t("ep.d.costAuto") : undefined}>{f.head}</th>)}</tr></thead>
         <tbody>{data.rows.map((r) => (
           <tr key={r.id} data-key={r.id} data-plan-row={r.code} style={{ background: sel?.id === r.activity_id ? "var(--cy-soft)" : undefined }}>
             <td className="mono sm" dir="ltr">{r.node_code}</td><td className="mono" dir="ltr">{r.code}</td><td className="mono sm">{r.activityNo || ""}</td><td>{r.name}</td><td>{r.unit || ""}</td>
             <td className="mono">{day(r.start_on)}</td><td className="mono">{fmt(r.days)}</td><td className="mono">{day(r.end_on)}</td>
             <td className="mono">{fmt(r.done_before, 10)}</td><td className="mono">{fmt(r.volume_plan, 10)}</td><td className="mono">{fmt(r.total, 10)}</td>
-            <td className="mono">{fmt(r.remainAfter, 10)}</td><td className="mono">{fmt(r.done, 10)}</td><td>{r.description || ""}</td></tr>))}</tbody>
+            <td className="mono">{fmt(r.remainAfter, 10)}</td><td className="mono">{fmt(r.done, 10)}</td><td>{r.description || ""}</td>
+            {COST_FIELDS.map((f) => <td key={f.key} className="mono" data-cost={f.key}>{fmt(r[f.col], 4)}</td>)}</tr>))}</tbody>
       </table></TableKit></div>);
 }

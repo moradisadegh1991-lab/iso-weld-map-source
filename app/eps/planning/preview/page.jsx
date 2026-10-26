@@ -5,7 +5,7 @@ import { usePlatform, useProjectData } from "../../../../lib/client/platform.mjs
 import ActivityGrid, { useSplit } from "../../../../components/eps/ActivityGrid";
 import ActivityDetail from "../../../../components/eps/ActivityDetail";
 import { Requirements, Comments, Status } from "../../../../components/eps/PlanningSubforms";
-import { COLUMNS, useVersion } from "../../../../components/eps/shared";
+import { COLUMNS, PLAN_COST_COLUMNS, useVersion } from "../../../../components/eps/shared";
 import { usePrefs } from "../../../../lib/client/prefs.mjs";
 
 /**
@@ -70,20 +70,25 @@ export default function PlanningPreviewPage() {
     { key: "pBefore", title: t("ep.pl.doneBefore"), width: 90, mono: true, get: (r, x) => (r.item.plan ? x.fmt(r.item.plan.done_before, 10) : "") },
     { key: "pPlanned", title: t("ep.pl.planned"), width: 95, mono: true, get: (r, x) => (r.item.plan ? x.fmt(r.item.plan.volume_plan, 10) : "") },
     { key: "pDesc", title: t("ep.pl.planDesc"), width: 180, get: (r) => r.item.plan?.description || "" },
+    // the version's cost and float (item 4): six typed, the two percentages worked out
+    ...PLAN_COST_COLUMNS,
   ], [t]);
   // only the planning figures are edited here, in the activity's own row
   const ops = useMemo(() => {
     if (!tree.data?.may?.edit) return null;
     return {
       fields: (row) => (row.kind === "act" ? [{ key: "pStart", type: "date" }, { key: "pDays", type: "number" }, { key: "pFinish", type: "date" },
-        { key: "pBefore", type: "number" }, { key: "pPlanned", type: "number" }, { key: "pDesc", type: "text" }] : []),
-      value: (row) => { const p = row.item.plan; return { pStart: p.start_on || "", pDays: p.days ?? "", pFinish: p.end_on || "", pBefore: p.done_before ?? "", pPlanned: p.volume_plan ?? "", pDesc: p.description || "" }; },
+        { key: "pBefore", type: "number" }, { key: "pPlanned", type: "number" }, { key: "pDesc", type: "text" },
+        ...PLAN_COST_COLUMNS.filter((c) => !c.field.derived).map((c) => ({ key: c.key, type: "number" }))] : []),
+      value: (row) => { const p = row.item.plan; return { pStart: p.start_on || "", pDays: p.days ?? "", pFinish: p.end_on || "", pBefore: p.done_before ?? "", pPlanned: p.volume_plan ?? "", pDesc: p.description || "",
+        ...Object.fromEntries(PLAN_COST_COLUMNS.map((c) => [c.key, p[c.field.col] ?? ""])) }; },
       save: async (row, v) => {
         const p = row.item.plan;
         const endChanged = (v.pFinish || "") !== (p.end_on || "");
         const byDays = !endChanged && String(v.pDays).trim() !== "" && (String(v.pDays) !== String(p.days ?? "") || (v.pStart || "") !== (p.start_on || ""));
         return !!(await postPlan({ kind: "plan-edit", id: p.id, startOn: v.pStart, endOn: byDays ? undefined : v.pFinish, days: byDays ? v.pDays : undefined,
-          doneBefore: v.pBefore, volumePlan: v.pPlanned, description: v.pDesc }, () => t("ep.pl.saved", { code: row.item.code })));
+          doneBefore: v.pBefore, volumePlan: v.pPlanned, description: v.pDesc,
+          ...Object.fromEntries(PLAN_COST_COLUMNS.filter((c) => !c.field.derived).map((c) => [c.field.key, v[c.key]])) }, () => t("ep.pl.saved", { code: row.item.code })));
       },
     };
   }, [tree.data?.may?.edit, versionId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -106,7 +111,7 @@ export default function PlanningPreviewPage() {
     if (tab === "comments") return <Comments p={sub.data} a={a} may={sub.data.may.edit} post={postPlan} />;
     if (tab === "status") return <Status p={sub.data} a={a} />;
     return <ActivityDetail d={detail.data} tab={tab} may={may} post={post} acts={acts} labels={data.labels} codes={data.codes} resources={data.resources}
-      companies={data.companies} projectId={projectId} history={tab === "reports"} />;
+      companies={data.companies} projectId={projectId} history={tab === "reports"} planCosts />;
   };
   return (
     <div className="page">
@@ -115,7 +120,7 @@ export default function PlanningPreviewPage() {
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.roots.length === 0 ? <p className="empty-note">{t("ep.pl.empty")}</p> : (
         <div style={{ height }}>
-          <ActivityGrid data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "pStart", "pDays", "pFinish", "pBefore", "pPlanned", "pDesc"]}
+          <ActivityGrid data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "pStart", "pDays", "pFinish", "pBefore", "pPlanned", "pDesc", ...PLAN_COST_COLUMNS.map((c) => c.key)]}
             storeKey="p6-plan-preview" selected={sel?.id} onSelect={(r) => setSel(r)} ops={ops} />
         </div>)}
       {grip}

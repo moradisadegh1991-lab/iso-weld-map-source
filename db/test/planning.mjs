@@ -302,7 +302,8 @@ test("a PMS deleted takes everything under it — versions, planning rows and th
     equal([c.counts.versions, c.counts.plans, c.counts.nodes, c.counts.activities, c.counts.relations, c.blockers], [1, 2, 3, 2, 1, []]);
     const others = async () => (await db.query("SELECT (SELECT count(*) FROM wbs_node WHERE pms_id <> $1)::int + (SELECT count(*) FROM eps_version WHERE pms_id <> $1)::int AS n", [PM3.id])).rows[0].n;
     const before = await others();
-    await eps.removeEps(db, { projectId: P, kind: "pms", id: PM3.id, userId: U.id });
+    await throws(() => eps.removeEps(db, { projectId: P, kind: "pms", id: PM3.id, userId: U.id }), "حذف تمام زیرمجموعه‌ها", "only when asked to take what is under it");
+    await eps.removeEps(db, { projectId: P, kind: "pms", id: PM3.id, all: true, userId: U.id });
     const left = (await db.query(
       `SELECT (SELECT count(*) FROM eps_pms WHERE id = $1)::int + (SELECT count(*) FROM eps_version WHERE pms_id = $1)::int
             + (SELECT count(*) FROM wbs_node WHERE pms_id = $1)::int + (SELECT count(*) FROM wbs_activity WHERE id = ANY($2::uuid[]))::int
@@ -321,7 +322,7 @@ test("a PMS a control account is measured on is not deleted", async () => {
     const n = await eps.saveNode(db, { projectId: P, pmsId: PM4.id, name: "گره", wf: 100 });
     await db.query("INSERT INTO control_account (project_id, code, title, wbs_node_id) VALUES ($1,'CA-PM04','x',$2)", [P, n.id]);
     equal((await eps.pmsContents(db, { projectId: P, id: PM4.id })).blockers.length, 1);
-    await throws(() => eps.removeEps(db, { projectId: P, kind: "pms", id: PM4.id }), "CA-PM04");
+    await throws(() => eps.removeEps(db, { projectId: P, kind: "pms", id: PM4.id, all: true }), "CA-PM04", "not even with all under it");
     equal((await db.query("SELECT count(*)::int AS n FROM wbs_node WHERE pms_id = $1", [PM4.id])).rows[0].n, 1, "nothing removed");
   });
 });

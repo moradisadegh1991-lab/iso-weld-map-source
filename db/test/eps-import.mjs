@@ -113,7 +113,8 @@ test("a PMS whose activity a daily report names is not replaced, nor deleted —
     const c = await eps.pmsContents(db, { projectId: P, id: PB.id });
     assert(c.blockers.length === 1 && c.blockers[0].includes("CRX-0001"), c.blockers.join(" "));
     await throws(() => imp.importPlan(db, { projectId: P, mode: "replace", pmsId: PB.id, kind: "pms", sourceName: "pms.xlsx", content: xls, userId: u.id }), "CRX-0001");
-    await throws(() => eps.removeEps(db, { projectId: P, kind: "pms", id: PB.id }), "CRX-0001");
+    await throws(() => eps.removeEps(db, { projectId: P, kind: "pms", id: PB.id }), "حذف تمام زیرمجموعه‌ها");
+    await throws(() => eps.removeEps(db, { projectId: P, kind: "pms", id: PB.id, all: true }), "CRX-0001", "a report not of the contract's daily reports holds it even with all under it");
     equal(await actsOf(PB.id), before, "untouched");
   });
 });

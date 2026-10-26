@@ -7,6 +7,7 @@ import ActivityDetail, { useEpsFmt } from "../../../components/eps/ActivityDetai
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 import { COLUMNS, useVersion, wIn, wOut } from "../../../components/eps/shared";
 import { NodeScope } from "../../../components/eps/ScopePanel";
+import { COST_FIELDS, costValues } from "../../../lib/eps/costs.mjs";
 
 import TableKit from "../../../components/ui/TableKit";
 /**
@@ -61,18 +62,20 @@ export default function ActivitiesPage() {
       catch (e) { setMsg(e.message); live.current.reload(); return false; }
     };
     const own = (v) => ({ name: v.name, wf: wOut(v.wf), volumeActual: v.volActual === "" ? null : v.volActual,
-      actType: v.actType, activityNo: v.activityNo, wfRate: v.wfRate === "" ? null : v.wfRate, description: v.description });
+      actType: v.actType, activityNo: v.activityNo, wfRate: v.wfRate === "" ? null : v.wfRate, description: v.description,
+      ...Object.fromEntries(COST_FIELDS.map((f) => [f.key, v[f.key] === "" ? null : v[f.key]])) });
     const actBody = (v) => ({ ...own(v), planStart: v.start || null, planEnd: v.finish || null, volumePlan: v.volPlan === "" ? null : v.volPlan });
     const valueOf = (it) => ({ name: it.name ?? "", wf: wIn(it.wf), volPlan: it.volumePlan ?? "", volActual: it.volumeActual ?? "",
       start: it.plan_start ? String(it.plan_start).slice(0, 10) : "", finish: it.plan_end ? String(it.plan_end).slice(0, 10) : "",
-      actType: it.act_type ?? "", activityNo: it.activity_no ?? "", wfRate: it.wf_rate ?? "", description: it.description ?? "" });
+      actType: it.act_type ?? "", activityNo: it.activity_no ?? "", wfRate: it.wf_rate ?? "", description: it.description ?? "", ...costValues(it) });
     // under a version that plans the activity, its dates and planned quantity are the version's row (owner's requirements 2026-10-22)
     const planned = (row) => !!(versionId && row.item?.plan);
     const toPlan = (row, v) => ({ url: "/api/eps/planning", kind: "plan-edit", id: row.item.plan.id, startOn: v.start || "", endOn: v.finish || "", volumePlan: v.volPlan });
     return {
       fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "actType", type: "text" }, { key: "activityNo", type: "text" },
         { key: "wf", type: "number" }, { key: "wfRate", type: "number" }, { key: "volPlan", type: "number" },
-        { key: "volActual", type: "number" }, { key: "start", type: "date" }, { key: "finish", type: "date" }, { key: "description", type: "text" }] : []),
+        { key: "volActual", type: "number" }, { key: "start", type: "date" }, { key: "finish", type: "date" }, { key: "description", type: "text" },
+        ...COST_FIELDS.map((f) => ({ key: f.key, type: "number" }))] : []),
       value: (row) => valueOf(row.item),
       save: (row, v) => (planned(row) ? batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...own(v) }, toPlan(row, v)])
         : batch([{ kind: "activity", id: row.id, nodeId: row.item.node_id, ...actBody(v) }])),
@@ -132,7 +135,7 @@ export default function ActivitiesPage() {
         {t("ep.ac.pendingLinks", { n: data.scope.filter((x) => !x.rule.auto_apply && (x.pending.any || x.firstApply)).length })} <Link href="/eps/scope">{t("ep.link.scope")}</Link></p>}
       {data.problems.length > 0 && <div className="card" style={{ borderColor: "var(--bad)" }}><b>{t("ep.ac.problems")}</b><ul className="sm">{data.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>}
       <div style={{ height }}>
-        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "actType", "activityNo", "name", "wf", "wfRate", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur", "description"]}
+        <ActivityGrid data={data} columns={COLUMNS} defaultCols={["code", "actType", "activityNo", "name", "wf", "wfRate", "wv", "unit", "volActual", "done", "pct", "src", "start", "finish", "dur", "description", ...COST_FIELDS.map((f) => f.key)]}
           storeKey="p6-activities" customKey="eps-activities" selected={sel?.id} onSelect={(r) => setSel(r)} toolbar={toolbar} ops={ops} />
       </div>
       {grip}
