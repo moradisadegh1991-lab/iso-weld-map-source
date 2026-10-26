@@ -112,21 +112,21 @@ await page.locator(`[data-detail="${newCode}"] [data-costs=plan]`).waitFor();
 await page.locator("[data-detail-edit]").click();
 for (const [k, v] of [["targetCost", "800"], ["actCost", "300"], ["totalCost", "1000"]]) await page.fill(`[data-costs=plan] input[aria-label="${k}"]`, v);
 const live = await page.locator("[data-costs=plan] [data-cost-auto]").allInnerTexts();
-check(live.join(" ") === "80% 30%", `the two percentages worked out while typing, not typed (${live.join(" ")})`);
+check(live.join(" ") === "30% 37.5%", `the two percentages worked out while typing, not typed (${live.join(" ")})`);
 check(await page.locator('[data-costs=plan] input[aria-label="costCompletePct"]').count() === 0, "no field to type them in the plan");
 await page.screenshot({ path: `${SHOT}/482-preview-plan-costs-en.png` });
 asked.length = 0;
 await page.locator(`[data-detail="${newCode}"] button[type=submit]`).click();
 await settle();
 const row = (await api(`/api/eps/planning?projectId=${projectId}&versionId=${V.id}`)).rows.find((r) => r.activity_id === A.id);
-check(asked[0] === "Save the changes?" && [row.target_cost, row.act_cost, row.total_cost, row.cost_complete_pct, row.act_pct_spent].join(",") === "800,300,1000,80,30",
-  `the version's plan row takes them; the database works out 80% and 30% (${[row.cost_complete_pct, row.act_pct_spent]})`);
+check(asked[0] === "Save the changes?" && [row.target_cost, row.act_cost, row.total_cost, row.cost_complete_pct, row.act_pct_spent].join(",") === "800,300,1000,30,37.5",
+  `the version's plan row takes them; the database works out 30% and 37.5% (${[row.cost_complete_pct, row.act_pct_spent]})`);
 a = (await api(`/api/eps/activities?projectId=${projectId}&activityId=${A.id}`)).activity;
 check(Number(a.target_cost) === 1000, "the activity table keeps its own budget");
 // the planning page shows them on the version's rows
 await page.goto(`${BASE}/eps/planning?version=${V.id}`, { waitUntil: "networkidle" });
 await page.locator(`[data-plan-row="${newCode}"]`).waitFor();
-check(await page.locator(`[data-plan-row="${newCode}"] [data-cost=costCompletePct]`).innerText() === "80", "the planning page's rows show the percentage");
+check(await page.locator(`[data-plan-row="${newCode}"] [data-cost=costCompletePct]`).innerText() === "30", "the planning page's rows show the percentage");
 
 // ── 1: the EPS Excel template with the project's own column ─────────────
 const crew = `Crew ${tag}`;

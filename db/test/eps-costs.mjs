@@ -19,12 +19,12 @@ import { pickable, checkPick, templateOf } from "../../lib/import-templates.mjs"
 
 // ── the rules ────────────────────────────────────────────────────────────
 
-test("the two percentages, as the owner defines them: budgeted or actual over the at completion total; empty while a side is empty or the total is 0", () => {
-  equal(costPercents({ targetCost: 800, actCost: 300, totalCost: 1000 }), { costCompletePct: 80, actPctSpent: 30 });
-  equal(costPercents({ targetCost: 1, actCost: 2, totalCost: 3 }), { costCompletePct: 33.3333, actPctSpent: 66.6667 });
-  equal(costPercents({ targetCost: 800, actCost: null, totalCost: 1000 }), { costCompletePct: 80, actPctSpent: null }, "an actual nobody gave is not zero");
-  equal(costPercents({ targetCost: 800, actCost: 300, totalCost: "" }), { costCompletePct: null, actPctSpent: null });
-  equal(costPercents({ targetCost: 800, actCost: 300, totalCost: 0 }), { costCompletePct: null, actPctSpent: null }, "no division by zero");
+test("the two percentages as P6 defines them: actual over the at completion total, actual over the budget; empty while a side is empty or a divisor is 0", () => {
+  equal(costPercents({ targetCost: 800, actCost: 300, totalCost: 1000 }), { costCompletePct: 30, actPctSpent: 37.5 });
+  equal(costPercents({ targetCost: 3, actCost: 2, totalCost: 3 }), { costCompletePct: 66.6667, actPctSpent: 66.6667 });
+  equal(costPercents({ targetCost: 800, actCost: null, totalCost: 1000 }), { costCompletePct: null, actPctSpent: null }, "an actual nobody gave is not zero");
+  equal(costPercents({ targetCost: 800, actCost: 300, totalCost: "" }), { costCompletePct: null, actPctSpent: 37.5 }, "each percentage needs only its own divisor");
+  equal(costPercents({ targetCost: 0, actCost: 300, totalCost: 0 }), { costCompletePct: null, actPctSpent: null }, "no division by zero");
   equal(COST_FIELDS.map((f) => f.col), ["target_cost", "act_cost", "remain_cost", "total_cost", "free_float_hr_cnt", "total_float_hr_cnt", "cost_complete_pct", "act_pct_spent"]);
   equal(PLAN_COST_FIELDS.length, 6, "in a plan the two percentages are not typed");
 });
@@ -121,10 +121,10 @@ test("a version's plan: six typed, the two percentages worked out by the databas
       costCompletePct: 99, actPctSpent: 99, userId: U.planner.id });
     let r = (await plan.planRows(db, { projectId: P, versionId: V.id })).rows.find((x) => x.id === row.id);
     equal([r.target_cost, r.act_cost, r.remain_cost, r.total_cost, r.free_float_hr_cnt, r.total_float_hr_cnt, r.cost_complete_pct, r.act_pct_spent],
-      [800, 300, 700, 1000, 6, -2, 80, 30], "800 ÷ 1000 and 300 ÷ 1000; the 99 typed is not taken");
+      [800, 300, 700, 1000, 6, -2, 30, 37.5], "300 ÷ 1000 and 300 ÷ 800; the 99 typed is not taken");
     await plan.savePlanRow(db, { projectId: P, id: row.id, totalCost: "", userId: U.planner.id });
     r = (await plan.planRows(db, { projectId: P, versionId: V.id })).rows.find((x) => x.id === row.id);
-    equal([r.target_cost, r.cost_complete_pct, r.act_pct_spent], [800, null, null], "the total emptied: no percentage");
+    equal([r.target_cost, r.cost_complete_pct, r.act_pct_spent], [800, null, 37.5], "the total emptied: no Cost % Complete; Cost % of Budget stands on the budget");
     await throws(() => plan.savePlanRow(db, { projectId: P, id: row.id, actCost: -3, userId: U.planner.id }), "منفی");
     await throws(() => db.query("UPDATE activity_plan SET cost_complete_pct = 5 WHERE id = $1", [row.id]), "428C9", "a percentage is never written by hand (a generated column)");
     // under the version the activity carries its plan's figures; the activity table keeps its own
@@ -136,7 +136,7 @@ test("a version's plan: six typed, the two percentages worked out by the databas
     await plan.savePlanRow(db, { projectId: P, id: row.id, totalCost: 1000, userId: U.planner.id });
     await plan.copyPlan(db, { projectId: P, fromVersionId: V.id, toVersionId: V2.id, userId: U.planner.id });
     const c = (await plan.planRows(db, { projectId: P, versionId: V2.id })).rows.find((x) => x.activity_id === A.id);
-    equal([c.target_cost, c.total_cost, c.cost_complete_pct, c.act_pct_spent], [800, 1000, 80, 30]);
+    equal([c.target_cost, c.total_cost, c.cost_complete_pct, c.act_pct_spent], [800, 1000, 30, 37.5]);
   });
 });
 
