@@ -5,6 +5,7 @@ import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { usePrefs } from "../../../lib/client/prefs.mjs";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
 import { wIn, wOut } from "../../../components/eps/shared";
+import { COST_FIELDS, costValues } from "../../../lib/eps/costs.mjs";
 /**
  * Activity templates, built as the activities page's tree table is (owner's
  * request 2026-10-24: «الگو … مطابق لیست جدول فعالیت ها قابل ساختن باشد»): the
@@ -35,10 +36,12 @@ const TPL_COLUMNS = [
   { key: "volPlan", title: "ep.col.volPlan", width: 85, mono: true, get: (r, x) => (r.kind === "act" && r.item.volume_plan != null ? x.fmt(Number(r.item.volume_plan)) : "") },
   { key: "count", title: "ep.activity", width: 70, mono: true, get: (r) => (r.kind === "node" ? r.item.activities.length || "" : "") },
   { key: "description", title: "ep.description", width: 220, hits: true, get: (r) => r.item.description || "" },
+  // the activity table's cost and float (091), handed to the activity made from the template
+  ...COST_FIELDS.map((f) => ({ key: f.key, title: f.head, width: 120, mono: true, get: (r, x) => (r.kind === "act" && r.item[f.col] != null ? x.fmt(Number(r.item[f.col]), 4) : "") })),
 ];
-const DEFAULT_COLS = ["code", "name", "number", "actType", "activityNo", "wf", "wfRate", "volPlan", "count", "description"];
+const DEFAULT_COLS = ["code", "name", "number", "actType", "activityNo", "wf", "wfRate", "volPlan", "count", "description", ...COST_FIELDS.map((f) => f.key)];
 const ACT_FIELDS = [{ key: "name", type: "text" }, { key: "actType", type: "text" }, { key: "activityNo", type: "text" }, { key: "wf", type: "number" },
-  { key: "wfRate", type: "number" }, { key: "volPlan", type: "number" }, { key: "description", type: "text" }];
+  { key: "wfRate", type: "number" }, { key: "volPlan", type: "number" }, { key: "description", type: "text" }, ...COST_FIELDS.map((f) => ({ key: f.key, type: "number" }))];
 // the templates as the grid's tree: a template is a node, its activities the rows under it
 const asTree = (rows) => {
   const by = new Map(rows.map((r) => [r.id, { ...r, children: [], activities: r.activities.map((a) => ({ ...a, node_id: r.id })) }]));
@@ -76,13 +79,14 @@ export default function TemplatesPage() {
     };
     const blank = (x) => (x === "" || x === undefined ? null : x);
     const actBody = (templateId, v, it = {}) => ({ kind: "template-activity", id: it.id || null, templateId, number: it.number ?? null, name: v.name, wf: wOut(v.wf),
-      description: v.description || null, actType: v.actType ?? null, activityNo: v.activityNo ?? null, wfRate: blank(v.wfRate), volumePlan: blank(v.volPlan) });
+      description: v.description || null, actType: v.actType ?? null, activityNo: v.activityNo ?? null, wfRate: blank(v.wfRate), volumePlan: blank(v.volPlan),
+      ...Object.fromEntries(COST_FIELDS.map((f) => [f.key, blank(v[f.key])])) });
     const siblings = (row) => data.templates.filter((x) => (x.parent_id || null) === (row.item.parent_id || null)).sort((a, b) => a.seq - b.seq || a.code.localeCompare(b.code));
     return {
       fields: (row) => (row.kind === "act" ? ACT_FIELDS
         : [{ key: "code", type: "text" }, { key: "name", type: "text" }, { key: "description", type: "text" }]),
       value: (row) => (row.kind === "act" ? { name: row.item.name ?? "", actType: row.item.act_type ?? "", activityNo: row.item.activity_no ?? "", wf: wIn(row.item.wf),
-        wfRate: row.item.wf_rate ?? "", volPlan: row.item.volume_plan ?? "", description: row.item.description ?? "" }
+        wfRate: row.item.wf_rate ?? "", volPlan: row.item.volume_plan ?? "", description: row.item.description ?? "", ...costValues(row.item) }
         : { code: row.item.code ?? "", name: row.item.name ?? "", description: row.item.description ?? "" }),
       save: (row, v) => batch([row.kind === "act" ? actBody(row.item.node_id, v, row.item)
         : { kind: "template", id: row.id, parentId: row.item.parent_id || null, code: String(v.code || "").toUpperCase(), name: v.name, description: v.description || null }],

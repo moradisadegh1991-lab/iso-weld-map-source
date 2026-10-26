@@ -260,18 +260,25 @@ wbs = await api(`/api/eps?projectId=${projectId}&pmsId=${imported.id}`);
 check(wbs.overflows.length === 2, "replaced from the file: its figures as the file has them again (the fit undone)");
 await row("[data-eps-tree]", newCode).click();
 await page.locator(`[data-pms-form="${newCode}"] [data-pms-remove]`).waitFor();
-asked.length = 0;
+// deleting it: the box says what goes, and «delete everything under it» is ticked (owner's requirements 2026-10-26, item 5)
 await page.locator(`[data-pms-form="${newCode}"] [data-pms-remove]`).click();
+await page.locator("[data-remove-ask]").waitFor();
+const holds = await page.locator("[data-remove-item]").innerText();
+await page.locator("[data-remove-all] input").check();
+await page.locator("[data-remove-ok]").click();
 await page.waitForTimeout(1500);
-check(/with everything under it\? 0 versions .*3 WBS nodes, 3 activities/.test(asked[0] || ""), `deleting the PMS names what goes with it (${(asked[0] || "").slice(0, 120)})`);
+check(/0 versions .*3 WBS nodes, 3 activities/.test(holds), `deleting the PMS names what goes with it (${holds.slice(0, 120)})`);
 check(!(await api(`/api/eps?projectId=${projectId}&contractId=${contractId}`)).pms.some((p) => p.code === newCode), "the PMS is gone with everything under it");
 // the drive's own PMS, with two versions and a node, goes too
 await row("[data-eps-tree]", pms.code).click();
-asked.length = 0;
 await page.locator(`[data-pms-form="${pms.code}"] [data-pms-remove]`).click();
+await page.locator("[data-remove-ask]").waitFor();
+const holds2 = await page.locator("[data-remove-item]").innerText();
+await page.locator("[data-remove-all] input").check();
+await page.locator("[data-remove-ok]").click();
 await page.waitForTimeout(1500);
-check(/3 versions/.test(asked[0] || "") && !(await api(`/api/eps?projectId=${projectId}&contractId=${contractId}`)).pms.some((p) => p.id === pms.id),
-  `a PMS with versions and WBS is deleted whole (${(asked[0] || "").slice(0, 80)})`);
+check(/3 versions/.test(holds2) && !(await api(`/api/eps?projectId=${projectId}&contractId=${contractId}`)).pms.some((p) => p.id === pms.id),
+  `a PMS with versions and WBS is deleted whole (${holds2.slice(0, 80)})`);
 
 // ── a template of chosen columns ─────────────────────────────────────────
 await page.goto(`${BASE}/eps/planning?version=${v1.id}`, { waitUntil: "networkidle" });

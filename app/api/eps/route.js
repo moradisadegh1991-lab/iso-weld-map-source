@@ -23,7 +23,7 @@ import { logEvent } from "../../../lib/db/repos/log.mjs";
  *   GET ?projectId&(pmsId|versionId)&suggest=1[&parentId]   the code a new node would get
  *   GET ?projectId&pmsId&contents=1        what is under the PMS, and what stops deleting it
  *   GET ?projectId&templates=1             the activity templates
- *   POST {kind: pms | pms-budget | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
+ *   POST {kind: pms | pms-budget | pms-active | version | version-master | eps-move | eps-remove | settings | node | node-move | node-copy | node-remove |
  *         attach | activity | activity-remove | template | template-move | template-copy | template-remove |
  *         template-activity | template-activity-remove | template-activity-place | template-sync | convert-legacy}
  *   POST multipart {kind: import-plan, mode: replace (pmsId) | new (contractId, pmsCode, title?), fileKind: mspdi | pms | sheet, file}
@@ -43,7 +43,7 @@ async function contractOf(db, projectId, b) {
   const q = async (sql, id) => (id ? (await db.query(sql, [id, projectId])).rows[0]?.contract_id ?? null : null);
   switch (b.kind) {
     case "pms": return b.id ? q(PMS, b.id) : b.contractId || null;
-    case "pms-budget": return q(PMS, b.id);
+    case "pms-budget": case "pms-active": return q(PMS, b.id);
     case "version": return b.id ? q(VERSION, b.id) : q(PMS, b.pmsId);
     case "import-plan": return b.mode === "new" ? b.contractId || null : q(PMS, b.pmsId);
     case "convert-legacy": case "wf-fit": return q(PMS, b.pmsId);
@@ -122,6 +122,7 @@ export async function POST(request) {
       const run = {
         pms: () => eps.savePms(db, a),
         "pms-budget": () => eps.savePmsBudget(db, a),
+        "pms-active": () => eps.setPmsActive(db, a),
         version: () => eps.saveVersion(db, a),
         "version-master": () => eps.setMaster(db, a),
         "eps-move": () => eps.moveEps(db, { ...a, kind: b.epsKind }),

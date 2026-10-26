@@ -36,7 +36,7 @@ const EPS_COLUMNS = [
   { key: "count", title: "ep.bd.versionsNodes", width: 150, get: (r, x) => (r.kind === "node" ? x.t("ep.bd.pmsCounts", { v: r.item.activities.length, n: r.item.nodes }) : x.t("ep.bd.planned", { n: r.item.planned })) },
   { key: "description", title: "ep.description", width: 200, hits: true, get: (r) => r.item.description || "" },
 ];
-const DEFAULT_COLS = ["code", "name", "type", "master", "start", "finish", "dur", "aStart", "aFinish", "budget", "count"];
+const DEFAULT_COLS = ["code", "active", "name", "type", "master", "start", "finish", "dur", "aStart", "aFinish", "budget", "count"];
 const COLORS = ["#1f6f8b", "#7d3c98"];
 // the board as the tree's data: a PMS is a node, its versions the rows under it (a version's span on the chart is its schedule's)
 const asTree = (pms) => ({ roots: pms.map((p) => ({ ...p, name: p.title, level: 1, color: COLORS[0], children: [],
@@ -60,15 +60,40 @@ export default function EpsPage() {
     catch (e) { setMsg(e.message); return null; }
   }
   const tree = useMemo(() => (data ? asTree(data.pms) : null), [data]);
-  // a PMS goes with everything under it: what that is, and what would stop it, asked of the server before the question is put
-  async function askRemovePms(p) {
+  // a deletion asked in a box of its own (owner's requirements 2026-10-26, item 5): what each row holds — for a PMS asked of the
+  // server — and «delete all under it» to tick; resolves to null (cancelled) or { all }
+  const [asking, setAsking] = useState(null);
+  async function askRemove(rows) {
     setMsg(null);
-    let c;
-    try { c = await call(`/api/eps?projectId=${projectId}&pmsId=${p.id}&contents=1`); } catch (e) { setMsg(e.message); return false; }
-    if (c.blockers.length) { setMsg(t("ep.bd.removePmsBlocked", { code: p.code, why: c.blockers.join(" ") })); return false; }
-    return window.confirm(t("ep.bd.removePmsAll", { code: p.code, ...c.counts }));
+    const items = [];
+    for (const r of rows) {
+      if (r.kind === "pms") {
+        let c;
+        try { c = await call(`/api/eps?projectId=${projectId}&pmsId=${r.item.id}&contents=1`); } catch (e) { setMsg(e.message); return null; }
+        items.push({ ...r, counts: c.counts, stop: c.stops });
+      } else items.push({ ...r, counts: { plans: r.item.planned || 0 } });
+    }
+    return new Promise((resolve) => setAsking({ items, resolve }));
   }
-  live.current.askRemovePms = askRemovePms;
+  const removeNow = async (rows, all) => {
+    setMsg(null); setOk(null);
+    try {
+      for (const r of rows) await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, contractId, kind: "eps-remove", epsKind: r.kind, id: r.item.id, all }) });
+      setOk(t("ep.removed")); reload(); return true;
+    } catch (e) { setMsg(e.message); reload(); return false; }
+  };
+  async function askRemovePms(p) {
+    const a = await askRemove([{ kind: "pms", item: p }]);
+    return a ? removeNow([{ kind: "pms", item: p }], a.all) : false;
+  }
+  live.current.askRemove = askRemove;
+  live.current.removeNow = removeNow;
+  // a PMS ticked active is offered where a PMS is picked; one set aside is not (item 5)
+  const columns = useMemo(() => [EPS_COLUMNS[0],
+    { key: "active", title: "ep.bd.active", width: 60, get: (r) => (r.kind !== "node" ? "" : (
+      <input type="checkbox" aria-label={t("ep.bd.activeOf", { code: r.item.code })} checked={r.item.active !== false} disabled={!data?.may?.edit} data-pms-active={r.item.code}
+        onChange={(e) => post({ kind: "pms-active", id: r.item.id, active: e.target.checked }, () => t(e.target.checked ? "ep.bd.activeOn" : "ep.bd.activeOff", { code: r.item.code }))} />)) },
+    ...EPS_COLUMNS.slice(1)], [data?.may?.edit, t]); // eslint-disable-line react-hooks/exhaustive-deps
   const ops = useMemo(() => {
     if (!data?.may?.edit) return null;
     const send = (body) => call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, contractId, ...body }) });
@@ -95,12 +120,13 @@ export default function EpsPage() {
       save: (row, v) => batch([row.kind === "node" ? pmsBody(row.item, v) : verBody(row.item, v)], t("ep.bd.saved", { code: row.item.code })),
       // a row typed under a PMS is a new version of it, numbered after the last
       create: (node, v) => batch([{ ...verBody({ pms_id: node.id, code: `${node.item.code}-R${node.item.activities.length + 1}` }, v), id: null }], t("ep.bd.verSaved", { code: `${node.item.code}-R${node.item.activities.length + 1}` })),
+      // the question is the page's own box, with «delete all under it» (item 5), not the grid's
+      asks: true,
       remove: async (rows) => {
-        const pmsRows = rows.filter((x) => x.kind === "node");
-        // each PMS picked: what it takes with it, said before it goes
-        for (const x of pmsRows) if (!(await live.current.askRemovePms(x.item))) return false;
-        return batch([...rows.filter((x) => x.kind === "act" && !rows.some((p) => p.id === x.parentId)).map((x) => ({ kind: "eps-remove", epsKind: "version", id: x.id })),
-          ...pmsRows.map((x) => ({ kind: "eps-remove", epsKind: "pms", id: x.id }))], t("ep.removed"));
+        const list = [...rows.filter((x) => x.kind === "act" && !rows.some((p) => p.id === x.parentId)).map((x) => ({ kind: "version", item: x.item })),
+          ...rows.filter((x) => x.kind === "node").map((x) => ({ kind: "pms", item: x.item }))];
+        const a = await live.current.askRemove(list);
+        return a ? live.current.removeNow(list, a.all) : false;
       },
       // versions cut onto another PMS move there; a copy of a version is made on the planning page (copy between versions)
       paste: async (node, rows, how) => {
@@ -127,7 +153,7 @@ export default function EpsPage() {
   const may = data.may.edit;
   const toolbar = may && <>
     <button className="btn sm" type="button" data-new-pms onClick={() => { setAdding(true); setSel(null); }}>{t("ep.bd.newPms")}</button>
-    <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.length ? "replace" : "new", pmsId: data.pms[0]?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></>;
+    <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.some((p) => p.active !== false) ? "replace" : "new", pmsId: data.pms.find((p) => p.active !== false)?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></>;
   const pickedPms = sel?.kind === "node" ? data.pms.find((p) => p.id === sel.id) : null;
   const pickedVer = sel?.kind === "act" ? data.pms.flatMap((p) => p.versions.map((v) => ({ v, p }))).find((x) => x.v.id === sel.id) : null;
   return (
@@ -136,18 +162,20 @@ export default function EpsPage() {
         <span className="sub">{t("ep.bd.sub", { no: contract?.contract_no || "", title: contract?.title || "" })}</span></div>
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
+      {asking && <RemoveAsk items={asking.items} close={(r) => { asking.resolve(r); setAsking(null); }} />}
       {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} contractId={contractId} call={call} done={(m) => { setImp(null); setOk(m); reload(); }} fail={setMsg} />}
       {data.pms.length === 0 && !adding ? <div className="card"><p className="empty-note">{t("ep.bd.none")}</p>{may && <p className="row" style={{ gap: 6 }}><button className="btn" type="button" data-new-pms onClick={() => setAdding(true)}>{t("ep.bd.newPms")}</button>
         <button className="btn ghost" type="button" data-import-open onClick={() => setImp({ mode: "new", pmsId: "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></p>}</div> : <>
         <div style={{ height }} data-eps-tree>
-          <ActivityGrid data={tree} columns={EPS_COLUMNS} defaultCols={DEFAULT_COLS} storeKey="p6-eps" customKey="eps-board" selected={sel?.id}
+          <ActivityGrid data={tree} columns={columns} defaultCols={DEFAULT_COLS} storeKey="p6-eps" customKey="eps-board" selected={sel?.id}
             onSelect={(r) => { setSel(r); setAdding(false); }} toolbar={toolbar} ops={ops} />
         </div>
         {grip}</>}
       <div className="p6-detail" data-eps-detail>
         {adding ? <PmsForm init={{ ...BLANK_PMS }} labels={data.labels} post={post} close={() => setAdding(false)} />
           : pickedPms ? <PmsForm key={`${pickedPms.id}|${pickedPms.title}|${pickedPms.budget_plan}`} p={pickedPms} labels={data.labels} post={post} may={may} askRemove={askRemovePms} />
-          : pickedVer ? <VersionForm key={pickedVer.v.id} v={pickedVer.v} p={pickedVer.p} post={post} may={may} />
+          : pickedVer ? <VersionForm key={pickedVer.v.id} v={pickedVer.v} p={pickedVer.p} post={post} may={may}
+            askRemove={async () => { const a = await askRemove([{ kind: "version", item: pickedVer.v }]); if (a) await removeNow([{ kind: "version", item: pickedVer.v }], a.all); }} />
           : data.pms.length > 0 && <p className="empty-note">{t("ep.bd.pick")}</p>}
       </div>
     </div>
@@ -185,13 +213,13 @@ function PmsForm({ p = null, init = null, labels, post, may = true, close = null
         <p className="sm muted">{t("ep.bd.spans", { plan: fmt(span(pf.planStart, pf.planEnd)), actual: fmt(span(pf.actualStart, pf.actualEnd)) })}</p>
         {may && <p className="row" style={{ gap: 6 }}><button className="btn" type="submit">{t("ep.save")}</button>
           {close && <button className="btn ghost" type="button" onClick={close}>{t("ep.cancel")}</button>}
-          {p && <button className="btn ghost danger" type="button" data-pms-remove onClick={async () => { if (await askRemove(p)) post({ kind: "eps-remove", epsKind: "pms", id: p.id }, () => t("ep.bd.pmsRemoved", { code: p.code })); }}>{t("ep.remove")}</button>}</p>}
+          {p && <button className="btn ghost danger" type="button" data-pms-remove onClick={() => askRemove(p)}>{t("ep.remove")}</button>}</p>}
       </fieldset>
     </form>);
 }
 
 /** A version picked: its schedule's fields, master plan or not, and its planning and activities a click away. */
-function VersionForm({ v, p, post, may }) {
+function VersionForm({ v, p, post, may, askRemove }) {
   const { t } = usePrefs();
   const [vf, setVf] = useState({ id: v.id, pmsId: p.id, code: v.code, title: v.title, description: v.description || "", registeredOn: v.registered_on || "",
     startOn: v.start_on || "", endOn: v.end_on || "", budgetPlan: v.budget_plan ?? "", budgetActual: v.budget_actual ?? "" });
@@ -211,7 +239,7 @@ function VersionForm({ v, p, post, may }) {
         <label className="sm" title={t("ep.bd.masterTip")} data-master-toggle>
           <input type="checkbox" checked={!!v.master} onChange={(e) => post({ kind: "version-master", id: v.id, master: e.target.checked }, () => (e.target.checked ? t("ep.bd.masterSet", { code: v.code, pms: p.code }) : t("ep.bd.masterOff", { code: v.code })))} /> Master plan</label>
         {may && <p className="row" style={{ gap: 6 }}><button className="btn" type="submit">{t("ep.save")}</button>
-          <button className="btn ghost danger" type="button" onClick={() => { if (window.confirm(t("ep.bd.removeVerAsk", { code: v.code }))) post({ kind: "eps-remove", epsKind: "version", id: v.id }, () => t("ep.removed")); }}>{t("ep.remove")}</button></p>}
+          <button className="btn ghost danger" type="button" data-version-remove onClick={askRemove}>{t("ep.remove")}</button></p>}
       </fieldset>
     </form>);
 }
@@ -278,7 +306,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
         {imp.mode === "replace" ? (
           <div className="field"><label htmlFor="im-pms">{t("ep.im.replaceWhich")}</label>
             <select id="im-pms" value={imp.pmsId} onChange={(e) => setImp({ ...imp, pmsId: e.target.value })}>
-              {data.pms.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
+              {data.pms.filter((p) => p.active !== false || p.id === imp.pmsId).map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
         ) : <>
           <div className="field"><label htmlFor="im-newcode">{t("ep.bd.pmsCode")}</label>
             <input id="im-newcode" dir="ltr" required value={imp.pmsCode} placeholder={`PM${String(data.pms.length + 1).padStart(2, "0")}`}
@@ -304,7 +332,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
           <div className="grid2">
             <div className="field"><label htmlFor="im-lpms">PMS</label>
               <select id="im-lpms" value={imp.pmsId} onChange={(e) => setImp({ ...imp, pmsId: e.target.value })}>
-                {data.pms.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
+                {data.pms.filter((p) => p.active !== false).map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
             <div className="field"><label htmlFor="im-code">{t("ep.im.code")}</label>
               <input id="im-code" dir="ltr" value={imp.versionCode} placeholder={`${pms?.code || "PM01"}-R${(pms?.versions.length || 0) + 1}`}
                 onChange={(e) => setImp({ ...imp, versionCode: e.target.value })} /></div></div>
@@ -317,4 +345,33 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
         </div>)}
     </form>
   );
+}
+
+/**
+ * The question before a PMS or a version is deleted (owner's requirements
+ * 2026-10-26, item 5): what each holds, and «delete all under it» — with it
+ * ticked the row goes with its planning rows, daily-report lines, activities
+ * and WBS; without it only an empty one goes. What still stops a PMS (a
+ * control account on its WBS) is said, and OK stays shut.
+ */
+function RemoveAsk({ items, close }) {
+  const { t } = usePrefs();
+  const [all, setAll] = useState(false);
+  const stop = items.flatMap((x) => (x.stop || []).map((why) => `${x.item.code}: ${why}`));
+  return (
+    <div className="p6-modal" role="dialog" aria-label={t("ep.bd.removeTitle")} data-remove-ask onClick={() => close(null)}>
+      <div className="card" onClick={(e) => e.stopPropagation()}>
+        <h2>{t("ep.bd.removeTitle")}</h2>
+        <ul className="sm">{items.map((x) => (
+          <li key={x.item.id} data-remove-item={x.item.code}>{x.kind === "pms"
+            ? t("ep.bd.removePmsHolds", { code: x.item.code, ...x.counts })
+            : t("ep.bd.removeVerHolds", { code: x.item.code, plans: x.counts.plans })}</li>))}</ul>
+        <label className="sm" data-remove-all><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> {t("ep.bd.removeAll")}</label>
+        <p className="sm muted">{t(all ? "ep.bd.removeAllNote" : "ep.bd.removeEmptyNote")}</p>
+        {stop.length > 0 && <p className="err sm">{stop.join(" ")}</p>}
+        <p className="row" style={{ gap: 6 }}>
+          <button className="btn danger" type="button" data-remove-ok disabled={stop.length > 0} onClick={() => close({ all })}>{t("ep.bd.ok")}</button>
+          <button className="btn ghost" type="button" onClick={() => close(null)}>{t("ep.cancel")}</button></p>
+      </div>
+    </div>);
 }
