@@ -236,6 +236,26 @@ test("the EPS sheet into a new PMS: the activity table's fields and the project'
   });
 });
 
+test("an EPS sheet whose actual finish is before its start: the file still goes in, that row named and its actual dates left empty — not a database error", async () => {
+  await inP(async () => {
+    const head = [...SHEET_HEAD];
+    const row = (vals) => { const r = new Array(head.length).fill(""); for (const [h, v] of Object.entries(vals)) r[head.indexOf(h)] = v; return r; };
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head,
+      row({ Code: "01", Name: "Civil" }),
+      row({ "Parent code": "01", Code: "A-1", Name: "Anchor bolt", "Plan start": "2024-07-01", "Plan end": "2024-12-31", "Actual start": "2024-11-27", "Actual end": "2024-07-27" }),
+      row({ "Parent code": "01", Code: "A-2", Name: "Rebar", "Actual start": "2025-06-01", "Actual end": "2025-06-18" }),
+    ]), "WBS");
+    const r = await imp.importPlan(db, { projectId: P, contractId: C.id, mode: "new", pmsCode: "PMS2", kind: "sheet", sourceName: "spans.xlsx",
+      content: XLSX.write(wb, { type: "buffer", bookType: "xlsx" }), userId: U.planner.id });
+    const { rows } = await db.query(`SELECT a.code, a.plan_start::text, a.actual_start::text, a.actual_end::text FROM wbs_activity a JOIN wbs_node n ON n.id = a.node_id
+      WHERE n.pms_id = $1 ORDER BY a.code`, [r.pms.id]);
+    equal(rows.map((x) => [x.code, x.plan_start, x.actual_start, x.actual_end]), [["A-1", "2024-07-01", null, null], ["A-2", null, "2025-06-01", "2025-06-18"]],
+      "which of the two is wrong is not guessed; its plan dates and the other row stand");
+    assert(r.problems.some((p) => p.includes("A-1") && p.includes("2024-07-27") && p.includes("2024-11-27")), r.problems.join(" | "));
+  });
+});
+
 test("through the route: a PMS set active or aside by one who edits the contract's EPS", async () => {
   const route = await import("../../app/api/eps/route.js");
   const call = async (body, as = "ec-planner") => {
