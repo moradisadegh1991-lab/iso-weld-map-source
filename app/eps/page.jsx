@@ -50,6 +50,8 @@ export default function EpsPage() {
   const [sel, setSel] = useState(null);
   const [adding, setAdding] = useState(false);
   const [imp, setImp] = useState(null);
+  // what the last file import named and left empty, listed in full under its message
+  const [notes, setNotes] = useState([]);
   const { t } = usePrefs();
   const { height, grip } = useSplit("p6-eps", 300);
   const live = useRef({});
@@ -163,7 +165,10 @@ export default function EpsPage() {
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {asking && <RemoveAsk items={asking.items} close={(r) => { asking.resolve(r); setAsking(null); }} />}
-      {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} contractId={contractId} call={call} done={(m) => { setImp(null); setOk(m); reload(); }} fail={setMsg} />}
+      {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} contractId={contractId} call={call} done={(m, notes = []) => { setImp(null); setOk(m); setNotes(notes); reload(); }} fail={setMsg} />}
+      {notes.length > 0 && <div className="card" data-import-notes><b>{t("ep.im.notes", { n: notes.length })}</b>
+        <ul className="sm" style={{ maxHeight: 220, overflowY: "auto" }}>{notes.map((x, i) => <li key={i} dir="auto">{x}</li>)}</ul>
+        <button type="button" className="btn ghost sm" onClick={() => setNotes([])}>{t("ep.close")}</button></div>}
       {data.pms.length === 0 && !adding ? <div className="card"><p className="empty-note">{t("ep.bd.none")}</p>{may && <p className="row" style={{ gap: 6 }}><button className="btn" type="button" data-new-pms onClick={() => setAdding(true)}>{t("ep.bd.newPms")}</button>
         <button className="btn ghost" type="button" data-import-open onClick={() => setImp({ mode: "new", pmsId: "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></p>}</div> : <>
         <div style={{ height }} data-eps-tree>
@@ -276,7 +281,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
       if (!res.ok) throw new Error(b.error || t("ep.im.status", { n: res.status }));
       const r = b.row;
       done(t(imp.mode === "new" ? "ep.im.doneNew" : "ep.im.doneReplace", { code: r.pms.code, nodes: r.nodes, acts: r.activities, rels: r.relations })
-        + (r.problems.length ? ` · ${t("ep.im.notes", { n: r.problems.length })} ${r.problems.slice(0, 3).join(" · ")}` : ""));
+        + (r.problems.length ? ` · ${t("ep.im.notes", { n: r.problems.length })}` : ""), r.problems);
     } catch (e2) { fail(e2.message); } finally { setBusy(false); }
   }
   async function convert(source, importId, label) {
