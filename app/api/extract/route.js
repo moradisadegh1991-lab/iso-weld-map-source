@@ -5,6 +5,7 @@ export const maxDuration = 300;
 
 import { ELL90, ELL45, TEE_C } from "../../../lib/standards";
 import { createLlmRouter } from "../../../lib/llm/index.mjs";
+import { resolveEndpoints } from "../../../lib/db/repos/llm-endpoints.mjs";
 import { parseLoose, cleanJsonText } from "../../../lib/llm/parse.mjs";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
@@ -331,14 +332,16 @@ export async function POST(req) {
     }
 
     // the model picked decides who answers: Claude, Gemini or the in-house server
-    const client = createLlmRouter().clientFor(model);
+    // the endpoints this project's admin registered stand over the server's environment
+    const { endpoints } = await withProject(db, projectId, () => resolveEndpoints(db, { projectId }));
+    const client = createLlmRouter({ endpoints }).clientFor(model);
     if (!client.configured) {
       return Response.json({
         error: client.id === "anthropic"
           ? "Anthropic روی سرور تنظیم نشده: ANTHROPIC_RELAY_TOKEN (با رلهٔ Vercel) یا ANTHROPIC_API_KEY را در Environment Variables بگذارید."
           : client.id === "gemini"
             ? "Gemini تنظیم نشده: GEMINI_RELAY_TOKEN (با رلهٔ Vercel) یا GEMINI_API_KEY را روی سرور بگذارید."
-            : "LLM_BASE_URL تنظیم نشده. آدرس سرویس vLLM را در Environment Variables بگذارید.",
+            : "سرویس سازگار با OpenAI تنظیم نشده: آدرس و کلید را در صفحهٔ ایزومتریک (ثبت کلید و آدرس سرور) ثبت کنید، یا LLM_BASE_URL را در Environment Variables بگذارید.",
         code: "LLM_NOT_CONFIGURED",
       }, { status: 400 });
     }

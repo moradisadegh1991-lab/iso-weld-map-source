@@ -15,6 +15,7 @@ import TruthBar from "../../components/TruthBar";
 import EquipmentBar from "../../components/EquipmentBar";
 import WeldListEntry from "../../components/WeldListEntry";
 import CutList from "../../components/CutList";
+import LlmEndpoints from "../../components/LlmEndpoints";
 import { StageRail } from "../../components/PlatformShell";
 import { STAGES } from "../../lib/platform/workflow.mjs";
 import ReviewQueue from "../../components/ReviewQueue";
@@ -119,7 +120,8 @@ export default function Page() {
   /* What the server can actually run — see app/api/models/route.js. */
   async function loadModels() {
     try {
-      const res = await fetch("/api/models", { credentials: "same-origin" });
+      // with the project, so the endpoints its admin registered are listed too
+      const res = await fetch(`/api/models${session.projectId ? `?projectId=${session.projectId}` : ""}`, { credentials: "same-origin" });
       const c = await res.json();
       if (!res.ok) throw new Error(c.error || `پاسخ ${res.status}`);
       setCatalogue(c);
@@ -139,7 +141,7 @@ export default function Page() {
     .filter((p) => p.models.length);
   const modelPicker = (value, set, withNote) => PROVIDER_GROUPS.map((p) => (
     <div key={p.id} className="model-group" data-provider={p.id}>
-      <div className="muted sm">{p.label}{p.via === "relay" ? " · از رلهٔ Vercel" : ""}{p.configured ? "" : " — روی سرور پیکربندی نشده"}</div>
+      <div className="muted sm">{p.label}{p.via === "relay" ? " · از رله" : ""}{p.own ? " · ثبت‌شده در این پروژه" : ""}{p.configured ? "" : " — روی سرور پیکربندی نشده"}</div>
       <div className="models">
         {p.models.map((m) => (
           <button key={m.id} className={value === m.id ? "on" : ""} disabled={!p.configured} data-model={m.id}
@@ -525,11 +527,12 @@ export default function Page() {
 
           <div className="key">
             <label className="muted">
-              مدل استخراج — کلید API روی سرور است و هرگز از مرورگر ارسال نمی‌شود
+              مدل استخراج — کلید API روی سرور نگه داشته می‌شود (Environment یا ثبت‌شده در همین صفحه) و هرگز به مرورگر برنمی‌گردد
             </label>
             <div className="row">
               <button className="ghost" onClick={() => loadModels()}>خواندن مدل‌ها</button>
             </div>
+            <LlmEndpoints session={session} onChange={() => loadModels()} />
             {session.error && <div className="err">{session.error}</div>}
 
             {catalogue && (
