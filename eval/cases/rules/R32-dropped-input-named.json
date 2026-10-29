@@ -1,0 +1,60 @@
+{
+  "id": "R32-dropped-input-named",
+  "title": "A node without coordinates and an edge to a node that is not there are named, not silently dropped",
+  "rule": "گره بی‌مختصات و یال به گرهٔ ناموجود → نام برده می‌شوند",
+  "input": {
+    "meta": {
+      "nps": 12,
+      "schedule": "SCH 40",
+      "pupLength": 0
+    },
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "elbow90",
+        "ref": "",
+        "E": null,
+        "N": 4000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "tie-in",
+        "ref": "B",
+        "E": 0,
+        "N": 8000,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N3",
+        "nps": 12
+      },
+      {
+        "from": "N3",
+        "to": "N9",
+        "nps": 12
+      }
+    ]
+  },
+  "expect": {
+    "warningLabels": [
+      "گره یا یالِ کنارگذاشته"
+    ]
+  },
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": false
+  }
+}

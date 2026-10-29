@@ -1,0 +1,68 @@
+{
+  "id": "R33-route-in-pieces",
+  "title": "A route in two pieces (a missing edge) is said",
+  "rule": "مسیر باید پیوسته باشد؛ دو تکهٔ جدا یعنی یالی جا افتاده",
+  "input": {
+    "meta": {
+      "nps": 12,
+      "schedule": "SCH 40",
+      "pupLength": 0
+    },
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "tie-in",
+        "ref": "B",
+        "E": 0,
+        "N": 3000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "tie-in",
+        "ref": "C",
+        "E": 5000,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N4",
+        "type": "tie-in",
+        "ref": "D",
+        "E": 5000,
+        "N": 3000,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 12
+      },
+      {
+        "from": "N3",
+        "to": "N4",
+        "nps": 12
+      }
+    ]
+  },
+  "expect": {
+    "warningLabels": [
+      "مسیر پیوسته نیست"
+    ]
+  },
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": false
+  }
+}
