@@ -1,0 +1,128 @@
+{
+  "id": "R27-weldolet-height-unknown",
+  "title": "Weldolet whose height is not printed: still two welds, and the unknown height is said",
+  "rule": "ارتفاع ولدولت چاپ نشده → باز هم دو جوش؛ ارتفاع حدس زده نمی‌شود و هشدار داده می‌شود",
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": true
+  },
+  "input": {
+    "meta": {
+      "nps": 12,
+      "schedule": "SCH 40",
+      "pupLength": 0
+    },
+    "bom": [
+      {
+        "pt": 1,
+        "group": "PIPE",
+        "description": "Pipe, API 5L Gr.B, SCH 40",
+        "diam": 12,
+        "qty": 5.0
+      },
+      {
+        "pt": 2,
+        "group": "PIPE",
+        "description": "Pipe, ASTM A106 Gr.B, SCH 80",
+        "diam": 2,
+        "qty": 0.74
+      },
+      {
+        "pt": 3,
+        "group": "FITTINGS",
+        "description": "Weldolet, ASTM A105N, BW, MSS SP-97",
+        "diam": 12,
+        "qty": 1
+      },
+      {
+        "pt": 4,
+        "group": "FLANGES",
+        "description": "Flange, Weld Neck, RF, 150#",
+        "diam": 2,
+        "qty": 1
+      },
+      {
+        "pt": 5,
+        "group": "FLANGES",
+        "description": "Flange, Blind, RF, 150#",
+        "diam": 2,
+        "qty": 1
+      }
+    ],
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "TP-A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "olet",
+        "ref": "",
+        "faceToFace": null,
+        "E": 0,
+        "N": 2000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "tie-in",
+        "ref": "TP-B",
+        "E": 0,
+        "N": 5000,
+        "EL": 10000
+      },
+      {
+        "id": "N4",
+        "type": "flange-wn",
+        "ref": "",
+        "faceToFace": 60,
+        "E": 0,
+        "N": 2000,
+        "EL": 11000
+      },
+      {
+        "id": "N5",
+        "type": "flange-blind",
+        "ref": "",
+        "E": 0,
+        "N": 2000,
+        "EL": 11000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 12
+      },
+      {
+        "from": "N2",
+        "to": "N3",
+        "nps": 12
+      },
+      {
+        "from": "N2",
+        "to": "N4",
+        "nps": 2
+      },
+      {
+        "from": "N4",
+        "to": "N5",
+        "nps": 2
+      }
+    ]
+  },
+  "expect": {
+    "weldCount": 5,
+    "fieldWeldCount": 2,
+    "spoolCount": 1,
+    "warningLabels": [
+      "ارتفاع olet"
+    ]
+  }
+}

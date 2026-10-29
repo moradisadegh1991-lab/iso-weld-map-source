@@ -1,0 +1,78 @@
+{
+  "id": "R29-elbow-60in-od",
+  "title": "60\" LR elbow: the outside diameter is the nominal size (B36.10M), so the take-out is 1.5D = 2286 mm",
+  "rule": "از NPS 14 به بالا OD = NPS × 25.4 (B36.10M)؛ زانوی LR ۹۰° = 1.5D",
+  "note": "Before F-20 a size beyond the tables was scaled by an estimated OD (NPS × 25.4 × 1.14 = 1737 mm at 60\"), which made a 60\" elbow 320 mm too long and the pipe beside it short by as much. The pipe length here is the drawing's: 2 × 5000 mm of centreline less two 1.5D take-outs.",
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": true
+  },
+  "input": {
+    "meta": {
+      "nps": 60,
+      "schedule": "STD",
+      "pupLength": 0
+    },
+    "bom": [
+      {
+        "pt": 1,
+        "group": "PIPE",
+        "description": "Pipe, API 5L GR.B, LSAW, BE, THK 15.88mm",
+        "diam": 60,
+        "qty": 5.428
+      },
+      {
+        "pt": 6,
+        "group": "FITTINGS",
+        "description": "Elbow 90, ASTM A234 WPB, LR, BW",
+        "diam": 60,
+        "qty": 1
+      }
+    ],
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "TP-A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "elbow90",
+        "ref": "",
+        "E": 0,
+        "N": 5000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "tie-in",
+        "ref": "TP-B",
+        "E": 5000,
+        "N": 5000,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 60
+      },
+      {
+        "from": "N2",
+        "to": "N3",
+        "nps": 60
+      }
+    ]
+  },
+  "expect": {
+    "weldCount": 4,
+    "fieldWeldCount": 2,
+    "spoolCount": 1,
+    "maxWarnings": 0
+  }
+}

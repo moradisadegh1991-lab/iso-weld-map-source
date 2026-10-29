@@ -1,0 +1,140 @@
+{
+  "id": "R25-valve-flanged-between-flanges",
+  "title": "Flanged valve between two WN flanges: kept by the MTO, 2 flange welds, no pipe inside the valve",
+  "rule": "شیر فلنجی بین دو فلنج WN → فقط جوش‌های hub دو فلنج؛ اتصال پیچی جوش و لوله ندارد؛ MTO شیر را با هر نوعی (BW، فلنجی، ویفر) شیر می‌شمارد",
+  "note": "Owner's report 2026-10-29: 'valves: MTO 2, geometry 0'. The MTO census typed every valve as valve-bw, so a correctly read flanged valve was taken for a hallucination and dropped; and a WN flange put its hub weld on BOTH legs, one of them inside the valve body. Expectation from piping practice: a WN flange has one weld, at the end of its hub on the pipe side; the bolted side has none.",
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": true
+  },
+  "input": {
+    "meta": {
+      "nps": 12,
+      "schedule": "SCH 40",
+      "pupLength": 0
+    },
+    "bom": [
+      {
+        "pt": 1,
+        "group": "PIPE",
+        "description": "Pipe, API 5L Gr.B, SCH 40",
+        "diam": 12,
+        "qty": 5.5
+      },
+      {
+        "pt": 2,
+        "group": "FLANGES",
+        "description": "Flange, Weld Neck, RF, 150#, ASME B16.5",
+        "diam": 12,
+        "qty": 2
+      },
+      {
+        "pt": 3,
+        "group": "VALVES / IN-LINE ITEMS",
+        "description": "Gate Valve, Flexible Wedge, BB, OS&Y, FLGD, RF, 150#",
+        "diam": 12,
+        "qty": 1
+      }
+    ],
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "TP-A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "flange-wn",
+        "ref": "",
+        "faceToFace": 100,
+        "E": 0,
+        "N": 3000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "valve-flanged",
+        "ref": "",
+        "faceToFace": 300,
+        "E": 0,
+        "N": 3150,
+        "EL": 10000
+      },
+      {
+        "id": "N4",
+        "type": "flange-wn",
+        "ref": "",
+        "faceToFace": 100,
+        "E": 0,
+        "N": 3300,
+        "EL": 10000
+      },
+      {
+        "id": "N5",
+        "type": "tie-in",
+        "ref": "TP-B",
+        "E": 0,
+        "N": 6000,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 12
+      },
+      {
+        "from": "N2",
+        "to": "N3",
+        "nps": 12
+      },
+      {
+        "from": "N3",
+        "to": "N4",
+        "nps": 12
+      },
+      {
+        "from": "N4",
+        "to": "N5",
+        "nps": 12
+      }
+    ]
+  },
+  "expect": {
+    "weldCount": 4,
+    "fieldWeldCount": 2,
+    "spoolCount": 2,
+    "maxWarnings": 0,
+    "register": [
+      {
+        "no": "W-01",
+        "loc": "Field",
+        "kind": "Tie-in",
+        "nps": 12
+      },
+      {
+        "no": "W-02",
+        "loc": "Shop",
+        "kind": "BW",
+        "nps": 12
+      },
+      {
+        "no": "W-03",
+        "loc": "Shop",
+        "kind": "BW",
+        "nps": 12
+      },
+      {
+        "no": "W-04",
+        "loc": "Field",
+        "kind": "Tie-in",
+        "nps": 12
+      }
+    ]
+  }
+}
