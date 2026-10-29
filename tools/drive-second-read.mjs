@@ -55,7 +55,7 @@ async function run(secondModel, secondDisagrees) {
   await page.getByRole("button", { name: "خواندن مدل‌ها" }).click();
   await page.waitForSelector("[data-second-reader] .model-group");
   if (secondModel) await page.locator(`[data-second-reader] button[data-model="${secondModel}"]`).click();
-  await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+  await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
   await page.check('input[name="iso-reader"][value="model"]');
   await page.setInputFiles(".drop input[type=file]", "eval/cases/golden/drawings/25-1004-SH1-0.pdf");
   await page.waitForSelector("nav.tabnav", { timeout: 60000 });

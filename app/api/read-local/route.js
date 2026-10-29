@@ -64,7 +64,9 @@ export async function POST(request) {
       .sort((a, b) => { const [x, y] = [key(a.no), key(b.no)]; return x[0] - y[0] || (x[1] || 0) - (y[1] || 0); });
     // the title block: a field not read for certain is null, and stays for the person
     const meta = { drawingNo: r.meta?.drawingNo ?? null, sheet: r.meta?.sheet ?? null, rev: r.meta?.rev ?? null };
-    return Response.json({ marks, meta,
+    // the spool marks (ovals) and support marks (hexagons) the reader found, each with its place
+    const tags = (r.tags || []).map(({ kind, no, at }) => ({ kind, no, ...(Array.isArray(at) ? { at } : {}) }));
+    return Response.json({ marks, tags, meta,
       orientation: r.orientation, ms: Date.now() - t0, reader: "tools/iso-read.py (OpenCV + tesseract, no model)" });
   } catch (e) { return errorResponse(e); }
   finally { if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {}); }

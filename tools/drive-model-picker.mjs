@@ -48,7 +48,7 @@ check(await gemini.locator('button[data-model="gemini-4-argon"]').evaluate((x) =
 await page.screenshot({ path: `${SHOT}/model-picker.png`, fullPage: false, clip: await page.locator(".model-group").first().evaluate((e) => {
   const r = e.parentElement.getBoundingClientRect(); return { x: r.x, y: Math.max(0, r.y - 60 + scrollY), width: r.width, height: Math.min(700, r.height + 60) }; }) }).catch(() => page.screenshot({ path: `${SHOT}/model-picker.png` }));
 
-await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await page.check('input[name="iso-reader"][value="model"]');
 const sent = [];
 page.on("request", (r) => { if (r.url().includes("/api/extract")) sent.push(JSON.parse(r.postData() || "{}").model); });

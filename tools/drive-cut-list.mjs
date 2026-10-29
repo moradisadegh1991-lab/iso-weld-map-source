@@ -29,7 +29,7 @@ await page.goto(BASE, { waitUntil: "networkidle" });
 await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);
 await page.click("button[type=submit]"); await page.waitForSelector(".shell");
 await page.goto(`${BASE}/piping`, { waitUntil: "networkidle" });
-await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await page.getByRole("button", { name: /نمونه بدون سرور/ }).click();
 const tab = page.locator(".tabnav button", { hasText: "لیست برش" });
 await tab.waitFor();

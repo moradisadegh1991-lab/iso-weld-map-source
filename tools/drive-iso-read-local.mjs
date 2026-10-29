@@ -42,7 +42,7 @@ await page.locator("form", { has: page.locator("#weld_symbol_shop") }).getByRole
 await page.waitForSelector("text=ذخیره شد", { timeout: 15000 });
 
 await page.goto(`${BASE}/piping`, { waitUntil: "networkidle" }); await settle();
-await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await page.check('input[name="iso-reader"][value="local"]');
 // an image is not read this way
 await page.setInputFiles(".drop input[type=file]", { name: "sheet.png", mimeType: "image/png", buffer: Buffer.from([137, 80, 78, 71]) });

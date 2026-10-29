@@ -9,6 +9,8 @@ import { TYPE_FA } from "../../lib/standards";
 import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../../lib/extraction/merge.mjs";
 import { compareReads } from "../../lib/extraction/second-read.mjs";
+import { seedFromPass, fromReaderTags, normalize as normalizeMarks, unplaced as unplacedMarks } from "../../lib/sheet/markup.mjs";
+import SheetMarkup from "../../components/SheetMarkup";
 import { weldListFromMarks } from "../../lib/register/weld-marks.mjs";
 import SaveBar from "../../components/SaveBar";
 import TabNav from "../../components/TabNav";
@@ -29,6 +31,13 @@ import PdfSheetPicker from "../../components/PdfSheetPicker";
 import { base64FromBuffer } from "../../lib/client/base64.mjs";
 import { DISCLAIMER_FA } from "../../lib/disclaimer.mjs";
 
+/**
+ * For now the isometric is shown as the SHEET with its welds, spools and
+ * supports marked on it (components/SheetMarkup.jsx); the 2D weld map and the
+ * 3D model are not built. Their code is kept: set this false to bring them back.
+ */
+const SHEET_MARKUP = true;
+
 export default function Page() {
   const [data, setData] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -46,7 +55,7 @@ export default function Page() {
   const [showTags, setShowTags] = useState(true);
   const [showDims, setShowDims] = useState(false);
   const [view, setView] = useState("iso");
-  const [dim, setDim] = useState(null);
+  const [dim, setDim] = useState(SHEET_MARKUP ? "2d" : null);
   const [strictBom, setStrictBom] = useState(true);
   // What the rules said about a register read from the printed joint numbers.
   const [marksInfo, setMarksInfo] = useState(null);
@@ -286,16 +295,18 @@ export default function Page() {
    * repair pass and the reporting. Shared, because a sheet rendered from a
    * PDF and a photographed drawing differ only in how the pixels were made.
    */
-  async function runExtraction({ images, bytes, w, h, grid, long }, { prefix = "" } = {}) {
+  async function runExtraction({ images, bytes, w, h, grid, long }, { prefix = "", page = null } = {}) {
     try {
       setNote(`${prefix}${w}×${h} px → شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
 
       setBusy(secondModel ? "خواندن نقشه — پنج پاس موازی (با خوانش دوم)…" : "خواندن نقشه — سه پاس موازی…");
-      const [ra, rb, rc, rn2, rm2] = await Promise.allSettled([
+      const [ra, rb, rc, rs, rn2, rm2] = await Promise.allSettled([
         callPass("meta", images),
         callPass("nodes", images),
         // The joint numbers printed on the sheet, when the designer printed them.
         callPass("welds", images),
+        // every numbered marker with its place on the sheet: the marks the person starts from
+        callPass("sheetmarks", images),
         // the second reading of the same sheet, by the second reader
         ...(secondModel ? [callPass("nodes", images, 0, {}, secondModel), callPass("meta", images, 0, {}, secondModel)] : []),
       ]);
@@ -346,6 +357,19 @@ export default function Page() {
           (conv.problems.length ? ` · ${conv.problems.join(" ")}` : "") + (conv.notes.length ? ` · ${conv.notes.join(" · ")}` : "");
       }
 
+      // the marks drawn on the sheet start from what the model saw printed on it
+      let seedNote = "";
+      if (SHEET_MARKUP) {
+        if (rs.status === "fulfilled") {
+          const seed = seedFromPass(rs.value?.data, { shop: profile.data?.project?.weld_symbol_shop, field: profile.data?.project?.weld_symbol_field });
+          final = { ...final, sheetMarkup: { page: page || 1, items: seed.items } };
+          seedNote = ` · نشان‌های روی نقشه: ${seed.items.length} پیشنهاد مدل` + (seed.dropped.length ? ` (${seed.dropped.length} مورد بی‌شماره یا بی‌محل کنار گذاشته شد)` : "");
+        } else {
+          final = { ...final, sheetMarkup: { page: page || 1, items: [] } };
+          seedNote = " · نشان‌ها از نقشه خوانده نشد؛ خودتان روی نقشه بگذارید";
+        }
+      }
+
       setData(final);
       setEditing(JSON.stringify(final, null, 2));
       setOpenRun(null);
@@ -366,7 +390,7 @@ export default function Page() {
           ? rep.failed ? ` · پاس اصلاح ناموفق (${rep.why || "?"})`
             : rep.kept ? ` · پاس اصلاح رد شد (${rep.why}) — نسخه اول نگه داشته شد`
               : ` · پاس اصلاح اعمال شد${rep.notes?.length ? `: ${rep.notes.join(" ")}` : ""}`
-          : " · همه چک‌ها پاس") + marksNote +
+          : " · همه چک‌ها پاس") + marksNote + seedNote +
         (secondModel
           ? rn2?.status !== "fulfilled" ? " · خوانش دوم ناموفق (نتیجهٔ خوانش اول بدون مقایسه)"
             : final.secondRead?.issues?.length ? ` · خوانش دوم (${final.secondRead.model}): ${final.secondRead.issues.length} اختلاف`
@@ -392,7 +416,7 @@ export default function Page() {
       setPreview(canvas.toDataURL("image/jpeg", 0.6));
       setPdfPage(index);
       await runExtraction(prepareSource(canvas), {
-        prefix: `برگ ${index} · ${effectiveDpi} DPI · `,
+        prefix: `برگ ${index} · ${effectiveDpi} DPI · `, page: index,
       });
     } catch (e) {
       setErr(e.message);
@@ -430,13 +454,16 @@ export default function Page() {
       const conv = weldListFromMarks({ meta, bom: [], weldMarks },
         { shop: profile.data?.project?.weld_symbol_shop, field: profile.data?.project?.weld_symbol_field,
           thdLabelled: Boolean(profile.data?.project?.weld_thd_labelled) });
+      // the spool numbers (ovals) and support numbers (hexagons) the reader found, to be moved or corrected on the sheet
+      const tags = fromReaderTags(r.tags);
       const final = { meta, bom: [], nodes: [], edges: [], notes: [], weldMarks, weldList: conv.weldList,
-        ...(Object.keys(placed).length ? { weldMarkup: { page: index, marks: placed } } : {}) };
+        ...(Object.keys(placed).length ? { weldMarkup: { page: index, marks: placed } } : {}),
+        ...(tags.length ? { sheetMarkup: { page: index, items: tags } } : {}) };
       setMarksInfo(conv);
       setData(final);
       setEditing(JSON.stringify(final, null, 2));
       setOpenRun(null);
-      setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s · ${r.marks.length} نشانگر جوش` +
+      setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s · ${r.marks.length} نشانگر جوش` + (tags.length ? ` · ${tags.filter((t) => t.kind === "spool").length} اسپول · ${tags.filter((t) => t.kind === "support").length} ساپورت` : "") +
         (r.orientation ? ` · صفحه ${r.orientation}° چرخانده شد` : "") +
         (conv.problems.length ? ` · ${conv.problems.join(" ")}` : "") + (conv.notes.length ? ` · ${conv.notes.join(" · ")}` : ""));
     } catch (e) {
@@ -510,8 +537,8 @@ export default function Page() {
       {!data && (
         <section className="intake">
           <div className="ask">
-            <div className="ask-q">با کدام نما شروع کنیم؟</div>
-            <div className="ask-opts">
+            {!SHEET_MARKUP && <div className="ask-q">با کدام نما شروع کنیم؟</div>}
+            {!SHEET_MARKUP && <div className="ask-opts">
               <button className={dim === "2d" ? "on" : ""} onClick={() => setDim("2d")}>
                 <b>نقشه دوبعدی</b>
                 <span>تصویر ایزومتریک با تگ جوش — همان چیزی که QC چاپ می‌کند. خروجی SVG برداری.</span>
@@ -520,7 +547,7 @@ export default function Page() {
                 <b>مدل سه‌بعدی</b>
                 <span>چرخش آزاد، حالت شفاف و تک‌خط، اسپول باز. برای بررسی مسیر و تداخل.</span>
               </button>
-            </div>
+            </div>}
             <label className="chk">
               <input type="checkbox" checked={strictBom} onChange={(e) => setStrictBom(e.target.checked)} />
               <span>فقط اقلامی رسم شود که در MTO وجود دارند
@@ -688,6 +715,18 @@ export default function Page() {
                   به ترتیب مسیر از یک سر خط تا سر دیگر.
                 </p>
               </div>
+            </div>
+          ) : SHEET_MARKUP ? (
+            <div className="canvas" data-sheet-stage style={{ overflow: "auto", padding: 12 }}>
+              <SheetMarkup src={openRun ? runSheet?.src : preview}
+                items={data.sheetMarkup?.items || []}
+                unplaced={unplacedMarks(model.register, model.spoolIds, data.sheetMarkup?.items || [])}
+                fileName={`${data.meta?.drawingNo || "iso"}-${data.meta?.sheet || "1"}-marked`.replace(/[^\w.-]+/g, "_")}
+                onChange={(items) => {
+                  const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks(items) } };
+                  setData(next);
+                  setEditing(JSON.stringify(next, null, 2));
+                }} />
             </div>
           ) : (
             <div className="canvas">
