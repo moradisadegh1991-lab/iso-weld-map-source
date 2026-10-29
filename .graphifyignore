@@ -1,0 +1,15 @@
+# Not this project's code: libraries and data that only drown a knowledge graph
+# of it (graphify reads gitignore syntax here).
+
+# PDF.js, copied in so the browser can open drawings
+public/pdf.worker.min.mjs
+public/pdfjs/
+public/sw.js
+
+# the golden sheets and their renders: images and PDFs, not source
+eval/cases/golden/drawings/
+eval/results/
+
+# build output and the graph's own output
+.next/
+graphify-out/

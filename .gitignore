@@ -20,3 +20,6 @@ backups/
 
 # python bytecode
 __pycache__/
+
+# a knowledge graph written by graphify (.graphifyignore says what it skips); rebuilt on demand
+graphify-out/
