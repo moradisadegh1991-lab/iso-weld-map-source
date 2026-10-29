@@ -1,0 +1,73 @@
+{
+  "id": "R31-fittings-overlap",
+  "title": "Two elbows closer than their take-outs: the fittings would overlap — said, not drawn as a zero pipe",
+  "rule": "فاصلهٔ مرکز دو اتصال کمتر از جمع take-outها → تداخل؛ عدد اشتباه خوانده شده",
+  "input": {
+    "meta": {
+      "nps": 12,
+      "schedule": "SCH 40",
+      "pupLength": 0
+    },
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "elbow90",
+        "ref": "",
+        "E": 0,
+        "N": 4000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "elbow90",
+        "ref": "",
+        "E": 600,
+        "N": 4000,
+        "EL": 10000
+      },
+      {
+        "id": "N4",
+        "type": "tie-in",
+        "ref": "B",
+        "E": 600,
+        "N": 8000,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 12
+      },
+      {
+        "from": "N2",
+        "to": "N3",
+        "nps": 12
+      },
+      {
+        "from": "N3",
+        "to": "N4",
+        "nps": 12
+      }
+    ]
+  },
+  "expect": {
+    "warningLabels": [
+      "تداخل اتصالات"
+    ]
+  },
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": false
+  }
+}

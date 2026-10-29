@@ -4,7 +4,9 @@
  * 60" lug butterfly valve and a blind & open spacer, each bolted between WN
  * flanges) and R26 (a weldolet with a blind-flanged branch) typed into the JSON
  * tab, applied, and seen in the register, the checks, the 2-D map and the 3-D
- * view — the welds the rules give, no weld inside a valve, no page error.
+ * view — the welds the rules give, no weld inside a valve, no page error; and
+ * R30 / R31 (finding F-21): a mis-read elbow angle and overlapping fittings
+ * called out in the checks.
  *   BASE_URL=http://localhost:3000 DRIVE_EMAIL=... DRIVE_PASSWORD=... node tools/drive-bolted-olet.mjs
  */
 import { chromium } from "playwright";
@@ -61,6 +63,12 @@ check(/اولت ×1/.test(r26.checks) && /فلنج ×2/.test(r26.checks), "the w
 // R27: the same with no height printed — said, not guessed
 const r27 = await apply("R27-weldolet-height-unknown", "513-weldolet-no-height-fa.png");
 check(r27.rows.length === 5 && /ارتفاع olet/.test(r27.checks), "an olet with no printed height: still two welds, and the warning says so");
+
+// R30 / R31: a reading that does not hold together is said in the checks (and so reaches the repair pass)
+const r30 = await apply("R30-elbow-angle-mistyped", "514-elbow-angle-fa.png");
+check(/زاویهٔ زانو/.test(r30.checks) && /135°/.test(r30.checks), "an elbow90 on a 135° turn is called out with its angle");
+const r31 = await apply("R31-fittings-overlap", "515-overlap-fa.png");
+check(/تداخل اتصالات/.test(r31.checks), "two elbows closer than their take-outs are called out");
 
 console.log(problems.length ? problems.join("\n") : "no page errors");
 await b.close();

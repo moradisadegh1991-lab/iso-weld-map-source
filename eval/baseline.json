@@ -1,17 +1,17 @@
 {
-  "recordedAt": "2026-10-29T10:47:44.655Z",
+  "recordedAt": "2026-10-29T14:49:59.530Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 85,
+    "cases": 90,
     "draft": 1,
-    "pass": 84,
+    "pass": 89,
     "fail": 0,
     "xfail": 0,
     "xpass": 0,
     "passRate": 100,
     "weldCountExact": {
-      "ok": 83,
-      "of": 83,
+      "ok": 84,
+      "of": 84,
       "pct": 100
     },
     "fieldWeldsExact": {
@@ -35,7 +35,7 @@
       "of": 2246,
       "undecided": 251
     },
-    "warnings": 11
+    "warnings": 16
   },
   "cases": [
     {
@@ -631,6 +631,41 @@
       "kind": "rule",
       "status": "pass",
       "file": "eval/cases/rules/R29-elbow-60in-od.json",
+      "failed": []
+    },
+    {
+      "id": "R30-elbow-angle-mistyped",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R30-elbow-angle-mistyped.json",
+      "failed": []
+    },
+    {
+      "id": "R31-fittings-overlap",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R31-fittings-overlap.json",
+      "failed": []
+    },
+    {
+      "id": "R32-dropped-input-named",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R32-dropped-input-named.json",
+      "failed": []
+    },
+    {
+      "id": "R33-route-in-pieces",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R33-route-in-pieces.json",
+      "failed": []
+    },
+    {
+      "id": "R34-tee-without-run",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R34-tee-without-run.json",
       "failed": []
     }
   ]

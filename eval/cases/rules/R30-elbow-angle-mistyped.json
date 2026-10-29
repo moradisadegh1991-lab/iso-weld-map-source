@@ -1,0 +1,62 @@
+{
+  "id": "R30-elbow-angle-mistyped",
+  "title": "An elbow90 whose legs meet at 135° is a mis-read: said, so the repair pass looks at it",
+  "rule": "زاویهٔ دو ساق زانوی ۹۰ باید ۹۰° باشد (و ۴۵ → ۱۳۵°)؛ غیر از آن نوع یا مختصات غلط خوانده شده",
+  "note": "From the review of the extraction (owner's file Isometric.txt, 2026-10-30): a fitting typed elbow90 on a 45° turn gives a register that looks complete and is wrong by one take-out.",
+  "input": {
+    "meta": {
+      "nps": 12,
+      "schedule": "SCH 40",
+      "pupLength": 0
+    },
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "elbow90",
+        "ref": "",
+        "E": 0,
+        "N": 4000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "tie-in",
+        "ref": "B",
+        "E": 3000,
+        "N": 7000,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 12
+      },
+      {
+        "from": "N2",
+        "to": "N3",
+        "nps": 12
+      }
+    ]
+  },
+  "expect": {
+    "weldCount": 4,
+    "warningLabels": [
+      "زاویهٔ زانو"
+    ]
+  },
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": false
+  }
+}
