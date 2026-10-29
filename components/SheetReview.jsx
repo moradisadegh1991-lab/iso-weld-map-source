@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import MarkShape from "./MarkShape";
+import { KINDS, addMark, updateMark, removeMark } from "../lib/sheet/markup.mjs";
 
 /**
  * The drawing beside its weld list: the sheet as an image, a marker on it
@@ -15,17 +17,27 @@ import { useEffect, useRef, useState } from "react";
  *             clicked, and a marker can be dragged; without it the sheet is
  *             only looked at
  *
+ *   kinds     { [weldNo]: "weld-shop" | "weld-field" | "weld-unknown" } — when given, a weld is drawn
+ *             in its shape (circle shop, square site, dashed circle unknown) painted in its state's colour
+ *   extras    [{ id, kind: "spool"|"support", no, x, y }] — the spool numbers (oval) and support numbers
+ *             (hexagon) marked on the sheet; with `onExtras` a person adds, moves, renumbers and deletes them
+ *
  * Nothing here decides anything about a weld: the place is where a person
- * or the reader saw its number; the colour is a state given from outside.
+ * or the reader saw its number; the colour is a state given from outside,
+ * and Shop/Field is the register's.
  */
 export const STATE_COLORS = {
   done: "#2e9d5b", inspection: "#d39b18", open: "#d2453a",
   checked: "#2e9d5b", unchecked: "#5b8def",
 };
 
-export default function SheetReview({ src, marks = {}, states = {}, legend = [], selected = null, onSelect, onPlace, height = 640 }) {
+export default function SheetReview({ src, marks = {}, states = {}, legend = [], selected = null, onSelect, onPlace, height = 640, kinds = null, extras = null, onExtras }) {
   const [zoom, setZoom] = useState(1);
   const [drag, setDrag] = useState(null);
+  const [tool, setTool] = useState(null);       // "spool" | "support": put where the sheet is next clicked
+  const [extraId, setExtraId] = useState(null); // the spool or support mark picked
+  const editExtras = Boolean(extras && onExtras);
+  const extra = extras?.find((m) => m.id === extraId) || null;
   const box = useRef(null);
   const sheet = useRef(null);
 
@@ -46,6 +58,12 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
 
   function onSheetClick(e) {
     if (drag?.moved) return;
+    if (editExtras && tool && !e.target.closest("[data-mark],[data-extra]")) {
+      const next = addMark(extras, { kind: tool, ...round(at(e)) });
+      onExtras(next); setExtraId(next[next.length - 1].id); setTool(null);
+      return;
+    }
+    if (editExtras && !e.target.closest("[data-mark],[data-extra]")) setExtraId(null);
     if (!onPlace || !selected || e.target.closest("[data-mark]")) return;
     onPlace(selected, round(at(e)));
   }
@@ -56,12 +74,20 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* no live pointer (a pen lifted, a synthetic event): the drag still follows the sheet */ }
     setDrag({ no, moved: false });
   }
+  function downExtra(e, m) {
+    e.stopPropagation();
+    setExtraId(m.id);
+    if (!editExtras) return;
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* a synthetic pointer: the drag still follows the sheet */ }
+    setDrag({ extra: m.id, moved: false });
+  }
   function move(e) {
     if (!drag) return;
     setDrag({ ...drag, moved: true, p: at(e) });
   }
   function up() {
-    if (drag?.moved && drag.p) onPlace(drag.no, round(drag.p));
+    if (drag?.moved && drag.p && drag.extra) onExtras(updateMark(extras, drag.extra, round(drag.p)));
+    else if (drag?.moved && drag.p) onPlace(drag.no, round(drag.p));
     // the click that ends a drag is not a placement
     setTimeout(() => setDrag(null), 0);
   }
@@ -78,6 +104,26 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
         <span className="grow" />
         {legend.map(([k, label]) => <span key={k} className="sm"><i className="dot" style={{ background: STATE_COLORS[k] }} /> {label}</span>)}
       </div>
+      {editExtras && (
+        <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }} data-extras-tools>
+          <span className="muted sm">افزودن با کلیک روی نقشه:</span>
+          {["spool", "support"].map((k) => (
+            <button key={k} type="button" data-extra-tool={k} className={tool === k ? "on" : "ghost"} onClick={() => setTool(tool === k ? null : k)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <MarkShape kind={k} no="" size={0.5} />{KINDS[k].label}
+            </button>
+          ))}
+          {tool && <span className="muted sm">{KINDS[tool].label}: روی محلش در نقشه کلیک کنید.</span>}
+          {extra && (<>
+            <label className="sm">شماره <input data-extra-no className="mono" style={{ width: 90 }} value={extra.no}
+              onChange={(e) => onExtras(updateMark(extras, extra.id, { no: e.target.value }))} /></label>
+            <label className="sm">نوع <select data-extra-kind value={extra.kind} onChange={(e) => onExtras(updateMark(extras, extra.id, { kind: e.target.value }))}>
+              {["spool", "support"].map((k) => <option key={k} value={k}>{KINDS[k].label}</option>)}
+            </select></label>
+            <button type="button" className="ghost sm" data-extra-delete onClick={() => { onExtras(removeMark(extras, extra.id)); setExtraId(null); }}>حذف</button>
+          </>)}
+        </div>
+      )}
       {onPlace && <p className="muted sm" data-place-hint>{missing
         ? `جوش ${selected} روی نقشه جا ندارد — روی محلش در نقشه کلیک کنید.`
         : selected ? `جوش ${selected}: نشانگرش را بکشید تا جابه‌جا شود، یا جای دیگری از نقشه را کلیک کنید.` : "ردیفی را انتخاب کنید، بعد روی محل جوش در نقشه کلیک کنید."}</p>}
@@ -91,14 +137,29 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
             const on = selected === no;
             return (
               <button key={no} type="button" data-mark={no} data-state={states[no] || ""} data-src={m.src || ""}
+                data-kind={kinds?.[no] || undefined} data-shape={kinds?.[no] ? KINDS[kinds[no]].shape : undefined}
+                data-picked={on ? "true" : "false"}
                 title={`${no}${m.src === "hand" ? " (دستی)" : m.src === "reader" ? " (خوانده‌شده از نقشه)" : ""}`}
                 onPointerDown={(e) => down(e, no)}
-                style={{ position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
+                style={kinds?.[no]
+                  ? { position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
+                      padding: 0, border: 0, background: "none", cursor: onPlace ? "grab" : "pointer", touchAction: "none" }
+                  : { position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
                   minWidth: 22, height: 22, padding: "0 4px", borderRadius: 11, border: on ? "3px solid #111" : "2px solid #fff",
                   background: STATE_COLORS[states[no]] || "#5b8def", color: "#fff", font: "700 11px/16px system-ui", cursor: onPlace ? "grab" : "pointer",
                   boxShadow: on ? "0 0 0 4px rgba(255,214,0,.85)" : "0 1px 3px rgba(0,0,0,.5)", opacity: 0.92, touchAction: "none" }}>
-                {no}
+                {kinds?.[no] ? <MarkShape kind={kinds[no]} no={no} on={on} tint={STATE_COLORS[states[no]] || "#5b8def"} /> : no}
               </button>);
+          })}
+          {(extras || []).map((m) => {
+            const p = drag?.extra === m.id && drag.p ? drag.p : m;
+            return (
+              <div key={m.id} data-extra={m.id} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
+                title={`${KINDS[m.kind].label} ${m.no}`} onPointerDown={(e) => downExtra(e, m)}
+                style={{ position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
+                  cursor: editExtras ? "grab" : "default", touchAction: "none" }}>
+                <MarkShape kind={m.kind} no={m.no} on={m.id === extraId} />
+              </div>);
           })}
         </div>
       </div>

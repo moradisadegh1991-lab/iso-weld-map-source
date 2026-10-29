@@ -285,12 +285,51 @@ RULES
    with where it is.
 3. NEVER refuse and NEVER explain. Your entire reply is the JSON object.`;
 
+const SHEETMARKS_PROMPT = `You are locating the NUMBERED MARKERS printed on a piping isometric drawing, so a person can see them on the sheet.
+
+You are given the FULL SHEET first, then overlapping high-resolution QUADRANT crops of the same
+drawing. Use the quadrants to read small text and the full sheet to give each marker's place.
+The quadrants overlap, so the same marker may appear twice - report it once.
+
+Return ONLY a JSON object. No markdown fences, no preamble, no commentary.
+
+{
+  "items": [{ "kind": "weld"|"spool"|"support", "no": string,
+              "shape": "circle"|"square"|"oval"|"hexagon"|"diamond"|"other",
+              "x": number, "y": number }],
+  "unreadable": [string]
+}
+
+"x" and "y" are where the CENTRE of the marker's frame (or of its text, when it has no frame) lies
+on the FULL SHEET image, as fractions of that image: x 0 at the left edge and 1 at the right edge,
+y 0 at the top edge and 1 at the bottom edge. Give them to two decimals.
+
+  kind "weld"    a joint number printed in a frame with a leader line ending on the pipe at a weld
+                 point. "shape" is the frame's shape as drawn - report the shape only and NEVER
+                 decide whether the joint is shop or field.
+  kind "spool"   a spool mark (e.g. SP-1, SP-01) printed on the drawing.
+  kind "support" a support mark (e.g. S-2, SW-1, S9), usually in a hexagon or an oval.
+
+"no" is the number or mark exactly as printed, keeping leading zeros and any prefix.
+
+NOT markers - never report these: small boxes holding a BOM item number next to a fitting,
+cut-piece marks (<1>, <2>), flange or gasket tags (F8, G15, B16), "MATL" boxes, HOLD clouds,
+revision triangles, anything in the title block or the cut-length table.
+
+Rules
+1. Skip nothing you can see: a marker left out is a marker nobody checks.
+2. Never invent a number or a place. A marker whose number you cannot read goes in "unreadable"
+   with where it is, not in "items".
+3. NEVER refuse and NEVER explain. Your entire reply is the JSON object.`;
+
 const PASSES = {
   meta: { prompt: META_PROMPT, maxTokens: 4000 },
   nodes: { prompt: NODES_PROMPT, maxTokens: 4000 },
   repair: { prompt: REPAIR_PROMPT, maxTokens: 5000 },
   // A sheet carries up to ~70 markers; each is a short object.
   welds: { prompt: WELDS_PROMPT, maxTokens: 6000 },
+  // every numbered marker with its place on the sheet, to start the marks drawn on the isometric from
+  sheetmarks: { prompt: SHEETMARKS_PROMPT, maxTokens: 6000 },
   // A list runs to hundreds of rows, so it gets a larger budget than a
   // drawing pass; `truncated` in the response tells the caller when even
   // that was not enough rather than handing back half a plant.

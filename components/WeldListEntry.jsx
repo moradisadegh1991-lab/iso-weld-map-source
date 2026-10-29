@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import SaveBar from "./SaveBar";
 import SheetReview from "./SheetReview";
+import { normalize as normalizeMarks } from "../lib/sheet/markup.mjs";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
 import { splitWeldLog, weldLogSheetName } from "../lib/register/weld-log-import.mjs";
@@ -51,6 +52,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [marks, setMarks] = useState(() => ({ ...(initial?.weldMarkup?.marks || {}) }));
   const [reviewed, setReviewed] = useState(() => new Set(initial?.reviewed || []));
   const [picked, setPicked] = useState(null);
+  // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
+  const [extras, setExtras] = useState(() => normalizeMarks(initial?.sheetMarkup?.items).filter((m) => m.kind === "spool" || m.kind === "support"));
 
   const typed = rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
   // A list read from the drawing's printed markers keeps what the model read
@@ -62,9 +65,15 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     ...(initial?.weldMarks ? { weldMarks: initial.weldMarks } : {}),
     // the page of the file the sheet is, kept even with nothing placed yet: a PDF of many sheets opens on this one
     ...(Object.keys(keptMarks).length || sheet ? { weldMarkup: { page: sheet?.page ?? initial?.weldMarkup?.page ?? 1, marks: keptMarks } } : {}),
-    ...(keptReviewed.length ? { reviewed: keptReviewed } : {}) }),
+    ...(keptReviewed.length ? { reviewed: keptReviewed } : {}),
+    ...(extras.length ? { sheetMarkup: { page: sheet?.page ?? initial?.sheetMarkup?.page ?? 1, items: extras } } : {}) }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [meta, typed, initial, JSON.stringify(keptMarks), keptReviewed.join("|"), sheet?.page]);
+  [meta, typed, initial, JSON.stringify(keptMarks), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras)]);
+  // a weld is drawn in the shape of where it is welded, as the register says: unsaid stays unsaid (dashed)
+  const kinds = Object.fromEntries(typed.map((r) => String(r.no ?? "").trim()).filter(Boolean).map((no) => {
+    const loc = String(typed.find((r) => String(r.no ?? "").trim() === no)?.loc ?? "").trim().toLowerCase();
+    return [no, loc === "shop" ? "weld-shop" : loc === "field" ? "weld-field" : "weld-unknown"];
+  }));
   const model = useMemo(() => (typed.length ? modelFromWeldList(data) : { error: "هنوز جوشی وارد نشده است." }), [data, typed.length]);
 
   const setCell = (i, k, v) => {
@@ -213,6 +222,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       {sheet && (
         <div className="wl-sheet" data-wl-sheet>
           <SheetReview src={sheet.src} marks={keptMarks} states={states} selected={picked} onSelect={pick}
+            kinds={kinds} extras={extras} onExtras={run?.run?.status === "approved" ? undefined : setExtras}
             onPlace={run?.run?.status === "approved" ? undefined : place}
             legend={progress ? [["done", "جوش و NDT پذیرفته"], ["inspection", "جوش‌شده، منتظر بازرسی/NDT"], ["open", "باز"]]
               : [["checked", "بررسی شد"], ["unchecked", "بررسی نشده"]]} />

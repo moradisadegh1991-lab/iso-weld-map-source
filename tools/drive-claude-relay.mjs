@@ -37,7 +37,7 @@ for (const id of ["anthropic", "gemini"]) {
 }
 const claude = page.locator('.model-group[data-provider="anthropic"]').first();
 await claude.locator('button[data-model="claude-opus-5"]').click();
-await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await page.check('input[name="iso-reader"][value="model"]');
 const first = page.waitForResponse((r) => r.url().includes("/api/extract"), { timeout: 120000 });
 await page.setInputFiles(".drop input[type=file]", "eval/cases/golden/drawings/25-1004-SH1-0.pdf");

@@ -691,7 +691,7 @@ try {
 
     at("5.2", "isometric DMW-ISO-7001, keyed by hand and saved with its file");
     await pm.goto(BASE + "/piping", { waitUntil: "networkidle" }); await settle(pm);
-    await pm.getByRole("button", { name: /نقشه دوبعدی/ }).click();
+    await pm.getByRole("button", { name: /نقشه دوبعدی/ }).click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
     await pm.locator(".drop input[type=file][accept*=pdf]").setInputFiles({ name: "DMW-ISO-7001_Rev0.pdf", mimeType: "application/pdf", buffer: tinyPdf("DMW-ISO-7001 Rev.0") });
     await pm.waitForTimeout(3000);
     await pm.getByRole("button", { name: "ورود دستی (JSON) برای همین نقشه" }).click(); await settle(pm);

@@ -22,7 +22,7 @@ await page.goto(BASE, { waitUntil: "networkidle" });
 await page.fill("#email", EMAIL); await page.fill("#password", PASSWORD);
 await page.click("button[type=submit]"); await page.waitForSelector(".shell");
 await page.goto(`${BASE}/piping`, { waitUntil: "networkidle" }); await page.waitForTimeout(800);
-await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await page.check('input[name="iso-reader"][value="local"]');
 const res = page.waitForResponse((r) => r.url().includes("/api/read-local"));
 await page.setInputFiles(".drop input[type=file]", "eval/cases/golden/drawings/25-1004-SH1-0.pdf");

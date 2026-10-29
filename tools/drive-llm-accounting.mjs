@@ -39,7 +39,7 @@ await page.locator(".topbar select").selectOption(`p:${projectId}`); await page.
 const before = (await page.evaluate((id) => fetch(`/api/llm-usage?projectId=${id}`).then((r) => r.json()), projectId)).total;
 
 await page.goto(`${BASE}/piping`, { waitUntil: "networkidle" }); await page.waitForTimeout(800);
-await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await page.check('input[name="iso-reader"][value="model"]');
 const passes = [];
 page.on("response", (r) => { if (r.url().includes("/api/extract")) passes.push(r.status()); });

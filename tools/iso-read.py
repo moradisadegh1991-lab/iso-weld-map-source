@@ -334,6 +334,64 @@ def detect(g):
     return marks, rejected, tables
 
 
+TAG_NO = re.compile(r"[A-Z]{1,3}-\d{1,3}")
+
+
+def detect_tags(g, tables):
+    """The spool marks and support marks of an upright page: [{kind, no, box, xywh}].
+
+    A spool mark is an OVAL holding its number (SP-1), a support mark a
+    HEXAGON (SW-1, S-2) — on the sheets that taught this, and as the
+    platform draws them back (lib/sheet/markup.mjs). The shape is the
+    evidence of the kind; the text inside is read like a weld number, four
+    ways and by majority, and a frame whose text is not letters, a hyphen
+    and digits is not reported (it is not guessed)."""
+    _, ink = cv2.threshold(g, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    cnts, hier = cv2.findContours(ink, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    found = []
+    for i, c in enumerate(cnts):
+        if hier[0][i][3] < 0:
+            continue
+        x, y, w, h = cv2.boundingRect(c)
+        if not (80 * S <= w <= 190 * S and 40 * S <= h <= 100 * S):
+            continue
+        area = cv2.contourArea(c)
+        peri = cv2.arcLength(c, True)
+        if peri == 0 or len(c) < 5:
+            continue
+        fill, ar = area / (w * h), w / h
+        # how far the hole is from the ellipse fitted to it: an oval is within a few percent, a hexagon is not
+        el = cv2.fitEllipse(c)
+        a, b = np.zeros(g.shape[:2], np.uint8), np.zeros(g.shape[:2], np.uint8)
+        cv2.ellipse(a, el, 255, -1)
+        cv2.drawContours(b, [c], -1, 255, -1)
+        miss = 1 - cv2.countNonZero(cv2.bitwise_and(a, b)) / max(1, cv2.countNonZero(cv2.bitwise_or(a, b)))
+        verts = len(cv2.approxPolyDP(c, 0.03 * peri, True))
+        if 1.9 <= ar <= 3.0 and 0.68 <= fill <= 0.84 and miss < 0.03:
+            kind = "spool"
+        elif 1.2 <= ar <= 1.5 and 0.68 <= fill <= 0.82 and verts == 6 and 0.03 <= miss <= 0.15:
+            kind = "support"
+        else:
+            continue
+        box = (x, y, x + w, y + h)
+        if inside(box, tables):
+            continue
+        found.append({"kind": kind, "box": [int(v) for v in box], "xywh": (x, y, w, h), "contour": c})
+    variants = [number_crops(g, *t["xywh"], t["contour"]) for t in found]
+    votes = [{} for _ in found]
+    for k in range(4):
+        for i, t in enumerate(batch_read([v[k] for v in variants], 6, "SPWU-0123456789")):
+            t = t.replace(" ", "").upper()
+            if TAG_NO.fullmatch(t):
+                votes[i][t] = votes[i].get(t, 0) + 1
+    tags = []
+    for t, v in zip(found, votes):
+        if v:
+            t["no"] = max(v.items(), key=lambda kv: (kv[1], len(kv[0])))[0]
+            tags.append(t)
+    return tags
+
+
 def cell_vote(cell, whitelist, valid, key=lambda o: o):
     """One line of a title-block cell read four ways (grey and two-level, 3x
     and 4x, white margin round it). An answer only when every reading that
@@ -481,6 +539,7 @@ def main():
     g, marks, rejected, tables, rot = best
     for m, lab in zip(marks, read_labels(g, marks)):
         m["label"] = lab
+    tags = detect_tags(g, tables)
     marks = [{k: m[k] for k in ("no", "shape", "outline", "label", "box")} for m in marks]
     # one marker per number and place: a number read twice at one spot is one marker
     seen, out = set(), []
@@ -492,8 +551,8 @@ def main():
     # where each marker sits on the page as rendered (before the turn above), as
     # fractions of its width and height: the reviewer's drawing is that page
     H0, W0 = g0.shape[:2]
-    for m in out:
-        b = m["box"]
+
+    def page_at(b):
         x, y = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
         if rot == 180:
             x, y = W0 - x, H0 - y
@@ -501,7 +560,10 @@ def main():
             x, y = y, H0 - x
         elif rot == 270:     # turned counter-clockwise: x' = y, y' = W0 - x
             x, y = W0 - y, x
-        m["at"] = [round(x / W0, 4), round(y / H0, 4)]
+        return [round(x / W0, 4), round(y / H0, 4)]
+    for m in out:
+        m["at"] = page_at(m["box"])
+    tags_out = sorted(({"kind": t["kind"], "no": t["no"], "at": page_at(t["box"])} for t in tags), key=lambda t: (t["kind"], t["no"]))
     if debug:
         dbg = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
         for t in tables:
@@ -511,7 +573,7 @@ def main():
             cv2.rectangle(dbg, (b[0], b[1]), (b[2], b[3]), (0, 0, 255) if m["shape"] == "square" else (0, 160, 0), 3)
             cv2.putText(dbg, m["no"] + (" " + m["label"] if m["label"] else ""), (b[2] + 4, b[1] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
         cv2.imwrite(debug, dbg)
-    print(json.dumps({"orientation": rot, "meta": read_title(g), "marks": out, "rejected": rejected}))
+    print(json.dumps({"orientation": rot, "meta": read_title(g), "marks": out, "tags": tags_out, "rejected": rejected}))
 
 
 main()

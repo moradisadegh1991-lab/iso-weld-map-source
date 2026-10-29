@@ -30,7 +30,7 @@ await page.waitForTimeout(800);
 const labels = await page.locator(".key button b.mono").allInnerTexts();
 check(labels.includes("Gemini 3.8 Flash") && labels.includes("Gemini 4 Argon"), `the models offered are Gemini's: ${labels.join(", ")}`);
 
-await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await page.check('input[name="iso-reader"][value="model"]');
 const extract = page.waitForResponse((r) => r.url().includes("/api/extract"), { timeout: 120000 });
 await page.setInputFiles(".drop input[type=file]", "eval/cases/golden/drawings/25-1004-SH1-0.pdf");

@@ -38,7 +38,7 @@ const flat = (t) => t.replace(/\s+/g, " ").trim();
 
 log("A  JSON register with no drawing file (the reported error)");
 await p.goto(BASE + "/piping", { waitUntil: "networkidle" }); await settle();
-await p.getByRole("button", { name: /نقشه دوبعدی/ }).first().click();
+await p.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await p.getByRole("button", { name: /نمونه بدون سرور/ }).click(); await settle();
 await p.getByRole("button", { name: "ذخیره در سامانه" }).click();
 await p.waitForSelector(".savebar .note, .savebar .err", { timeout: 20000 }); await settle();
