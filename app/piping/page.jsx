@@ -8,6 +8,7 @@ import { DEMO } from "../../lib/demo";
 import { TYPE_FA } from "../../lib/standards";
 import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../../lib/extraction/merge.mjs";
+import { compareReads } from "../../lib/extraction/second-read.mjs";
 import { weldListFromMarks } from "../../lib/register/weld-marks.mjs";
 import SaveBar from "../../components/SaveBar";
 import TabNav from "../../components/TabNav";
@@ -37,6 +38,8 @@ export default function Page() {
   const [catalogue, setCatalogue] = useState(null);
   const [modelName, setModelName] = useState("");
   const [repairModel, setRepairModel] = useState("");
+  // a second, independent reading of the sheet; "" = off (it costs two more model calls)
+  const [secondModel, setSecondModel] = useState("");
   const [tab, setTab] = useState("weld");
   const [selected, setSelected] = useState(null);
   const [exploded, setExploded] = useState(false);
@@ -287,12 +290,14 @@ export default function Page() {
     try {
       setNote(`${prefix}${w}×${h} px → شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB`);
 
-      setBusy("خواندن نقشه — سه پاس موازی…");
-      const [ra, rb, rc] = await Promise.allSettled([
+      setBusy(secondModel ? "خواندن نقشه — پنج پاس موازی (با خوانش دوم)…" : "خواندن نقشه — سه پاس موازی…");
+      const [ra, rb, rc, rn2, rm2] = await Promise.allSettled([
         callPass("meta", images),
         callPass("nodes", images),
         // The joint numbers printed on the sheet, when the designer printed them.
         callPass("welds", images),
+        // the second reading of the same sheet, by the second reader
+        ...(secondModel ? [callPass("nodes", images, 0, {}, secondModel), callPass("meta", images, 0, {}, secondModel)] : []),
       ]);
 
       if (ra.status === "rejected" && rb.status === "rejected") {
@@ -304,9 +309,25 @@ export default function Page() {
       const merged = mergePasses(a, b);
 
       const fixes = sanitize(merged);
+      // Where the two readings disagree, the engine raises it as a check, so the repair pass is shown it.
+      let second2 = null;
+      if (rn2?.status === "fulfilled") {
+        second2 = mergePasses(rm2?.status === "fulfilled" ? rm2.value : null, rn2.value);
+        sanitize(second2);
+        const cuts2 = rm2?.status === "fulfilled" ? rm2.value?.data?.cutLengths : undefined;
+        const cmp = compareReads({ nodes: merged.nodes, bom: merged.bom, cutLengths: a?.data?.cutLengths },
+          { nodes: second2.nodes, bom: second2.bom, cutLengths: cuts2 });
+        merged.secondRead = { model: rn2.value.model, issues: cmp.issues };
+      }
       let final = merged, rep = { ran: false };
       if (a && b) { rep = await repair(merged, images); final = rep.data; }
       sanitize(final);
+      // the repair may have changed the geometry: say what still disagrees with the second reading now
+      if (second2 && final.secondRead) {
+        const cmp2 = compareReads({ nodes: final.nodes, bom: final.bom, cutLengths: a?.data?.cutLengths },
+          { nodes: second2.nodes, bom: second2.bom, cutLengths: rm2?.status === "fulfilled" ? rm2.value?.data?.cutLengths : undefined });
+        final = { ...final, secondRead: { ...final.secondRead, issues: cmp2.issues } };
+      }
 
       // A sheet whose designer printed every joint: the register is the one
       // printed, read marker by marker and turned into rows by rule
@@ -345,7 +366,11 @@ export default function Page() {
           ? rep.failed ? ` · پاس اصلاح ناموفق (${rep.why || "?"})`
             : rep.kept ? ` · پاس اصلاح رد شد (${rep.why}) — نسخه اول نگه داشته شد`
               : ` · پاس اصلاح اعمال شد${rep.notes?.length ? `: ${rep.notes.join(" ")}` : ""}`
-          : " · همه چک‌ها پاس") + marksNote);
+          : " · همه چک‌ها پاس") + marksNote +
+        (secondModel
+          ? rn2?.status !== "fulfilled" ? " · خوانش دوم ناموفق (نتیجهٔ خوانش اول بدون مقایسه)"
+            : final.secondRead?.issues?.length ? ` · خوانش دوم (${final.secondRead.model}): ${final.secondRead.issues.length} اختلاف`
+              : ` · خوانش دوم (${final.secondRead?.model}): هم‌خوان` : ""));
       if (long < 2200) {
         setErr(`رزولوشن منبع ${w}×${h} px است. برای خواندن مطمئن BOM و ابعاد ریز، ضلع بلند حداقل ۲۵۰۰ px لازم است — ترجیحاً اسکن ۳۰۰ DPI از PDF اصلی. نتیجه فعلی را حتماً در تب JSON بازبینی کنید.`);
       }
@@ -547,6 +572,14 @@ export default function Page() {
                   پس ارتقا به مدل قوی‌تر تقریباً رایگان است؛ می‌تواند از ارائه‌دهندهٔ دیگری باشد
                 </label>
                 {modelPicker(repairModel, setRepairModel, false)}
+                <label className="muted">
+                  خوانش دوم — نقشه را یک‌بار دیگر (گره‌ها و BOM) با مدل دیگری می‌خواند و هر عددی را که دو خوانش
+                  یکی نخواندند نام می‌برد؛ دو پاس بیشتر هزینه دارد. مدل متفاوت از مدل استخراج بگذارید
+                </label>
+                <div data-second-reader>
+                  <div className="models"><button className={secondModel === "" ? "on" : ""} data-second-off onClick={() => setSecondModel("")}><b>خاموش</b></button></div>
+                  {modelPicker(secondModel, setSecondModel, false)}
+                </div>
               </>
             )}
             <button className="ghost" disabled={!dim} onClick={loadDemo}>نمونه بدون سرور: SW 265022A</button>
