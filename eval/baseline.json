@@ -1,10 +1,10 @@
 {
-  "recordedAt": "2026-10-29T14:49:59.530Z",
+  "recordedAt": "2026-10-29T19:05:12.905Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 90,
+    "cases": 91,
     "draft": 1,
-    "pass": 89,
+    "pass": 90,
     "fail": 0,
     "xfail": 0,
     "xpass": 0,
@@ -35,7 +35,7 @@
       "of": 2246,
       "undecided": 251
     },
-    "warnings": 16
+    "warnings": 17
   },
   "cases": [
     {
@@ -666,6 +666,13 @@
       "kind": "rule",
       "status": "pass",
       "file": "eval/cases/rules/R34-tee-without-run.json",
+      "failed": []
+    },
+    {
+      "id": "R35-second-read-disagrees",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R35-second-read-disagrees.json",
       "failed": []
     }
   ]

@@ -1,0 +1,53 @@
+{
+  "id": "R35-second-read-disagrees",
+  "title": "Two independent readings of the sheet disagree on a number: the engine names it, it does not pick one",
+  "rule": "دو خوانش مستقل از یک نقشه باید یکی باشند؛ هر جا نیستند، هشدار با نام همان عدد",
+  "input": {
+    "meta": {
+      "nps": 12,
+      "schedule": "SCH 40",
+      "pupLength": 0
+    },
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "A",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "tie-in",
+        "ref": "B",
+        "E": 3000,
+        "N": 0,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 12
+      }
+    ],
+    "secondRead": {
+      "model": "other",
+      "issues": [
+        "گره (3000, 0, 10000): در خوانش دوم 3200 mm است"
+      ]
+    }
+  },
+  "expect": {
+    "warningLabels": [
+      "دو خوانش یکی نیست"
+    ]
+  },
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": false
+  }
+}
