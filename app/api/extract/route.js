@@ -85,8 +85,11 @@ Extract ONLY the route geometry. Do NOT output the BOM or the title block.
 {
   "nps": number,
   "nodes": [{ "id": string,
-              "type": "tie-in"|"elbow90"|"elbow45"|"tee"|"reducer"|"flange-wn"|"valve-bw"|"valve-flanged",
+              "type": "tie-in"|"elbow90"|"elbow45"|"tee"|"reducer"|"olet"|"cap"
+                    |"flange-wn"|"flange-blind"|"spacer"
+                    |"valve-bw"|"valve-flanged"|"valve-wafer"|"instrument",
               "ref": string,
+              "pt": number|null,
               "faceToFace": number|null,
               "E": number, "N": number, "EL": number }],
   "edges": [{ "from": string, "to": string, "nps": number }],
@@ -122,7 +125,32 @@ CRITICAL RULES
    NOT estimate it. The tables that would give it (B16.10 for valves, B16.9 for reducers,
    B16.5 for flange hubs) key on valve type, pressure class or reduction ratio, and this
    drawing may state none of them. A null here is handled downstream and reported.
-11. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
+11. INVENTORY FIRST. Before placing nodes, go through the BILL OF MATERIAL printed on this
+   sheet - FITTINGS, FLANGES, VALVES / IN-LINE ITEMS - with their QTY. Every one of them drawn
+   on THIS sheet is a node, with "pt" set to its BOM item number (PT NO). Count them against
+   the QTY column before you answer: a valve, a flange, a weldolet or a spacer that the BOM
+   lists and the drawing shows but your node list lacks is the most common error on these
+   sheets. Gaskets and bolts are NOT nodes. Pipe is edges, not nodes.
+12. FLANGED JOINTS. An item bolted between flanges is its own node between two "flange-wn"
+   nodes, and the edges between them are the bolted joints (no pipe):
+     - a flanged valve (gate, globe, check with flanged ends)  -> "valve-flanged"
+     - a butterfly / wafer / lug valve clamped between flanges  -> "valve-wafer"
+     - a blind & open spacer, spectacle blind, paddle blind      -> "spacer"
+   The item's node goes at the CENTRE of its body; each flange node on its FACE. A valve with
+   butt-weld ends is "valve-bw" and has no flanges.
+   Two flanges bolted face to face with nothing between them are two "flange-wn" nodes at the
+   same coordinates.
+13. A BLIND FLANGE closing a flange is a "flange-blind" node at the SAME coordinates as the face
+   of the "flange-wn" it is bolted to. An INSTRUMENT (gauge, transmitter, element - a circle with
+   a tag such as "10 930 TG-203") bolted or screwed onto a flange or a valve is an "instrument"
+   node where it attaches, with its tag in "ref".
+14. An OLET (weldolet, sockolet, threadolet, nipolet - BOM size written "60 x 6", "60 x 1.1/2")
+   sits ON the run pipe: ONE node on the run centreline at the branch point. The run passes
+   THROUGH it - two collinear edges at the run size - and the branch is a third edge at the
+   branch size. Its "faceToFace" is the olet's height off the run if the drawing prints it,
+   else null. Never draw an olet as a tee: a tee cuts the run, an olet does not.
+15. A CAP closing a pipe end is a "cap" node at that end.
+16. NEVER refuse and NEVER explain. If you cannot work out the intermediate fitting
    vertices, still output every tie-in node whose coordinates are printed on the drawing,
    and name what is missing in "unreadable". An incomplete node list is useful;
    prose is not. Your entire reply must be the JSON object and nothing else.`;
@@ -137,7 +165,11 @@ that was already right. Change only what the failed checks point at. Common caus
 of likelihood:
   - a digit mis-read in a running dimension (6 vs 8, 1 vs 7, 3 vs 9)
   - a fitting typed as elbow90 when the drawing shows elbow45, or vice versa
-  - a missing node: a fitting present on the drawing but absent from the node list
+  - a missing node: a fitting present on the drawing but absent from the node list - check
+    every FITTINGS / FLANGES / VALVES row of the BOM against the nodes' "pt"; a valve, flange,
+    olet or spacer is the usual one missing
+  - an olet drawn as a tee (a tee cuts the run; an olet sits on it), or a bolted valve,
+    spacer or blind flange typed as something welded
   - a missing edge, especially the branch leg of a tee
   - "pupLength" wrong, which shifts every take-out at once
   - the MTO covers several sheets while the geometry is one sheet - if so set

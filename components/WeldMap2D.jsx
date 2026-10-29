@@ -37,6 +37,7 @@ export default function WeldMap2D({ model, meta, selected, onSelect, showDims, c
     const spoolIdx = new Map(model.spoolIds.map((s, i) => [s, i]));
     const sizes = [...new Set(model.elements.map((e) => e.nps || model.nps))].sort((a, b) => b - a);
     const colorOf = (e) => {
+      if (e.bolted) return "#9AA5AE";   // a bolted body (valve, spacer, blind) belongs to no spool
       if (colorBy === "size") return SPOOL_COLORS[sizes.indexOf(e.nps || model.nps) % SPOOL_COLORS.length];
       if (colorBy === "none") return "#8FA3B0";
       return SPOOL_COLORS[(spoolIdx.get(e.spool) ?? 0) % SPOOL_COLORS.length];

@@ -1,0 +1,162 @@
+{
+  "id": "R28-wafer-valve-and-spacer-60in",
+  "title": "60\" line: a lug butterfly valve and a blind & open spacer, each bolted between two WN flanges",
+  "rule": "شیر پروانه‌ای ویفر/لاگ و اسپیسر بین دو فلنج → بدون جوش؛ اتصال پیچی اسپول را می‌شکند؛ MTO آن‌ها را جدا می‌شمارد",
+  "note": "From the owner's drawing AISPC-10-DE-930-PI-ISO-0001 sheet 2 (60\"-CWS-10-930030A-DA01-UCW): PT 14 butterfly valve lug type between flanges F7/F8, PT 5 blind & open spacer. Neither is welded; each bolted joint separates the spools.",
+  "options": {
+    "spoolMaxLen": 50000,
+    "maxPipeLength": 50000,
+    "strictBom": true
+  },
+  "input": {
+    "meta": {
+      "nps": 60,
+      "schedule": "STD",
+      "pupLength": 0,
+      "clLengthM": 9.0
+    },
+    "bom": [
+      {
+        "pt": 1,
+        "group": "PIPE",
+        "description": "Pipe, API 5L GR.B 100% RT, LSAW, BE, THK 15.88mm",
+        "diam": 60,
+        "qty": 7.8
+      },
+      {
+        "pt": 7,
+        "group": "FLANGES",
+        "description": "Flange, ASTM A105N, Weld Neck, RF, SCH 15.88MM, 150#, ASME B16.47B",
+        "diam": 60,
+        "qty": 4
+      },
+      {
+        "pt": 14,
+        "group": "VALVES / IN-LINE ITEMS",
+        "description": "Butterfly valve, Category A, 150#, Lug type, G.O, API 609",
+        "diam": 60,
+        "qty": 1
+      },
+      {
+        "pt": 5,
+        "group": "FITTINGS",
+        "description": "Blind & Open Spacer, ASTM A516 GR.70, RF, 150#",
+        "diam": 60,
+        "qty": 1
+      }
+    ],
+    "nodes": [
+      {
+        "id": "N1",
+        "type": "tie-in",
+        "ref": "DRG-1",
+        "E": 0,
+        "N": 0,
+        "EL": 10000
+      },
+      {
+        "id": "N2",
+        "type": "flange-wn",
+        "ref": "",
+        "faceToFace": 200,
+        "E": 0,
+        "N": 3000,
+        "EL": 10000
+      },
+      {
+        "id": "N3",
+        "type": "valve-wafer",
+        "ref": "",
+        "E": 0,
+        "N": 3150,
+        "EL": 10000
+      },
+      {
+        "id": "N4",
+        "type": "flange-wn",
+        "ref": "",
+        "faceToFace": 200,
+        "E": 0,
+        "N": 3300,
+        "EL": 10000
+      },
+      {
+        "id": "N5",
+        "type": "flange-wn",
+        "ref": "",
+        "faceToFace": 200,
+        "E": 0,
+        "N": 6000,
+        "EL": 10000
+      },
+      {
+        "id": "N6",
+        "type": "spacer",
+        "ref": "",
+        "E": 0,
+        "N": 6050,
+        "EL": 10000
+      },
+      {
+        "id": "N7",
+        "type": "flange-wn",
+        "ref": "",
+        "faceToFace": 200,
+        "E": 0,
+        "N": 6100,
+        "EL": 10000
+      },
+      {
+        "id": "N8",
+        "type": "tie-in",
+        "ref": "DRG-930001A",
+        "E": 0,
+        "N": 9000,
+        "EL": 10000
+      }
+    ],
+    "edges": [
+      {
+        "from": "N1",
+        "to": "N2",
+        "nps": 60
+      },
+      {
+        "from": "N2",
+        "to": "N3",
+        "nps": 60
+      },
+      {
+        "from": "N3",
+        "to": "N4",
+        "nps": 60
+      },
+      {
+        "from": "N4",
+        "to": "N5",
+        "nps": 60
+      },
+      {
+        "from": "N5",
+        "to": "N6",
+        "nps": 60
+      },
+      {
+        "from": "N6",
+        "to": "N7",
+        "nps": 60
+      },
+      {
+        "from": "N7",
+        "to": "N8",
+        "nps": 60
+      }
+    ]
+  },
+  "expect": {
+    "weldCount": 6,
+    "fieldWeldCount": 2,
+    "spoolCount": 3,
+    "maxWarnings": 0
+  }
+}

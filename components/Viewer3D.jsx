@@ -62,6 +62,8 @@ export default function Viewer3D({ model, selected, onSelect, exploded, showTags
 
     const sizes = [...new Set(model.elements.map((e) => e.nps || model.nps))].sort((a, b) => b - a);
     const paintOf = (e, spoolColor) => {
+      // a bolted body (valve, spacer, blind) belongs to no spool
+      if (e.bolted) return "#9AA5AE";
       if (colorBy === "size") return SPOOL_COLORS[sizes.indexOf(e.nps || model.nps) % SPOOL_COLORS.length];
       if (colorBy === "none") return "#8FA3B0";
       return spoolColor;

@@ -1,17 +1,17 @@
 {
-  "recordedAt": "2026-10-03T14:03:17.504Z",
+  "recordedAt": "2026-10-29T10:47:44.655Z",
   "engine": "lib/engine.js",
   "summary": {
-    "cases": 80,
+    "cases": 85,
     "draft": 1,
-    "pass": 79,
+    "pass": 84,
     "fail": 0,
     "xfail": 0,
     "xpass": 0,
     "passRate": 100,
     "weldCountExact": {
-      "ok": 78,
-      "of": 78,
+      "ok": 83,
+      "of": 83,
       "pct": 100
     },
     "fieldWeldsExact": {
@@ -20,22 +20,22 @@
       "pct": 100
     },
     "spoolCountExact": {
-      "ok": 39,
-      "of": 39,
+      "ok": 44,
+      "of": 44,
       "pct": 100
     },
     "registerExact": {
-      "ok": 62,
-      "of": 62,
+      "ok": 63,
+      "of": 63,
       "pct": 100
     },
     "registerFieldAccuracy": 100,
     "registerFields": {
-      "correct": 2234,
-      "of": 2234,
+      "correct": 2246,
+      "of": 2246,
       "undecided": 251
     },
-    "warnings": 10
+    "warnings": 11
   },
   "cases": [
     {
@@ -596,6 +596,41 @@
       "kind": "rule",
       "status": "pass",
       "file": "eval/cases/rules/R24-incomplete-geometry-invalidates-length.json",
+      "failed": []
+    },
+    {
+      "id": "R25-valve-flanged-between-flanges",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R25-valve-flanged-between-flanges.json",
+      "failed": []
+    },
+    {
+      "id": "R26-weldolet-branch",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R26-weldolet-branch.json",
+      "failed": []
+    },
+    {
+      "id": "R27-weldolet-height-unknown",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R27-weldolet-height-unknown.json",
+      "failed": []
+    },
+    {
+      "id": "R28-wafer-valve-and-spacer-60in",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R28-wafer-valve-and-spacer-60in.json",
+      "failed": []
+    },
+    {
+      "id": "R29-elbow-60in-od",
+      "kind": "rule",
+      "status": "pass",
+      "file": "eval/cases/rules/R29-elbow-60in-od.json",
       "failed": []
     }
   ]
