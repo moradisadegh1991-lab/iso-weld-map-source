@@ -53,12 +53,30 @@ const db = await createClient({ dataDir: process.env.PGLITE_DIR || ".pglite" });
     applied.rows.length === onDisk ? null : "npm run db:migrate");
 
   // ── 3 · authentication ─────────────────────────────────────────────────
+  // Three ways in. AUTH_MODE=dev is for a laptop only and is never suggested here.
+  // OIDC is a wired verifier. The third is what a public server runs: people sign
+  // in with a password and the server holds a signed session cookie (lib/auth/
+  // cookie.mjs), which needs SESSION_SECRET (32+ characters) and at least one
+  // account with a password. A request with no cookie is simply "not signed in"
+  // (401, the login form), not rejected for lack of configuration.
   const dev = process.env.AUTH_MODE === "dev";
-  step(3, "احراز هویت", dev ? "warn" : process.env.OIDC_ISSUER ? "ok" : "missing",
-    dev ? `${C.y}حالت dev — توکن همان نام کاربر است. فقط برای لپ‌تاپ.${C.o}`
-        : process.env.OIDC_ISSUER ? `OIDC: ${process.env.OIDC_ISSUER}`
-        : "پیکربندی نشده — سرور هر درخواست را رد می‌کند",
-    dev || process.env.OIDC_ISSUER ? null : "AUTH_MODE=dev  (یا verifier واقعی)");
+  const oidc = Boolean(process.env.OIDC_ISSUER);
+  const secretOk = String(process.env.SESSION_SECRET || "").length >= 32;
+  const { rows: [pw] } = await db.query("SELECT count(*)::int AS n FROM user_credential").catch(() => ({ rows: [{ n: 0 }] }));   // no table yet (migrations not applied): no accounts
+  if (dev) {
+    step(3, "احراز هویت", "warn", `${C.y}حالت dev — توکن همان نام کاربر است. فقط برای لپ‌تاپ.${C.o}`);
+  } else if (oidc) {
+    step(3, "احراز هویت", "ok", `OIDC: ${process.env.OIDC_ISSUER}`);
+  } else if (!secretOk) {
+    step(3, "احراز هویت", "missing",
+      "SESSION_SECRET تنظیم نشده یا کوتاه‌تر از ۳۲ نویسه است — کسی نمی‌تواند با رمز عبور وارد شود",
+      "SESSION_SECRET را (۳۲ نویسهٔ تصادفی، مثلاً از openssl rand -hex 32) در فایل تنظیمات سرور بگذارید؛ install.sh آن را یک‌بار می‌سازد");
+  } else if (pw.n === 0) {
+    step(3, "احراز هویت", "warn", "ورود با رمز عبور آماده است ولی هنوز حسابی با رمز عبور نیست",
+      "npm run auth:developer -- you@example.com   (لینک تنظیم رمز یک‌بارمصرف می‌دهد)");
+  } else {
+    step(3, "احراز هویت", "ok", `ورود با رمز عبور (نشست امضاشده) · ${pw.n} حساب با رمز عبور`);
+  }
 
   // ── 4 · model provider ─────────────────────────────────────────────────
   let llm = null;

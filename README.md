@@ -35,7 +35,7 @@ npx vercel --prod
 
 | متغیر | مقدار |
 |---|---|
-| `AUTH_MODE` | `dev` برای کار محلی (توکن = نام کاربر). بدون آن و بدون verifier، سرور درخواست را رد می‌کند |
+| `AUTH_MODE` | `dev` فقط برای لپ‌تاپ (توکن = نام کاربر)؛ **روی سرور عمومی هرگز**. سرور عمومی بدون آن اجرا می‌شود: ورود با رمز عبور و کوکی امضاشده، که `SESSION_SECRET` (دست‌کم ۳۲ نویسه) و یک حساب اولیه (`npm run auth:developer -- you@example.com`) می‌خواهد |
 | `LLM_PROVIDER` | `anthropic` (پیش‌فرض) یا `openai-compatible` برای vLLM |
 | `ANTHROPIC_API_KEY` | کلید API — **فقط روی سرور**؛ هرگز از مرورگر ارسال نمی‌شود |
 | `ANTHROPIC_MODEL` | اختیاری، پیش‌فرض `claude-sonnet-5` |
