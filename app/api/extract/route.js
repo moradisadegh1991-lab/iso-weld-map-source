@@ -91,10 +91,17 @@ Extract ONLY the route geometry. Do NOT output the BOM or the title block.
               "ref": string,
               "pt": number|null,
               "faceToFace": number|null,
-              "E": number, "N": number, "EL": number }],
+              "E": number, "N": number, "EL": number,
+              "px": number|null, "py": number|null }],
   "edges": [{ "from": string, "to": string, "nps": number }],
   "unreadable": [string]
 }
+
+"px" and "py" are where the node is DRAWN on the FULL SHEET image (the first image), as fractions
+of that image: px 0 at the left edge and 1 at the right edge, py 0 at the top edge and 1 at the
+bottom edge, to two decimals - the point on the drawn pipe where the fitting sits (the corner of an
+elbow, the centre of a tee, the end of a tie-in). They place marks on the sheet only and are never
+used for geometry. null when you cannot see where it is drawn; never guess one.
 
 The route is a GRAPH, not a chain. "edges" lists every pipe leg and its own nominal
 size in inches. A tee therefore has THREE incident edges and a branch runs to its own

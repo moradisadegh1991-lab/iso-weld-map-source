@@ -9,7 +9,7 @@ import { TYPE_FA } from "../../lib/standards";
 import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../../lib/extraction/merge.mjs";
 import { compareReads } from "../../lib/extraction/second-read.mjs";
-import { seedFromPass, fromReaderTags, normalize as normalizeMarks, unplaced as unplacedMarks } from "../../lib/sheet/markup.mjs";
+import { seedFromPass, fromReaderTags, fromEngine, normalize as normalizeMarks, unplaced as unplacedMarks } from "../../lib/sheet/markup.mjs";
 import SheetMarkup from "../../components/SheetMarkup";
 import { weldListFromMarks } from "../../lib/register/weld-marks.mjs";
 import SaveBar from "../../components/SaveBar";
@@ -366,7 +366,13 @@ export default function Page() {
           seedNote = ` · نشان‌های روی نقشه: ${seed.items.length} پیشنهاد مدل` + (seed.dropped.length ? ` (${seed.dropped.length} مورد بی‌شماره یا بی‌محل کنار گذاشته شد)` : "");
         } else {
           final = { ...final, sheetMarkup: { page: page || 1, items: [] } };
-          seedNote = " · نشان‌ها از نقشه خوانده نشد؛ خودتان روی نقشه بگذارید";
+          seedNote = " · نشان‌های چاپی از نقشه خوانده نشد";
+        }
+        // a sheet with no weld numbers printed: the engine's welds, each where the model saw its node drawn
+        if (!final.sheetMarkup.items.some((m) => m.kind.startsWith("weld"))) {
+          const eng = fromEngine(buildModel(final, { strictBom, gradeElevationMm }), final.nodes, w / h);
+          final = { ...final, sheetMarkup: { ...final.sheetMarkup, items: normalizeMarks([...final.sheetMarkup.items, ...eng.items]) } };
+          seedNote += ` · ${eng.items.length} سرجوش موتور روی نقشه گذاشته شد` + (eng.missing.length ? `، ${eng.missing.length} جا نیفتاد (گره‌اش روی نقشه دیده نشد) — از فهرست بگذارید` : "");
         }
       }
 
@@ -721,6 +727,14 @@ export default function Page() {
               <SheetMarkup src={openRun ? runSheet?.src : preview}
                 items={data.sheetMarkup?.items || []}
                 unplaced={unplacedMarks(model.register, model.spoolIds, data.sheetMarkup?.items || [])}
+                onSeedEngine={(aspect) => {
+                  // the engine's welds again, where the model saw their nodes: what a person placed or kept stays
+                  const kept = (data.sheetMarkup?.items || []).filter((m) => m.src !== "engine");
+                  const eng = fromEngine(model, data.nodes, aspect).items.filter((m) => !kept.some((k) => k.kind.startsWith("weld") && k.no === m.no));
+                  const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks([...kept, ...eng]) } };
+                  setData(next);
+                  setEditing(JSON.stringify(next, null, 2));
+                }}
                 fileName={`${data.meta?.drawingNo || "iso"}-${data.meta?.sheet || "1"}-marked`.replace(/[^\w.-]+/g, "_")}
                 onChange={(items) => {
                   const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks(items) } };

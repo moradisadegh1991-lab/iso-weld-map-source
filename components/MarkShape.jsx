@@ -7,15 +7,17 @@ import { KINDS } from "../lib/sheet/markup.mjs";
  * `tint` paints the shape in a state's colour (checked, accepted, …) with
  * white text, where the kind alone is shown by the shape.
  */
+// drawn as a designer draws them on the sheet: thin black frames, hollow, the number inside;
+// the kind is told by the shape alone (an unknown Shop/Field weld is a grey dashed circle)
 export const COLOR = {
-  "weld-shop": "#1f6feb", "weld-field": "#d2453a", "weld-unknown": "#6b7280", spool: "#1a8f4a", support: "#7c3aed",
+  "weld-shop": "#111", "weld-field": "#111", "weld-unknown": "#6b7280", spool: "#111", support: "#111",
 };
 
 export default function MarkShape({ kind, no, on = false, size = 1, tint = null }) {
   const c = tint || COLOR[kind], shape = KINDS[kind].shape;
   const common = tint
     ? { fill: tint, fillOpacity: 0.92, stroke: on ? "#111" : "#fff", strokeWidth: on ? 3.5 : 2 }
-    : { fill: "#fff", fillOpacity: 0.92, stroke: c, strokeWidth: on ? 3.5 : 2.5 };
+    : { fill: "#fff", fillOpacity: 0.92, stroke: c, strokeWidth: on ? 3 : 1.6 };
   const len = String(no).length;
   return (
     <svg width={40 * size} height={30 * size} viewBox="0 0 40 30"
@@ -25,7 +27,7 @@ export default function MarkShape({ kind, no, on = false, size = 1, tint = null 
       {shape === "square" && <rect x="7" y="2" width="26" height="26" {...common} />}
       {shape === "oval" && <ellipse cx="20" cy="15" rx="18" ry="12" {...common} />}
       {shape === "hexagon" && <polygon points="10,3 30,3 38,15 30,27 10,27 2,15" {...common} />}
-      <text x="20" y="19" textAnchor="middle" fontSize={len > 4 ? 8.5 : len > 2 ? 10.5 : 12.5}
+      <text x="20" y="19" textAnchor="middle" fontSize={len > 4 ? 7.5 : len > 3 ? 9 : len > 2 ? 10.5 : 12.5}
         fontFamily="system-ui,sans-serif" fontWeight="700" fill={tint ? "#fff" : "#111"} style={{ userSelect: "none" }}>{no}</text>
     </svg>
   );
