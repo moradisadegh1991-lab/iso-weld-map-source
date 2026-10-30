@@ -61,7 +61,7 @@ const leaders = await page.locator("[data-leader]").count();
 check(leaders === marks.length, `a leader for every mark (${leaders})`);
 // every leader's weld end lies on a drawn leg of the route
 const segs = edges.map((e) => [nodes.find((n) => n.id === e.from), nodes.find((n) => n.id === e.to)]);
-const ends = await page.locator("[data-leader]").evaluateAll((els) => els.map((l) => ({ x: +l.getAttribute("x1"), y: +l.getAttribute("y1"), fx: +l.getAttribute("x2"), fy: +l.getAttribute("y2") })));
+const ends = await page.locator("[data-leader]").evaluateAll((els) => els.map((l) => ({ x: +l.dataset.ax, y: +l.dataset.ay, fx: +l.dataset.fx, fy: +l.dataset.fy })));
 const onLeg = (p) => segs.some(([a, b]) => {
   const dx = b.px - a.px, dy = b.py - a.py, L = dx * dx + dy * dy;
   const t = Math.max(0, Math.min(1, ((p.x - a.px) * dx + (p.y - a.py) * dy) / L));
@@ -71,33 +71,80 @@ check(ends.every(onLeg), "each leader starts on the drawn pipe");
 check(ends.every((e) => Math.hypot(e.fx - e.x, e.fy - e.y) > 0.015), "and ends at a frame set off the pipe");
 const ink = await page.locator("[data-mark-id] svg :is(rect,circle)").first().getAttribute("stroke");
 check(ink === "#111" || ink === "#6b7280", `hollow frames in black ink (${ink})`);
+// drawn at the sheet's own size: a weld frame is as wide, against the sheet, as the example sheet's frames
+const sizes = await page.evaluate(() => {
+  const img = document.querySelector("[data-sheet] img").getBoundingClientRect();
+  const frame = document.querySelector("[data-mark-id] svg :is(rect,circle)").getBoundingClientRect();
+  return { img: img.width, frame: frame.width };
+});
+check(Math.abs(sizes.frame / sizes.img - 0.024) < 0.003, `a weld frame is ${(100 * sizes.frame / sizes.img).toFixed(2)}% of the sheet's width (the example's: 2.4%)`);
+const zoomed = async () => page.evaluate(() => document.querySelector("[data-mark-id] svg :is(rect,circle)").getBoundingClientRect().width / document.querySelector("[data-sheet] img").getBoundingClientRect().width);
+await page.getByRole("button", { name: "zoom in" }).click(); await page.getByRole("button", { name: "zoom in" }).click();
+check(Math.abs((await zoomed()) - sizes.frame / sizes.img) < 0.001, "and stays that share of the sheet when zoomed");
+await page.getByRole("button", { name: "⤢" }).click();
+check(await page.locator("[data-anchor-id]").evaluateAll((els) => els.every((e) => getComputedStyle(e).borderTopWidth === "0px" && getComputedStyle(e).backgroundColor === "rgba(0, 0, 0, 0)")),
+  "no dot over the drawing at the weld points");
 await page.locator("[data-sheet] img").scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOT}/sheet-leaders-1.png` });
+
+// the tables: welds with what the register and the BOM say, editable
+const weldRows = await page.locator('[data-mark-table="weld"] tbody tr[data-mark-row]').count();
+check(weldRows === marks.length, `a row for every weld (${weldRows})`);
+const mat = await page.locator('[data-mark-table="weld"] [data-cell="material"]').first().inputValue();
+check(mat === "A312-TP304", `material read off the sheet's own pipe row (${mat})`);
+await page.locator('[data-mark-table="weld"] [data-cell="wps"]').first().fill("WPS-01");
+await page.locator('[data-mark-table="weld"] [data-cell="schedule"]').first().fill("40S");
+check(await page.locator('[data-mark-table="weld"] [data-cell="wps"]').first().inputValue() === "WPS-01", "a WPS typed into the weld table stays");
+// the spool tab: add one on the sheet, name and describe it; the rules speak
+await page.locator('[data-mark-tab="spool"]').click();
+check(await page.locator("[data-mark-rules]").count() > 0 && /SP-01.*بیضی/.test(await page.locator("[data-mark-rules]").innerText()), "the rules: a spool the welds name has no oval on the sheet yet");
+await page.locator('[data-mark-add="spool"]').click();
+const sbx = await page.locator("[data-sheet]").boundingBox();
+await page.mouse.click(sbx.x + sbx.width * 0.30, sbx.y + sbx.height * 0.62);
+await page.waitForTimeout(200);
+await page.locator('[data-mark-table="spool"] [data-cell="no"]').first().fill("SP-01");
+await page.locator('[data-mark-table="spool"] [data-cell="lengthMm"]').first().fill("5000");
+await page.waitForTimeout(200);
+check(await page.locator('[data-mark-id][data-shape="oval"][data-no="SP-01"]').count() === 1, "SP-01 is an oval on the sheet");
+const rulesNow = (await page.locator("[data-mark-rules]").count()) ? await page.locator("[data-mark-rules]").innerText() : "";
+check(!/SP-01/.test(rulesNow), `and the rule about SP-01 is met (${rulesNow.replace(/\s+/g, " ").slice(0, 120) || "no rule left"})`);
+// the support tab works the same way, a hexagon
+await page.locator('[data-mark-tab="support"]').click();
+await page.locator('[data-mark-add="support"]').click();
+await page.mouse.click(sbx.x + sbx.width * 0.20, sbx.y + sbx.height * 0.66);
+await page.waitForTimeout(200);
+await page.locator('[data-mark-table="support"] [data-cell="no"]').first().fill("SW-1");
+check(/نوعش مشخص نیست/.test(await page.locator("[data-mark-tables]").innerText()), "a support with no type is named");
+await page.locator('[data-mark-table="support"] [data-cell="type"]').first().fill("FS133");
+await page.waitForTimeout(200);
+check(!/نوعش مشخص نیست/.test(await page.locator("[data-mark-tables]").innerText()), "its type given, the rule is met");
+check(await page.locator('[data-mark-id][data-shape="hexagon"][data-no="SW-1"]').count() === 1, "SW-1 is a hexagon on the sheet");
+await page.screenshot({ path: `${SHOT}/sheet-leaders-tables.png`, fullPage: true });
 
 // move a weld point along: pick the first mark, drag its yellow weld point
 const first = marks[0];
 await page.locator(`[data-mark-id="${first.id}"]`).click();
 const dot = page.locator(`[data-anchor-id="${first.id}"]`);
 const bb = await dot.boundingBox();
-const before = await page.locator(`[data-leader="${first.id}"]`).getAttribute("x1");
+const before = await page.locator(`[data-leader="${first.id}"]`).getAttribute("data-ax");
 await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.mouse.down();
 await page.mouse.move(bb.x + 30, bb.y + 20, { steps: 4 }); await page.mouse.move(bb.x + 60, bb.y + 30, { steps: 4 }); await page.mouse.up();
 await page.waitForTimeout(300);
-const after = await page.locator(`[data-leader="${first.id}"]`).getAttribute("x1");
+const after = await page.locator(`[data-leader="${first.id}"]`).getAttribute("data-ax");
 check(Number(after) > Number(before), `the weld point is dragged and its leader follows (${before} → ${after})`);
 
 // the frame dragged: the leader's other end follows
 const fb = await page.locator(`[data-mark-id="${first.id}"]`).boundingBox();
-const fx0 = await page.locator(`[data-leader="${first.id}"]`).getAttribute("x2");
+const fx0 = await page.locator(`[data-leader="${first.id}"]`).getAttribute("data-fx");
 await page.mouse.move(fb.x + fb.width / 2, fb.y + fb.height / 2); await page.mouse.down();
 await page.mouse.move(fb.x + fb.width / 2 - 40, fb.y + fb.height / 2 + 10, { steps: 4 }); await page.mouse.move(fb.x + fb.width / 2 - 80, fb.y + fb.height / 2 + 20, { steps: 4 }); await page.mouse.up();
 await page.waitForTimeout(300);
-check(Number(await page.locator(`[data-leader="${first.id}"]`).getAttribute("x2")) < Number(fx0), "the frame dragged, the leader still joins it");
+check(Number(await page.locator(`[data-leader="${first.id}"]`).getAttribute("data-fx")) < Number(fx0), "the frame dragged, the leader still joins it");
 
 // put the engine's marks back where they were suggested; a hand-placed one is kept
 await page.locator("[data-seed-engine]").click();
 await page.waitForTimeout(300);
-check(await page.locator("[data-mark-id]").count() === marks.length, "re-placing the engine's welds keeps one mark per weld");
+check(await page.locator("[data-mark-id]").count() === marks.length + 2, "re-placing the engine's welds keeps one mark per weld, and the spool and support placed by hand");
 
 const dl = page.waitForEvent("download");
 await page.locator("[data-download]").click();

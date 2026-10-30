@@ -7,7 +7,7 @@
 import { test, run, assert, equal } from "./harness.mjs";
 import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
-import { KINDS, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, unplaced, problems, normalize } from "../../lib/sheet/markup.mjs";
+import { KINDS, SHEET_SIZE, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, unplaced, problems, normalize } from "../../lib/sheet/markup.mjs";
 
 const SYM = { shop: "circle", field: "square" };
 const pass = (items) => ({ items });
@@ -218,6 +218,72 @@ test("the leader's weld point is kept, moved and cleaned like the frame", () => 
   assert(!("ax" in items[1]), "a malformed weld point is dropped, the mark kept without a leader");
   items = updateMark(items, items[0].id, { ax: 0.4, ay: 1.3 });
   assert(items[0].ax === 0.4 && items[0].ay === 1, "moved, and kept on the sheet");
+});
+
+test("marks are drawn at the example sheet's own size (25-1020 sheet 1: frames 79 px on a 3307 px sheet)", () => {
+  const px = (f) => Math.round(f * 3307);
+  assert(Math.abs(px(SHEET_SIZE.weld.w) - 79) <= 2, `weld frame ${px(SHEET_SIZE.weld.w)} px`);
+  assert(Math.abs(px(SHEET_SIZE.spool.w) - 142) <= 2 && Math.abs(px(SHEET_SIZE.spool.h) - 63) <= 2, "spool oval 142 x 63");
+  assert(Math.abs(px(SHEET_SIZE.support.w) - 106) <= 2 && Math.abs(px(SHEET_SIZE.support.h) - 82) <= 2, "support hexagon 106 x 82");
+  assert(px(SHEET_SIZE.leader) <= 2, "a leader as thin as the drawing's");
+});
+
+test("what a mark records is kept, edited and cleaned, by its kind", () => {
+  let items = normalize([
+    { kind: "weld-field", no: "1", x: 0.1, y: 0.1, attrs: { type: "SW", size: '1"', material: " A312-TP304 ", bogus: "x", spool: "" } },
+    { kind: "spool", no: "SP-1", x: 0.2, y: 0.2, attrs: { lengthMm: "1200", type: "SW" } },
+  ]);
+  equal(items[0].attrs, { type: "SW", size: '1"', material: "A312-TP304" }, "trimmed; empty and unknown fields dropped");
+  equal(items[1].attrs, { lengthMm: "1200" }, "a spool has no joint type");
+  items = updateMark(items, items[0].id, { attrs: { spool: "SP-1", type: "" } });
+  equal(items[0].attrs, { size: '1"', material: "A312-TP304", spool: "SP-1" }, "one field edited, one cleared, the rest kept");
+});
+
+test("the material at a size is read off the sheet's own pipe rows, never guessed", () => {
+  const bom = [{ group: "PIPE", description: "PIPE 40S PE SMLS A312-TP304 ASME B36.19", diam: 1 },
+    { group: "PIPE", description: "PIPE S40 BE ERW API 5L-B PSL1", diam: 6 },
+    { group: "FITTINGS", description: "ELBOW 90 A234-WPB", diam: 6 },
+    { group: "PIPE", description: "PIPE SMLS A106-B", diam: 2 }, { group: "PIPE", description: "PIPE SMLS A333-6", diam: 2 },
+    { group: "PIPE", description: "PIPE PE SMLS", diam: 3 }];
+  equal(materialAt(bom, 1), "A312-TP304");
+  equal(materialAt(bom, 6), "API 5L-B", "a fitting's grade is not the pipe's");
+  equal(materialAt(bom, 2), "", "two grades at one size: unknown");
+  equal(materialAt(bom, 3), "", "a pipe row with no grade: unknown");
+  equal(materialAt(bom, 4), "", "no pipe at that size");
+  equal(scheduleOf('36" SCH 10', 36), "SCH 10");
+  equal(scheduleOf('1"', 1), "");
+});
+
+test("the engine's welds carry what the register and the BOM say", () => {
+  const data = { ...drawn(), bom: [{ group: "PIPE", description: "PIPE 36 SCH 10 API 5L-B", diam: 36 }] };
+  const m = buildModel(data);
+  const { items } = fromEngine(m, data.nodes, 1.414, data.bom);
+  for (const it of items) {
+    const r = m.register.find((w) => w.no === it.no);
+    equal(it.attrs.type, r.kind, `${it.no}: joint type`);
+    equal(it.attrs.size, `${r.nps}"`, `${it.no}: size`);
+    equal(it.attrs.spool, r.spool, `${it.no}: spool`);
+    equal(it.attrs.material, "API 5L-B", `${it.no}: material from the BOM`);
+  }
+});
+
+test("the spool and support rules, on marks and on a weld list", () => {
+  const mk = (kind, no, attrs) => ({ kind, no, x: 0, y: 0, ...(attrs ? { attrs } : {}) });
+  const r = rules([
+    mk("weld-shop", "1", { spool: "SP-1" }), mk("weld-shop", "2"), mk("weld-field", "3"),
+    mk("weld-shop", "4", { spool: "SP-9" }), mk("spool", "SP-1"), mk("spool", "SP-2"),
+    mk("support", "SW-1", { type: "FS133" }), mk("support", "SW-2"),
+  ]);
+  assert(r.some((x) => /کارگاهی 2 اسپول ندارد/.test(x)), "a shop weld with no spool");
+  assert(!r.some((x) => /\b3\b.*اسپول ندارد/.test(x)), "a site weld needs no spool");
+  assert(r.some((x) => /SP-9.*بیضی‌اش روی نقشه نیست/.test(x)), "a spool named but not marked");
+  assert(r.some((x) => /SP-2.*هیچ سرجوشی/.test(x)), "a spool marked with no weld in it");
+  assert(!r.some((x) => /SP-1/.test(x)), "a spool marked and used is fine");
+  assert(r.some((x) => /ساپورت SW-2 نوعش/.test(x)) && !r.some((x) => /SW-1/.test(x)), "a support needs its type");
+  // the same rules where the welds are kept as a list beside the sheet
+  const l = rules([mk("spool", "SP-1"), mk("spool", "SP-3")],
+    [{ no: "1", loc: "Shop", spool: "SP-1" }, { no: "2", loc: "Shop", spool: "" }, { no: "3", loc: "Field", spool: "" }]);
+  assert(l.some((x) => /کارگاهی 2/.test(x)) && l.some((x) => /SP-3.*هیچ سرجوشی/.test(x)) && !l.some((x) => /SP-1/.test(x)), l.join(" | "));
 });
 
 await run();

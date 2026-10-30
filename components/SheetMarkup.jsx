@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { KINDS, KIND_IDS, addMark, updateMark, removeMark, problems } from "../lib/sheet/markup.mjs";
-import Shape, { COLOR } from "./MarkShape";
+import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, removeMark, problems } from "../lib/sheet/markup.mjs";
+import Shape, { COLOR, geometryOf } from "./MarkShape";
+import MarkTables from "./MarkTables";
 
 /**
  * The isometric sheet itself, marked: a circle on a shop weld, a square on a
@@ -19,35 +20,35 @@ import Shape, { COLOR } from "./MarkShape";
  * Nothing here decides Shop or Field: a mark's kind is what the project's
  * symbols, the engine's register or the person said.
  */
-/** The sheet with its marks burnt in, as a PNG at the sheet's own resolution. */
+/** The sheet with its marks burnt in, as a PNG at the sheet's own resolution, each mark at the example sheet's size. */
 export async function renderMarkedPng(src, items) {
   const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("تصویر نقشه باز نشد")); i.src = src; });
   const cv = document.createElement("canvas");
-  cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+  const W = cv.width = img.naturalWidth, H = cv.height = img.naturalHeight;
   const g = cv.getContext("2d");
   g.drawImage(img, 0, 0);
-  const s = cv.width / 1500;
-  // the leaders first, so each frame sits over the end of its own
-  g.strokeStyle = "#111"; g.lineWidth = 1.4 * s;
+  // the leaders first, thin as the drawing's own, so each frame sits over the end of its own
+  g.strokeStyle = "#111"; g.lineWidth = Math.max(1, SHEET_SIZE.leader * W);
   for (const m of items) {
     if (m.ax == null || m.ay == null) continue;
-    g.beginPath(); g.moveTo(m.ax * cv.width, m.ay * cv.height); g.lineTo(m.x * cv.width, m.y * cv.height); g.stroke();
-    g.beginPath(); g.arc(m.ax * cv.width, m.ay * cv.height, 2.6 * s, 0, Math.PI * 2); g.fillStyle = "#111"; g.fill();
+    g.beginPath(); g.moveTo(m.ax * W, m.ay * H); g.lineTo(m.x * W, m.y * H); g.stroke();
   }
   for (const m of items) {
-    const cx = m.x * cv.width, cy = m.y * cv.height, c = COLOR[m.kind], shape = KINDS[m.kind].shape;
-    g.save(); g.translate(cx, cy); g.scale(s, s);
-    g.lineWidth = 1.6; g.strokeStyle = c; g.fillStyle = "rgba(255,255,255,.95)";
-    g.setLineDash(shape === "circle-dashed" ? [4, 3] : []);
+    const geo = geometryOf(m.kind), [vw, vh] = geo.vb, k = (geo.box * W) / vw, shape = KINDS[m.kind].shape;
+    g.save(); g.translate(m.x * W - (vw * k) / 2, m.y * H - (vh * k) / 2); g.scale(k, k);
+    g.lineWidth = geo.stroke; g.strokeStyle = COLOR[m.kind]; g.fillStyle = "rgba(255,255,255,.95)";
+    g.setLineDash(shape === "circle-dashed" ? [3, 2.4] : []);
     g.beginPath();
-    if (shape === "circle" || shape === "circle-dashed") g.arc(0, 0, 13, 0, Math.PI * 2);
-    else if (shape === "square") g.rect(-13, -13, 26, 26);
-    else if (shape === "oval") g.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2);
-    else { g.moveTo(-10, -12); g.lineTo(10, -12); g.lineTo(18, 0); g.lineTo(10, 12); g.lineTo(-10, 12); g.lineTo(-18, 0); g.closePath(); }
+    if (shape === "circle" || shape === "circle-dashed") g.arc(vw / 2, vh / 2, 13, 0, Math.PI * 2);
+    else if (shape === "square") g.rect(2, 2, 26, 26);
+    else if (shape === "oval") g.ellipse(30, 14, 28, 12.4, 0, 0, Math.PI * 2);
+    else { [[2, 18], [11, 2.4], [33, 2.4], [42, 18], [33, 33.6], [11, 33.6]].forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); }
     g.fill(); g.stroke();
     g.setLineDash([]); g.fillStyle = "#111"; g.textAlign = "center"; g.textBaseline = "middle";
-    g.font = `700 ${String(m.no).length > 4 ? 7.5 : String(m.no).length > 3 ? 9 : String(m.no).length > 2 ? 10.5 : 12.5}px system-ui,sans-serif`;
-    g.fillText(String(m.no), 0, 1);
+    g.font = `700 ${geo.font}px "Times New Roman",Times,serif`;
+    const label = String(m.no), wide = g.measureText(label).width;
+    if (wide > geo.fit) { g.translate(vw / 2, vh / 2); g.scale(geo.fit / wide, 1); g.fillText(label, 0, 0.5); }
+    else g.fillText(label, vw / 2, vh / 2 + 0.5);
     g.restore();
   }
   return cv.toDataURL("image/png");
@@ -61,6 +62,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
   const [pointFor, setPointFor] = useState(null); // a weld mark's id: the next click on the sheet is its weld point
   const [drag, setDrag] = useState(null);
   const [busy, setBusy] = useState("");
+  const [aspect, setAspect] = useState(Math.SQRT2);   // the sheet's width / height, once its image is loaded
   const sheet = useRef(null);
   const selected = items.find((m) => m.id === selectedId) || null;
   const issues = problems(items);
@@ -152,7 +154,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
           : pointFor ? "روی نقطهٔ سرجوش، روی خود لوله، کلیک کنید تا خط از آن نقطه به شمارهٔ سرجوش وصل شود."
           : armed ? `«${armed.no}» انتخاب شد — روی محلش در نقشه کلیک کنید.`
           : tool ? `${KINDS[tool].label}: روی محلش در نقشه کلیک کنید.`
-          : "نشان را بکشید تا جابه‌جا شود؛ با کلیک انتخابش کنید تا شماره یا نوعش را عوض کنید یا پاکش کنید (Delete). نقطهٔ زرد سر خط، محل سرجوش روی لوله است و آن هم کشیدنی است."}
+          : "نشان را بکشید تا جابه‌جا شود؛ با کلیک انتخابش کنید تا شماره یا نوعش را عوض کنید یا پاکش کنید (Delete). سر خطِ نشان انتخاب‌شده، محل سرجوش روی لوله است و آن هم کشیدنی است. جزئیات هر نشان در جدول زیر نقشه."}
       </p>
       <p className="mono sm" data-counts>
         سرجوش‌ها {count("weld")} · اسپول‌ها {count("spool")} · ساپورت‌ها {count("support")}
@@ -198,15 +200,20 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
         <div ref={sheet} data-sheet style={{ position: "relative", width: `${zoom * 100}%`, cursor: (tool || armed) ? "crosshair" : "default" }} onClick={onSheetClick}>
           {src
             // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={src} alt="نقشه ایزومتریک" draggable={false} style={{ display: "block", width: "100%", userSelect: "none" }} />
+            ? <img src={src} alt="نقشه ایزومتریک" draggable={false} style={{ display: "block", width: "100%", userSelect: "none" }}
+                onLoad={(e) => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setAspect(i.naturalWidth / i.naturalHeight); }} />
             : <div className="muted" style={{ padding: 40 }}>تصویر نقشه در دسترس نیست.</div>}
           {/* each leader from its weld point on the pipe to its frame; the frame drawn over its end */}
-          <svg viewBox="0 0 1 1" preserveAspectRatio="none" data-leaders
+          <svg viewBox={`0 0 1000 ${1000 / aspect}`} data-leaders
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
             {items.filter((m) => m.ax != null && m.ay != null).map((m) => {
               const f = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
               const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
-              return <line key={m.id} data-leader={m.id} x1={a.ax} y1={a.ay} x2={f.x} y2={f.y} stroke="#111" strokeWidth={m.id === selectedId ? 2.2 : 1.3} vectorEffect="non-scaling-stroke" />;
+              const k = 1000 / aspect;
+              // as thin as the drawing's own leaders, and no blob at the weld point to cover the drawing
+              return <line key={m.id} data-leader={m.id} data-ax={a.ax} data-ay={a.ay} data-fx={f.x} data-fy={f.y}
+                x1={a.ax * 1000} y1={a.ay * k} x2={f.x * 1000} y2={f.y * k}
+                stroke={m.id === selectedId ? "#b8860b" : "#111"} strokeWidth={SHEET_SIZE.leader * 1000 * (m.id === selectedId ? 2 : 1)} />;
             })}
           </svg>
           {items.filter((m) => m.ax != null && m.ay != null).map((m) => {
@@ -216,8 +223,8 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
               <div key={`a${m.id}`} data-anchor-id={m.id} title={on && !readOnly ? "محل سرجوش روی لوله — بکشید تا جابه‌جا شود" : undefined}
                 onPointerDown={on && !readOnly ? (e) => down(e, m, "anchor") : undefined}
                 style={{ position: "absolute", left: `${a.ax * 100}%`, top: `${a.ay * 100}%`, transform: "translate(-50%,-50%)",
-                  width: on ? 12 : 6, height: on ? 12 : 6, borderRadius: "50%", background: on ? "#ffd400" : "#111",
-                  border: on ? "2px solid #111" : 0, cursor: on && !readOnly ? "grab" : "default", touchAction: "none",
+                  width: 12, height: 12, borderRadius: "50%", background: "transparent",
+                  border: on ? "2px solid #b8860b" : 0, cursor: on && !readOnly ? "grab" : "default", touchAction: "none",
                   pointerEvents: on && !readOnly ? "auto" : "none" }} />);
           })}
           {items.map((m) => {
@@ -227,12 +234,15 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
                 title={`${KINDS[m.kind].label} ${m.no}${m.src === "model" ? " (پیشنهاد مدل)" : ""}`}
                 onPointerDown={(e) => down(e, m)}
                 style={{ position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
+                  width: `${geometryOf(m.kind).box * 100}%`, aspectRatio: `${geometryOf(m.kind).vb[0]} / ${geometryOf(m.kind).vb[1]}`,
                   cursor: readOnly ? "default" : "grab", touchAction: "none" }}>
-                <Shape kind={m.kind} no={m.no} on={m.id === selectedId} />
+                <Shape kind={m.kind} no={m.no} on={m.id === selectedId} fluid />
               </div>);
           })}
         </div>
       </div>
+      <MarkTables items={items} onChange={commit} selectedId={selectedId} onSelect={setSelectedId} readOnly={readOnly}
+        onAdd={(k) => { setTool(k); setArmed(null); }} />
     </div>
   );
 }
