@@ -370,7 +370,7 @@ export default function Page() {
         }
         // a sheet with no weld numbers printed: the engine's welds, each where the model saw its node drawn
         if (!final.sheetMarkup.items.some((m) => m.kind.startsWith("weld"))) {
-          const eng = fromEngine(buildModel(final, { strictBom, gradeElevationMm }), final.nodes, w / h);
+          const eng = fromEngine(buildModel(final, { strictBom, gradeElevationMm }), final.nodes, w / h, final.bom);
           final = { ...final, sheetMarkup: { ...final.sheetMarkup, items: normalizeMarks([...final.sheetMarkup.items, ...eng.items]) } };
           seedNote += ` · ${eng.items.length} سرجوش موتور روی نقشه گذاشته شد` + (eng.missing.length ? `، ${eng.missing.length} جا نیفتاد (گره‌اش روی نقشه دیده نشد) — از فهرست بگذارید` : "");
         }
@@ -730,7 +730,7 @@ export default function Page() {
                 onSeedEngine={(aspect) => {
                   // the engine's welds again, where the model saw their nodes: what a person placed or kept stays
                   const kept = (data.sheetMarkup?.items || []).filter((m) => m.src !== "engine");
-                  const eng = fromEngine(model, data.nodes, aspect).items.filter((m) => !kept.some((k) => k.kind.startsWith("weld") && k.no === m.no));
+                  const eng = fromEngine(model, data.nodes, aspect, data.bom).items.filter((m) => !kept.some((k) => k.kind.startsWith("weld") && k.no === m.no));
                   const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks([...kept, ...eng]) } };
                   setData(next);
                   setEditing(JSON.stringify(next, null, 2));

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import MarkShape from "./MarkShape";
+import MarkShape, { geometryOf } from "./MarkShape";
 import { KINDS, addMark, updateMark, removeMark } from "../lib/sheet/markup.mjs";
 
 /**
@@ -31,11 +31,14 @@ export const STATE_COLORS = {
   checked: "#2e9d5b", unchecked: "#5b8def",
 };
 
-export default function SheetReview({ src, marks = {}, states = {}, legend = [], selected = null, onSelect, onPlace, height = 640, kinds = null, extras = null, onExtras }) {
+export default function SheetReview({ src, marks = {}, states = {}, legend = [], selected = null, onSelect, onPlace, height = 640, kinds = null, extras = null, onExtras, extraTool = null, onExtraTool, extraSel = null, onExtraSel }) {
   const [zoom, setZoom] = useState(1);
   const [drag, setDrag] = useState(null);
-  const [tool, setTool] = useState(null);       // "spool" | "support": put where the sheet is next clicked
-  const [extraId, setExtraId] = useState(null); // the spool or support mark picked
+  // the tool and the picked spool/support mark may be held by the parent (its tables pick the same mark)
+  const [toolOwn, setToolOwn] = useState(null);       // "spool" | "support": put where the sheet is next clicked
+  const [extraOwn, setExtraOwn] = useState(null);     // the spool or support mark picked
+  const tool = onExtraTool ? extraTool : toolOwn, setTool = onExtraTool || setToolOwn;
+  const extraId = onExtraSel ? extraSel : extraOwn, setExtraId = onExtraSel || setExtraOwn;
   const editExtras = Boolean(extras && onExtras);
   const extra = extras?.find((m) => m.id === extraId) || null;
   const box = useRef(null);
@@ -143,12 +146,13 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
                 onPointerDown={(e) => down(e, no)}
                 style={kinds?.[no]
                   ? { position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
+                      width: `${geometryOf(kinds[no]).box * 100}%`, aspectRatio: `${geometryOf(kinds[no]).vb[0]} / ${geometryOf(kinds[no]).vb[1]}`,
                       padding: 0, border: 0, background: "none", cursor: onPlace ? "grab" : "pointer", touchAction: "none" }
                   : { position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
                   minWidth: 22, height: 22, padding: "0 4px", borderRadius: 11, border: on ? "3px solid #111" : "2px solid #fff",
                   background: STATE_COLORS[states[no]] || "#5b8def", color: "#fff", font: "700 11px/16px system-ui", cursor: onPlace ? "grab" : "pointer",
                   boxShadow: on ? "0 0 0 4px rgba(255,214,0,.85)" : "0 1px 3px rgba(0,0,0,.5)", opacity: 0.92, touchAction: "none" }}>
-                {kinds?.[no] ? <MarkShape kind={kinds[no]} no={no} on={on} tint={STATE_COLORS[states[no]] || "#5b8def"} /> : no}
+                {kinds?.[no] ? <MarkShape kind={kinds[no]} no={no} on={on} tint={STATE_COLORS[states[no]] || "#5b8def"} fluid /> : no}
               </button>);
           })}
           {(extras || []).map((m) => {
@@ -157,8 +161,9 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
               <div key={m.id} data-extra={m.id} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
                 title={`${KINDS[m.kind].label} ${m.no}`} onPointerDown={(e) => downExtra(e, m)}
                 style={{ position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
+                  width: `${geometryOf(m.kind).box * 100}%`, aspectRatio: `${geometryOf(m.kind).vb[0]} / ${geometryOf(m.kind).vb[1]}`,
                   cursor: editExtras ? "grab" : "default", touchAction: "none" }}>
-                <MarkShape kind={m.kind} no={m.no} on={m.id === extraId} />
+                <MarkShape kind={m.kind} no={m.no} on={m.id === extraId} fluid />
               </div>);
           })}
         </div>

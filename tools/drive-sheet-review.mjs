@@ -97,6 +97,8 @@ const last = page.locator(".wl-table tbody tr").last();
 await last.locator("input").nth(1).fill("99");     // after the tick box: the weld number
 await last.locator("td").first().click();
 check(/جا ندارد/.test(await page.locator("[data-place-hint]").innerText()), "a weld with no marker: the sheet says to click where it is");
+// the sheet scrolled into view first: a click off the screen lands nowhere
+await page.locator("[data-wl-sheet] .sheet-box").scrollIntoViewIfNeeded();
 const sb = await page.locator("[data-wl-sheet] .sheet-box").boundingBox();
 await page.mouse.click(sb.x + sb.width * 0.62, sb.y + sb.height * 0.12);    // a clear part of the sheet
 await settle();

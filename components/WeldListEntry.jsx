@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import SaveBar from "./SaveBar";
 import SheetReview from "./SheetReview";
+import MarkTables from "./MarkTables";
 import { normalize as normalizeMarks } from "../lib/sheet/markup.mjs";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
@@ -35,9 +36,12 @@ const COLS = [
   ["loc", "محل (Shop / Field)", "Shop"],
   ["kind", "نوع (BW، SW، Tie-in…)", "BW"],
   ["nps", "قطر NPS", ""],
+  ["schedule", "Sch / ضخامت", "40S"],
+  ["material", "جنس", "A312-TP304"],
+  ["wps", "WPS", ""],
   ["ref", "اتصال به (برای Tie-in)", ""],
 ];
-const BLANK_ROW = { no: "", spool: "", loc: "", kind: "", nps: "", ref: "" };
+const BLANK_ROW = { no: "", spool: "", loc: "", kind: "", nps: "", schedule: "", material: "", wps: "", ref: "" };
 const BLANK_META = { drawingNo: "", rev: "", sheet: "1/1", lineNo: "", unit: "", pipingClass: "", nps: "", schedule: "" };
 export default function WeldListEntry({ session, initial = null, run = null, onSaved, onClose, sheet = null, progress = null }) {
   const [meta, setMeta] = useState({ ...BLANK_META, ...(initial?.meta || {}) });
@@ -52,6 +56,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [marks, setMarks] = useState(() => ({ ...(initial?.weldMarkup?.marks || {}) }));
   const [reviewed, setReviewed] = useState(() => new Set(initial?.reviewed || []));
   const [picked, setPicked] = useState(null);
+  const [extraTool, setExtraTool] = useState(null);
+  const [extraSel, setExtraSel] = useState(null);
   // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
   const [extras, setExtras] = useState(() => normalizeMarks(initial?.sheetMarkup?.items).filter((m) => m.kind === "spool" || m.kind === "support"));
 
@@ -223,6 +229,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         <div className="wl-sheet" data-wl-sheet>
           <SheetReview src={sheet.src} marks={keptMarks} states={states} selected={picked} onSelect={pick}
             kinds={kinds} extras={extras} onExtras={run?.run?.status === "approved" ? undefined : setExtras}
+            extraTool={extraTool} onExtraTool={setExtraTool} extraSel={extraSel} onExtraSel={setExtraSel}
             onPlace={run?.run?.status === "approved" ? undefined : place}
             legend={progress ? [["done", "جوش و NDT پذیرفته"], ["inspection", "جوش‌شده، منتظر بازرسی/NDT"], ["open", "باز"]]
               : [["checked", "بررسی شد"], ["unchecked", "بررسی نشده"]]} />
@@ -230,6 +237,9 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
             {nos.length - unchecked.length} از {nos.length} جوش با نقشه بررسی شد · {Object.keys(keptMarks).length} روی نقشه جا دارد
             {nos.length > 0 && <> · <button type="button" className="ghost sm" onClick={() => setReviewed(new Set(nos))}>همه بررسی شد</button></>}
           </p>
+          <MarkTables items={extras} onChange={run?.run?.status === "approved" ? undefined : setExtras} tabs={["spool", "support"]}
+            readOnly={run?.run?.status === "approved"} weldList={typed} selectedId={extraSel} onSelect={setExtraSel}
+            onAdd={(k) => setExtraTool(k)} />
         </div>)}
       <div className="wl-table">
         <table className="dtable">
