@@ -30,8 +30,8 @@ const nodes = [
 ];
 const edges = [{ from: "N1", to: "N2", nps: 12 }, { from: "N2", to: "N3", nps: 12 }];
 const items = [
-  { kind: "weld", no: "1", shape: "circle", x: 0.2, y: 0.3 },
-  { kind: "weld", no: "2", shape: "square", x: 0.5, y: 0.3 },
+  { kind: "weld", no: "1", shape: "circle", x: 0.2, y: 0.3, tx: 0.24, ty: 0.36 },
+  { kind: "weld", no: "2", shape: "square", x: 0.5, y: 0.3, tx: 0.46, ty: 0.38 },
   { kind: "weld", no: "3", shape: "diamond", x: 0.3, y: 0.6 },
   { kind: "spool", no: "SP-1", shape: "oval", x: 0.6, y: 0.5 },
   { kind: "support", no: "S-2", shape: "hexagon", x: 0.4, y: 0.7 },
@@ -79,6 +79,18 @@ check(s["1"] === "circle" && s["2"] === "square" && s["3"] === "circle-dashed" &
   "circle = shop weld, square = site weld, dashed circle = weld of unknown location, oval = spool, hexagon = support");
 check(/سرجوش‌ها 3 · اسپول‌ها 1 · ساپورت‌ها 1/.test(await page.locator("[data-counts]").innerText()), "the counts line: 3 welds, 1 spool, 1 support");
 await page.screenshot({ path: `${SHOT}/sheet-markup-1.png` });
+
+// the model saw where the leaders of 1 and 2 end: each is joined to its weld point; 3 has none and gets none
+check(await page.locator("[data-leader]").count() === 2, "a leader for each mark whose weld point the model saw (1 and 2), none for 3");
+await page.locator('[data-mark-id][data-no="3"]').click();
+await page.locator("[data-set-point]").click();
+const box0 = await page.locator("[data-sheet]").boundingBox();
+await page.mouse.click(box0.x + box0.width * 0.34, box0.y + box0.height * 0.55);
+await page.waitForTimeout(200);
+check(await page.locator("[data-leader]").count() === 3, "mark 3 joined to a weld point put by a click on the sheet");
+await page.locator('[data-mark-id][data-no="3"]').click();
+await page.locator("[data-clear-point]").click();
+check(await page.locator("[data-leader]").count() === 2, "its line taken away again");
 
 // move: drag mark 1 by 120 px right, 60 px down from its centre
 const m1 = page.locator('[data-no="1"]');

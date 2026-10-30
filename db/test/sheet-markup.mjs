@@ -30,6 +30,28 @@ test("a weld is shop or field only by the project's declared symbols", () => {
     "a project that declared no symbols: nothing is assumed");
 });
 
+test("a weld's leader end is kept when the model saw it, never guessed when it did not", () => {
+  const r = seedFromPass(pass([
+    { kind: "weld", no: "1", shape: "circle", x: 0.2, y: 0.2, tx: 0.25, ty: 0.3 },
+    { kind: "weld", no: "2", shape: "square", x: 0.4, y: 0.4, tx: null, ty: null },
+    { kind: "weld", no: "3", shape: "square", x: 0.5, y: 0.5 },
+    { kind: "weld", no: "4", shape: "square", x: 0.5, y: 0.5, tx: "q", ty: 0.2 },
+    { kind: "spool", no: "SP-1", shape: "oval", x: 0.6, y: 0.6, tx: 0.1, ty: 0.1 },
+  ]), SYM);
+  const by = Object.fromEntries(r.items.map((m) => [m.no, m]));
+  assert(by["1"].ax === 0.25 && by["1"].ay === 0.3, "the end of the leader the model saw");
+  assert(!("ax" in by["2"]) && !("ax" in by["3"]) && !("ax" in by["4"]), "no end seen, or a malformed one: no leader");
+  assert(!("ax" in by["SP-1"]), "a spool has no weld point");
+});
+
+test("a leader can be taken away: a weld point that is not known is not drawn", () => {
+  let items = normalize([{ kind: "weld-shop", no: "1", x: 0.3, y: 0.3, ax: 0.2, ay: 0.2 }]);
+  items = updateMark(items, items[0].id, { ax: null, ay: null });
+  assert(!("ax" in items[0]) && !("ay" in items[0]));
+  items = updateMark(items, items[0].id, { ax: 0.5, ay: 0.6 });
+  assert(items[0].ax === 0.5 && items[0].ay === 0.6, "and put back");
+});
+
 test("spools and supports keep their kind; every suggestion is marked as the model's", () => {
   const r = seedFromPass(pass([
     { kind: "spool", no: "SP-1", shape: "oval", x: 0.2, y: 0.2 },

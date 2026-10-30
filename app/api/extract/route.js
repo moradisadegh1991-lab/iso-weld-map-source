@@ -303,7 +303,8 @@ Return ONLY a JSON object. No markdown fences, no preamble, no commentary.
 {
   "items": [{ "kind": "weld"|"spool"|"support", "no": string,
               "shape": "circle"|"square"|"oval"|"hexagon"|"diamond"|"other",
-              "x": number, "y": number }],
+              "x": number, "y": number,
+              "tx": number|null, "ty": number|null }],
   "unreadable": [string]
 }
 
@@ -314,6 +315,9 @@ y 0 at the top edge and 1 at the bottom edge. Give them to two decimals.
   kind "weld"    a joint number printed in a frame with a leader line ending on the pipe at a weld
                  point. "shape" is the frame's shape as drawn - report the shape only and NEVER
                  decide whether the joint is shop or field.
+                 "tx" and "ty" are where that leader line ENDS on the pipe (the weld point), as
+                 fractions of the full sheet like "x" and "y". null when the frame has no leader or
+                 you cannot see where it ends: never guess one.
   kind "spool"   a spool mark (e.g. SP-1, SP-01) printed on the drawing.
   kind "support" a support mark (e.g. S-2, SW-1, S9), usually in a hexagon or an oval.
 
