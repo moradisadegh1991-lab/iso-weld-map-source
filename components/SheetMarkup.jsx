@@ -27,10 +27,17 @@ export async function renderMarkedPng(src, items) {
   const g = cv.getContext("2d");
   g.drawImage(img, 0, 0);
   const s = cv.width / 1500;
+  // the leaders first, so each frame sits over the end of its own
+  g.strokeStyle = "#111"; g.lineWidth = 1.4 * s;
+  for (const m of items) {
+    if (m.ax == null || m.ay == null) continue;
+    g.beginPath(); g.moveTo(m.ax * cv.width, m.ay * cv.height); g.lineTo(m.x * cv.width, m.y * cv.height); g.stroke();
+    g.beginPath(); g.arc(m.ax * cv.width, m.ay * cv.height, 2.6 * s, 0, Math.PI * 2); g.fillStyle = "#111"; g.fill();
+  }
   for (const m of items) {
     const cx = m.x * cv.width, cy = m.y * cv.height, c = COLOR[m.kind], shape = KINDS[m.kind].shape;
     g.save(); g.translate(cx, cy); g.scale(s, s);
-    g.lineWidth = 2.5; g.strokeStyle = c; g.fillStyle = "rgba(255,255,255,.92)";
+    g.lineWidth = 1.6; g.strokeStyle = c; g.fillStyle = "rgba(255,255,255,.95)";
     g.setLineDash(shape === "circle-dashed" ? [4, 3] : []);
     g.beginPath();
     if (shape === "circle" || shape === "circle-dashed") g.arc(0, 0, 13, 0, Math.PI * 2);
@@ -39,14 +46,14 @@ export async function renderMarkedPng(src, items) {
     else { g.moveTo(-10, -12); g.lineTo(10, -12); g.lineTo(18, 0); g.lineTo(10, 12); g.lineTo(-10, 12); g.lineTo(-18, 0); g.closePath(); }
     g.fill(); g.stroke();
     g.setLineDash([]); g.fillStyle = "#111"; g.textAlign = "center"; g.textBaseline = "middle";
-    g.font = `700 ${String(m.no).length > 4 ? 8.5 : String(m.no).length > 2 ? 10.5 : 12.5}px system-ui,sans-serif`;
+    g.font = `700 ${String(m.no).length > 4 ? 7.5 : String(m.no).length > 3 ? 9 : String(m.no).length > 2 ? 10.5 : 12.5}px system-ui,sans-serif`;
     g.fillText(String(m.no), 0, 1);
     g.restore();
   }
   return cv.toDataURL("image/png");
 }
 
-export default function SheetMarkup({ src, items = [], onChange, unplaced = [], readOnly = false, height = 680, fileName = "iso-marked" }) {
+export default function SheetMarkup({ src, items = [], onChange, unplaced = [], readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null }) {
   const [zoom, setZoom] = useState(1);
   const [selectedId, setSelectedId] = useState(null);
   const [tool, setTool] = useState(null);     // a kind, to be put where the sheet is next clicked
@@ -65,7 +72,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
 
   function onSheetClick(e) {
     if (drag?.moved) return;
-    if (readOnly || e.target.closest("[data-mark-id]")) return;
+    if (readOnly || e.target.closest("[data-mark-id],[data-anchor-id]")) return;
     const p = at(e);
     const what = armed || (tool ? { kind: tool, no: "" } : null);
     if (!what) { setSelectedId(null); return; }
@@ -74,16 +81,16 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
     setSelectedId(next[next.length - 1].id);
     setArmed(null); setTool(null);
   }
-  function down(e, m) {
+  function down(e, m, part = "frame") {
     e.stopPropagation();
     setSelectedId(m.id);
     if (readOnly) return;
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* a synthetic pointer: the drag still follows the sheet */ }
-    setDrag({ id: m.id, moved: false });
+    setDrag({ id: m.id, part, moved: false });
   }
   function move(e) { if (drag) setDrag({ ...drag, moved: true, p: at(e) }); }
   function up() {
-    if (drag?.moved && drag.p) commit(updateMark(items, drag.id, drag.p));
+    if (drag?.moved && drag.p) commit(updateMark(items, drag.id, drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : drag.p));
     setTimeout(() => setDrag(null), 0);
   }
   function remove() { if (selected) { commit(removeMark(items, selected.id)); setSelectedId(null); } }
@@ -116,6 +123,11 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
         <button type="button" className="ghost sm" onClick={() => setZoom((z) => Math.min(6, z * 1.25))} aria-label="zoom in">+</button>
         <button type="button" className="ghost sm" onClick={() => setZoom(1)}>⤢</button>
         <span className="grow" />
+        {onSeedEngine && !readOnly && (
+          <button type="button" className="ghost sm" data-seed-engine disabled={!src}
+            onClick={() => { const im = sheet.current?.querySelector("img"); onSeedEngine(im?.naturalWidth && im?.naturalHeight ? im.naturalWidth / im.naturalHeight : Math.SQRT2); }}>
+            سرجوش‌های موتور روی نقشه
+          </button>)}
         <button type="button" className="ghost sm" data-download onClick={download} disabled={!src}>دانلود نقشهٔ نشان‌دار (PNG)</button>
       </div>
       {!readOnly && (
@@ -133,11 +145,11 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
         {readOnly ? "نقشه با نشان‌ها — فقط دیدن."
           : armed ? `«${armed.no}» انتخاب شد — روی محلش در نقشه کلیک کنید.`
           : tool ? `${KINDS[tool].label}: روی محلش در نقشه کلیک کنید.`
-          : "نشان را بکشید تا جابه‌جا شود؛ با کلیک انتخابش کنید تا شماره یا نوعش را عوض کنید یا پاکش کنید (Delete)."}
+          : "نشان را بکشید تا جابه‌جا شود؛ با کلیک انتخابش کنید تا شماره یا نوعش را عوض کنید یا پاکش کنید (Delete). نقطهٔ زرد سر خط، محل سرجوش روی لوله است و آن هم کشیدنی است."}
       </p>
       <p className="mono sm" data-counts>
         سرجوش‌ها {count("weld")} · اسپول‌ها {count("spool")} · ساپورت‌ها {count("support")}
-        {items.some((m) => m.src === "model") && " · نشان‌های مدل پیشنهادند، محلشان را با نقشه بسنجید"}
+        {items.some((m) => m.src === "model" || m.src === "engine") && " · محل نشان‌های خودکار تقریبی است (سرجوش‌ها را موتور تعیین کرده، جایشان روی نقشه را مدل)، با نقشه بسنجید"}
       </p>
       {issues.map((x) => <p key={x} className="err sm" data-problem>{x}</p>)}
 
@@ -148,7 +160,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
           <label className="sm">نوع <select data-edit-kind value={selected.kind} onChange={(e) => commit(updateMark(items, selected.id, { kind: e.target.value }))}>
             {KIND_IDS.map((k) => <option key={k} value={k}>{KINDS[k].label}</option>)}
           </select></label>
-          <span className="muted sm">{selected.src === "model" ? "پیشنهاد مدل" : "دستی"}</span>
+          <span className="muted sm">{selected.src === "model" ? "پیشنهاد مدل" : selected.src === "engine" ? "سرجوش موتور، محل از مدل" : "دستی"}</span>
           <button type="button" className="ghost sm" data-delete onClick={remove}>حذف</button>
         </div>
       )}
@@ -175,8 +187,28 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={src} alt="نقشه ایزومتریک" draggable={false} style={{ display: "block", width: "100%", userSelect: "none" }} />
             : <div className="muted" style={{ padding: 40 }}>تصویر نقشه در دسترس نیست.</div>}
+          {/* each leader from its weld point on the pipe to its frame; the frame drawn over its end */}
+          <svg viewBox="0 0 1 1" preserveAspectRatio="none" data-leaders
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
+            {items.filter((m) => m.ax != null && m.ay != null).map((m) => {
+              const f = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
+              const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
+              return <line key={m.id} data-leader={m.id} x1={a.ax} y1={a.ay} x2={f.x} y2={f.y} stroke="#111" strokeWidth={m.id === selectedId ? 2.2 : 1.3} vectorEffect="non-scaling-stroke" />;
+            })}
+          </svg>
+          {items.filter((m) => m.ax != null && m.ay != null).map((m) => {
+            const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
+            const on = m.id === selectedId;
+            return (
+              <div key={`a${m.id}`} data-anchor-id={m.id} title={on && !readOnly ? "محل سرجوش روی لوله — بکشید تا جابه‌جا شود" : undefined}
+                onPointerDown={on && !readOnly ? (e) => down(e, m, "anchor") : undefined}
+                style={{ position: "absolute", left: `${a.ax * 100}%`, top: `${a.ay * 100}%`, transform: "translate(-50%,-50%)",
+                  width: on ? 12 : 6, height: on ? 12 : 6, borderRadius: "50%", background: on ? "#ffd400" : "#111",
+                  border: on ? "2px solid #111" : 0, cursor: on && !readOnly ? "grab" : "default", touchAction: "none",
+                  pointerEvents: on && !readOnly ? "auto" : "none" }} />);
+          })}
           {items.map((m) => {
-            const p = drag?.id === m.id && drag.p ? drag.p : m;
+            const p = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
             return (
               <div key={m.id} data-mark-id={m.id} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
                 title={`${KINDS[m.kind].label} ${m.no}${m.src === "model" ? " (پیشنهاد مدل)" : ""}`}
