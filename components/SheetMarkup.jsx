@@ -58,6 +58,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
   const [selectedId, setSelectedId] = useState(null);
   const [tool, setTool] = useState(null);     // a kind, to be put where the sheet is next clicked
   const [armed, setArmed] = useState(null);   // { kind, no } picked from `unplaced`
+  const [pointFor, setPointFor] = useState(null); // a weld mark's id: the next click on the sheet is its weld point
   const [drag, setDrag] = useState(null);
   const [busy, setBusy] = useState("");
   const sheet = useRef(null);
@@ -74,6 +75,11 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
     if (drag?.moved) return;
     if (readOnly || e.target.closest("[data-mark-id],[data-anchor-id]")) return;
     const p = at(e);
+    if (pointFor) {
+      commit(updateMark(items, pointFor, { ax: p.x, ay: p.y }));
+      setPointFor(null);
+      return;
+    }
     const what = armed || (tool ? { kind: tool, no: "" } : null);
     if (!what) { setSelectedId(null); return; }
     const next = addMark(items, { ...what, ...p });
@@ -99,7 +105,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
     const h = (e) => {
       if (readOnly || !selectedId || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
       if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); commit(removeMark(items, selectedId)); setSelectedId(null); }
-      if (e.key === "Escape") { setSelectedId(null); setTool(null); setArmed(null); }
+      if (e.key === "Escape") { setSelectedId(null); setTool(null); setArmed(null); setPointFor(null); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -143,6 +149,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
       )}
       <p className="muted sm" data-hint>
         {readOnly ? "نقشه با نشان‌ها — فقط دیدن."
+          : pointFor ? "روی نقطهٔ سرجوش، روی خود لوله، کلیک کنید تا خط از آن نقطه به شمارهٔ سرجوش وصل شود."
           : armed ? `«${armed.no}» انتخاب شد — روی محلش در نقشه کلیک کنید.`
           : tool ? `${KINDS[tool].label}: روی محلش در نقشه کلیک کنید.`
           : "نشان را بکشید تا جابه‌جا شود؛ با کلیک انتخابش کنید تا شماره یا نوعش را عوض کنید یا پاکش کنید (Delete). نقطهٔ زرد سر خط، محل سرجوش روی لوله است و آن هم کشیدنی است."}
@@ -161,6 +168,12 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
             {KIND_IDS.map((k) => <option key={k} value={k}>{KINDS[k].label}</option>)}
           </select></label>
           <span className="muted sm">{selected.src === "model" ? "پیشنهاد مدل" : selected.src === "engine" ? "سرجوش موتور، محل از مدل" : "دستی"}</span>
+          {KINDS[selected.kind].cls === "weld" && (<>
+            <button type="button" className={pointFor === selected.id ? "on sm" : "ghost sm"} data-set-point onClick={() => setPointFor(pointFor === selected.id ? null : selected.id)}>
+              {selected.ax == null ? "وصل به نقطهٔ سرجوش" : "جابه‌جایی نقطهٔ سرجوش"}
+            </button>
+            {selected.ax != null && <button type="button" className="ghost sm" data-clear-point onClick={() => commit(updateMark(items, selected.id, { ax: null, ay: null }))}>حذف خط</button>}
+          </>)}
           <button type="button" className="ghost sm" data-delete onClick={remove}>حذف</button>
         </div>
       )}
