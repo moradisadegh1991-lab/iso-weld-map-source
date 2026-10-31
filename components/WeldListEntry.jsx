@@ -2,8 +2,10 @@
 import { useMemo, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import SaveBar from "./SaveBar";
-import SheetReview from "./SheetReview";
+import { STATE_COLORS } from "./SheetReview";
+import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
+import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks } from "../lib/sheet/markup.mjs";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
@@ -22,13 +24,19 @@ import { splitWeldLog, weldLogSheetName } from "../lib/register/weld-log-import.
  * queue: its rows come back for correction (saving again makes a new run
  * of the same sheet), and an engineer can approve it here.
  *
- * `sheet` ({ src, page }) puts the drawing beside the rows
- * (components/SheetReview.jsx): each weld's marker where its number was
+ * `sheet` ({ src, page }) puts the drawing beside the rows: each weld's mark where its number was
  * read or where a person put it, kept with the payload as `weldMarkup`;
  * each row ticked once a person has checked it against the drawing
  * (`reviewed`), and saving with rows unticked asks first. `progress`
  * ({ [weldNo]: "done" | "inspection" | "open" }) colours a saved sheet by
  * where each joint stands on site.
+ *
+ * With the drawing beside it, the form is the engine's sheet (SheetMarkup,
+ * MarkTables): one table of welds, spools and supports, each row joined to
+ * its mark on the sheet by the buttons at its end, a leader from every
+ * mark to its place on the pipe, and the plain number in each frame. The
+ * rows are still the register (lib/sheet/weld-list-marks.mjs). A saved
+ * sheet paints each weld by where its joint stands on site.
  */
 const COLS = [
   ["no", "شمارهٔ جوش", "W-01"],
@@ -42,10 +50,18 @@ const COLS = [
   ["ref", "اتصال به (برای Tie-in)", ""],
 ];
 const BLANK_ROW = { no: "", spool: "", loc: "", kind: "", nps: "", schedule: "", material: "", wps: "", ref: "" };
+// the line data of the title block, as the reader (tools/iso-read.py read_line_data) names it
+const LINE_DATA = [
+  ["lineNo", "شمارهٔ خط"], ["lineClass", "کلاس خط"], ["designPressure", "فشار طراحی"], ["operatingPressure", "فشار کاری"],
+  ["designTemp", "دمای طراحی"], ["operatingTemp", "دمای کاری"], ["testFluid", "سیال تست"], ["testPressure", "فشار تست"],
+  ["insulationType", "نوع عایق"], ["insulationThk", "ضخامت عایق"], ["paint", "رنگ"], ["ndt", "NDT"], ["pwht", "PWHT"],
+];
 const BLANK_META = { drawingNo: "", rev: "", sheet: "1/1", lineNo: "", unit: "", pipingClass: "", nps: "", schedule: "" };
 export default function WeldListEntry({ session, initial = null, run = null, onSaved, onClose, sheet = null, progress = null }) {
   const [meta, setMeta] = useState({ ...BLANK_META, ...(initial?.meta || {}) });
-  const [rows, setRows] = useState(initial?.weldList?.length ? initial.weldList.map((r) => ({ ...BLANK_ROW, ...r })) : [{ ...BLANK_ROW }, { ...BLANK_ROW }, { ...BLANK_ROW }]);
+  const [rows, setRowsRaw] = useState(() => withRowIds(initial?.weldList?.length ? initial.weldList.map((r) => ({ ...BLANK_ROW, ...r })) : [{ ...BLANK_ROW }, { ...BLANK_ROW }, { ...BLANK_ROW }]));
+  // every row keeps an id of its own: its mark on the sheet is the same thing
+  const setRows = (rs) => setRowsRaw(withRowIds(rs));
   const [file, setFile] = useState(null);
   const [paste, setPaste] = useState("");
   const [read, setRead] = useState(null);
@@ -55,14 +71,14 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   // the drawing beside the rows: where each weld is on it, and which rows a person has checked against it
   const [marks, setMarks] = useState(() => ({ ...(initial?.weldMarkup?.marks || {}) }));
   const [reviewed, setReviewed] = useState(() => new Set(initial?.reviewed || []));
-  const [picked, setPicked] = useState(null);
-  const [extraTool, setExtraTool] = useState(null);
-  const [extraAttach, setExtraAttach] = useState(null);   // the spool/support row waiting for its place on the sheet
-  const [extraSel, setExtraSel] = useState(null);
+  // the line data and the BOM read off the sheet (OCR, for a person to check): kept with the payload
+  const [lineData, setLineData] = useState(() => (initial?.lineData ? { ...initial.lineData } : null));
+  const bom = Array.isArray(initial?.bom) ? initial.bom : [];
+  const cutLengths = Array.isArray(initial?.cutLengths) ? initial.cutLengths : [];
   // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
   const [extras, setExtras] = useState(() => normalizeMarks(initial?.sheetMarkup?.items).filter((m) => m.kind === "spool" || m.kind === "support"));
 
-  const typed = rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
+  const typed = rows.filter(rowTyped).map(registerRow);
   // A list read from the drawing's printed markers keeps what the model read
   // (weldMarks) beside what was completed by hand — the evidence for each row.
   const nos = typed.map((r) => String(r.no ?? "").trim()).filter(Boolean);
@@ -73,14 +89,12 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     // the page of the file the sheet is, kept even with nothing placed yet: a PDF of many sheets opens on this one
     ...(Object.keys(keptMarks).length || sheet ? { weldMarkup: { page: sheet?.page ?? initial?.weldMarkup?.page ?? 1, marks: keptMarks } } : {}),
     ...(keptReviewed.length ? { reviewed: keptReviewed } : {}),
+    ...(lineData && Object.values(lineData).some((v) => String(v ?? "").trim()) ? { lineData } : {}),
+    ...(bom.length ? { bom } : {}),
+    ...(cutLengths.length ? { cutLengths } : {}),
     ...(extras.length ? { sheetMarkup: { page: sheet?.page ?? initial?.sheetMarkup?.page ?? 1, items: extras } } : {}) }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [meta, typed, initial, JSON.stringify(keptMarks), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras)]);
-  // a weld is drawn in the shape of where it is welded, as the register says: unsaid stays unsaid (dashed)
-  const kinds = Object.fromEntries(typed.map((r) => String(r.no ?? "").trim()).filter(Boolean).map((no) => {
-    const loc = String(typed.find((r) => String(r.no ?? "").trim() === no)?.loc ?? "").trim().toLowerCase();
-    return [no, loc === "shop" ? "weld-shop" : loc === "field" ? "weld-field" : "weld-unknown"];
-  }));
+  [meta, typed, initial, JSON.stringify(keptMarks), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras), JSON.stringify(lineData)]);
   const model = useMemo(() => (typed.length ? modelFromWeldList(data) : { error: "هنوز جوشی وارد نشده است." }), [data, typed.length]);
 
   const setCell = (i, k, v) => {
@@ -89,22 +103,38 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       const was = String(rows[i]?.no ?? "").trim(), now = String(v ?? "").trim();
       if (was && now && was !== now && marks[was] && !marks[now]) { const m = { ...marks, [now]: marks[was] }; delete m[was]; setMarks(m); }
       if (was && reviewed.has(was)) { const r = new Set(reviewed); r.delete(was); setReviewed(r); }
-      if (picked === was) setPicked(now || null);
     }
     setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   };
   const tick = (no, on) => { const r = new Set(reviewed); if (on) r.add(no); else r.delete(no); setReviewed(r); };
-  const place = (no, p) => setMarks({ ...marks, [no]: { ...p, src: "hand" } });
   const unchecked = nos.filter((no) => !reviewed.has(no));
-  const states = Object.fromEntries(nos.map((no) => [no, progress ? progress[no] || "open" : reviewed.has(no) ? "checked" : "unchecked"]));
-  const pick = (no) => {
-    setPicked(no);
-    const row = document.querySelector(`[data-wl-row="${CSS.escape(no)}"]`);
-    row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  };
   const beforeSave = async () => !sheet || !unchecked.length
     || window.confirm(`${unchecked.length} جوش هنوز با نقشه بررسی نشده (${unchecked.slice(0, 8).join("، ")}${unchecked.length > 8 ? "، …" : ""}). همین حالا ذخیره شود؟`);
   const onMeta = (k) => (e) => setMeta({ ...meta, [k]: e.target.value });
+
+  // the drawing beside the rows, as the engine's sheet is drawn (one table, a leader on every mark)
+  const locked = run?.run?.status === "approved";
+  const sheetMode = Boolean(sheet);
+  const [markSel, setMarkSel] = useState(null);
+  const [attachId, setAttachId] = useState(null);
+  const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras) : []), [sheetMode, rows, marks, extras]);
+  // a saved sheet: each weld painted by where its joint stands on site
+  const progressStates = progress ? Object.fromEntries(items.filter((m) => m.kind.startsWith("weld")).map((m) => {
+    const st = progress[m.no] || "open";
+    return [m.id, { state: st, color: STATE_COLORS[st] }];
+  })) : null;
+  function onItems(next) {
+    const got = weldRowsFromItems(next, rows);
+    // a weld renumbered is not checked any more under its new number
+    const was = new Map(rows.map((r) => [r._id, String(r.no ?? "").trim()]));
+    const r = new Set(reviewed);
+    for (const row of got.rows) { const old = was.get(row._id); if (old && old !== row.no) r.delete(old); }
+    for (const [id, old] of was) if (old && !got.rows.some((x) => x._id === id)) r.delete(old);
+    setReviewed(r);
+    setRowsRaw(got.rows.length ? got.rows : withRowIds([{ ...BLANK_ROW }]));
+    setMarks(got.marks);
+    setExtras(got.extras);
+  }
 
   /** Header row + rows, however they arrived: the columns are found by name, never by position. */
   function fromText(text, source) {
@@ -189,6 +219,45 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         ))}
       </div>
 
+      {lineData && (
+        <details className="intake-more" open data-line-data>
+          <summary>مشخصات خط (Line Data) — خوانده‌شده با OCR از title block؛ با نقشه بررسی کنید</summary>
+          <div className="wl-grid">
+            {LINE_DATA.map(([k, label]) => (
+              <label key={k} className="wl-f">
+                <span className="muted sm">{label}</span>
+                <input data-line={k} dir="ltr" value={lineData[k] ?? ""} placeholder="خوانده نشد" disabled={locked}
+                  onChange={(e) => setLineData({ ...lineData, [k]: e.target.value })} />
+              </label>
+            ))}
+          </div>
+        </details>)}
+      {bom.length > 0 && (
+        <details className="intake-more" data-bom={bom.length}>
+          <summary>BOM همین برگ — {bom.length} ردیف، خوانده‌شده با OCR (شرح و کد کالا متن خام OCR است؛ با نقشه بررسی کنید)</summary>
+          <div style={{ overflowX: "auto" }}>
+            <table className="dtable">
+              <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th></tr></thead>
+              <tbody>{bom.map((b) => (
+                <tr key={b.pt} data-bom-row={b.pt}>
+                  <td className="mono">{b.pt}</td><td className="sm">{b.group || "—"}</td><td dir="ltr" className="sm">{b.description}</td>
+                  <td className="mono" dir="ltr">{b.diam ?? "؟"}</td><td className="mono sm" dir="ltr">{b.stockCode || "—"}</td>
+                  <td className="mono" dir="ltr">{b.qty != null ? `${b.qty}${b.qtyUnit === "m" ? " m" : ""}` : "؟"}</td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+        </details>)}
+
+      {cutLengths.length > 0 && (
+        <details className="intake-more" data-cut-lengths={cutLengths.length}>
+          <summary>جدول برش لوله (CUT PIPE LENGTH) — {cutLengths.length} قطعه، خوانده‌شده با OCR؛ با نقشه بررسی کنید</summary>
+          <table className="dtable">
+            <thead><tr><th>قطعه</th><th>طول برش (mm)</th><th>N.S.</th></tr></thead>
+            <tbody>{cutLengths.map((c) => (
+              <tr key={c.piece} data-cut-row={c.piece}><td className="mono">&lt;{c.piece}&gt;</td><td className="mono">{c.lengthMm}</td><td className="mono" dir="ltr">{c.ns ?? "؟"}</td></tr>))}</tbody>
+          </table>
+        </details>)}
+
       <details className="intake-more" open={!initial}>
         <summary>خواندن از فایل (Excel / CSV) یا چسباندن از Excel</summary>
         <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -225,55 +294,52 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
 
       <datalist id="wl-locs"><option value="Shop" /><option value="Field" /></datalist>
       <datalist id="wl-kinds"><option value="BW" /><option value="SW" /><option value="Tie-in" /><option value="Closure" /><option value="Branch" /></datalist>
-      <div className={sheet ? "wl-review" : undefined}>
-      {sheet && (
+      {sheetMode ? (
+      <div className="wl-review">
         <div className="wl-sheet" data-wl-sheet>
-          <SheetReview src={sheet.src} marks={keptMarks} states={states} selected={picked} onSelect={pick}
-            kinds={kinds} extras={extras} onExtras={run?.run?.status === "approved" ? undefined : setExtras}
-            extraTool={extraTool} onExtraTool={setExtraTool} extraSel={extraSel} onExtraSel={setExtraSel}
-            extraAttach={extraAttach} onExtraAttach={setExtraAttach}
-            onPlace={run?.run?.status === "approved" ? undefined : place}
-            legend={progress ? [["done", "جوش و NDT پذیرفته"], ["inspection", "جوش‌شده، منتظر بازرسی/NDT"], ["open", "باز"]]
-              : [["checked", "بررسی شد"], ["unchecked", "بررسی نشده"]]} />
+          <SheetMarkup src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
+            fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
+            states={progressStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
           <p className="note mono sm" data-wl-review-count>
             {nos.length - unchecked.length} از {nos.length} جوش با نقشه بررسی شد · {Object.keys(keptMarks).length} روی نقشه جا دارد
-            {nos.length > 0 && <> · <button type="button" className="ghost sm" onClick={() => setReviewed(new Set(nos))}>همه بررسی شد</button></>}
+            {nos.length > 0 && !locked && <> · <button type="button" className="ghost sm" onClick={() => setReviewed(new Set(nos))}>همه بررسی شد</button></>}
           </p>
-          <MarkTables items={extras} onChange={run?.run?.status === "approved" ? undefined : setExtras} tabs={["spool", "support"]}
-            readOnly={run?.run?.status === "approved"} weldList={typed} selectedId={extraSel} onSelect={setExtraSel}
-            attachId={extraAttach} onAttach={setExtraAttach} />
-        </div>)}
-      <div className="wl-table">
-        <table className="dtable">
-          <thead><tr><th>#</th>{sheet && <th title="با نقشه بررسی شد">✓</th>}{COLS.map(([k, label]) => <th key={k}>{label}</th>)}<th /></tr></thead>
-          <tbody>
-            {rows.map((r, i) => { const no = String(r.no ?? "").trim(); return (
-              <tr key={i} data-wl-row={no || undefined} className={sheet && no && picked === no ? "sel" : undefined}
-                onFocus={() => sheet && no && setPicked(no)}>
-                <td className="mono sm" style={sheet && no ? { cursor: "pointer" } : undefined} onClick={() => sheet && no && setPicked(no)}
-                  title={sheet && no ? (marks[no] ? "روی نقشه هست — برای دیدنش کلیک کنید" : "روی نقشه جا ندارد") : undefined}>
-                  {i + 1}{sheet && no ? (marks[no] ? " ⌖" : " ·") : ""}</td>
-                {sheet && <td><input type="checkbox" aria-label={`ردیف ${i + 1} با نقشه بررسی شد`} disabled={!no} data-wl-check={no}
-                  checked={Boolean(no) && reviewed.has(no)} onChange={(e) => tick(no, e.target.checked)} /></td>}
-                {COLS.map(([k, label, ph]) => (
-                  <td key={k}>
-                    <input aria-label={`${label} ردیف ${i + 1}`} dir="ltr" value={r[k] ?? ""} placeholder={i === 0 ? ph : ""}
-                      list={k === "loc" ? "wl-locs" : k === "kind" ? "wl-kinds" : undefined}
-                      inputMode={k === "nps" ? "decimal" : undefined}
-                      onChange={(e) => setCell(i, k, e.target.value)} />
-                  </td>
-                ))}
-                <td><button className="ghost" type="button" aria-label={`حذف ردیف ${i + 1}`}
-                  onClick={() => setRows(rows.length > 1 ? rows.filter((_, j) => j !== i) : [{ ...BLANK_ROW }])}>×</button></td>
-              </tr>); })}
-          </tbody>
-        </table>
+        </div>
+        <div className="wl-table">
+          <MarkTables items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
+            selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
+            checked={locked ? null : { has: (no) => reviewed.has(no), onTick: tick }} />
+        </div>
       </div>
-      </div>
-      <div className="row">
+      ) : (
+      <div>
+        <div className="wl-table">
+          <table className="dtable">
+            <thead><tr><th>#</th>{COLS.map(([k, label]) => <th key={k}>{label}</th>)}<th /></tr></thead>
+            <tbody>
+              {rows.map((r, i) => { const no = String(r.no ?? "").trim(); return (
+                <tr key={r._id} data-wl-row={no || undefined}>
+                  <td className="mono sm">{i + 1}</td>
+                  {COLS.map(([k, label, ph]) => (
+                    <td key={k}>
+                      <input aria-label={`${label} ردیف ${i + 1}`} dir="ltr" value={r[k] ?? ""} placeholder={i === 0 ? ph : ""}
+                        list={k === "loc" ? "wl-locs" : k === "kind" ? "wl-kinds" : undefined}
+                        inputMode={k === "nps" ? "decimal" : undefined}
+                        onChange={(e) => setCell(i, k, e.target.value)} />
+                    </td>
+                  ))}
+                  <td><button className="ghost" type="button" aria-label={`حذف ردیف ${i + 1}`}
+                    onClick={() => setRows(rows.length > 1 ? rows.filter((_, j) => j !== i) : [{ ...BLANK_ROW }])}>×</button></td>
+                </tr>); })}
+            </tbody>
+          </table>
+        </div>
+        </div>
+      )}
+      {!sheetMode && <div className="row">
         <button className="ghost" type="button" onClick={() => setRows([...rows, { ...BLANK_ROW }])}>+ ردیف</button>
         <button className="ghost" type="button" onClick={() => setRows([...rows, ...Array.from({ length: 10 }, () => ({ ...BLANK_ROW }))])}>+ ۱۰ ردیف</button>
-      </div>
+      </div>}
 
       {model.problems ? (
         <div className="err" role="alert"><b>{model.problems.length} ایراد — تا رفع نشود ذخیره نمی‌شود:</b>

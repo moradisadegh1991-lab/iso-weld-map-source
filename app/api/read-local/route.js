@@ -66,7 +66,16 @@ export async function POST(request) {
     const meta = { drawingNo: r.meta?.drawingNo ?? null, sheet: r.meta?.sheet ?? null, rev: r.meta?.rev ?? null };
     // the spool marks (ovals) and support marks (hexagons) the reader found, each with its place
     const tags = (r.tags || []).map(({ kind, no, at }) => ({ kind, no, ...(Array.isArray(at) ? { at } : {}) }));
-    return Response.json({ marks, tags, meta,
+    // the line data of the title block and the bill of material, as OCR read them: a field not read
+    // for certain is null; the descriptions and item codes are the OCR's text, for a person to check
+    const lineData = Object.fromEntries(Object.entries(r.lineData || {}).map(([k, v]) => [k, typeof v === "string" && v.trim() ? v.trim() : null]));
+    const bom = (Array.isArray(r.bom) ? r.bom : []).filter((b) => Number.isInteger(b?.pt)).map((b) => ({
+      pt: b.pt, group: b.group || null, description: String(b.description || "").slice(0, 200), diam: b.diam ?? null,
+      stockCode: b.stockCode || null, qty: Number.isFinite(b.qty) ? b.qty : null, qtyUnit: b.qtyUnit || null }));
+    // the CUT PIPE LENGTH table, when the sheet carries one: a length or size not read for certain is left out / null
+    const cutLengths = (Array.isArray(r.cutLengths) ? r.cutLengths : []).filter((c) => Number.isInteger(c?.piece) && Number.isFinite(c?.lengthMm))
+      .map((c) => ({ piece: c.piece, lengthMm: c.lengthMm, nps: Number.isFinite(c.nps) ? c.nps : null, ns: c.ns || null }));
+    return Response.json({ marks, tags, meta, lineData, bom, cutLengths,
       orientation: r.orientation, ms: Date.now() - t0, reader: "tools/iso-read.py (OpenCV + tesseract, no model)" });
   } catch (e) { return errorResponse(e); }
   finally { if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {}); }

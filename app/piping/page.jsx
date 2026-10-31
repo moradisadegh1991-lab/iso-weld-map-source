@@ -441,7 +441,10 @@ export default function Page() {
    * through the same rules (lib/register/weld-marks.mjs) into the weld-list
    * form, where a person completes size, type and spool. The title block's
    * isometric number, sheet and revision prefill the form when they were
-   * read for certain; the BOM is not read here.
+   * read for certain; the BOM and the line data (design and operating
+   * pressure and temperature, test, class, insulation, paint, NDT, PWHT,
+   * line number) and the CUT PIPE LENGTH table as OCR read them, for a
+   * person to check.
    */
   async function readLocal(index, source) {
     try {
@@ -454,19 +457,27 @@ export default function Page() {
       const r = await session.call("/api/read-local", { method: "POST",
         body: JSON.stringify({ projectId: session.projectId, pdfBase64, page: index }) });
       const title = r.meta || {};
-      const meta = { drawingNo: title.drawingNo || "", rev: title.rev || "", sheet: title.sheet || "", lineNo: "", unit: "", pipingClass: "", nps: null, schedule: "" };
+      const line = r.lineData || {};
+      // the line number and class only as read for certain (the reader returns null otherwise)
+      const meta = { drawingNo: title.drawingNo || "", rev: title.rev || "", sheet: title.sheet || "", lineNo: line.lineNo || "", unit: "",
+        pipingClass: line.lineClass || "", nps: null, schedule: "" };
+      const bom = Array.isArray(r.bom) ? r.bom : [];
+      const cutLengths = Array.isArray(r.cutLengths) ? r.cutLengths : [];
       // which reader produced the markers travels with them: the review says so, and the saved run keeps
       // it, with what the title block read (OCR, for a person to check — not verified data)
       const weldMarks = { marks: r.marks.map(({ at, ...m }) => m), reader: "local", readerVersion: r.reader, titleRead: title };
       // where each number was read on the sheet, for the review beside it; a person moves or adds the rest
       const placed = Object.fromEntries(r.marks.filter((m) => Array.isArray(m.at) && String(m.outline || "").toLowerCase() !== "dashed")
         .map((m) => [String(m.no).trim(), { x: m.at[0], y: m.at[1], src: "reader" }]));
-      const conv = weldListFromMarks({ meta, bom: [], weldMarks },
+      const conv = weldListFromMarks({ meta, bom, weldMarks },
         { shop: profile.data?.project?.weld_symbol_shop, field: profile.data?.project?.weld_symbol_field,
           thdLabelled: Boolean(profile.data?.project?.weld_thd_labelled) });
       // the spool numbers (ovals) and support numbers (hexagons) the reader found, to be moved or corrected on the sheet
       const tags = fromReaderTags(r.tags);
-      const final = { meta, bom: [], nodes: [], edges: [], notes: [], weldMarks, weldList: conv.weldList,
+      const hasLine = Object.values(line).some(Boolean);
+      const final = { meta, bom, nodes: [], edges: [], notes: [], weldMarks, weldList: conv.weldList,
+        ...(hasLine ? { lineData: line } : {}),
+        ...(cutLengths.length ? { cutLengths } : {}),
         ...(Object.keys(placed).length ? { weldMarkup: { page: index, marks: placed } } : {}),
         ...(tags.length ? { sheetMarkup: { page: index, items: tags } } : {}) };
       setMarksInfo(conv);
@@ -474,6 +485,9 @@ export default function Page() {
       setEditing(JSON.stringify(final, null, 2));
       setOpenRun(null);
       setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s · ${r.marks.length} نشانگر جوش` + (tags.length ? ` · ${tags.filter((t) => t.kind === "spool").length} اسپول · ${tags.filter((t) => t.kind === "support").length} ساپورت` : "") +
+        (bom.length ? ` · BOM ${bom.length} ردیف` : " · BOM خوانده نشد") +
+        (cutLengths.length ? ` · جدول برش ${cutLengths.length} قطعه` : "") +
+        (hasLine ? ` · مشخصات خط ${Object.values(line).filter(Boolean).length} مورد` : "") +
         (r.orientation ? ` · صفحه ${r.orientation}° چرخانده شد` : "") +
         (conv.problems.length ? ` · ${conv.problems.join(" ")}` : "") + (conv.notes.length ? ` · ${conv.notes.join(" · ")}` : ""));
     } catch (e) {

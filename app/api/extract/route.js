@@ -20,7 +20,42 @@ const TAKEOUT_TABLE = (() => {
   return sizes.map(row).join("\n");
 })();
 
+/* The isometric symbol vocabulary, after the two references the project reads
+   its sheets by (docs/epc-llm/09-iso-symbols.md): Wermac's "Mechanical symbols
+   for Isometric drawings" (wermac.org/documents/symbols_iso.html) and AQC
+   Inspection's "Pipe Line Isometric Drawings and P&ID Drawings". It names what
+   may be drawn; it decides nothing — the engine and the project's declared
+   weld symbols do. */
+const ISO_SYMBOLS = `ISOMETRIC SYMBOLS (what may be drawn on the sheet - recognise them, never infer one that is not drawn):
+- An isometric shows a process line in single-line presentation: the pipe, its connections (valves, flanges,
+  nipples, reducers, end caps, elbows, ...), the dimensions and the direction of the line. Symbols are drawn in
+  heavier lines; the lighter line through them is the connected pipe, not part of the symbol.
+- Each fitting and valve is drawn for its END TYPE: butt weld, socket weld, threaded (fittings) or butt weld,
+  flanged, socket/threaded (valves). The end type is what says whether there is a weld at that end: a butt-weld
+  or socket-weld end is a welded joint, a threaded or flanged-and-bolted end is not.
+- Fittings: elbow 90, elbow 45, tee equal, tee reducing, cap, reducer concentric, reducer eccentric, pipe bend
+  with special radius, pipe-to-pipe butt weld. Branch outlets: Weldolet, Nipolet, Flangolet.
+- Flanges: welding neck, socket weld, threaded, slip-on, lap-joint, blind; also spade, spectacle blind,
+  hammer blind, spacer, restriction orifice, orifice assembly with its taps, meter run.
+- Valves: gate, globe, Y-type globe, ball, plug, butterfly (wafer type too), needle, diaphragm, three-way, check,
+  bottom, relief, control (straight and angle); the direction of the hand wheel / wrench is drawn. Strainers:
+  Y-type, conical. Sight glass.
+- A FIELD WELD has its own symbol, distinct from a shop weld. On this project's sheets a weld is also numbered
+  in a frame whose shape the project declares (shop or field); read the frame's shape and never decide shop or
+  field yourself.
+- LINE NUMBER: one per line, valid for its whole length until it joins another line or equipment.
+  SPOOL NUMBER: a fabrication sub-division of the line (e.g. SP-1), joined on site to complete the line.
+- The direction (north) symbol is on top of the sheet. A rolling/offset (change of direction out of the
+  isometric planes) is a right-angled triangle hatched vertically (vertical rolling), horizontally (horizontal
+  rolling), or both (two triangles).
+- The sheet carries a title block with the LINE DATA (line no., piping/line class, design and operating
+  pressure and temperature, test fluid and pressure, insulation type and thickness, paint, NDT, PWHT), a bill of
+  material (FABRICATION and ERECTION MATERIALS: PT no., description, nominal size N.S., item code, quantity) and,
+  on some sheets, a CUT PIPE LENGTH table.`;
+
 const COMMON = `You are a senior piping engineer reading a piping isometric drawing.
+
+${ISO_SYMBOLS}
 
 You are given the FULL SHEET plus overlapping high-resolution QUADRANT crops of the same
 drawing. Use the quadrants to read small text and the full sheet for overall routing.
@@ -247,6 +282,8 @@ RULES
  */
 const WELDS_PROMPT = `You are reading the JOINT (WELD) MARKERS printed on a piping isometric drawing.
 
+${ISO_SYMBOLS}
+
 You are given the FULL SHEET plus overlapping high-resolution QUADRANT crops of the same
 drawing. Use the quadrants to read small text and the full sheet to follow leader lines.
 The quadrants overlap, so the same marker may appear twice - report it once.
@@ -293,6 +330,8 @@ RULES
 3. NEVER refuse and NEVER explain. Your entire reply is the JSON object.`;
 
 const SHEETMARKS_PROMPT = `You are locating the NUMBERED MARKERS printed on a piping isometric drawing, so a person can see them on the sheet.
+
+${ISO_SYMBOLS}
 
 You are given the FULL SHEET first, then overlapping high-resolution QUADRANT crops of the same
 drawing. Use the quadrants to read small text and the full sheet to give each marker's place.

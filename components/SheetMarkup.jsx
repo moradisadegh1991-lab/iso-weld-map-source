@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet } from "../lib/sheet/markup.mjs";
+import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo } from "../lib/sheet/markup.mjs";
 import Shape, { COLOR, geometryOf } from "./MarkShape";
 
 /**
@@ -15,6 +15,9 @@ import Shape, { COLOR, geometryOf } from "./MarkShape";
  *   selectedId, onSelect, attachId, onAttach  the picked mark and the row waiting for its weld point,
  *             held by the page so its table and this sheet pick and join the same mark
  *   readOnly  look only
+ *   states    { [id]: { state, color } } — a mark painted in its state's colour (where its joint
+ *             stands on site); without it every mark is black, as the designer draws them
+ *   legend    [[color, label]] for those colours
  *
  * Nothing here decides Shop or Field: a mark's kind is what the project's
  * symbols, the engine's register or the person said.
@@ -45,7 +48,7 @@ export async function renderMarkedPng(src, items) {
     g.fill(); g.stroke();
     g.setLineDash([]); g.fillStyle = "#111"; g.textAlign = "center"; g.textBaseline = "middle";
     g.font = `700 ${geo.font}px "Times New Roman",Times,serif`;
-    const label = String(m.no), wide = g.measureText(label).width;
+    const label = KINDS[m.kind].cls === "weld" ? plainNo(m.no) : String(m.no), wide = g.measureText(label).width;
     if (wide > geo.fit) { g.translate(vw / 2, vh / 2); g.scale(geo.fit / wide, 1); g.fillText(label, 0, 0.5); }
     else g.fillText(label, vw / 2, vh / 2 + 0.5);
     g.restore();
@@ -54,7 +57,7 @@ export async function renderMarkedPng(src, items) {
 }
 
 export default function SheetMarkup({ src, items = [], onChange, readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null,
-  selectedId: selectedProp, onSelect, attachId: attachProp, onAttach }) {
+  selectedId: selectedProp, onSelect, attachId: attachProp, onAttach, states = null, legend = [] }) {
   const [zoom, setZoom] = useState(1);
   // the picked mark and the mark waiting for its weld point may be held by the page, whose table picks the same mark
   const [selectedOwn, setSelectedOwn] = useState(null);
@@ -135,6 +138,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
         <span className="mono sm" data-zoom>{Math.round(zoom * 100)}%</span>
         <button type="button" className="ghost sm" onClick={() => setZoom((z) => Math.min(6, z * 1.25))} aria-label="zoom in">+</button>
         <button type="button" className="ghost sm" onClick={() => setZoom(1)}>⤢</button>
+        {legend.map(([c, label]) => <span key={label} className="sm"><i className="dot" style={{ background: c }} /> {label}</span>)}
         <span className="grow" />
         {onSeedEngine && !readOnly && (
           <button type="button" className="ghost sm" data-seed-engine disabled={!src}
@@ -201,13 +205,13 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
           {placedItems.map((m) => {
             const p = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
             return (
-              <div key={m.id} data-mark-id={m.id} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
+              <div key={m.id} data-mark-id={m.id} data-picked={m.id === selectedId ? "true" : "false"} data-state={states?.[m.id]?.state} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
                 title={`${KINDS[m.kind].label} ${m.no}${m.src === "model" ? " (پیشنهاد مدل)" : ""}`}
                 onPointerDown={(e) => down(e, m)}
                 style={{ position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
                   width: `${geometryOf(m.kind).box * 100}%`, aspectRatio: `${geometryOf(m.kind).vb[0]} / ${geometryOf(m.kind).vb[1]}`,
                   cursor: readOnly ? "default" : "grab", touchAction: "none" }}>
-                <Shape kind={m.kind} no={m.no} on={m.id === selectedId} fluid />
+                <Shape kind={m.kind} no={KINDS[m.kind].cls === "weld" ? plainNo(m.no) : m.no} on={m.id === selectedId} tint={states?.[m.id]?.color || null} fluid />
               </div>);
           })}
         </div>
