@@ -1,77 +1,121 @@
 "use client";
 import { useState } from "react";
-import { KINDS, ATTRS, updateMark, removeMark, problems, rules } from "../lib/sheet/markup.mjs";
+import { KINDS, ATTRS, addMark, updateMark, removeMark, unplace, isPlaced, notOnSheet, engineRow, problems, rules } from "../lib/sheet/markup.mjs";
 import MarkShape from "./MarkShape";
 
 /**
- * The marks of a sheet as tables a person edits: welds, spools, supports
- * (lib/sheet/markup.mjs ATTRS). A row and its mark on the sheet are one
- * thing — picking either picks both; an edit here is the person's, like a
- * mark moved on the sheet. Under the tables, the rules the sheet's welds,
- * spools and supports answer to, as problems to see.
+ * The one table of a sheet's welds, spools and supports. A row and its mark
+ * on the drawing are one thing: picking either picks both, and each row ends
+ * in what joins it to the drawing —
+ *
+ *   «اتصال به نقشه»          a row not on the drawing: the next click on the
+ *                            sheet is its weld point; its frame and leader are made there
+ *   «جابه‌جایی روی نقشه»     a row on the drawing: the next click is its new weld point
+ *   «حذف»                    the row, and its mark, gone
+ *
+ * Rows a person adds here ("+") start not joined to the drawing, and a row
+ * not on the drawing is named above the table. A weld row also shows what the
+ * engine says of that weld (Shop/Field, level, NDT) beside the editable
+ * details; those are the register's and are not edited here.
  *
  *   items       every mark of the sheet
  *   onChange    (items) after every edit
+ *   model       buildModel() result, for the engine's columns (optional)
  *   selectedId  the mark picked on the sheet; onSelect(id) picks one here
- *   onAdd       (kind) — arm the sheet to place a new mark of that kind
- *   tabs        which tables to show (a weld list kept elsewhere leaves "weld" out)
- *   weldList    those welds, as rows { no, loc, spool }, for the spool rules
+ *   attachId    the mark whose weld point the sheet is waiting for; onAttach(id|null)
+ *   tabs        which tables to show
+ *   weldList    welds kept as rows beside the sheet (the weld-list form), for the spool rules
  */
 const TABS = [["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["support", "ساپورت‌ها"]];
-const ADD = { weld: "weld-field", spool: "spool", support: "support" };
+const NEW_KIND = { weld: "weld-unknown", spool: "spool", support: "support" };
+const WORD = { weld: "سرجوش", spool: "اسپول", support: "ساپورت" };
 
-export default function MarkTables({ items = [], onChange, selectedId = null, onSelect, onAdd, readOnly = false, tabs = ["weld", "spool", "support"], weldList = null }) {
+export default function MarkTables({ items = [], onChange, model = null, selectedId = null, onSelect, attachId = null, onAttach,
+  readOnly = false, tabs = ["weld", "spool", "support"], weldList = null }) {
   const shown = TABS.filter(([k]) => tabs.includes(k));
   const [tab, setTab] = useState(shown[0]?.[0] || "weld");
   const rows = items.filter((m) => KINDS[m.kind]?.cls === tab);
-  const issues = [...problems(items), ...rules(items, weldList)].filter((p) =>
-    tab === "weld" ? /سرجوش/.test(p) : tab === "spool" ? /اسپول/.test(p) : /ساپورت/.test(p));
+  const loose = notOnSheet(items);
+  const issues = [...problems(items), ...rules(items, weldList)];
   const set = (id, patch) => onChange?.(updateMark(items, id, patch));
+  const add = () => {
+    const next = addMark(items, { kind: NEW_KIND[tab] });
+    onChange?.(next);
+    const row = next[next.length - 1];
+    onSelect?.(row.id);
+    onAttach?.(row.id);   // the sheet waits for its weld point at once
+  };
+  const withEngine = tab === "weld" && model && !model.error;
+  const colSpan = ATTRS[tab].length + 3 + (tab === "weld" ? 1 : 0) + (withEngine ? 2 : 0);
   return (
     <div className="mark-tables" data-mark-tables>
       <div className="row" style={{ gap: 4, flexWrap: "wrap" }} role="tablist">
         {shown.map(([k, label]) => (
           <button key={k} type="button" role="tab" data-mark-tab={k} className={tab === k ? "on" : "ghost"} onClick={() => setTab(k)}
             style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <MarkShape kind={ADD[k] === "weld-field" ? "weld-shop" : ADD[k]} no="" size={0.5} />
+            <MarkShape kind={k === "weld" ? "weld-shop" : k} no="" size={0.5} />
             {label} ({items.filter((m) => KINDS[m.kind]?.cls === k).length})
           </button>
         ))}
         <span className="grow" />
-        {!readOnly && onAdd && (
-          <button type="button" className="ghost sm" data-mark-add={tab} onClick={() => onAdd(ADD[tab])}>
-            + {tab === "weld" ? "سرجوش" : tab === "spool" ? "اسپول" : "ساپورت"} (روی نقشه کلیک کنید)
-          </button>)}
+        {!readOnly && (
+          <button type="button" className="ghost sm" data-mark-add={tab} onClick={add}>+ {WORD[tab]} (بعد روی نقشه، محل آن را کلیک کنید)</button>)}
       </div>
+
+      {loose.length > 0 && (
+        <p className="err sm" role="alert" data-loose>
+          {loose.length} ردیف به نقشه وصل نیست: {loose.slice(0, 8).map((m) => `${WORD[KINDS[m.kind].cls]} ${m.no || "بدون شماره"}`).join("، ")}
+          {loose.length > 8 ? "، …" : ""} — روی «اتصال به نقشه» در انتهای ردیف بزنید و محلش را روی نقشه کلیک کنید.
+        </p>)}
+      {attachId && <p className="note sm" data-attach-hint>روی نقشه، همان‌جا که سرجوش (یا اسپول/ساپورت) روی لوله است کلیک کنید. <button type="button" className="ghost sm" onClick={() => onAttach?.(null)}>انصراف</button></p>}
+
       <div style={{ overflowX: "auto" }}>
         <table className="dtable" data-mark-table={tab}>
           <thead><tr>
             <th>شماره</th>
             {tab === "weld" && <th>محل</th>}
             {ATTRS[tab].map(([k, label]) => <th key={k}>{label}</th>)}
-            <th>منبع</th><th />
+            {withEngine && <><th title="از رجیستر موتور">NDT</th><th title="از رجیستر موتور">EL</th></>}
+            <th>روی نقشه</th>
           </tr></thead>
           <tbody>
-            {rows.map((m) => (
-              <tr key={m.id} data-mark-row={m.id} className={m.id === selectedId ? "sel" : undefined} onClick={() => onSelect?.(m.id)}>
-                <td><input data-cell="no" dir="ltr" className="mono" style={{ width: 70 }} value={m.no} disabled={readOnly}
-                  onChange={(e) => set(m.id, { no: e.target.value })} /></td>
-                {tab === "weld" && (
-                  <td><select data-cell="kind" value={m.kind} disabled={readOnly} onChange={(e) => set(m.id, { kind: e.target.value })}>
-                    <option value="weld-shop">کارگاه (دایره)</option>
-                    <option value="weld-field">سایت (مربع)</option>
-                    <option value="weld-unknown">نامعلوم</option>
-                  </select></td>)}
-                {ATTRS[tab].map(([k, , ph]) => (
-                  <td key={k}><input data-cell={k} dir="ltr" style={{ width: k === "note" ? 140 : 90 }} placeholder={ph}
-                    value={m.attrs?.[k] ?? ""} disabled={readOnly} onChange={(e) => set(m.id, { attrs: { [k]: e.target.value } })} /></td>
-                ))}
-                <td className="muted sm">{m.src === "engine" ? "موتور" : m.src === "model" ? "مدل" : m.src === "reader" ? "OCR" : "دستی"}</td>
-                <td>{!readOnly && <button type="button" className="ghost" aria-label={`حذف ${m.no}`} data-row-delete={m.id}
-                  onClick={(e) => { e.stopPropagation(); onChange?.(removeMark(items, m.id)); }}>×</button>}</td>
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={ATTRS[tab].length + 4} className="muted sm">هنوز چیزی روی نقشه نیست.</td></tr>}
+            {rows.map((m) => {
+              const e = tab === "weld" ? engineRow(model, m.no) : null;
+              const placed = isPlaced(m);
+              return (
+                <tr key={m.id} data-mark-row={m.id} data-placed={placed ? "yes" : "no"} className={m.id === selectedId ? "sel" : undefined} onClick={() => onSelect?.(m.id)}>
+                  <td><input data-cell="no" dir="ltr" className="mono" style={{ width: 64 }} value={m.no} disabled={readOnly}
+                    onChange={(ev) => set(m.id, { no: ev.target.value })} /></td>
+                  {tab === "weld" && (
+                    <td><select data-cell="kind" value={m.kind} disabled={readOnly} onChange={(ev) => set(m.id, { kind: ev.target.value })}>
+                      <option value="weld-shop">کارگاه (دایره)</option>
+                      <option value="weld-field">سایت (مربع)</option>
+                      <option value="weld-unknown">نامعلوم</option>
+                    </select></td>)}
+                  {ATTRS[tab].map(([k, , ph]) => (
+                    <td key={k}><input data-cell={k} dir="ltr" style={{ width: k === "note" ? 130 : 84 }} placeholder={ph}
+                      value={m.attrs?.[k] ?? ""} disabled={readOnly} onChange={(ev) => set(m.id, { attrs: { [k]: ev.target.value } })} /></td>
+                  ))}
+                  {withEngine && <>
+                    <td className="mono sm" data-engine="ndt">{e?.ndt ?? "—"}</td>
+                    <td className="mono sm" data-engine="el">{e?.el != null ? Math.round(e.el).toLocaleString("en-US") : "—"}</td>
+                  </>}
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {!readOnly && (<>
+                      <button type="button" className={attachId === m.id ? "on sm" : "ghost sm"} data-row-attach={m.id}
+                        onClick={(ev) => { ev.stopPropagation(); onSelect?.(m.id); onAttach?.(attachId === m.id ? null : m.id); }}>
+                        {placed ? "جابه‌جایی روی نقشه" : "اتصال به نقشه"}
+                      </button>
+                      {placed && <button type="button" className="ghost sm" data-row-unplace={m.id}
+                        onClick={(ev) => { ev.stopPropagation(); onChange?.(unplace(items, m.id)); }}>برداشتن از نقشه</button>}
+                      <button type="button" className="ghost sm" aria-label={`حذف ${m.no}`} data-row-delete={m.id}
+                        onClick={(ev) => { ev.stopPropagation(); if (attachId === m.id) onAttach?.(null); onChange?.(removeMark(items, m.id)); }}>حذف</button>
+                    </>)}
+                    {readOnly && <span className="muted sm">{placed ? "روی نقشه" : "وصل نیست"}</span>}
+                  </td>
+                </tr>);
+            })}
+            {!rows.length && <tr><td colSpan={colSpan} className="muted sm">هنوز چیزی در این جدول نیست — «+ {WORD[tab]}» را بزنید.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -79,6 +123,8 @@ export default function MarkTables({ items = [], onChange, selectedId = null, on
         <ul className="sm" data-mark-rules style={{ margin: "6px 0", paddingInlineStart: 18 }}>
           {issues.map((x) => <li key={x} className="err">{x}</li>)}
         </ul>)}
+      {tab === "weld" && (
+        <p className="muted sm">محل، نوع اتصال، قطر، اسپول و جنس را موتور و BOM پر کرده‌اند و همه قابل ویرایش‌اند؛ NDT و EL از رجیستر موتورند و اینجا ویرایش نمی‌شوند.</p>)}
       {tab === "spool" && (
         <p className="muted sm" data-spool-rules>قاعده‌ها: هر سرجوش کارگاهی داخل یک اسپول است و آن را نام می‌برد؛ هر اسپولی که نام برده شده بیضی‌اش روی نقشه هست؛
           هر بیضی روی نقشه دست‌کم یک سرجوش دارد؛ شمارهٔ اسپول تکراری نیست. سرجوش سایت دو اسپول را به هم وصل می‌کند و اسپول خودش را لازم ندارد.</p>)}

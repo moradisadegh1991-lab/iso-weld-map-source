@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, removeMark, problems } from "../lib/sheet/markup.mjs";
+import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet } from "../lib/sheet/markup.mjs";
 import Shape, { COLOR, geometryOf } from "./MarkShape";
-import MarkTables from "./MarkTables";
 
 /**
  * The isometric sheet itself, marked: a circle on a shop weld, a square on a
@@ -13,8 +12,8 @@ import MarkTables from "./MarkTables";
  *
  *   items     [{ id, kind, no, x, y, src }]  — x, y fractions of the sheet (lib/sheet/markup.mjs)
  *   onChange  (items) — called with the new list after every edit
- *   unplaced  [{ kind, no }] welds and spools the register has that the sheet does not yet show;
- *             one is picked, then put where the sheet is clicked
+ *   selectedId, onSelect, attachId, onAttach  the picked mark and the row waiting for its weld point,
+ *             held by the page so its table and this sheet pick and join the same mark
  *   readOnly  look only
  *
  * Nothing here decides Shop or Field: a mark's kind is what the project's
@@ -54,18 +53,21 @@ export async function renderMarkedPng(src, items) {
   return cv.toDataURL("image/png");
 }
 
-export default function SheetMarkup({ src, items = [], onChange, unplaced = [], readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null }) {
+export default function SheetMarkup({ src, items = [], onChange, readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null,
+  selectedId: selectedProp, onSelect, attachId: attachProp, onAttach }) {
   const [zoom, setZoom] = useState(1);
-  const [selectedId, setSelectedId] = useState(null);
+  // the picked mark and the mark waiting for its weld point may be held by the page, whose table picks the same mark
+  const [selectedOwn, setSelectedOwn] = useState(null);
+  const [attachOwn, setAttachOwn] = useState(null);
+  const selectedId = onSelect ? selectedProp : selectedOwn, setSelectedId = onSelect || setSelectedOwn;
+  const pointFor = onAttach ? attachProp : attachOwn, setPointFor = onAttach || setAttachOwn;
   const [tool, setTool] = useState(null);     // a kind, to be put where the sheet is next clicked
-  const [armed, setArmed] = useState(null);   // { kind, no } picked from `unplaced`
-  const [pointFor, setPointFor] = useState(null); // a weld mark's id: the next click on the sheet is its weld point
   const [drag, setDrag] = useState(null);
   const [busy, setBusy] = useState("");
   const [aspect, setAspect] = useState(Math.SQRT2);   // the sheet's width / height, once its image is loaded
   const sheet = useRef(null);
-  const selected = items.find((m) => m.id === selectedId) || null;
-  const issues = problems(items);
+  const placedItems = items.filter(isPlaced);
+  const loose = notOnSheet(items);
 
   const at = (e) => {
     const r = sheet.current.getBoundingClientRect();
@@ -77,17 +79,22 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
     if (drag?.moved) return;
     if (readOnly || e.target.closest("[data-mark-id],[data-anchor-id]")) return;
     const p = at(e);
+    // a row of the table waiting for its weld point: the leader ends here, the frame is set beside it
     if (pointFor) {
-      commit(updateMark(items, pointFor, { ax: p.x, ay: p.y }));
+      commit(placeAt(items, pointFor, p, aspect));
       setPointFor(null);
       return;
     }
-    const what = armed || (tool ? { kind: tool, no: "" } : null);
-    if (!what) { setSelectedId(null); return; }
-    const next = addMark(items, { ...what, ...p });
-    commit(next);
-    setSelectedId(next[next.length - 1].id);
-    setArmed(null); setTool(null);
+    // a new mark by the tool: its weld point is the click, with its leader and frame, like any other
+    if (tool) {
+      const next = addMark(items, { kind: tool });
+      const id = next[next.length - 1].id;
+      commit(placeAt(next, id, p, aspect));
+      setSelectedId(id);
+      setTool(null);
+      return;
+    }
+    setSelectedId(null);
   }
   function down(e, m, part = "frame") {
     e.stopPropagation();
@@ -101,13 +108,11 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
     if (drag?.moved && drag.p) commit(updateMark(items, drag.id, drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : drag.p));
     setTimeout(() => setDrag(null), 0);
   }
-  function remove() { if (selected) { commit(removeMark(items, selected.id)); setSelectedId(null); } }
 
   useEffect(() => {
     const h = (e) => {
       if (readOnly || !selectedId || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
-      if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); commit(removeMark(items, selectedId)); setSelectedId(null); }
-      if (e.key === "Escape") { setSelectedId(null); setTool(null); setArmed(null); setPointFor(null); }
+      if (e.key === "Escape") { setSelectedId(null); setTool(null); setPointFor(null); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -140,9 +145,9 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
       </div>
       {!readOnly && (
         <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }} data-tools>
-          <span className="muted sm">افزودن با کلیک روی نقشه:</span>
+          <span className="muted sm">افزودن مستقیم روی نقشه:</span>
           {KIND_IDS.filter((k) => k !== "weld-unknown").map((k) => (
-            <button key={k} type="button" data-tool={k} className={tool === k ? "on" : "ghost"} onClick={() => { setTool(tool === k ? null : k); setArmed(null); }}
+            <button key={k} type="button" data-tool={k} className={tool === k ? "on" : "ghost"} onClick={() => { setTool(tool === k ? null : k); setPointFor(null); }}
               style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               <Shape kind={k} no="" size={0.5} />{KINDS[k].label}
             </button>
@@ -151,53 +156,19 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
       )}
       <p className="muted sm" data-hint>
         {readOnly ? "نقشه با نشان‌ها — فقط دیدن."
-          : pointFor ? "روی نقطهٔ سرجوش، روی خود لوله، کلیک کنید تا خط از آن نقطه به شمارهٔ سرجوش وصل شود."
-          : armed ? `«${armed.no}» انتخاب شد — روی محلش در نقشه کلیک کنید.`
-          : tool ? `${KINDS[tool].label}: روی محلش در نقشه کلیک کنید.`
-          : "نشان را بکشید تا جابه‌جا شود؛ با کلیک انتخابش کنید تا شماره یا نوعش را عوض کنید یا پاکش کنید (Delete). سر خطِ نشان انتخاب‌شده، محل سرجوش روی لوله است و آن هم کشیدنی است. جزئیات هر نشان در جدول زیر نقشه."}
+          : pointFor ? "روی نقشه، محل سرجوش (روی خود لوله) را کلیک کنید تا خط راهنما از آن‌جا به شماره‌اش وصل شود."
+          : tool ? `${KINDS[tool].label}: محل آن را روی لوله کلیک کنید.`
+          : "قاب را بکشید تا جابه‌جا شود؛ نقطهٔ اتصال هر نشان با کشیدن سر خطِ نشان انتخاب‌شده عوض می‌شود. شماره، جزئیات، اتصال به نقشه و حذف در جدول سمت چپ/زیر نقشه است."}
       </p>
       <p className="mono sm" data-counts>
         سرجوش‌ها {count("weld")} · اسپول‌ها {count("spool")} · ساپورت‌ها {count("support")}
+        {loose.length > 0 && ` · ${loose.length} ردیف به نقشه وصل نیست`}
         {items.some((m) => m.src === "model" || m.src === "engine") && " · محل نشان‌های خودکار تقریبی است (سرجوش‌ها را موتور تعیین کرده، جایشان روی نقشه را مدل)، با نقشه بسنجید"}
       </p>
-      {issues.map((x) => <p key={x} className="err sm" data-problem>{x}</p>)}
-
-      {selected && !readOnly && (
-        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap", margin: "6px 0" }} data-inspector>
-          <label className="sm">شماره <input data-edit-no className="mono" style={{ width: 90 }} value={selected.no}
-            onChange={(e) => commit(updateMark(items, selected.id, { no: e.target.value }))} /></label>
-          <label className="sm">نوع <select data-edit-kind value={selected.kind} onChange={(e) => commit(updateMark(items, selected.id, { kind: e.target.value }))}>
-            {KIND_IDS.map((k) => <option key={k} value={k}>{KINDS[k].label}</option>)}
-          </select></label>
-          <span className="muted sm">{selected.src === "model" ? "پیشنهاد مدل" : selected.src === "engine" ? "سرجوش موتور، محل از مدل" : "دستی"}</span>
-          {KINDS[selected.kind].cls === "weld" && (<>
-            <button type="button" className={pointFor === selected.id ? "on sm" : "ghost sm"} data-set-point onClick={() => setPointFor(pointFor === selected.id ? null : selected.id)}>
-              {selected.ax == null ? "وصل به نقطهٔ سرجوش" : "جابه‌جایی نقطهٔ سرجوش"}
-            </button>
-            {selected.ax != null && <button type="button" className="ghost sm" data-clear-point onClick={() => commit(updateMark(items, selected.id, { ax: null, ay: null }))}>حذف خط</button>}
-          </>)}
-          <button type="button" className="ghost sm" data-delete onClick={remove}>حذف</button>
-        </div>
-      )}
-
-      {!readOnly && unplaced.length > 0 && (
-        <details className="sm" data-unplaced style={{ margin: "6px 0" }}>
-          <summary>{unplaced.length} مورد از رجیستر هنوز روی نقشه نیست — یکی را بردارید و روی محلش کلیک کنید</summary>
-          <div className="row" style={{ gap: 4, flexWrap: "wrap", marginTop: 4 }}>
-            {unplaced.map((u) => (
-              <button key={`${u.kind}|${u.no}`} type="button" data-unplaced-item={u.no} className={armed?.no === u.no && armed?.kind === u.kind ? "on" : "ghost"}
-                onClick={() => { setArmed(armed?.no === u.no && armed?.kind === u.kind ? null : u); setTool(null); }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 2, padding: "0 4px" }}>
-                <Shape kind={u.kind} no="" size={0.45} />{u.no}
-              </button>
-            ))}
-          </div>
-        </details>
-      )}
       {busy && <p className="muted sm">{busy}</p>}
 
       <div className="sheet-box" style={{ height, overflow: "auto", position: "relative", background: "#fff" }} onPointerMove={move} onPointerUp={up}>
-        <div ref={sheet} data-sheet style={{ position: "relative", width: `${zoom * 100}%`, cursor: (tool || armed) ? "crosshair" : "default" }} onClick={onSheetClick}>
+        <div ref={sheet} data-sheet style={{ position: "relative", width: `${zoom * 100}%`, cursor: (tool || pointFor) ? "crosshair" : "default" }} onClick={onSheetClick}>
           {src
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={src} alt="نقشه ایزومتریک" draggable={false} style={{ display: "block", width: "100%", userSelect: "none" }}
@@ -206,7 +177,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
           {/* each leader from its weld point on the pipe to its frame; the frame drawn over its end */}
           <svg viewBox={`0 0 1000 ${1000 / aspect}`} data-leaders
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
-            {items.filter((m) => m.ax != null && m.ay != null).map((m) => {
+            {placedItems.filter((m) => m.ax != null && m.ay != null).map((m) => {
               const f = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
               const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
               const k = 1000 / aspect;
@@ -216,7 +187,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
                 stroke={m.id === selectedId ? "#b8860b" : "#111"} strokeWidth={SHEET_SIZE.leader * 1000 * (m.id === selectedId ? 2 : 1)} />;
             })}
           </svg>
-          {items.filter((m) => m.ax != null && m.ay != null).map((m) => {
+          {placedItems.filter((m) => m.ax != null && m.ay != null).map((m) => {
             const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
             const on = m.id === selectedId;
             return (
@@ -227,7 +198,7 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
                   border: on ? "2px solid #b8860b" : 0, cursor: on && !readOnly ? "grab" : "default", touchAction: "none",
                   pointerEvents: on && !readOnly ? "auto" : "none" }} />);
           })}
-          {items.map((m) => {
+          {placedItems.map((m) => {
             const p = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
             return (
               <div key={m.id} data-mark-id={m.id} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
@@ -241,8 +212,6 @@ export default function SheetMarkup({ src, items = [], onChange, unplaced = [], 
           })}
         </div>
       </div>
-      <MarkTables items={items} onChange={commit} selectedId={selectedId} onSelect={setSelectedId} readOnly={readOnly}
-        onAdd={(k) => { setTool(k); setArmed(null); }} />
     </div>
   );
 }

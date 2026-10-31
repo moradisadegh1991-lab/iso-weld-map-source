@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import MarkShape, { geometryOf } from "./MarkShape";
-import { KINDS, addMark, updateMark, removeMark } from "../lib/sheet/markup.mjs";
+import { KINDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced } from "../lib/sheet/markup.mjs";
 
 /**
  * The drawing beside its weld list: the sheet as an image, a marker on it
@@ -31,7 +31,7 @@ export const STATE_COLORS = {
   checked: "#2e9d5b", unchecked: "#5b8def",
 };
 
-export default function SheetReview({ src, marks = {}, states = {}, legend = [], selected = null, onSelect, onPlace, height = 640, kinds = null, extras = null, onExtras, extraTool = null, onExtraTool, extraSel = null, onExtraSel }) {
+export default function SheetReview({ src, marks = {}, states = {}, legend = [], selected = null, onSelect, onPlace, height = 640, kinds = null, extras = null, onExtras, extraTool = null, onExtraTool, extraSel = null, onExtraSel, extraAttach = null, onExtraAttach }) {
   const [zoom, setZoom] = useState(1);
   const [drag, setDrag] = useState(null);
   // the tool and the picked spool/support mark may be held by the parent (its tables pick the same mark)
@@ -40,7 +40,8 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
   const tool = onExtraTool ? extraTool : toolOwn, setTool = onExtraTool || setToolOwn;
   const extraId = onExtraSel ? extraSel : extraOwn, setExtraId = onExtraSel || setExtraOwn;
   const editExtras = Boolean(extras && onExtras);
-  const extra = extras?.find((m) => m.id === extraId) || null;
+  const [aspect, setAspect] = useState(Math.SQRT2);   // the sheet's width / height, once its image is loaded
+  const placedExtras = (extras || []).filter(isPlaced);
   const box = useRef(null);
   const sheet = useRef(null);
 
@@ -61,9 +62,18 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
 
   function onSheetClick(e) {
     if (drag?.moved) return;
+    // a row of the spool/support table waiting for its weld point: the leader ends at the click, the frame stands beside it
+    if (editExtras && extraAttach && !e.target.closest("[data-mark],[data-extra]")) {
+      onExtras(placeAt(extras, extraAttach, at(e), aspect));
+      onExtraAttach?.(null);
+      return;
+    }
+    // a new spool or support by the tool: the same, with its leader
     if (editExtras && tool && !e.target.closest("[data-mark],[data-extra]")) {
-      const next = addMark(extras, { kind: tool, ...round(at(e)) });
-      onExtras(next); setExtraId(next[next.length - 1].id); setTool(null);
+      const next = addMark(extras, { kind: tool });
+      const id = next[next.length - 1].id;
+      onExtras(placeAt(next, id, at(e), aspect));
+      setExtraId(id); setTool(null);
       return;
     }
     if (editExtras && !e.target.closest("[data-mark],[data-extra]")) setExtraId(null);
@@ -77,19 +87,19 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* no live pointer (a pen lifted, a synthetic event): the drag still follows the sheet */ }
     setDrag({ no, moved: false });
   }
-  function downExtra(e, m) {
+  function downExtra(e, m, part = "frame") {
     e.stopPropagation();
     setExtraId(m.id);
     if (!editExtras) return;
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* a synthetic pointer: the drag still follows the sheet */ }
-    setDrag({ extra: m.id, moved: false });
+    setDrag({ extra: m.id, part, moved: false });
   }
   function move(e) {
     if (!drag) return;
     setDrag({ ...drag, moved: true, p: at(e) });
   }
   function up() {
-    if (drag?.moved && drag.p && drag.extra) onExtras(updateMark(extras, drag.extra, round(drag.p)));
+    if (drag?.moved && drag.p && drag.extra) onExtras(updateMark(extras, drag.extra, drag.part === "anchor" ? { ax: round(drag.p).x, ay: round(drag.p).y } : round(drag.p)));
     else if (drag?.moved && drag.p) onPlace(drag.no, round(drag.p));
     // the click that ends a drag is not a placement
     setTimeout(() => setDrag(null), 0);
@@ -117,14 +127,7 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
             </button>
           ))}
           {tool && <span className="muted sm">{KINDS[tool].label}: روی محلش در نقشه کلیک کنید.</span>}
-          {extra && (<>
-            <label className="sm">شماره <input data-extra-no className="mono" style={{ width: 90 }} value={extra.no}
-              onChange={(e) => onExtras(updateMark(extras, extra.id, { no: e.target.value }))} /></label>
-            <label className="sm">نوع <select data-extra-kind value={extra.kind} onChange={(e) => onExtras(updateMark(extras, extra.id, { kind: e.target.value }))}>
-              {["spool", "support"].map((k) => <option key={k} value={k}>{KINDS[k].label}</option>)}
-            </select></label>
-            <button type="button" className="ghost sm" data-extra-delete onClick={() => { onExtras(removeMark(extras, extra.id)); setExtraId(null); }}>حذف</button>
-          </>)}
+
         </div>
       )}
       {onPlace && <p className="muted sm" data-place-hint>{missing
@@ -132,9 +135,10 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
         : selected ? `جوش ${selected}: نشانگرش را بکشید تا جابه‌جا شود، یا جای دیگری از نقشه را کلیک کنید.` : "ردیفی را انتخاب کنید، بعد روی محل جوش در نقشه کلیک کنید."}</p>}
       <div ref={box} className="sheet-box" style={{ height, overflow: "auto", position: "relative", background: "#fff" }}
         onPointerMove={move} onPointerUp={up}>
-        <div ref={sheet} style={{ position: "relative", width: `${zoom * 100}%`, cursor: onPlace && selected ? "crosshair" : "default" }} onClick={onSheetClick}>
+        <div ref={sheet} style={{ position: "relative", width: `${zoom * 100}%`, cursor: (onPlace && selected) || extraAttach || tool ? "crosshair" : "default" }} onClick={onSheetClick}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt="sheet" draggable={false} style={{ display: "block", width: "100%", userSelect: "none" }} />
+          <img src={src} alt="sheet" draggable={false} style={{ display: "block", width: "100%", userSelect: "none" }}
+            onLoad={(e) => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setAspect(i.naturalWidth / i.naturalHeight); }} />
           {shown.map(([no, m]) => {
             const p = drag?.no === no && drag.p ? drag.p : m;
             const on = selected === no;
@@ -155,8 +159,24 @@ export default function SheetReview({ src, marks = {}, states = {}, legend = [],
                 {kinds?.[no] ? <MarkShape kind={kinds[no]} no={no} on={on} tint={STATE_COLORS[states[no]] || "#5b8def"} fluid /> : no}
               </button>);
           })}
-          {(extras || []).map((m) => {
-            const p = drag?.extra === m.id && drag.p ? drag.p : m;
+          {/* each spool and support is joined to its place on the pipe by a leader, as the welds are */}
+          <svg viewBox={`0 0 1000 ${1000 / aspect}`} data-extra-leaders
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
+            {placedExtras.filter((m) => m.ax != null && m.ay != null).map((m) => {
+              const f = drag?.extra === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
+              const a = drag?.extra === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
+              return <line key={m.id} data-extra-leader={m.id} data-ax={a.ax} data-ay={a.ay} data-fx={f.x} data-fy={f.y}
+                x1={a.ax * 1000} y1={a.ay * (1000 / aspect)} x2={f.x * 1000} y2={f.y * (1000 / aspect)} stroke="#111" strokeWidth={SHEET_SIZE.leader * 1000} />;
+            })}
+          </svg>
+          {placedExtras.filter((m) => m.id === extraId && m.ax != null && m.ay != null && editExtras).map((m) => {
+            const a = drag?.extra === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
+            return <div key={`a${m.id}`} data-extra-anchor={m.id} title="محل روی لوله — بکشید تا جابه‌جا شود" onPointerDown={(e) => downExtra(e, m, "anchor")}
+              style={{ position: "absolute", left: `${a.ax * 100}%`, top: `${a.ay * 100}%`, transform: "translate(-50%,-50%)", width: 12, height: 12,
+                borderRadius: "50%", border: "2px solid #b8860b", cursor: "grab", touchAction: "none" }} />;
+          })}
+          {placedExtras.map((m) => {
+            const p = drag?.extra === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
             return (
               <div key={m.id} data-extra={m.id} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
                 title={`${KINDS[m.kind].label} ${m.no}`} onPointerDown={(e) => downExtra(e, m)}

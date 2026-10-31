@@ -7,7 +7,7 @@
 import { test, run, assert, equal } from "./harness.mjs";
 import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
-import { KINDS, SHEET_SIZE, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, unplaced, problems, normalize } from "../../lib/sheet/markup.mjs";
+import { KINDS, SHEET_SIZE, plainNo, isPlaced, notOnSheet, engineRow, frameSpot, placeAt, unplace, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, problems, normalize } from "../../lib/sheet/markup.mjs";
 
 const SYM = { shop: "circle", field: "square" };
 const pass = (items) => ({ items });
@@ -108,23 +108,54 @@ test("the next number is one past the largest in that class", () => {
   equal(nextNo([], "support"), "1");
 });
 
-test("what still needs placing: the register's welds, shop or field as the ENGINE says, and the spools", () => {
-  const m = buildModel(DEMO);
-  const todo = unplaced(m.register, m.spoolIds, []);
-  equal(todo.filter((t) => t.kind !== "spool").length, m.register.length);
-  for (const w of m.register) {
-    const t = todo.find((x) => x.no === w.no && x.kind !== "spool");
-    equal(t.kind, w.loc === "Field" ? "weld-field" : "weld-shop", `${w.no}`);
-  }
-  equal(todo.filter((t) => t.kind === "spool").map((t) => t.no), m.spoolIds);
-  const placed = [{ kind: "weld-unknown", no: m.register[0].no, x: 0, y: 0 }, { kind: "spool", no: m.spoolIds[0], x: 0, y: 0 }];
-  const left = unplaced(m.register, m.spoolIds, placed);
-  assert(!left.some((t) => t.no === m.register[0].no) && !left.some((t) => t.no === m.spoolIds[0]),
-    "a weld the model already placed by its number is not offered again");
+test("a weld's number is shown as the number alone, so its frame takes little room", () => {
+  equal(["W-01", "W-12", "SW-3", "7", "4-1", "W-004", " 13 "].map(plainNo), ["1", "12", "3", "7", "4-1", "4", "13"]);
+  equal(plainNo("A7B"), "A7B", "something that is not a prefix and a number is kept as typed");
 });
 
-test("a weld with no declared location is offered as unknown, not as shop", () => {
-  equal(unplaced([{ no: "W-9" }], [], [])[0].kind, "weld-unknown");
+test("a row of the table with no place is not on the sheet; it is not lost, and it has no leader", () => {
+  const n = normalize([{ kind: "weld-field", no: "1", ax: 0.2, ay: 0.2, attrs: { type: "SW" } }, { kind: "spool", no: "SP-1", x: 0.3, y: 0.3 }]);
+  equal(n.length, 2);
+  assert(!isPlaced(n[0]) && !("ax" in n[0]), "no place: no leader either");
+  equal(n[0].attrs, { type: "SW" });
+  equal(notOnSheet(n).map((m) => m.no), ["1"]);
+});
+
+test("a row is joined to the drawing at a weld point: the leader ends there, the frame stands beside it", () => {
+  let items = addMark([], { kind: "weld-field", no: "1" });
+  assert(!isPlaced(items[0]));
+  items = placeAt(items, items[0].id, { x: 0.4, y: 0.5 }, 1.414);
+  const m = items[0];
+  assert(m.ax === 0.4 && m.ay === 0.5 && isPlaced(m), "joined at the point clicked");
+  assert(Math.hypot((m.x - m.ax) * 1.414, m.y - m.ay) > 0.04, "the frame stands off the weld point");
+  assert(m.src === "hand");
+  // moved: the frame keeps the offset a person gave it from the point
+  const dragged = updateMark(items, m.id, { x: m.x + 0.08, y: m.y + 0.03 })[0];
+  const moved = placeAt([dragged], m.id, { x: 0.6, y: 0.5 }, 1.414)[0];
+  assert(Math.abs((moved.x - moved.ax) - (dragged.x - dragged.ax)) < 1e-3 && Math.abs((moved.y - moved.ay) - (dragged.y - dragged.ay)) < 1e-3, "keeps its offset");
+  // taken off the drawing: still a row
+  const off = unplace(items, m.id)[0];
+  assert(!isPlaced(off) && !("ax" in off) && off.no === "1");
+});
+
+test("the same for a spool and a support: each is joined by a leader, and frames keep clear of each other", () => {
+  let items = [];
+  for (const kind of ["weld-shop", "spool", "support", "weld-field"]) items = addMark(items, { kind });
+  for (const m of [...items]) items = placeAt(items, m.id, { x: 0.5, y: 0.5 }, 1.414);
+  assert(items.every((m) => m.ax === 0.5 && m.ay === 0.5), "every kind has its leader to the one point");
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    assert(Math.hypot((items[i].x - items[j].x) * 1.414, items[i].y - items[j].y) >= 0.05, `${items[i].kind} and ${items[j].kind} frames overlap`);
+  }
+  const f = frameSpot({ x: 0.99, y: 0.01 }, [], 1.414);
+  assert(f.x <= 1 && f.y >= 0, "a frame stays on the sheet");
+});
+
+test("the engine's row for a mark is found by its plain number", () => {
+  const m = buildModel(DEMO);
+  const r = engineRow(m, plainNo(m.register[1].no));
+  equal(r.no, m.register[1].no);
+  equal(engineRow(m, "999"), null);
+  equal(engineRow({ error: "x" }, "1"), null);
 });
 
 test("the same number twice in a class, and a mark with no number, are named", () => {
@@ -134,10 +165,11 @@ test("the same number twice in a class, and a mark with no number, are named", (
   assert(problems([{ kind: "support", no: "" }]).length === 1);
 });
 
-test("a saved payload is cleaned: bad kinds and places are dropped, ids filled", () => {
+test("a saved payload is cleaned: a bad kind is dropped, a bad place makes a row not joined to the drawing, ids filled", () => {
   const n = normalize([{ kind: "weld-shop", no: "1", x: 0.2, y: 0.3 }, { kind: "zzz", no: "2", x: 0, y: 0 }, { kind: "spool", no: "3", x: "q", y: 0 }, null]);
-  equal(n.length, 1);
-  assert(n[0].id);
+  equal(n.length, 2);
+  assert(n.every((m) => m.id));
+  assert(isPlaced(n[0]) && !isPlaced(n[1]) && n[1].no === "3", "the row is kept, not on the sheet");
   equal(normalize(undefined), []);
 });
 
@@ -170,12 +202,13 @@ test("the engine's welds go on the drawn pipe, each with its frame to one side a
   const m = buildModel(data);
   const { items, missing } = fromEngine(m, data.nodes, 1.414);
   equal(missing, []);
-  equal(items.map((i) => i.no).sort(), m.register.map((r) => r.no).sort(), "one mark per weld of the register, by its number");
+  const welds = items.filter((i) => KINDS[i.kind].cls === "weld");
+  equal(welds.map((i) => i.no).sort(), m.register.map((r) => plainNo(r.no)).sort(), "one mark per weld of the register, by its plain number");
   const segs = m.edges.map((e) => [PX[m.nodes[e.a].id], PX[m.nodes[e.b].id]]);
-  for (const it of items) {
+  for (const it of welds) {
     assert(segs.some(([a, b]) => onSegment(it, a, b)), `${it.no}: the weld point (${it.ax}, ${it.ay}) lies on a drawn leg`);
     assert(Math.hypot(it.x - it.ax, it.y - it.ay) > 0.015, `${it.no}: its frame stands off the pipe`);
-    const r = m.register.find((w) => w.no === it.no);
+    const r = m.register.find((w) => plainNo(w.no) === it.no);
     equal(it.kind, r.loc === "Field" ? "weld-field" : r.loc === "Shop" ? "weld-shop" : "weld-unknown", `${it.no}: Shop/Field as the engine says`);
     assert(it.src === "engine");
   }
@@ -184,7 +217,7 @@ test("the engine's welds go on the drawn pipe, each with its frame to one side a
 test("two welds at one fitting do not put their frames on top of each other", () => {
   // the route drawn small, so its welds crowd together
   const data = { ...DEMO, nodes: DEMO.nodes.map((n) => ({ ...n, px: 0.5 + (PX[n.id][0] - 0.5) * 0.08, py: 0.5 + (PX[n.id][1] - 0.5) * 0.08 })) };
-  const { items } = fromEngine(buildModel(data), data.nodes, 1.414);
+  const items = fromEngine(buildModel(data), data.nodes, 1.414).items.filter(isPlaced);
   assert(items.length > 3);
   for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
     const d = Math.hypot((items[i].x - items[j].x) * 1.414, items[i].y - items[j].y);
@@ -192,23 +225,41 @@ test("two welds at one fitting do not put their frames on top of each other", ()
   }
 });
 
-test("a weld whose node was not seen on the sheet is not put anywhere: it is named as missing", () => {
+test("a weld whose node was not seen on the sheet is not put anywhere: it is a row not joined to the drawing", () => {
   const data = drawn(["N1"]);
   const m = buildModel(data);
   const { items, missing } = fromEngine(m, data.nodes);
-  const atN1 = m.welds.filter((w) => w.tag === "weld" && w.node === 0).map((w) => w.no);
+  const atN1 = m.welds.filter((w) => w.tag === "weld" && w.node === 0).map((w) => plainNo(w.no));
   assert(atN1.length > 0);
   equal(missing.sort(), atN1.sort());
-  assert(!items.some((i) => atN1.includes(i.no)));
-  equal(fromEngine(buildModel(DEMO), DEMO.nodes).items, [], "no node seen at all: no marks");
+  const rows = items.filter((i) => atN1.includes(i.no) && KINDS[i.kind].cls === "weld");
+  equal(rows.length, atN1.length, "the row is there, with the engine's details");
+  assert(rows.every((r) => !isPlaced(r) && r.attrs?.type), "but not on the sheet, and not given a place");
+  const all = fromEngine(buildModel(DEMO), DEMO.nodes).items;
+  assert(all.length > 0 && !all.some(isPlaced), "no node seen at all: rows only, none on the sheet");
   equal(fromEngine({ error: "x" }, []).items, []);
+});
+
+test("a spool is on the sheet only when its oval is joined to the drawing: a row alone does not meet the rule", () => {
+  const mk = (kind, no, attrs, placed = true) => ({ kind, no, ...(placed ? { x: 0.5, y: 0.5 } : {}), ...(attrs ? { attrs } : {}) });
+  const welds = [mk("weld-shop", "1", { spool: "SP-1" })];
+  assert(rules([...welds, mk("spool", "SP-1", null, false)]).some((x) => /SP-1.*بیضی‌اش روی نقشه نیست/.test(x)), "a row not joined: the oval is not on the sheet");
+  assert(!rules([...welds, mk("spool", "SP-1")]).some((x) => /SP-1/.test(x)), "joined: the rule is met");
+});
+
+test("the engine's spools are rows to be joined to their ovals", () => {
+  const data = drawn();
+  const m = buildModel(data);
+  const sp = fromEngine(m, data.nodes).items.filter((i) => i.kind === "spool");
+  equal(sp.map((i) => i.no), m.spoolIds);
+  assert(sp.every((i) => !isPlaced(i)));
 });
 
 test("a weld the register leaves without Shop/Field is drawn as unknown, not as a shop weld", () => {
   const data = drawn();
   const m = buildModel(data);
   const reg = m.register.map((r, i) => (i === 0 ? { ...r, loc: null } : r));
-  const it = fromEngine({ ...m, register: reg }, data.nodes).items.find((i) => i.no === m.register[0].no);
+  const it = fromEngine({ ...m, register: reg }, data.nodes).items.find((i) => i.no === plainNo(m.register[0].no));
   equal(it.kind, "weld-unknown");
 });
 
@@ -258,8 +309,8 @@ test("the engine's welds carry what the register and the BOM say", () => {
   const data = { ...drawn(), bom: [{ group: "PIPE", description: "PIPE 36 SCH 10 API 5L-B", diam: 36 }] };
   const m = buildModel(data);
   const { items } = fromEngine(m, data.nodes, 1.414, data.bom);
-  for (const it of items) {
-    const r = m.register.find((w) => w.no === it.no);
+  for (const it of items.filter((i) => KINDS[i.kind].cls === "weld")) {
+    const r = m.register.find((w) => plainNo(w.no) === it.no);
     equal(it.attrs.type, r.kind, `${it.no}: joint type`);
     equal(it.attrs.size, `${r.nps}"`, `${it.no}: size`);
     equal(it.attrs.spool, r.spool, `${it.no}: spool`);

@@ -88,6 +88,7 @@ await page.locator("[data-sheet] img").scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOT}/sheet-leaders-1.png` });
 
 // the tables: welds with what the register and the BOM say, editable
+await page.locator('[data-mark-tab="weld"]').click();
 const weldRows = await page.locator('[data-mark-table="weld"] tbody tr[data-mark-row]').count();
 check(weldRows === marks.length, `a row for every weld (${weldRows})`);
 const mat = await page.locator('[data-mark-table="weld"] [data-cell="material"]').first().inputValue();
@@ -95,20 +96,25 @@ check(mat === "A312-TP304", `material read off the sheet's own pipe row (${mat})
 await page.locator('[data-mark-table="weld"] [data-cell="wps"]').first().fill("WPS-01");
 await page.locator('[data-mark-table="weld"] [data-cell="schedule"]').first().fill("40S");
 check(await page.locator('[data-mark-table="weld"] [data-cell="wps"]').first().inputValue() === "WPS-01", "a WPS typed into the weld table stays");
-// the spool tab: add one on the sheet, name and describe it; the rules speak
+// numbers are the number alone, so a frame takes little room (the register still calls them W-01…)
+check(marks.every((m) => /^\d+$/.test(m.no)), `weld numbers on the sheet are plain numbers: ${marks.map((m) => m.no).join(", ")}`);
+const engineCols = await page.locator('[data-mark-table="weld"] [data-engine="ndt"]').first().innerText();
+check(/RT/.test(engineCols), `the engine's NDT sits in the same row (${engineCols})`);
+// the spool tab: the engine's spools are rows not yet joined to an oval; join one, describe it; the rules speak
 await page.locator('[data-mark-tab="spool"]').click();
-check(await page.locator("[data-mark-rules]").count() > 0 && /SP-01.*بیضی/.test(await page.locator("[data-mark-rules]").innerText()), "the rules: a spool the welds name has no oval on the sheet yet");
-await page.locator('[data-mark-add="spool"]').click();
+check(await page.locator("[data-loose]").count() > 0 && /اسپول SP-01/.test(await page.locator("[data-loose]").innerText()), "the spools the engine made are rows not yet joined to the drawing, and the table says so");
+const spoolRow = page.locator('[data-mark-table="spool"] [data-mark-row]').first();
+await spoolRow.locator('[data-cell="lengthMm"]').fill("5000");
+const leadersBefore = await page.locator("[data-leader]").count();
+await spoolRow.locator("[data-row-attach]").click();
 const sbx = await page.locator("[data-sheet]").boundingBox();
 await page.mouse.click(sbx.x + sbx.width * 0.30, sbx.y + sbx.height * 0.62);
 await page.waitForTimeout(200);
-await page.locator('[data-mark-table="spool"] [data-cell="no"]').first().fill("SP-01");
-await page.locator('[data-mark-table="spool"] [data-cell="lengthMm"]').first().fill("5000");
-await page.waitForTimeout(200);
 check(await page.locator('[data-mark-id][data-shape="oval"][data-no="SP-01"]').count() === 1, "SP-01 is an oval on the sheet");
+check(await page.locator("[data-leader]").count() === leadersBefore + 1, "joined to its place by a leader, like a weld");
 const rulesNow = (await page.locator("[data-mark-rules]").count()) ? await page.locator("[data-mark-rules]").innerText() : "";
-check(!/SP-01/.test(rulesNow), `and the rule about SP-01 is met (${rulesNow.replace(/\s+/g, " ").slice(0, 120) || "no rule left"})`);
-// the support tab works the same way, a hexagon
+check(!/اسپول SP-01 را/.test(rulesNow) && /SP-02/.test(rulesNow), `the rule about SP-01 is met, SP-02 (no oval yet) is still named (${rulesNow.replace(/\s+/g, " ").slice(0, 110)})`);
+// the support tab: a row is added, joined to a place, given its type
 await page.locator('[data-mark-tab="support"]').click();
 await page.locator('[data-mark-add="support"]').click();
 await page.mouse.click(sbx.x + sbx.width * 0.20, sbx.y + sbx.height * 0.66);
@@ -118,7 +124,7 @@ check(/نوعش مشخص نیست/.test(await page.locator("[data-mark-tables]")
 await page.locator('[data-mark-table="support"] [data-cell="type"]').first().fill("FS133");
 await page.waitForTimeout(200);
 check(!/نوعش مشخص نیست/.test(await page.locator("[data-mark-tables]").innerText()), "its type given, the rule is met");
-check(await page.locator('[data-mark-id][data-shape="hexagon"][data-no="SW-1"]').count() === 1, "SW-1 is a hexagon on the sheet");
+check(await page.locator('[data-mark-id][data-shape="hexagon"][data-no="SW-1"]').count() === 1, "SW-1 is a hexagon on the sheet, with its leader");
 await page.screenshot({ path: `${SHOT}/sheet-leaders-tables.png`, fullPage: true });
 
 // move a weld point along: pick the first mark, drag its yellow weld point

@@ -9,8 +9,9 @@ import { TYPE_FA } from "../../lib/standards";
 import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../../lib/extraction/merge.mjs";
 import { compareReads } from "../../lib/extraction/second-read.mjs";
-import { seedFromPass, fromReaderTags, fromEngine, normalize as normalizeMarks, unplaced as unplacedMarks } from "../../lib/sheet/markup.mjs";
+import { seedFromPass, fromReaderTags, fromEngine, normalize as normalizeMarks } from "../../lib/sheet/markup.mjs";
 import SheetMarkup from "../../components/SheetMarkup";
+import MarkTables from "../../components/MarkTables";
 import { weldListFromMarks } from "../../lib/register/weld-marks.mjs";
 import SaveBar from "../../components/SaveBar";
 import TabNav from "../../components/TabNav";
@@ -49,6 +50,9 @@ export default function Page() {
   const [repairModel, setRepairModel] = useState("");
   // a second, independent reading of the sheet; "" = off (it costs two more model calls)
   const [secondModel, setSecondModel] = useState("");
+  // the mark picked, and the row of the table waiting for its weld point on the sheet: shared by the sheet and the table
+  const [markSel, setMarkSel] = useState(null);
+  const [attachId, setAttachId] = useState(null);
   const [tab, setTab] = useState("weld");
   const [selected, setSelected] = useState(null);
   const [exploded, setExploded] = useState(false);
@@ -726,11 +730,11 @@ export default function Page() {
             <div className="canvas" data-sheet-stage style={{ overflow: "auto", padding: 12 }}>
               <SheetMarkup src={openRun ? runSheet?.src : preview}
                 items={data.sheetMarkup?.items || []}
-                unplaced={unplacedMarks(model.register, model.spoolIds, data.sheetMarkup?.items || [])}
+                selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
                 onSeedEngine={(aspect) => {
                   // the engine's welds again, where the model saw their nodes: what a person placed or kept stays
                   const kept = (data.sheetMarkup?.items || []).filter((m) => m.src !== "engine");
-                  const eng = fromEngine(model, data.nodes, aspect, data.bom).items.filter((m) => !kept.some((k) => k.kind.startsWith("weld") && k.no === m.no));
+                  const eng = fromEngine(model, data.nodes, aspect, data.bom).items.filter((m) => !kept.some((k) => k.no === m.no && (k.kind === m.kind || (k.kind.startsWith("weld") && m.kind.startsWith("weld")))));
                   const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks([...kept, ...eng]) } };
                   setData(next);
                   setEditing(JSON.stringify(next, null, 2));
@@ -823,6 +827,16 @@ export default function Page() {
                     ? " · زیرزمینی: تراز گرید ثبت نشده"
                     : ` · ${model.totals.buried} زیرزمینی / ${model.totals.aboveGround} روزمینی (${gradeSource})`}
                 </div>
+                {/* one table: the welds, spools and supports of the sheet, with the engine's Shop/Field, NDT and level beside them */}
+                {SHEET_MARKUP ? (
+                  <MarkTables items={data.sheetMarkup?.items || []} model={model}
+                    onChange={(items) => {
+                      const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks(items) } };
+                      setData(next);
+                      setEditing(JSON.stringify(next, null, 2));
+                    }}
+                    selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} />
+                ) : (
                 <table>
                   <thead><tr><th>No</th><th>Spool</th><th>محل</th><th>نوع</th><th>اتصال</th><th>EL</th><th>NDT</th></tr></thead>
                   <tbody>
@@ -840,6 +854,7 @@ export default function Page() {
                     ))}
                   </tbody>
                 </table>
+                )}
                 <div className="row">
                   <button className="ghost" onClick={() => exportWorkbook(model, data)}>دانلود Excel (۶ شیت)</button>
                   <button className="ghost" onClick={download}>CSV</button>

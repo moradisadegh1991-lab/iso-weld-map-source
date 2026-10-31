@@ -57,6 +57,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [reviewed, setReviewed] = useState(() => new Set(initial?.reviewed || []));
   const [picked, setPicked] = useState(null);
   const [extraTool, setExtraTool] = useState(null);
+  const [extraAttach, setExtraAttach] = useState(null);   // the spool/support row waiting for its place on the sheet
   const [extraSel, setExtraSel] = useState(null);
   // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
   const [extras, setExtras] = useState(() => normalizeMarks(initial?.sheetMarkup?.items).filter((m) => m.kind === "spool" || m.kind === "support"));
@@ -230,6 +231,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           <SheetReview src={sheet.src} marks={keptMarks} states={states} selected={picked} onSelect={pick}
             kinds={kinds} extras={extras} onExtras={run?.run?.status === "approved" ? undefined : setExtras}
             extraTool={extraTool} onExtraTool={setExtraTool} extraSel={extraSel} onExtraSel={setExtraSel}
+            extraAttach={extraAttach} onExtraAttach={setExtraAttach}
             onPlace={run?.run?.status === "approved" ? undefined : place}
             legend={progress ? [["done", "جوش و NDT پذیرفته"], ["inspection", "جوش‌شده، منتظر بازرسی/NDT"], ["open", "باز"]]
               : [["checked", "بررسی شد"], ["unchecked", "بررسی نشده"]]} />
@@ -239,7 +241,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           </p>
           <MarkTables items={extras} onChange={run?.run?.status === "approved" ? undefined : setExtras} tabs={["spool", "support"]}
             readOnly={run?.run?.status === "approved"} weldList={typed} selectedId={extraSel} onSelect={setExtraSel}
-            onAdd={(k) => setExtraTool(k)} />
+            attachId={extraAttach} onAttach={setExtraAttach} />
         </div>)}
       <div className="wl-table">
         <table className="dtable">
