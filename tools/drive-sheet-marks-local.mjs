@@ -53,7 +53,7 @@ check(await page.locator('[data-extra][data-src="reader"]').count() === 6, "each
 await page.locator("[data-wl-sheet] .sheet-box").scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOT}/sheet-marks-local-1.png` });
 
-// the person's edits on an extra: move, renumber, retype, delete, add
+// the person's edits on an extra: move, renumber, delete, add
 const ex = page.locator('[data-extra][data-no="SP-1"]');
 await ex.scrollIntoViewIfNeeded();
 const bb = await ex.boundingBox();
@@ -63,17 +63,22 @@ await settle();
 const bb2 = await page.locator('[data-extra][data-no="SP-1"]').boundingBox();
 check(Math.abs(bb2.x - bb.x - 80) < 8 && Math.abs(bb2.y - bb.y - 40) < 8, `SP-1 dragged (${Math.round(bb2.x - bb.x)}, ${Math.round(bb2.y - bb.y)} px)`);
 check(await page.locator('[data-extra][data-no="SP-1"]').getAttribute("data-src") === "hand", "…and is the person's from then on");
-await page.locator("[data-extra-no]").fill("SP-9");
-await page.locator("[data-extra-kind]").selectOption("support");
+// renumber in the table (the row is the mark), then delete the row
+const spId = await page.locator('[data-extra][data-no="SP-1"]').getAttribute("data-extra");
+const spRow = page.locator(`[data-mark-row="${spId}"]`);
+await spRow.locator('[data-cell="no"]').fill("SP-9");
 await settle();
-check(await page.locator('[data-extra][data-no="SP-9"]').getAttribute("data-shape") === "hexagon", "SP-1 renumbered SP-9 and retyped as a support: now a hexagon");
-await page.locator("[data-extra-delete]").click();
-check(await page.locator("[data-extra]").count() === 5, "deleted: 5 left");
-await page.locator('[data-extra-tool="spool"]').click();
+check(await page.locator('[data-extra][data-no="SP-9"]').count() === 1, "SP-1 renumbered SP-9 in the table: the oval on the sheet follows");
+await spRow.locator("[data-row-delete]").click();
+check(await page.locator("[data-extra]").count() === 5, "its row deleted: 5 left");
+// a spool added by the "+" button: a row not joined to the drawing, then joined by a click, with its leader
+await page.locator('[data-mark-add="spool"]').click();
+check(/به نقشه وصل نیست/.test(await page.locator("[data-loose]").innerText()), "the new row is named as not joined to the drawing");
 const sb = await page.locator("[data-wl-sheet] .sheet-box").boundingBox();
 await page.mouse.click(sb.x + sb.width * 0.7, sb.y + sb.height * 0.12);
 await settle();
-check(await page.locator("[data-extra]").count() === 6 && await page.locator('[data-extra][data-shape="oval"][data-src="hand"]').count() === 1, "a spool added by hand where the sheet was clicked");
+check(await page.locator("[data-extra]").count() === 6 && await page.locator('[data-extra][data-shape="oval"][data-src="hand"]').count() === 1, "a spool added by hand and joined where the sheet was clicked");
+check(await page.locator("[data-extra-leader]").count() === 1 && await page.locator("[data-loose]").count() === 0, "with a leader to its place, and no row left unjoined");
 
 // a weld can still be picked and moved as before
 await page.locator('[data-mark="5"]').dispatchEvent("pointerdown");

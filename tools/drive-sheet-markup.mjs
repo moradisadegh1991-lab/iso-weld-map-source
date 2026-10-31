@@ -80,17 +80,32 @@ check(s["1"] === "circle" && s["2"] === "square" && s["3"] === "circle-dashed" &
 check(/سرجوش‌ها 3 · اسپول‌ها 1 · ساپورت‌ها 1/.test(await page.locator("[data-counts]").innerText()), "the counts line: 3 welds, 1 spool, 1 support");
 await page.screenshot({ path: `${SHOT}/sheet-markup-1.png` });
 
+// the table: one table for welds, spools and supports, rows and marks one thing
+const rowOf = async (no) => page.locator(`[data-mark-id][data-no="${no}"]`).first().getAttribute("data-mark-id").then((id) => page.locator(`[data-mark-row="${id}"]`));
+check(await page.locator('[data-mark-table="weld"]').count() === 1 && await page.locator('[data-mark-tab]').count() === 3, "one table with the three tabs: welds, spools, supports");
+check(await page.locator("[data-loose]").count() === 0, "every row is joined to the drawing: no warning");
 // the model saw where the leaders of 1 and 2 end: each is joined to its weld point; 3 has none and gets none
 check(await page.locator("[data-leader]").count() === 2, "a leader for each mark whose weld point the model saw (1 and 2), none for 3");
+// a mark picked on the sheet picks its row
 await page.locator('[data-mark-id][data-no="3"]').click();
-await page.locator("[data-set-point]").click();
+check(await (await rowOf("3")).evaluate((r) => r.classList.contains("sel")), "mark 3 picked on the sheet: its row is picked");
+// join it to the drawing with the row's button: the leader ends where the sheet is clicked
+const id3 = await page.locator('[data-mark-id][data-no="3"]').getAttribute("data-mark-id");
+await page.locator(`[data-row-attach="${id3}"]`).click();
+check(await page.locator("[data-attach-hint]").count() === 1, "the sheet is waiting for the weld point");
 const box0 = await page.locator("[data-sheet]").boundingBox();
 await page.mouse.click(box0.x + box0.width * 0.34, box0.y + box0.height * 0.55);
 await page.waitForTimeout(200);
 check(await page.locator("[data-leader]").count() === 3, "mark 3 joined to a weld point put by a click on the sheet");
-await page.locator('[data-mark-id][data-no="3"]').click();
-await page.locator("[data-clear-point]").click();
-check(await page.locator("[data-leader]").count() === 2, "its line taken away again");
+// take it off the drawing: still a row, and the user is told it is not joined
+await page.locator(`[data-row-unplace="${id3}"]`).click();
+await page.waitForTimeout(200);
+check(await marks().count() === 4 && await page.locator(`[data-mark-row="${id3}"][data-placed="no"]`).count() === 1, "taken off the drawing: the row stays, the mark goes");
+check(/به نقشه وصل نیست/.test(await page.locator("[data-loose]").innerText()), "and the table says a row is not joined to the drawing");
+await page.locator(`[data-row-attach="${id3}"]`).click();
+await page.mouse.click(box0.x + box0.width * 0.36, box0.y + box0.height * 0.57);
+await page.waitForTimeout(200);
+check(await marks().count() === 5 && await page.locator("[data-loose]").count() === 0, "joined again: no warning");
 
 // move: drag mark 1 by 120 px right, 60 px down from its centre
 const m1 = page.locator('[data-no="1"]');
@@ -102,44 +117,46 @@ await page.waitForTimeout(300);
 const after = await m1.boundingBox();
 check(Math.abs(after.x - before.x - 120) < 6 && Math.abs(after.y - before.y - 60) < 6, `drag moves the mark (${Math.round(after.x - before.x)}, ${Math.round(after.y - before.y)} px)`);
 
-// edit number and kind
-await m1.click();
-await page.locator("[data-edit-no]").fill("99");
-await page.locator("[data-edit-kind]").selectOption("weld-field");
+// edit number and kind in the table
+const row1 = await rowOf("1");
+await row1.locator('[data-cell="no"]').fill("99");
+await row1.locator('[data-cell="kind"]').selectOption("weld-field");
 await page.waitForTimeout(200);
 s = await shapes();
-check(s["99"] === "square" && !("1" in s), "renumbered to 99 and retyped to a site weld: now a square");
+check(s["99"] === "square" && !("1" in s), "renumbered to 99 and retyped to a site weld in the table: now a square");
 
-// delete
-await page.locator("[data-delete]").click();
-check((await marks().count()) === 4, "deleted: 4 left");
+// delete the row: the mark goes with it
+await page.locator(`[data-mark-row] [data-cell="no"]`).first().scrollIntoViewIfNeeded();
+await (await rowOf("99")).locator("[data-row-delete]").click();
+check((await marks().count()) === 4 && !("99" in await shapes()), "the row deleted: 4 marks left");
 
-// add a support by the tool
+// add a support by the tool: it comes with its leader like the others
+const leadersBefore = await page.locator("[data-leader]").count();
 await page.locator('[data-tool="support"]').click();
 const box = await page.locator("[data-sheet]").boundingBox();
 await page.mouse.click(box.x + box.width * 0.75, box.y + box.height * 0.25);
 await page.waitForTimeout(200);
-s = await shapes();
 check((await marks().count()) === 5 && (await marks().evaluateAll((els) => els.filter((e) => e.dataset.kind === "support" && e.dataset.src === "hand").length)) === 1,
   "a support added where the sheet was clicked (by hand), 5 marks");
+check(await page.locator("[data-leader]").count() === leadersBefore + 1, "and joined to its place by a leader, as the welds are");
 
-// duplicate number is named
-await page.locator("[data-edit-no]").fill("S-2");
-check(await page.locator("[data-problem]").count() === 1, "the same support number twice is named");
-await page.locator("[data-edit-no]").fill("S-3");
-check(await page.locator("[data-problem]").count() === 0, "…and the warning goes when fixed");
+// duplicate number is named, in the support tab
+await page.locator('[data-mark-tab="support"]').click();
+const handRow = page.locator('[data-mark-table="support"] [data-mark-row]').last();
+await handRow.locator('[data-cell="no"]').fill("S-2");
+check(/دو بار/.test(await page.locator("[data-mark-rules]").innerText()), "the same support number twice is named");
+await handRow.locator('[data-cell="no"]').fill("S-3");
+check((await page.locator("[data-mark-rules]").count()) === 0 || !/دو بار/.test(await page.locator("[data-mark-rules]").innerText()), "…and the warning goes when fixed");
 
-// the register's welds the sheet lacks
-const todo = await page.locator("[data-unplaced-item]").evaluateAll((els) => els.map((e) => e.dataset.unplacedItem));
-await page.locator("[data-unplaced] summary").click();
-check(todo.length >= 2, `welds the register has and the sheet lacks are offered: ${todo.join(", ")}`);
-const first = todo[0];
-await page.locator(`[data-unplaced-item="${first}"]`).click();
+// a new weld row with "+": it is not joined to the drawing until its weld point is clicked
+await page.locator('[data-mark-tab="weld"]').click();
+await page.locator('[data-mark-add="weld"]').click();
+check(await page.locator("[data-loose]").count() === 1 && await page.locator("[data-attach-hint]").count() === 1, "a row added in the table is named as not joined, and the sheet waits for its place");
 await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.85);
 await page.waitForTimeout(200);
-const placed = await page.locator(`[data-mark-id][data-no="${first}"]`).evaluate((e) => e.dataset.kind);
-check(placed === "weld-shop" || placed === "weld-field", `placed from the list with the engine's location (${placed})`);
-check(!(await page.locator(`[data-unplaced-item="${first}"]`).count()), "…and no longer offered");
+check((await marks().count()) === 6 && await page.locator("[data-loose]").count() === 0, "its weld point clicked: it is on the sheet with its leader");
+const newest = await page.locator('[data-mark-table="weld"] [data-mark-row]').last().locator('[data-cell="no"]').inputValue();
+check(/^\d+$/.test(newest), `the new weld's number is a plain number (${newest})`);
 
 // download the marked sheet
 const dl = page.waitForEvent("download");
