@@ -51,6 +51,11 @@ check(Object.keys(welds).length === 28, `all 28 printed weld numbers are on the 
 const wrong = Object.entries(welds).filter(([no, sh]) => sh !== (CIRCLES.includes(no) ? "circle" : "square"));
 check(wrong.length === 0, `circle = shop (${CIRCLES.join(",")}), square = site (the other 21)${wrong.length ? " — wrong: " + JSON.stringify(wrong) : ""}`);
 check(await page.locator(`${W}[data-no="5"] text`).textContent() === "5", "the frame holds the plain number");
+// each frame's leader followed to the pipe by the reader: the frame joined to its weld point
+const readerLeaders = await page.locator("[data-wl-sheet] [data-leader]").count();
+check(readerLeaders >= 18, `${readerLeaders} weld frames joined to their weld point on the pipe by the reader (18 measured on this sheet)`);
+const l2 = await page.locator(`[data-leader="${await page.locator(`${W}[data-no="2"]`).getAttribute("data-mark-id")}"]`).evaluate((e) => [Number(e.dataset.ax), Number(e.dataset.ay)]).catch(() => null);
+check(l2 && Math.abs(l2[0] - 0.1294) < 0.004 && Math.abs(l2[1] - 0.2587) < 0.006, `weld 2's leader ends on its dot on the pipe (${l2})`);
 
 const X = '[data-wl-sheet] [data-mark-id]:is([data-kind="spool"],[data-kind="support"])';
 const extras = Object.fromEntries(await page.locator(X).evaluateAll((els) => els.map((e) => [e.dataset.no, e.dataset.shape])));
@@ -142,6 +147,23 @@ if (sent) {
   check(sent.payload?.bom?.length === 20 && sent.payload?.lineData?.lineClass === "1P2", "the BOM and the line data go with it");
 } else console.log("note: the save did not reach /api/runs — payload not captured:", (await page.locator(".weldlist .err").allInnerTexts()).join(" | ").slice(0, 600));
 await page.screenshot({ path: `${SHOT}/sheet-marks-local-2.png` });
+
+// the same sheet with its weld numbers whited out: the weld dots on the pipe are suggested as welds
+const UNMARKED = process.env.UNMARKED_SHEET || "/tmp/claude-0/p2/sh1-unmarked.pdf";
+await page.unrouteAll({ behavior: "ignoreErrors" });
+await page.goto(`${BASE}/piping`, { waitUntil: "networkidle" }); await settle();
+await page.check('input[name="iso-reader"][value="local"]');
+await page.setInputFiles(".drop input[type=file]", UNMARKED);
+await page.locator(W).first().waitFor({ timeout: 150000 });
+await settle();
+const sug = await page.locator(W).count();
+check(sug >= 14 && sug <= 20, `no weld numbers printed: ${sug} weld dots on the pipe suggested as welds (14 of the 18 traced on the marked sheet, measured)`);
+check(await page.locator(`${W}[data-shape="circle-dashed"]`).count() === sug, "each a weld of unknown location (dashed) — Shop/Field is not guessed");
+check(await page.locator("[data-wl-sheet] [data-leader]").count() === sug, "each joined to its dot by a leader");
+const noteText = (await page.locator(".note").allTextContents()).join(" | ");
+check(/پیشنهادی/.test(noteText) && await page.locator("[data-from-dots]").count() === 1, `the page says the welds are suggestions to check${/پیشنهادی/.test(noteText) ? "" : ` («${noteText.slice(0, 300)}»)`}`);
+check(!/شمارهٔ جوش چاپ‌شده روی نقشه/.test(noteText), "…and never that the numbers were printed on the sheet");
+await page.screenshot({ path: `${SHOT}/sheet-marks-unmarked.png` });
 
 // a sheet with only its CUT PIPE LENGTH table (25-1020 sheet 4): the table read with no model
 const CUT_SHEET = process.env.CUT_SHEET || "/tmp/claude-0/sh4/in.pdf";

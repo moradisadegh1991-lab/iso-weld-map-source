@@ -60,7 +60,9 @@ export async function POST(request) {
     // in weld-number order (1, 2, … 4, 4-1, 5), not the order they were found on the page
     const key = (no) => String(no).split("-").map(Number);
     // `at`: the marker's centre as fractions of the page as rendered, for the review beside the drawing
-    const marks = r.marks.map(({ no, shape, outline, label, at }) => ({ no, shape, outline, label, ...(Array.isArray(at) ? { at } : {}) }))
+    // `weldAt`: where the marker's leader meets the pipe (its weld point), when it was followed there
+    const marks = r.marks.map(({ no, shape, outline, label, at, weldAt, weldDot }) => ({ no, shape, outline, label, ...(Array.isArray(at) ? { at } : {}),
+      ...(Array.isArray(weldAt) ? { weldAt, weldDot: Boolean(weldDot) } : {}) }))
       .sort((a, b) => { const [x, y] = [key(a.no), key(b.no)]; return x[0] - y[0] || (x[1] || 0) - (y[1] || 0); });
     // the title block: a field not read for certain is null, and stays for the person
     const meta = { drawingNo: r.meta?.drawingNo ?? null, sheet: r.meta?.sheet ?? null, rev: r.meta?.rev ?? null };
@@ -75,7 +77,9 @@ export async function POST(request) {
     // the CUT PIPE LENGTH table, when the sheet carries one: a length or size not read for certain is left out / null
     const cutLengths = (Array.isArray(r.cutLengths) ? r.cutLengths : []).filter((c) => Number.isInteger(c?.piece) && Number.isFinite(c?.lengthMm))
       .map((c) => ({ piece: c.piece, lengthMm: c.lengthMm, nps: Number.isFinite(c.nps) ? c.nps : null, ns: c.ns || null }));
-    return Response.json({ marks, tags, meta, lineData, bom, cutLengths,
+    // the weld dots drawn on the pipe (a filled dot at each weld), each a candidate weld point for a person to check
+    const weldDots = (Array.isArray(r.weldDots) ? r.weldDots : []).filter((d) => Array.isArray(d) && d.length === 2 && d.every(Number.isFinite));
+    return Response.json({ marks, tags, meta, lineData, bom, cutLengths, weldDots,
       orientation: r.orientation, ms: Date.now() - t0, reader: "tools/iso-read.py (OpenCV + tesseract, no model)" });
   } catch (e) { return errorResponse(e); }
   finally { if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {}); }

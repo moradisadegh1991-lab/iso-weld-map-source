@@ -3,8 +3,11 @@
     python3 -I tools/iso-read.py <sheet.pdf|.png|.jpg> [--page 1] [--dpi 200] [--debug out.png]
 
 Prints one JSON object: { "orientation", "meta": {drawingNo, sheet, rev},
-"lineData": {...}, "bom": [...], "marks": [ {no, shape, outline, label, box, at} ],
-"tags": [...], "rejected": [...] }. `meta` is
+"lineData": {...}, "bom": [...], "cutLengths": [...], "weldDots": [[x, y]],
+"marks": [ {no, shape, outline, label, box, at, weldAt?, weldDot?} ], "tags": [...],
+"rejected": [...] }. `weldAt` is where the marker's leader meets the pipe and
+`weldDots` the weld dots drawn on the pipe (weld_points;
+docs/epc-llm/10-weld-points.md), both fractions of the page as rendered. `meta` is
 the title block (read_title; any part not read for certain is null),
 `lineData` the line data printed in it (read_line_data) and `bom` the bill of
 material beside the drawing (read_bom), each as the sheet prints it; `box`
@@ -52,6 +55,13 @@ dpi = int(args[args.index("--dpi") + 1]) if "--dpi" in args else 200
 page = int(args[args.index("--page") + 1]) if "--page" in args else 1
 debug = args[args.index("--debug") + 1] if "--debug" in args else None
 S = dpi / 200.0                     # every size below is for 200 dpi
+
+
+def load_at(path, at_dpi):
+    with tempfile.TemporaryDirectory() as d:
+        subprocess.run(["pdftoppm", "-r", str(at_dpi), "-gray", "-png", "-f", str(page), "-l", str(page), path, f"{d}/p"], check=True)
+        f = [x for x in os.listdir(d) if x.endswith(".png")][0]
+        return cv2.imread(f"{d}/{f}", cv2.IMREAD_GRAYSCALE)
 
 
 def load(path):
@@ -572,6 +582,146 @@ def bom_size(text, description):
     return None
 
 
+# ── where each weld is on the pipe ────────────────────────────────────────
+# Measured on the golden sheets (docs/epc-llm/10-weld-points.md). At 300 dpi
+# a weld is drawn as a filled dot on the pipe, about 5.4 px in inscribed
+# radius; the pipe's heavy line is 2.8-3, a flow arrowhead 6.4 and more, a
+# leader 1-1.5. 200 dpi does not tell a dot from the sheet's border line, so
+# the page is rendered again at 300 dpi for this.
+DOT_DT = (4.3, 6.3)
+PIPE_DT, PIPE_LEN = 2.0, 40       # the pipe: a run of ink at least 2 px from its edge, 40 px long or more
+LEAD_DT = 2.4                     # a leader ends where it meets ink this thick (a pipe, a fitting's body)
+
+
+def weld_points(g3, frames, avoid):
+    """Each frame's weld point, and the dots drawn on the pipe.
+
+    g3      the upright page at 300 dpi
+    frames  the weld frames' boxes, in g3's pixels
+    avoid   boxes where nothing is a weld (spool and support tags, tables)
+
+    A frame's weld point is where its leader meets the pipe: the line that
+    leaves the frame is followed (one bend at most) until it reaches the
+    pipe's heavy line or a dot, and snaps to a dot within 14 px. A frame whose
+    leader is not followed to the pipe has none — a frame in a stack drawn
+    without a leader of its own included: it is not the stack's point.
+
+    Returns ([ (x, y, on_dot) | None per frame ], [ (x, y) dots on the pipe ]).
+    """
+    H, W = g3.shape
+    ink = (g3 < 140).astype(np.uint8)
+    dt = cv2.distanceTransform(ink, cv2.DIST_L2, 5)
+    fmask = np.zeros_like(ink)
+    for x0, y0, x1, y1 in list(frames) + list(avoid):
+        fmask[max(0, y0 - 4):y1 + 5, max(0, x0 - 4):x1 + 5] = 1
+    core = ((dt >= DOT_DT[0]) & (fmask == 0)).astype(np.uint8)
+    n, lab, st, cen = cv2.connectedComponentsWithStats(core, 8)
+    dots = []
+    for i in range(1, n):
+        x, y, w, h, a = st[i]
+        if a < 6 or w > 16 or h > 16:
+            continue
+        if dt[y:y + h, x:x + w][lab[y:y + h, x:x + w] == i].max() > DOT_DT[1]:
+            continue
+        dots.append((float(cen[i][0]), float(cen[i][1])))
+    darr = np.array(dots) if dots else np.zeros((0, 2))
+
+    # the frames' own outlines erased: a stack of frames touching each other is not a leader
+    ink2 = ink.copy()
+    for x0, y0, x1, y1 in frames:
+        ink2[max(0, y0 - 6):y1 + 7, max(0, x0 - 6):x1 + 7] = 0
+    inkb = cv2.dilate(ink2, np.ones((3, 3), np.uint8))
+    th0 = ((dt >= LEAD_DT) & (fmask == 0)).astype(np.uint8)
+    n2, lab2, st2, _ = cv2.connectedComponentsWithStats(th0, 8)
+    keep = np.zeros(n2, np.uint8)
+    keep[1:] = np.maximum(st2[1:, 2], st2[1:, 3]) >= 50
+    thick = keep[lab2]
+    for x, y in dots:
+        cv2.circle(thick, (int(x), int(y)), 5, 1, -1)
+    small = (th0 > 0) & (thick == 0)    # a fitting's short body, or a label's bold letters
+
+    lmax = int(0.22 * W)
+    ang = np.deg2rad(np.arange(0, 360, 1.0))
+    steps = np.arange(1, lmax)
+    cos_, sin_ = np.cos(ang)[:, None] * steps, np.sin(ang)[:, None] * steps
+
+    def scan(px, py, min_small, avoid_ang=None):
+        xs = (px + cos_).round().astype(int)
+        ys = (py + sin_).round().astype(int)
+        ok = (xs >= 0) & (xs < W) & (ys >= 0) & (ys < H)
+        xs, ys = xs.clip(0, W - 1), ys.clip(0, H - 1)
+        on = (inkb[ys, xs] > 0) & ok
+        run = np.where(on.all(1), lmax, np.argmin(on, 1))
+        th = (thick[ys, xs] > 0) & ok
+        first = np.where(th.any(1), np.argmax(th, 1), lmax)
+        sm = small[ys, xs] & ok
+        sm[:, :int(min_small)] = False        # not the frame's own label (THD, FFW printed beside it)
+        first_sm = np.where(sm.any(1), np.argmax(sm, 1), lmax)
+        # the pipe or a dot reached along the run wins over a short thick spot passed on the way
+        # (two thin lines crossing look thick for a few pixels)
+        first = np.where(first < run, first, first_sm)
+        hit = first < run
+        length = np.where(hit, first, run)
+        if avoid_ang is not None:
+            back = np.abs(((ang - avoid_ang + np.pi) % (2 * np.pi)) - np.pi) < np.deg2rad(160)
+            length = np.where(back, length, 0)
+        k = int(np.argmax(length + hit * 5))
+        L = int(length[k])
+        return ang[k], L, (px + np.cos(ang[k]) * L, py + np.sin(ang[k]) * L), bool(hit[k])
+
+    points = []
+    for x0, y0, x1, y1 in frames:
+        # the lines leaving the frame: ink in a band 8-12 px outside it (found in a window round the frame)
+        wx, wy = max(0, x0 - 12), max(0, y0 - 12)
+        win = ink2[wy:y1 + 13, wx:x1 + 13].copy()
+        win[max(0, y0 - 8) - wy:y1 + 9 - wy, max(0, x0 - 8) - wx:x1 + 9 - wx] = 0
+        m, _, _, ecen = cv2.connectedComponentsWithStats(win, 8)
+        ecen = ecen + [wx, wy]
+        min_small = 1.2 * max(x1 - x0, y1 - y0)
+        best = None
+        for e in range(1, m):
+            px, py = ecen[e]
+            a, L, end, hit = scan(px, py, min_small)
+            mx, my = px + np.cos(a) * 12, py + np.sin(a) * 12
+            if x0 - 3 <= mx <= x1 + 3 and y0 - 3 <= my <= y1 + 3:
+                continue          # along the frame's own side, not away from it
+            total = L
+            if not hit and L >= 15:      # a bent leader: one turn more
+                a2, L2, end2, hit2 = scan(end[0], end[1], 0, avoid_ang=a)
+                if hit2 and L2 >= 8:
+                    end, hit, total = end2, True, L + L2
+            if not hit or L < 15:
+                continue
+            if best is None or total < best[0]:
+                best = (total, end)
+        if not best:
+            points.append(None)
+            continue
+        ex, ey = best[1]
+        on_dot = False
+        if len(darr):
+            dd = np.hypot(darr[:, 0] - ex, darr[:, 1] - ey)
+            j = int(dd.argmin())
+            if dd[j] < 14:
+                ex, ey, on_dot = darr[j][0], darr[j][1], True
+        points.append((float(ex), float(ey), on_dot))
+
+    # the dots on the pipe: a ring round each crosses the pipe's heavy line; none near the page's edge
+    tp = ((dt >= PIPE_DT) & (fmask == 0)).astype(np.uint8)
+    n3, lab3, st3, _ = cv2.connectedComponentsWithStats(tp, 8)
+    keep3 = np.zeros(n3, np.uint8)
+    keep3[1:] = np.maximum(st3[1:, 2], st3[1:, 3]) >= PIPE_LEN
+    pipe = keep3[lab3]
+    ringpts = [(int(round(14 * np.cos(t))), int(round(14 * np.sin(t)))) for t in np.deg2rad(np.arange(0, 360, 4))]
+    on_pipe = []
+    for x, y in dots:
+        if not (0.03 * W < x < 0.97 * W and 0.03 * H < y < 0.97 * H):
+            continue
+        if any(pipe[min(H - 1, max(0, int(y) + dy)), min(W - 1, max(0, int(x) + dx))] for dx, dy in ringpts):
+            on_pipe.append((x, y))
+    return points, on_pipe
+
+
 def materials_panel(g):
     H, W = g.shape[:2]
     # the materials panel: between the two rightmost long vertical rules
@@ -584,6 +734,18 @@ def materials_panel(g):
     x0, x1 = (pairs[-1][0] + 4, pairs[-1][1] - 4) if pairs else (int(W * 0.66), W)
     region = g[: int(H * 0.86), x0:x1]
     return region
+
+
+def panel_edge(g):
+    """The x of the rule between the drawing and the materials panel: a rule
+    running most of the sheet's height in its right half, or None. A long
+    vertical pipe leg (25-1020 SH1's 2150) is not one."""
+    H, W = g.shape[:2]
+    ink = (g < 150).astype(np.uint8) * 255
+    vert = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, int(H * 0.4))))
+    xs = [(a + b) // 2 for a, b in runs((vert > 0).sum(0) >= H * 0.7)]
+    xs = [x for x in xs if W / 2 < x < W - W / 6]
+    return xs[-1] if xs else None
 
 
 def size_value(t):
@@ -888,6 +1050,27 @@ def main():
     for m in out:
         m["at"] = page_at(m["box"])
     tags_out = sorted(({"kind": t["kind"], "no": t["no"], "at": page_at(t["box"])} for t in tags), key=lambda t: (t["kind"], t["no"]))
+    # where each weld is on the pipe, on the page rendered again at 300 dpi (a PDF; an image as it is)
+    K = 300 / dpi if src.lower().endswith(".pdf") else 1.0
+    g3 = load_at(src, 300) if K != 1.0 else g0
+    turn = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}[rot]
+    if turn is not None:
+        g3 = cv2.rotate(g3, turn)
+    up = lambda b: [int(v * K) for v in b]
+    edge = panel_edge(g)
+    avoid = [up(t["box"]) for t in tags] + [up(t) for t in tables]
+    Hg, Wg = g.shape[:2]
+    avoid.append(up((0, int(Hg * 0.82), Wg, Hg)))                       # the title block
+    if edge is not None:
+        avoid.append(up((edge - 6, 0, Wg, Hg)))                         # the materials panel
+    pts, dots = weld_points(g3, [up(m["box"]) for m in out], avoid)
+    for m, p in zip(out, pts):
+        if p:
+            # as the marker's `at`: a fraction of the page as rendered
+            x, y = p[0] / K, p[1] / K
+            m["weldAt"] = page_at([x, y, x, y])
+            m["weldDot"] = p[2]
+    dots_out = [page_at([x / K, y / K, x / K, y / K]) for x, y in dots]
     if debug:
         dbg = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
         for t in tables:
@@ -899,7 +1082,7 @@ def main():
         cv2.imwrite(debug, dbg)
     meta = read_title(g)
     line = meta.pop("line", {})
-    print(json.dumps({"orientation": rot, "meta": meta, "lineData": line, "bom": read_bom(g), "cutLengths": read_cut_lengths(g), "marks": out, "tags": tags_out, "rejected": rejected}))
+    print(json.dumps({"orientation": rot, "aspect": round(W0 / H0, 4), "meta": meta, "lineData": line, "bom": read_bom(g), "cutLengths": read_cut_lengths(g), "weldDots": dots_out, "marks": out, "tags": tags_out, "rejected": rejected}))
 
 
 if __name__ == "__main__":

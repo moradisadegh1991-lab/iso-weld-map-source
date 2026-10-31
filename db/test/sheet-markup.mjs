@@ -9,6 +9,7 @@ import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
 import { KINDS, SHEET_SIZE, plainNo, isPlaced, notOnSheet, engineRow, frameSpot, placeAt, unplace, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, problems, normalize } from "../../lib/sheet/markup.mjs";
 
+import { suggestFromDots, orderAlongPipe } from "../../lib/sheet/weld-dots.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../../lib/sheet/weld-list-marks.mjs";
 
 const SYM = { shop: "circle", field: "square" };
@@ -376,6 +377,26 @@ test("the weld list's rows are the one table's weld marks, and back", () => {
   equal(added.rows[3].loc, "Shop"); equal(added.rows[3].no, "3", "the next plain number");
   // the register row is saved without the form's id
   assert(!("_id" in registerRow(rows[0])) && rowTyped(rows[2]) && !rowTyped(rows[3]), "register rows");
+});
+
+test("a sheet with no weld numbers: the weld dots become suggested welds, joined to their dots", () => {
+  // three dots along a pipe running down-right, given out of order
+  const dots = [[0.5, 0.5], [0.2, 0.2], [0.35, 0.35]];
+  equal(JSON.stringify(orderAlongPipe(dots)), JSON.stringify([[0.2, 0.2], [0.35, 0.35], [0.5, 0.5]]), "in order along the pipe");
+  const { rows, marks } = suggestFromDots(dots, Math.SQRT2);
+  equal(rows.length, 3);
+  equal(rows.map((r) => r.no).join(","), "1,2,3");
+  assert(rows.every((r) => r.loc === "" && r.kind === "" && r.spool === ""), "nothing the drawing does not say: no Shop/Field, no type");
+  equal(marks["1"].ax, 0.2); equal(marks["3"].ay, 0.5);
+  assert(Object.values(marks).every((m) => m.src === "reader-dot" && isPlaced(m) && (m.x !== m.ax || m.y !== m.ay)), "each frame beside its dot, with a leader");
+  const items = itemsFromWeldRows(withRowIds(rows), marks);
+  assert(items.every((m) => m.kind === "weld-unknown" && m.ax != null), "drawn as welds of unknown location, each joined to its dot");
+  // frames do not land on each other
+  const f = Object.values(marks);
+  for (let i = 0; i < f.length; i++) for (let j = i + 1; j < f.length; j++)
+    assert(Math.hypot((f[i].x - f[j].x) * Math.SQRT2, f[i].y - f[j].y) >= 0.05, `frames ${i + 1} and ${j + 1} apart`);
+  // what is not a point of the page is left out
+  equal(suggestFromDots([[0.1, 0.1], [NaN, 0.2], [1.5, 0.3], "x"]).rows.length, 1);
 });
 
 await run();

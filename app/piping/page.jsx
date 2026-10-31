@@ -10,6 +10,7 @@ import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs
 import { mergePasses } from "../../lib/extraction/merge.mjs";
 import { compareReads } from "../../lib/extraction/second-read.mjs";
 import { seedFromPass, fromReaderTags, fromEngine, normalize as normalizeMarks } from "../../lib/sheet/markup.mjs";
+import { suggestFromDots } from "../../lib/sheet/weld-dots.mjs";
 import SheetMarkup from "../../components/SheetMarkup";
 import MarkTables from "../../components/MarkTables";
 import { weldListFromMarks } from "../../lib/register/weld-marks.mjs";
@@ -465,13 +466,18 @@ export default function Page() {
       const cutLengths = Array.isArray(r.cutLengths) ? r.cutLengths : [];
       // which reader produced the markers travels with them: the review says so, and the saved run keeps
       // it, with what the title block read (OCR, for a person to check — not verified data)
-      const weldMarks = { marks: r.marks.map(({ at, ...m }) => m), reader: "local", readerVersion: r.reader, titleRead: title };
-      // where each number was read on the sheet, for the review beside it; a person moves or adds the rest
+      const weldMarks = { marks: r.marks.map(({ at, weldAt, weldDot, ...m }) => m), reader: "local", readerVersion: r.reader, titleRead: title };
+      // where each number was read on the sheet, for the review beside it, and where its leader meets the
+      // pipe when the reader followed it there (its weld point); a person moves or adds the rest
       const placed = Object.fromEntries(r.marks.filter((m) => Array.isArray(m.at) && String(m.outline || "").toLowerCase() !== "dashed")
-        .map((m) => [String(m.no).trim(), { x: m.at[0], y: m.at[1], src: "reader" }]));
+        .map((m) => [String(m.no).trim(), { x: m.at[0], y: m.at[1], ...(Array.isArray(m.weldAt) ? { ax: m.weldAt[0], ay: m.weldAt[1] } : {}), src: "reader" }]));
       const conv = weldListFromMarks({ meta, bom, weldMarks },
         { shop: profile.data?.project?.weld_symbol_shop, field: profile.data?.project?.weld_symbol_field,
           thdLabelled: Boolean(profile.data?.project?.weld_thd_labelled) });
+      // a sheet with no weld numbers printed: the weld dots found on the pipe, as welds suggested for a person to check
+      const printedWelds = r.marks.some((m) => String(m.outline || "").toLowerCase() !== "dashed");
+      const dots = !printedWelds && Array.isArray(r.weldDots) && r.weldDots.length ? suggestFromDots(r.weldDots, canvas.width / canvas.height) : null;
+      if (dots) { Object.assign(conv, { weldList: dots.rows, fromDots: true, problems: [], notes: [] }); Object.assign(placed, dots.marks); }
       // the spool numbers (ovals) and support numbers (hexagons) the reader found, to be moved or corrected on the sheet
       const tags = fromReaderTags(r.tags);
       const hasLine = Object.values(line).some(Boolean);
@@ -484,7 +490,10 @@ export default function Page() {
       setData(final);
       setEditing(JSON.stringify(final, null, 2));
       setOpenRun(null);
-      setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s · ${r.marks.length} نشانگر جوش` + (tags.length ? ` · ${tags.filter((t) => t.kind === "spool").length} اسپول · ${tags.filter((t) => t.kind === "support").length} ساپورت` : "") +
+      const traced = r.marks.filter((m) => Array.isArray(m.weldAt)).length;
+      setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s · ${r.marks.length} نشانگر جوش` +
+        (r.marks.length ? ` (${traced} با محل سرجوش روی لوله، از خط رهبرش)` : "") +
+        (dots ? ` · شمارهٔ جوش چاپ نشده: ${dots.rows.length} نقطهٔ جوش روی لوله پیدا شد — پیشنهادی؛ شماره‌ها فقط ترتیبی برای شروع‌اند، محل (کارگاه/سایت) خالی است؛ همه را با نقشه بررسی کنید` : "") + (tags.length ? ` · ${tags.filter((t) => t.kind === "spool").length} اسپول · ${tags.filter((t) => t.kind === "support").length} ساپورت` : "") +
         (bom.length ? ` · BOM ${bom.length} ردیف` : " · BOM خوانده نشد") +
         (cutLengths.length ? ` · جدول برش ${cutLengths.length} قطعه` : "") +
         (hasLine ? ` · مشخصات خط ${Object.values(line).filter(Boolean).length} مورد` : "") +
@@ -691,10 +700,17 @@ export default function Page() {
           {data.weldMarks && marksInfo && (
             <div className="pane" data-weld-marks>
               {data.weldMarks.reader === "local" ? (<>
+                {marksInfo.fromDots ? (
+                  <p className="note mono" data-reader="local" data-from-dots={marksInfo.weldList.length}>
+                    شمارهٔ جوش روی این نقشه چاپ نشده — خوانده‌شده بدون مدل و بدون توکن (OCR روی سرور): {marksInfo.weldList.length} نقطهٔ جوش روی لوله پیدا شد
+                    و هرکدام سرجوش پیشنهادی است، با خط به همان نقطه. شماره‌ها فقط ترتیبی در امتداد لوله برای شروع‌اند؛ محل (کارگاه/سایت)، نوع و قطر خالی‌اند.
+                    همه را با نقشه بررسی کنید: سرجوشی که نقطه ندارد (رزوه‌ای، ساکتی) پیدا نمی‌شود و باید دستی اضافه شود.
+                  </p>
+                ) : (
                 <p className="note mono" data-reader="local">
                   رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — خوانده‌شده بدون مدل و بدون توکن (OCR روی سرور):
                   شماره، شکل قاب و برچسب کنار آن؛ محل از نماد اعلام‌شدهٔ پروژه تعیین شد. قطر، نوع اتصال و اسپول را تکمیل کنید.
-                </p>
+                </p>)}
                 <p className="note mono" data-title-read>
                   جدول عنوان (OCR، پیش از ذخیره بررسی کنید): {[["drawingNo", "شمارهٔ نقشه"], ["sheet", "شیت"], ["rev", "رویژن"]].map(([k, l]) =>
                     `${l} ${data.weldMarks.titleRead?.[k] || "خوانده نشد"}`).join(" · ")}

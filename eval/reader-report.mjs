@@ -126,6 +126,39 @@ for (const def of cases) {
   }
   CUTS.invented += [...got.keys()].filter((p) => !truth.some(([q]) => q === p)).length;
 }
+// where each weld is on the pipe (tools/iso-read.py weld_points): each printed frame's leader followed
+// to the pipe, against the points confirmed by eye (eval/cases/weld-points.json); and the weld dots on the
+// pipe found with the frames masked — what a sheet with no numbers printed is read with — against the points traced
+const WP = { frames: 0, traced: 0, onDot: 0, checked: 0, right: 0, wrong: [], untraced: 0, sheets: 0 };
+const DOTS = { points: 0, found: 0, dots: 0, notTraced: 0 };
+const wpTruth = JSON.parse(await readFile("eval/cases/weld-points.json", "utf8")).sheets;
+const near = (p, q, aspect) => Math.hypot(p[0] - q[0], (p[1] - q[1]) / aspect) < 0.006;
+for (const def of cases) {
+  const name = path.basename(def.drawing, ".pdf");
+  const rd = reads.get(def.id);
+  const aspect = rd.aspect || Math.SQRT2;
+  const solid = (rd.marks || []).filter((m) => m.outline !== "dashed");
+  WP.frames += solid.length;
+  WP.traced += solid.filter((m) => m.weldAt).length;
+  WP.onDot += solid.filter((m) => m.weldDot).length;
+  const truth = wpTruth[name];
+  if (truth) {
+    WP.sheets++;
+    for (const [no, p] of Object.entries(truth)) {
+      WP.checked++;
+      const m = solid.find((x) => x.no === no);
+      if (!m?.weldAt) WP.untraced++;
+      else if (near(m.weldAt, p, aspect)) WP.right++;
+      else WP.wrong.push(`${name} ${no}: ${m.weldAt.join(",")} (checked ${p.join(",")})`);
+    }
+  }
+  const pts = solid.filter((m) => m.weldAt).map((m) => m.weldAt);
+  const dots = rd.weldDots || [];
+  DOTS.points += pts.length;
+  DOTS.found += pts.filter((p) => dots.some((q) => near(p, q, aspect))).length;
+  DOTS.dots += dots.length;
+  DOTS.notTraced += dots.filter((q) => !pts.some((p) => near(p, q, aspect))).length;
+}
 for (const def of cases) {
   const gold = marksOf(def).filter((m) => m.outline !== "dashed");
   const got = reads.get(def.id).marks;
@@ -188,6 +221,9 @@ console.log(`BOM       ${BOM.sheets} sheets · rows matched ${BOM.found}/${BOM.g
 if (BOM.sizeWrong.length) console.log(`          size wrong: ${BOM.sizeWrong.slice(0, 20).join("; ")}${BOM.sizeWrong.length > 20 ? " …" : ""}`);
 console.log(`CUT       ${Object.keys(cutTruth).length} sheets transcribed · pieces found ${CUTS.found}/${CUTS.printed} · invented ${CUTS.invented} · length right ${CUTS.lengthRight}, wrong ${CUTS.lengthWrong.length} · size right ${CUTS.sizeRight}, wrong ${CUTS.sizeWrong.length}, unknown ${CUTS.sizeUnknown}`);
 for (const x of [...CUTS.lengthWrong, ...CUTS.sizeWrong]) console.log(`          ${x}`);
+console.log(`WELD PT   frames' leaders followed to the pipe ${WP.traced}/${WP.frames} (${pct(WP.traced, WP.frames)}), ${WP.onDot} on a weld dot · against ${WP.checked} points checked by eye on ${WP.sheets} sheets: right ${WP.right}, wrong ${WP.wrong.length}, not followed ${WP.untraced}`);
+for (const x of WP.wrong) console.log(`          ${x}`);
+console.log(`DOTS      weld dots on the pipe, frames masked (a sheet with no numbers printed): ${DOTS.found}/${DOTS.points} traced weld points found (${pct(DOTS.found, DOTS.points)}) · ${DOTS.notTraced} of ${DOTS.dots} dots at no traced point (a weld whose frame's leader was not followed, a joint of the next sheet, or not a weld)`);
 console.log(`JOINT     type set by the rules on ${T.kindOk + T.kindBad} welds, right on ${pct(T.kindOk, T.kindOk + T.kindBad)} · ${T.kindBlank} left for a person (no size is read off the drawing)`);
 console.log(`REGISTER  welds ${T.regMade} made for ${T.regExpected} in the contractor's register · matched by number ${T.regMatched} (${pct(T.regMatched, T.regExpected)}) · shop/field right ${pct(T.locOk, T.regMatched - T.locBlank)} (${T.locBlank} left blank)`);
-await writeFile(path.join(CACHE, "summary.json"), JSON.stringify({ totals: T, title: TB, bom: BOM, cuts: CUTS, rows }, null, 2));
+await writeFile(path.join(CACHE, "summary.json"), JSON.stringify({ totals: T, title: TB, bom: BOM, cuts: CUTS, weldPoints: WP, dots: DOTS, rows }, null, 2));
