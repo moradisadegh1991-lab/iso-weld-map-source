@@ -2,7 +2,7 @@
  * Drive the review beside the drawing (owner's request 2026-10-24, from the
  * features piping.tools describes publicly): a golden sheet read with no
  * model, and the weld-list form opens with the sheet beside it —
- *   - a marker on the sheet for every number read, where it was read;
+ *   - drawn as the engine route's sheet: one table, a mark on the sheet for every number read, where it was read;
  *   - a row picked picks its marker, a marker picked picks its row;
  *   - a marker dragged moves (and is the person's from then on); a weld with
  *     no marker is put on the sheet by clicking there;
@@ -58,28 +58,31 @@ await page.goto(`${BASE}/piping`, { waitUntil: "networkidle" }); await settle();
 await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
 await page.check('input[name="iso-reader"][value="local"]');
 await page.setInputFiles(".drop input[type=file]", SHEET);
-await page.locator("[data-wl-sheet] [data-mark]").first().waitFor({ timeout: 120000 });
+const W = '[data-wl-sheet] [data-mark-id][data-kind^="weld"]';
+const mk = (no) => page.locator(`${W}[data-no="${no}"]`);
+const idOf = async (no) => mk(no).getAttribute("data-mark-id");
+await page.locator(W).first().waitFor({ timeout: 120000 });
 
-// ── the sheet beside the rows ────────────────────────────────────────────
-const marks = page.locator("[data-wl-sheet] [data-mark]");
-check(await marks.count() === GOLD.length, `a marker for every number read (${await marks.count()} of ${GOLD.length} printed)`);
-check(await page.locator('[data-wl-sheet] [data-mark][data-src="reader"]').count() === GOLD.length, "each where the reader read it");
-const sheetBox = await page.locator("[data-wl-sheet] .sheet-box").boundingBox();
+// ── the sheet beside the rows (the engine route's sheet and its one table) ──
+const marks = page.locator(W);
+check(await marks.count() === GOLD.length, `a mark for every number read (${await marks.count()} of ${GOLD.length} printed)`);
+check(await page.locator(`${W}[data-src="reader"]`).count() === GOLD.length, "each where the reader read it");
+const sheetBox = await page.locator("[data-wl-sheet] [data-sheet-markup]").boundingBox();
 const tableBox = await page.locator(".wl-table").boundingBox();
 check(sheetBox && tableBox && Math.abs(sheetBox.y - tableBox.y) < 160 && sheetBox.x !== tableBox.x, "the drawing and the rows side by side");
-check(await page.locator('[data-mark][data-state="unchecked"]').count() === GOLD.length, "none checked against the drawing yet");
+check(await page.locator("[data-wl-check]:checked").count() === 0, "none checked against the drawing yet");
 await page.screenshot({ path: `${SHOT}/450-sheet-review.png` });
 
-// a row picks its marker
-await page.locator('[data-wl-row="5"] td').first().click();
-check(await page.locator('[data-mark="5"]').getAttribute("data-picked") === "true", "row 5 picked: its marker is ringed on the sheet");
-// a marker picks its row
-await page.locator('[data-mark="7"]').dispatchEvent("pointerdown");
+// a row picks its mark
+await page.locator(`[data-mark-row="${await idOf("5")}"] td`).nth(1).click();
+check(await mk("5").getAttribute("data-picked") === "true", "row 5 picked: its mark is picked on the sheet");
+// a mark picks its row
+await mk("7").dispatchEvent("pointerdown");
 await settle();
-check(await page.locator('[data-wl-row="7"]').evaluate((tr) => tr.classList.contains("sel")), "marker 7 picked: its row is picked");
+check(await page.locator(`[data-mark-row="${await idOf("7")}"]`).evaluate((tr) => tr.classList.contains("sel")), "mark 7 picked: its row is picked");
 
-// a marker dragged moves, and is the person's from then on
-const m3 = page.locator('[data-mark="3"]');
+// a mark dragged moves, and is the person's from then on
+const m3 = mk("3");
 await m3.scrollIntoViewIfNeeded();
 const before = await m3.evaluate((e) => [e.style.left, e.style.top]);
 const bb = await m3.boundingBox();
@@ -89,35 +92,31 @@ await page.mouse.move(bb.x + bb.width / 2 + 60, bb.y + bb.height / 2 + 30, { ste
 await page.mouse.up();
 await settle();
 const after = await m3.evaluate((e) => [e.style.left, e.style.top, e.dataset.src]);
-check(after[0] !== before[0] && after[1] !== before[1] && after[2] === "hand", `marker 3 dragged: ${before.join(",")} → ${after.slice(0, 2).join(",")}, now placed by hand`);
+check(after[0] !== before[0] && after[1] !== before[1] && after[2] === "hand", `mark 3 dragged: ${before.join(",")} → ${after.slice(0, 2).join(",")}, now placed by hand`);
 
-// a weld with no marker is put on the sheet where it is clicked
-await page.getByRole("button", { name: "+ ردیف" }).click();
-const last = page.locator(".wl-table tbody tr").last();
-await last.locator("input").nth(1).fill("99");     // after the tick box: the weld number
-await last.locator("td").first().click();
-check(/جا ندارد/.test(await page.locator("[data-place-hint]").innerText()), "a weld with no marker: the sheet says to click where it is");
-// the sheet scrolled into view first: a click off the screen lands nowhere
-await page.locator("[data-wl-sheet] .sheet-box").scrollIntoViewIfNeeded();
-const sb = await page.locator("[data-wl-sheet] .sheet-box").boundingBox();
-await page.mouse.click(sb.x + sb.width * 0.62, sb.y + sb.height * 0.12);    // a clear part of the sheet
+// a weld added in the table is a row not joined to the drawing until its place is clicked
+await page.locator('[data-mark-add="weld"]').click();
+const newId = await page.locator("[data-mark-row]").last().getAttribute("data-mark-row");
+await page.locator(`[data-mark-row="${newId}"] [data-cell="no"]`).fill("99");
+check(/سرجوش 99/.test(await page.locator("[data-loose]").innerText()), "a weld with no mark: named as not joined to the drawing");
+check(await page.locator(`[data-row-attach="${newId}"]`).getAttribute("class") === "on sm", "«+» arms its join at once: the sheet waits for its place");
+await page.locator("[data-wl-sheet] [data-sheet]").scrollIntoViewIfNeeded();
+const sb = await page.locator("[data-wl-sheet] [data-sheet]").boundingBox();
+await page.locator("[data-wl-sheet] [data-sheet]").click({ position: { x: Math.round(sb.width * 0.62), y: 120 } });    // a clear part of the sheet
 await settle();
-check(await page.locator('[data-mark="99"][data-src="hand"]').count() === 1, "weld 99 put on the sheet by hand");
-await last.getByRole("button", { name: /حذف ردیف/ }).click();
+check(await page.locator(`${W}[data-no="99"][data-src="hand"]`).count() === 1 && await page.locator(`[data-leader="${newId}"]`).count() === 1, "weld 99 joined where the sheet was clicked, with its leader");
+await page.locator(`[data-row-delete="${newId}"]`).click();
 await settle();
-check(await page.locator('[data-mark="99"]').count() === 0, "its row deleted: its marker goes with it");
+check(await mk("99").count() === 0, "its row deleted: its mark goes with it");
 
 // complete what the drawing did not say, from the golden register
-const rows = page.locator(".wl-table tbody tr");
-for (let i = 0; i < await rows.count(); i++) {
-  const r = rows.nth(i);
-  const no = await r.getAttribute("data-wl-row");
+for (const tr of await page.locator('[data-mark-table="weld"] [data-mark-row]').all()) {
+  const no = await tr.locator('[data-cell="no"]').inputValue();
   const g = GOLD.find((x) => x.no === no);
   if (!g) continue;
-  const inputs = r.locator('input:not([type="checkbox"])');
-  if (!(await inputs.nth(3).inputValue())) await inputs.nth(3).fill(g.kind);
+  if (!(await tr.locator('[data-cell="type"]').inputValue())) await tr.locator('[data-cell="type"]').fill(g.kind);
   // weld 20's size is disputed in the golden case (register 3/4", the leader ends on the 1 1/2" header): the drive enters what the drawing shows
-  if (!(await inputs.nth(4).inputValue())) await inputs.nth(4).fill(String(g.nps ?? 1.5));
+  if (!(await tr.locator('[data-cell="size"]').inputValue())) await tr.locator('[data-cell="size"]').fill(String(g.nps ?? 1.5));
 }
 // a drawing number of this run's own: the joints of an earlier run would carry their site records over
 await page.fill("#wl-drawingNo", `25-1014-DRV-${Date.now().toString(36)}`);
@@ -126,7 +125,6 @@ if (!(await page.locator("#wl-rev").inputValue())) await page.fill("#wl-rev", "0
 // tick all but two, and try to save
 for (const g of GOLD.slice(0, -2)) await page.locator(`[data-wl-check="${g.no}"]`).check();
 check((await page.locator("[data-wl-review-count]").innerText()).startsWith(`${GOLD.length - 2} از ${GOLD.length}`), "the count of rows checked against the drawing");
-check(await page.locator('[data-mark][data-state="checked"]').count() === GOLD.length - 2, "checked rows' markers turn to «checked»");
 const saveBtn = page.locator(".weldlist").getByRole("button", { name: "ذخیره در سامانه" }).first();
 const stuck = (await page.locator(".weldlist .err[role=alert]").allInnerTexts()).map((x) => x.replace(/\s+/g, " "));
 check(stuck.length === 0, `the list is a register row by row${stuck.length ? `: ${stuck.join(" ").slice(0, 300)}` : ""}`);
@@ -142,9 +140,9 @@ await page.locator("[data-run-status]").waitFor({ timeout: 60000 });
 check(asked.length === 0, "all checked: saved without asking");
 
 // ── reopened: the sheet comes back from the server, coloured by site progress ──
-await page.locator('[data-wl-sheet] [data-mark]').first().waitFor({ timeout: 60000 });
-check(await page.locator('[data-mark][data-state="open"]').count() === GOLD.length, "the saved sheet comes back; every joint open on site");
-const kept = await page.locator('[data-mark="3"]').evaluate((e) => [e.style.left, e.style.top, e.dataset.src]);
+await page.locator(W).first().waitFor({ timeout: 60000 });
+check(await page.locator(`${W}[data-state="open"]`).count() === GOLD.length, "the saved sheet comes back; every joint open on site");
+const kept = await mk("3").evaluate((e) => [e.style.left, e.style.top, e.dataset.src]);
 check(kept[0] === after[0] && kept[1] === after[1] && kept[2] === "hand", "marker 3 where it was left");
 const docNo = await page.locator("#wl-drawingNo").inputValue();
 const runs = await api(`/api/review-queue?projectId=${projectId}`);
@@ -170,8 +168,8 @@ if (runDetail) {
     await page.reload({ waitUntil: "networkidle" });
     await page.getByRole("button", { name: /نقشه دوبعدی/ }).first().click({ timeout: 1500 }).catch(() => {}); // the 2D/3D choice is hidden while SHEET_MARKUP is on (app/piping/page.jsx)
     await page.locator(".queuebox tr", { hasText: docNo }).first().getByRole("button", { name: "باز کردن" }).click();
-    await page.locator('[data-wl-sheet] [data-mark="1"]').waitFor({ timeout: 60000 });
-    const st = async (no) => page.locator(`[data-mark="${no}"]`).getAttribute("data-state");
+    await mk("1").waitFor({ timeout: 60000 });
+    const st = async (no) => mk(no).getAttribute("data-state");
     check(await st("1") === "done" && await st("2") === "inspection" && await st("3") === "open",
       `site progress on the sheet: 1 ${await st("1")}, 2 ${await st("2")}, 3 ${await st("3")}`);
     await page.screenshot({ path: `${SHOT}/451-sheet-progress.png` });

@@ -47,10 +47,11 @@ try {
   await p.goto(BASE + "/piping", { waitUntil: "networkidle" }); await settle();
   await p.locator("input[type=file][accept*='image/webp']").setInputFiles(ISO_PDF);
   await p.waitForSelector(".wl-table", { timeout: 120000 }); await settle();
-  const rows = p.locator(".wl-table tbody tr");
+  // with the drawing beside it, the list is the sheet's one table (components/MarkTables.jsx)
+  const rows = p.locator('[data-mark-table="weld"] [data-mark-row]');
   const n = await rows.count();
   check(!EXPECT || n === EXPECT, `the weld list holds the ${n} joints printed on the sheet`);
-  const locs = await p.locator(".wl-table tbody tr td:nth-child(4) input").evaluateAll((els) => els.map((e) => e.value));
+  const locs = await p.locator('[data-mark-table="weld"] [data-cell="kind"]').evaluateAll((els) => els.map((e) => ({ "weld-shop": "Shop", "weld-field": "Field" }[e.value] || e.value)));
   check(locs.length > 0 && locs.every((v) => /^(Shop|Field)$/i.test(v)), `every joint has its location from the declared symbols (${[...new Set(locs)].join("/")})`);
   const note = flat(await p.locator("[data-weld-marks]").innerText());
   check(/از 25 شمارهٔ جوش چاپ‌شده روی نقشه/.test(note) || /شمارهٔ جوش چاپ‌شده روی نقشه/.test(note),

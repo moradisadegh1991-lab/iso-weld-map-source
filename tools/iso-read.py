@@ -3,8 +3,11 @@
     python3 -I tools/iso-read.py <sheet.pdf|.png|.jpg> [--page 1] [--dpi 200] [--debug out.png]
 
 Prints one JSON object: { "orientation", "meta": {drawingNo, sheet, rev},
-"marks": [ {no, shape, outline, label, box, at} ], "rejected": [...] }. `meta` is
-the title block (read_title; any part not read for certain is null); `box`
+"lineData": {...}, "bom": [...], "marks": [ {no, shape, outline, label, box, at} ],
+"tags": [...], "rejected": [...] }. `meta` is
+the title block (read_title; any part not read for certain is null),
+`lineData` the line data printed in it (read_line_data) and `bom` the bill of
+material beside the drawing (read_bom), each as the sheet prints it; `box`
 is in the upright page's pixels, `at` the marker's centre as fractions of
 the page as rendered (before it was turned upright). The
 same `marks` a model's `welds` pass
@@ -37,8 +40,8 @@ docs/epc-llm/08-no-model-reader.md).
 
 What it does not do: dashed frames (a joint of the neighbouring sheet) are
 not closed and are not found; that is the right answer for the register,
-which excludes them, but they are not reported either. Sizes, branches and
-spools are not read here.
+which excludes them, but they are not reported either. The size at each
+weld and branches are not read here (docs/epc-llm/09-iso-symbols.md).
 """
 import sys, json, subprocess, tempfile, os, re
 import numpy as np, cv2
@@ -419,6 +422,324 @@ def runs(mask):
     return out
 
 
+# The line data printed in the title block: each value is the words beside
+# its label, inside the label's own cell, and kept only when it reads as
+# such a value. A label under a heading ("DESIGN" under PRESSURE or under
+# TEMPERATURE) takes its meaning from the heading above it in its column.
+LINE_FIELDS = [
+    # key, label word, heading word above (or None), may the value sit below the label, valid value
+    ("designPressure", r"DESIGN:?", r"PRESSURE", False, r"\d+(?:[.,]\d+)?(?:\s*,?\s*FV)?|FV"),
+    ("operatingPressure", r"OPERATING:?", r"PRESSURE", False, r"\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?"),
+    ("designTemp", r"DESIGN:?", r"TEMPERATURE", False, r"-?\d+(?:[.,]\d+)?"),
+    ("operatingTemp", r"OPERATING:?", r"TEMPERATURE", False, r"-?\d+(?:[.,]\d+)?(?:\s*-\s*-?\d+(?:[.,]\d+)?)?"),
+    ("insulationType", r"TYPE:?", r"INSULATION", False, r"[A-Z]{1,4}|NONE|N/?A|-"),
+    ("insulationThk", r"THK", r"INSULATION", False, r"\d{1,3}|-"),
+    ("testFluid", r"FLUID:?", r"TEST", False, r"WATER|AIR|NITROGEN|N2|SERVICE|PNEUMATIC|HYDRO(?:STATIC)?"),
+    ("testPressure", r"PRESSURE:?", r"TEST", True, r"\d+(?:[.,]\d+)?"),
+    ("lineClass", r"CLASS:?", r"LINE", True, r"[0-9][A-Z0-9]{1,5}|[A-Z][0-9][A-Z0-9]{0,4}"),
+    ("paint", r"PAINT:?", None, False, r"[A-Z]{1,3}-?\d{1,3}|NONE|N/?A|-"),
+    ("ndt", r"NDT:?", None, False, r"[A-Z]|\d{1,3}\s*%|[A-Z]\d?"),
+    ("pwht", r"PWHT:?", None, False, r"YES|NO|N/?A|REQ(?:UIRED|'D)?|-"),
+]
+
+
+def read_line_data(strip, words, vert, horz, corner_label):
+    """The line data of the title block (LINE_FIELDS), and the line number.
+
+    A value is kept only when it fits its field's pattern; anything else is
+    null, never a near guess. The line number is kept only when the title
+    block's LINE NO. cell and the file label at the sheet's corner,
+    "(ISO-aa-nnnn)/<line>", read the same."""
+    Hs, Ws = strip.shape[:2]
+
+    def cell_of(w):
+        cx, cy = w["x"] + w["w"] // 2, w["y"] + w["h"] // 2
+        row = vert[max(0, cy - 2):cy + 3, :].max(0) > 0
+        col = horz[:, max(0, cx - 2):cx + 3].max(1) > 0
+        left = next((x for x in range(w["x"] - 2, -1, -1) if row[x]), 0)
+        right = next((x for x in range(w["x"] + w["w"] + 2, Ws) if row[x]), Ws)
+        top = next((y for y in range(cy, -1, -1) if col[y]), 0)
+        bottom = next((y for y in range(cy, Hs) if col[y]), Hs)
+        return left, right, top, bottom
+
+    def heading_of(w, pattern):
+        # the heading over the label, in its column, in the same cell
+        l, r, t, _ = cell_of(w)
+        return any(re.fullmatch(pattern, h["t"].strip("(:")) and l <= h["x"] + h["w"] // 2 <= r and t <= h["y"] < w["y"] for h in words)
+
+    out = {}
+    used = set()
+    for key, lab, head, below, ok in LINE_FIELDS:
+        got = None
+        for w in words:
+            if id(w) in used or not re.fullmatch(lab, w["t"]):
+                continue
+            if head and not heading_of(w, head):
+                continue
+            l, r, t, b = cell_of(w)
+            cy = w["y"] + w["h"] / 2
+            vals = sorted((v for v in words if v is not w and v["x"] > w["x"] + w["w"] - 2 and v["x"] + v["w"] <= r + 2
+                           and t <= v["y"] + v["h"] / 2 <= b
+                           and (abs(v["y"] + v["h"] / 2 - cy) < max(w["h"], v["h"]) * 0.6
+                                or (below and v["y"] > w["y"]))),
+                          key=lambda v: (round((v["y"] + v["h"] / 2 - cy) / max(1, w["h"] * 1.2)), v["x"]))
+            # the value runs to the next label of the cell (a word ending in ":"); a unit in brackets is not the value
+            text, boxes = [], []
+            for v in vals:
+                if re.fullmatch(r"\(.*\):?", v["t"]):
+                    continue
+                if v["t"].endswith(":"):
+                    break
+                text.append(v["t"])
+                boxes.append(v)
+            # 6,2 printed 6.2: a comma between two digits is the decimal point either way
+            value = re.sub(r"(?<=\d),(?=\d)", ".", " ".join(text).strip(" :"))
+            if value and re.fullmatch(ok, value):
+                used.add(id(w))
+                # a number stands only when its cell, read again several ways on its own, says the
+                # same: one reading drops a minus sign ("-5" read "5") or a decimal point
+                if re.search(r"\d", value) and key not in ("paint", "lineClass"):
+                    same = [b2 for b2 in boxes if abs(b2["y"] - boxes[0]["y"]) < w["h"]]
+                    bx0 = max(w["x"] + w["w"] + 2, min(b2["x"] for b2 in same) - int(14 * S))
+                    bx1 = max(b2["x"] + b2["w"] for b2 in same) + 6
+                    # the value's own line, as tall as its label's: a taller box takes in the line below
+                    mid = sum(b2["y"] + b2["h"] / 2 for b2 in same) / len(same)
+                    by0, by1 = int(mid - w["h"] * 0.5) - 5, int(mid + w["h"] * 0.5) + 5
+                    norm = lambda o: re.sub(r"(?<=\d),(?=\d)", ".", re.sub(r"\s+", "", o))
+                    again = cell_vote(strip[max(0, by0):by1, bx0:bx1], "0123456789-~.,FV",
+                                      lambda o: bool(re.fullmatch(ok, o.replace(",FV", ", FV"))), key=norm)
+                    if again is None or again != norm(value):
+                        value = None
+                got = value
+                break
+        out[key] = got
+
+    # LINE NO.: the title-block cell and the corner label must agree, each read
+    # on its own several ways (cell_vote) — one reading, or two that differ, is unknown
+    line_pat = re.compile(r"(\d{1,2}(?:\.\d/\d)?)\"?-([A-Z]{1,5}-\d{3,6}-[A-Z0-9]{1,5}(?:-[A-Z0-9]{1,4})?)")
+    white = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-/().\""
+
+    def vote(box):
+        x0_, y0_, x1_, y1_ = box
+        crop = strip[max(0, y0_ - 4):y1_ + 4, max(0, x0_ - 6):x1_ + 6]
+        return cell_vote(crop, white, lambda o: line_pat.search(o), key=lambda o: "%s\"-%s" % line_pat.search(o).groups())
+
+    corner = None
+    if corner_label:
+        c = corner_label
+        row = sorted((v for v in words if abs((v["y"] + v["h"] / 2) - (c["y"] + c["h"] / 2)) < c["h"] * 0.6 and v["x"] >= c["x"]), key=lambda v: v["x"])
+        end_x = c["x"] + c["w"]
+        for v in row[1:]:
+            if v["x"] - end_x > 40 * S:
+                break
+            end_x = v["x"] + v["w"]
+        corner = vote((c["x"], c["y"], end_x, c["y"] + c["h"]))
+    cell = None
+    if corner:
+        for w in words:
+            if w is corner_label or not line_pat.search(w["t"].replace("*", '"')):
+                continue
+            if vote((w["x"], w["y"], w["x"] + w["w"], w["y"] + w["h"])) == corner:
+                cell = corner
+                break
+    out["lineNo"] = cell
+    return out
+
+
+BOM_GROUP = re.compile(r"(?:PIPES?|FITTINGS?|FLANGES?|SUPPORTS?|GASKETS?|BOLTS?(?: ?& ?NUTS)?|STUD BOLTS|VALVES?(?: ?/ ?IN-LINE ITEMS)?|IN-LINE ITEMS|"
+                       r"INSTRUMENTS?|SPECIAL(?: ITEMS)?|SPECIALS|MISC(?:ELLANEOUS)?\.?|OLETS?|BRANCH(?:ES)?)")
+BOM_SIZE = re.compile(r"(\d+(?:\.\d+/\d+|/\d+|\.\d+)?)(?:\s*[xX]\s*(\d+(?:\.\d+/\d+|/\d+|\.\d+)?))?")
+# the nominal pipe sizes a size column can hold; a bolt's second figure is its length in mm
+NPS = {"1/8", "1/4", "3/8", "1/2", "3/4", "1", "1.1/4", "1.1/2", "2", "2.1/2", "3", "3.1/2", "4", "5", "6", "8", "10", "12",
+       "14", "16", "18", "20", "22", "24", "26", "28", "30", "32", "34", "36", "40", "42", "44", "48", "52", "56", "60"}
+BOLT_DIA = {"1/2", "5/8", "3/4", "7/8", "1", "1.1/8", "1.1/4", "1.3/8", "1.1/2", "1.5/8", "1.3/4", "1.7/8", "2"}
+
+
+def bom_size(text, description):
+    """The N.S. column as printed — "6", "6 x 3/4", a bolt's "5/8 x 90" — or None
+    when it does not read as nominal sizes (a lost slash reads 1/2 as "172")."""
+    m = BOM_SIZE.fullmatch(text)
+    if not m:
+        return None
+    a, b = m.group(1), m.group(2)
+    bolt = re.search(r"\bBOLT", description.upper())
+    if a not in (BOLT_DIA if bolt else NPS):
+        return None
+    if b is None:
+        return a
+    if b in NPS or (bolt and re.fullmatch(r"\d{2,3}", b)):
+        return f"{a} x {b}"
+    return None
+
+
+def materials_panel(g):
+    H, W = g.shape[:2]
+    # the materials panel: between the two rightmost long vertical rules
+    # (the drawing frame's edge and the sheet's border) at least a sixth of the
+    # sheet apart; with none, the right third of the sheet
+    ink = (g < 150).astype(np.uint8) * 255
+    vert = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, int(H * 0.4))))
+    xs = [(a + b) // 2 for a, b in runs((vert > 0).sum(0) >= H * 0.4)]
+    pairs = [(a, b) for a, b in zip(xs, xs[1:]) if b - a >= W / 6 and a > W / 2]
+    x0, x1 = (pairs[-1][0] + 4, pairs[-1][1] - 4) if pairs else (int(W * 0.66), W)
+    region = g[: int(H * 0.86), x0:x1]
+    return region
+
+
+def size_value(t):
+    """ "1.1/2" → 1.5, "3/4" → 0.75, "6" → 6."""
+    m = re.fullmatch(r"(\d+)(?:\.(\d+)/(\d+))?|(\d+)/(\d+)", t)
+    if not m:
+        return None
+    if m.group(4):
+        return int(m.group(4)) / int(m.group(5))
+    return int(m.group(1)) + (int(m.group(2)) / int(m.group(3)) if m.group(2) else 0)
+
+
+def read_cut_lengths(g):
+    """The CUT PIPE LENGTH table, when the sheet carries one: one entry per
+    piece mark "<n>" with its cut length in mm and its nominal size. The table
+    may be printed in two side-by-side halves, each under its own PIECE / CUT /
+    N.S. header. A length stands only when its cell, read again several ways
+    on its own, says the same (a dropped digit is a wrong length); a size only
+    when it is a nominal size. A piece read twice is dropped."""
+    region = materials_panel(g)
+    words = []
+    for line in tess(region, 11, ["tsv"]).splitlines()[1:]:
+        f = line.split("\t")
+        if len(f) >= 12 and f[11].strip():
+            words.append({"t": f[11].strip().upper(), "x": int(f[6]), "y": int(f[7]), "w": int(f[8]), "h": int(f[9])})
+    # each half of the table under its header: PIECE with CUT beside it
+    heads = sorted((w for w in words if w["t"] == "PIECE" and any(
+        v["t"] == "CUT" and abs(v["y"] - w["y"]) < w["h"] and 0 < v["x"] - w["x"] < 150 * S for v in words)), key=lambda w: w["x"])
+    out = []
+    for k, h in enumerate(heads):
+        right = heads[k + 1]["x"] - 10 if k + 1 < len(heads) else region.shape[1]
+        row_h = [w for w in words if abs(w["y"] - h["y"]) < h["h"] and h["x"] <= w["x"] < right]
+        cut = next((w for w in row_h if w["t"] == "CUT"), None)
+        ns = next((w for w in row_h if re.fullmatch(r"N\.?S[.:]?", w["t"])), None)
+        if not cut or not ns:
+            continue
+        rem = next((w for w in row_h if w["t"].startswith("REMARK")), None)
+        end_ns = rem["x"] - 10 if rem else right
+        for p in (w for w in words if w["y"] > h["y"] + 2 * h["h"] and h["x"] - 20 * S <= w["x"] < cut["x"] - 10 * S):
+            m = re.fullmatch(r"[<(\[]?(\d{1,3})[>)\]]?", p["t"])
+            if not m:
+                continue
+            row = [w for w in words if abs((w["y"] + w["h"] / 2) - (p["y"] + p["h"] / 2)) < p["h"] * 0.6 and p["x"] < w["x"] < end_ns]
+            ln = [w for w in row if cut["x"] - 40 * S <= w["x"] < ns["x"] - 10 * S]
+            sz = [w for w in row if ns["x"] - 20 * S <= w["x"] < end_ns]
+            length = None
+            if len(ln) == 1 and re.fullmatch(r"\d{2,5}", ln[0]["t"]):
+                c = ln[0]
+                again = cell_vote(region[max(0, c["y"] - 4):c["y"] + c["h"] + 4, max(0, c["x"] - 6):c["x"] + c["w"] + 6], "0123456789",
+                                  lambda o: bool(re.fullmatch(r"\d{2,5}", o)))
+                length = int(again) if again == ln[0]["t"] else None
+            # the size from its cell read several ways ("1.1/2" read once is "1/2")
+            # the row's own line: a taller band takes in the top of the row below ("3" over "3/4" reads 30)
+            y0c, y1c = int(p["y"] - 2), int(p["y"] + p["h"] + 2)
+            # the size column is as wide as its header and a little more, not the remarks beside it
+            again = cell_vote(region[max(0, y0c):y1c, max(0, int(ns["x"] - 15 * S)):int(min(end_ns, ns["x"] + ns["w"] + 22 * S))], "0123456789./",
+                              lambda o: o in NPS and o not in ("12", "14", "18", "34", "38"))
+            size = again if again and (not sz or len(sz) == 1 and sz[0]["t"] == again) else None
+            if length is None:
+                continue
+            out.append({"piece": int(m.group(1)), "lengthMm": length, "nps": size_value(size) if size else None, "ns": size})
+    seen = {}
+    for c in out:
+        seen.setdefault(c["piece"], []).append(c)
+    return [v[0] for k, v in sorted(seen.items()) if len(v) == 1]
+
+
+def read_bom(g):
+    """The bill of material printed beside the drawing (FABRICATION / ERECTION
+    MATERIALS): one row per PT number — its group heading, description, size
+    (N.S.), item code and quantity — as the sheet prints them.
+
+    The table is found by its header line (a QTY word and a DESCRIPTION word);
+    each word goes to the column whose header it stands under. A row starts at
+    a PT number; a line with no PT number continues the description above it,
+    unless it is a group heading (PIPE, FITTINGS, …). A size or quantity that
+    does not read as one is null; the description and item code are the OCR's
+    text, for a person to check."""
+    region = materials_panel(g)
+    lines = {}
+    for line in tess(region, 6, ["tsv"]).splitlines()[1:]:
+        f = line.split("\t")
+        if len(f) >= 12 and f[11].strip():
+            k = (int(f[2]), int(f[3]), int(f[4]))
+            lines.setdefault(k, []).append({"t": f[11].strip(), "x": int(f[6]), "y": int(f[7]), "w": int(f[8]), "h": int(f[9])})
+    lines = sorted((sorted(ws, key=lambda w: w["x"]) for ws in lines.values()), key=lambda ws: min(w["y"] for w in ws))
+
+    def is_header(ws):
+        t = [w["t"].upper() for w in ws]
+        return any(re.fullmatch(r"QTY\.?|QUANTITY", x) for x in t) and any("DESCRIPTION" in x for x in t)
+
+    rows, cols, group, row, gap = [], None, None, None, int(14 * S)
+    for ws in lines:
+        if is_header(ws):
+            find = lambda pat: next((w["x"] for w in ws if re.fullmatch(pat, w["t"].upper())), None)
+            desc = find(r"COMPONENT|DESCRIPTION")
+            ns = find(r"N\.?S\.?|SIZE|NPS|DIA\.?")
+            code = find(r"ITEM|CODE|STOCK")
+            qty = find(r"QTY\.?|QUANTITY")
+            ptx = find(r"PT\.?|ITEM|NO\.?|MK")
+            cols = (desc, ns, code, qty) if None not in (desc, ns, code, qty) and desc < ns < code < qty else None
+            # words left of the PT column are the drawing's, not the table's
+            left = (ptx if ptx is not None and ptx < (desc or 0) else (desc or 0) - int(100 * S)) - int(20 * S)
+            row, group = None, None
+            continue
+        if not cols:
+            continue
+        desc, ns, code, qty = cols
+        ws = [w for w in ws if w["x"] + w["w"] >= left]
+        if not ws:
+            continue
+        text = " ".join(w["t"] for w in ws).upper()
+        if re.search(r"CONT\.? ?ON|\*{4}|MATERIALS$", text):
+            row = None
+            continue
+        if re.fullmatch(r"\(?INS\)?|NO\.?", text.replace(" ", "")) or re.fullmatch(r"[\d\s]*\(INS\).*", text):
+            continue
+        part = {"pt": [], "desc": [], "ns": [], "code": [], "qty": []}
+        for w in ws:
+            cx = w["x"] + w["w"] / 2
+            k = ("pt" if w["x"] + w["w"] < desc - gap / 2 else "desc" if w["x"] < ns - gap else
+                 "ns" if w["x"] < code - gap else "code" if w["x"] < qty - gap else "qty")
+            part[k].append(w["t"])
+        pt = " ".join(part["pt"]).rstrip(".")
+        if re.fullmatch(r"\d{1,3}", pt):
+            size = bom_size(" ".join(part["ns"]).replace(".x", " x").strip(" ."), " ".join(part["desc"]))
+            # 1/2, 1/4, 1/8, 3/4, 3/8 lose their slash as 12, 14, 18, 34, 38: such a size stands only
+            # when the cell, read again several ways on its own, says the same
+            if size and any(p in ("12", "14", "18", "34", "38") for p in size.split(" x ")):
+                nsw = [w for w in ws if ns - gap <= w["x"] < code - gap]
+                if nsw:
+                    bx0, by0 = min(w["x"] for w in nsw), min(w["y"] for w in nsw)
+                    bx1, by1 = max(w["x"] + w["w"] for w in nsw), max(w["y"] + w["h"] for w in nsw)
+                    again = cell_vote(region[max(0, by0 - 4):by1 + 4, max(0, bx0 - 6):bx1 + 6], "0123456789/x.",
+                                      lambda o: bool(o), key=lambda o: o.replace("x", " x ").replace("  ", " ").strip())
+                    if again is None or again.replace(" ", "") != size.replace(" ", ""):
+                        size = None
+            q = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(M)?", " ".join(part["qty"]).upper())
+            row = {"pt": int(pt), "group": group, "description": " ".join(part["desc"]),
+                   "diam": size,
+                   "stockCode": " ".join(part["code"]) or None,
+                   "qty": float(q.group(1)) if q else None, "qtyUnit": ("m" if q.group(2) else "pcs") if q else None}
+            rows.append(row)
+            continue
+        if not part["pt"] and not part["ns"] and not part["code"] and not part["qty"] and BOM_GROUP.fullmatch(" ".join(part["desc"]).upper().strip(" .:,")):
+            group, row = " ".join(part["desc"]).upper().strip(" .:,"), None
+            continue
+        if row and part["desc"] and not part["pt"]:
+            row["description"] += " " + " ".join(part["desc"])
+    # one row per PT number, in order; a number read twice is not trusted
+    seen = {}
+    for r in rows:
+        seen.setdefault(r["pt"], []).append(r)
+    return [v[0] for k, v in sorted(seen.items()) if len(v) == 1]
+
+
 def read_title(g):
     """The title block: isometric number, sheet "n/m" and revision. Each is
     found by where it is printed — the cell right of the isometric number for
@@ -456,14 +777,16 @@ def read_title(g):
             words.append({"t": f[11].strip().upper(), "x": int(f[6]), "y": int(f[7]), "w": int(f[8]), "h": int(f[9])})
 
     loose = re.compile(r"^(?:[ITL1|][S5][O0Q]{1,2}|1?8?0)-(\d{2})-(\d{3,5})$")
-    cell_no, label = None, None
+    cell_no, label, label_word = None, None, None
     for w in words:
         is_label = w["t"].lstrip("{[").startswith("(")
         m = loose.match(re.sub(r"^[{\[]*\(|\).*$", "", w["t"]))
         if not m:
             continue
         if is_label:
-            label = label or f"ISO-{m.group(1)}-{m.group(2)}"
+            if label is None:
+                label = f"ISO-{m.group(1)}-{m.group(2)}"
+                label_word = w
         elif cell_no is None:
             cell_no = w
     out = {"drawingNo": None, "sheet": None, "rev": None}
@@ -520,6 +843,7 @@ def read_title(g):
                                              lambda o: re.fullmatch(r"\d{2}\.\d{2}\.\d{4}", o))
             if date:
                 out["rev"] = rev
+    out["line"] = read_line_data(strip, words, vert, horz, label_word)
     return out
 
 
@@ -573,7 +897,10 @@ def main():
             cv2.rectangle(dbg, (b[0], b[1]), (b[2], b[3]), (0, 0, 255) if m["shape"] == "square" else (0, 160, 0), 3)
             cv2.putText(dbg, m["no"] + (" " + m["label"] if m["label"] else ""), (b[2] + 4, b[1] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
         cv2.imwrite(debug, dbg)
-    print(json.dumps({"orientation": rot, "meta": read_title(g), "marks": out, "tags": tags_out, "rejected": rejected}))
+    meta = read_title(g)
+    line = meta.pop("line", {})
+    print(json.dumps({"orientation": rot, "meta": meta, "lineData": line, "bom": read_bom(g), "cutLengths": read_cut_lengths(g), "marks": out, "tags": tags_out, "rejected": rejected}))
 
 
-main()
+if __name__ == "__main__":
+    main()

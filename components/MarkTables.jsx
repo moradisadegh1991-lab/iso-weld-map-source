@@ -25,13 +25,15 @@ import MarkShape from "./MarkShape";
  *   attachId    the mark whose weld point the sheet is waiting for; onAttach(id|null)
  *   tabs        which tables to show
  *   weldList    welds kept as rows beside the sheet (the weld-list form), for the spool rules
+ *   checked     { has(no), onTick(no, on) } — a weld row ticked once a person has checked it against
+ *               the drawing (the weld-list form); without it there is no tick column
  */
 const TABS = [["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["support", "ساپورت‌ها"]];
 const NEW_KIND = { weld: "weld-unknown", spool: "spool", support: "support" };
 const WORD = { weld: "سرجوش", spool: "اسپول", support: "ساپورت" };
 
 export default function MarkTables({ items = [], onChange, model = null, selectedId = null, onSelect, attachId = null, onAttach,
-  readOnly = false, tabs = ["weld", "spool", "support"], weldList = null }) {
+  readOnly = false, tabs = ["weld", "spool", "support"], weldList = null, checked = null }) {
   const shown = TABS.filter(([k]) => tabs.includes(k));
   const [tab, setTab] = useState(shown[0]?.[0] || "weld");
   const rows = items.filter((m) => KINDS[m.kind]?.cls === tab);
@@ -46,7 +48,8 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
     onAttach?.(row.id);   // the sheet waits for its weld point at once
   };
   const withEngine = tab === "weld" && model && !model.error;
-  const colSpan = ATTRS[tab].length + 3 + (tab === "weld" ? 1 : 0) + (withEngine ? 2 : 0);
+  const ticks = tab === "weld" && checked;
+  const colSpan = ATTRS[tab].length + 3 + (tab === "weld" ? 1 : 0) + (withEngine ? 2 : 0) + (ticks ? 1 : 0);
   return (
     <div className="mark-tables" data-mark-tables>
       <div className="row" style={{ gap: 4, flexWrap: "wrap" }} role="tablist">
@@ -72,6 +75,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
       <div style={{ overflowX: "auto" }}>
         <table className="dtable" data-mark-table={tab}>
           <thead><tr>
+            {ticks && <th title="با نقشه بررسی شد">✓</th>}
             <th>شماره</th>
             {tab === "weld" && <th>محل</th>}
             {ATTRS[tab].map(([k, label]) => <th key={k}>{label}</th>)}
@@ -84,6 +88,8 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
               const placed = isPlaced(m);
               return (
                 <tr key={m.id} data-mark-row={m.id} data-placed={placed ? "yes" : "no"} className={m.id === selectedId ? "sel" : undefined} onClick={() => onSelect?.(m.id)}>
+                  {ticks && <td><input type="checkbox" aria-label={`جوش ${m.no} با نقشه بررسی شد`} disabled={!m.no} data-wl-check={m.no}
+                    checked={Boolean(m.no) && checked.has(m.no)} onClick={(ev) => ev.stopPropagation()} onChange={(ev) => checked.onTick(m.no, ev.target.checked)} /></td>}
                   <td><input data-cell="no" dir="ltr" className="mono" style={{ width: 64 }} value={m.no} disabled={readOnly}
                     onChange={(ev) => set(m.id, { no: ev.target.value })} /></td>
                   {tab === "weld" && (
@@ -124,7 +130,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
           {issues.map((x) => <li key={x} className="err">{x}</li>)}
         </ul>)}
       {tab === "weld" && (
-        <p className="muted sm">محل، نوع اتصال، قطر، اسپول و جنس را موتور و BOM پر کرده‌اند و همه قابل ویرایش‌اند؛ NDT و EL از رجیستر موتورند و اینجا ویرایش نمی‌شوند.</p>)}
+        <p className="muted sm">محل، نوع اتصال، قطر، اسپول و جنس را موتور، خوانش نقشه یا BOM پر کرده‌اند (جایی که گفته نشده خالی می‌ماند) و همه قابل ویرایش‌اند{withEngine ? "؛ NDT و EL از رجیستر موتورند و اینجا ویرایش نمی‌شوند" : ""}.</p>)}
       {tab === "spool" && (
         <p className="muted sm" data-spool-rules>قاعده‌ها: هر سرجوش کارگاهی داخل یک اسپول است و آن را نام می‌برد؛ هر اسپولی که نام برده شده بیضی‌اش روی نقشه هست؛
           هر بیضی روی نقشه دست‌کم یک سرجوش دارد؛ شمارهٔ اسپول تکراری نیست. سرجوش سایت دو اسپول را به هم وصل می‌کند و اسپول خودش را لازم ندارد.</p>)}

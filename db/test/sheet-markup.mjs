@@ -9,6 +9,8 @@ import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
 import { KINDS, SHEET_SIZE, plainNo, isPlaced, notOnSheet, engineRow, frameSpot, placeAt, unplace, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, problems, normalize } from "../../lib/sheet/markup.mjs";
 
+import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../../lib/sheet/weld-list-marks.mjs";
+
 const SYM = { shop: "circle", field: "square" };
 const pass = (items) => ({ items });
 
@@ -335,6 +337,45 @@ test("the spool and support rules, on marks and on a weld list", () => {
   const l = rules([mk("spool", "SP-1"), mk("spool", "SP-3")],
     [{ no: "1", loc: "Shop", spool: "SP-1" }, { no: "2", loc: "Shop", spool: "" }, { no: "3", loc: "Field", spool: "" }]);
   assert(l.some((x) => /کارگاهی 2/.test(x)) && l.some((x) => /SP-3.*هیچ سرجوشی/.test(x)) && !l.some((x) => /SP-1/.test(x)), l.join(" | "));
+});
+
+test("the weld list's rows are the one table's weld marks, and back", () => {
+  const rows = withRowIds([
+    { no: "1", loc: "Shop", kind: "BW", nps: "6", spool: "SP-1", schedule: "S40", material: "A106-B", wps: "W1", ref: "" },
+    { no: "2", loc: "field", kind: "SW", nps: "3/4", spool: "", schedule: "", material: "", wps: "", ref: "" },
+    { no: "3", loc: "X?", kind: "", nps: "", spool: "", schedule: "", material: "", wps: "", ref: "TP-1" },
+    { no: "", loc: "", kind: "", nps: "", spool: "", schedule: "", material: "", wps: "", ref: "" },
+  ]);
+  const marks = { 1: { x: 0.2, y: 0.3, src: "reader" }, 2: { x: 0.5, y: 0.5, ax: 0.48, ay: 0.55, src: "hand" } };
+  const extras = [{ id: "s1", kind: "spool", no: "SP-1", x: 0.1, y: 0.1, src: "hand" }];
+  const items = itemsFromWeldRows(rows, marks, extras);
+  equal(items.length, 4, "a blank row is no mark");
+  equal(items[0].kind, "weld-shop"); equal(items[1].kind, "weld-field"); equal(items[2].kind, "weld-unknown");
+  equal(items[0].attrs.type, "BW"); equal(items[0].attrs.size, "6"); equal(items[0].attrs.spool, "SP-1"); equal(items[2].attrs.ref, "TP-1");
+  assert(isPlaced(items[0]) && items[0].ax == null, "a number read on the sheet is placed, with no weld point yet");
+  equal(items[1].ax, 0.48, "the weld point a person joined it to");
+  assert(!isPlaced(items[2]), "a weld with no place on the sheet is a row not joined");
+  equal(items[0].id, rows[0]._id, "the mark is the row");
+
+  // edits in the one table come back as rows the register checks
+  let next = updateMark(items, items[2].id, { no: "3A", attrs: { size: "2" } });
+  next = placeAt(next, items[2].id, { x: 0.7, y: 0.7 });
+  const back = weldRowsFromItems(next, rows);
+  equal(back.rows.length, 3); equal(back.rows[2].no, "3A"); equal(back.rows[2].nps, "2");
+  equal(back.rows[2].loc, "X?", "a location typed that is neither Shop nor Field is kept, for the check to name");
+  equal(back.rows[1].loc, "Field"); equal(back.rows[0].kind, "BW"); equal(back.rows[0].schedule, "S40");
+  equal(back.rows[2]._id, rows[2]._id, "a row keeps its id");
+  assert(back.marks["3A"] && back.marks["3A"].ax === 0.7, "its place on the sheet, with its weld point");
+  assert(!back.marks["3"], "under its new number only");
+  equal(back.extras.length, 1); equal(back.extras[0].no, "SP-1");
+  // a row deleted in the table is gone from the register and the sheet
+  const gone = weldRowsFromItems(removeMark(next, items[0].id), rows);
+  equal(gone.rows.length, 2); assert(!gone.marks["1"], "its mark gone too");
+  // a weld added by the sheet's tool is a register row of its kind
+  const added = weldRowsFromItems(addMark(next, { kind: "weld-shop", x: 0.4, y: 0.4 }), rows);
+  equal(added.rows[3].loc, "Shop"); equal(added.rows[3].no, "3", "the next plain number");
+  // the register row is saved without the form's id
+  assert(!("_id" in registerRow(rows[0])) && rowTyped(rows[2]) && !rowTyped(rows[3]), "register rows");
 });
 
 await run();

@@ -54,7 +54,7 @@ const t0 = Date.now();
 await page.setInputFiles(".drop input[type=file]", SHEET);
 await page.waitForFunction(() => document.querySelector("[data-weld-marks] [data-reader=local]") && document.querySelectorAll(".wl-table tbody tr").length > 1,
   null, { timeout: 120000 }).catch(async (e) => {
-  console.log("calls:", calls.join(" "), "\nerr:", await page.locator(".err").allInnerTexts(), "\nrows:", await page.locator(".wl-table tbody tr").count());
+  console.log("calls:", calls.join(" "), "\nerr:", await page.locator(".err").allInnerTexts(), "\nrows:", await page.locator("[data-mark-row]").count());
   await page.screenshot({ path: `${SHOT}/iso-read-local-fail.png` });
   throw e;
 });
@@ -62,8 +62,11 @@ const secs = ((Date.now() - t0) / 1000).toFixed(1);
 check(/بدون مدل و بدون توکن/.test(await page.locator("[data-weld-marks] [data-reader=local]").innerText()), "the review says the sheet was read with no model and no token");
 check(calls.includes("/api/read-local") && !calls.some((c) => c.startsWith("/api/extract")), `read on the server with no model: /api/read-local, never /api/extract (${secs}s)`);
 await settle();
-const rows = await page.locator(".wl-table tbody tr").evaluateAll((trs) => trs.map((tr) =>
-  [...tr.querySelectorAll('input:not([type="checkbox"])')].map((i) => i.value)));    // the row's fields, not its tick against the drawing
+// the one table of the sheet (components/MarkTables.jsx): number, location (the frame's shape), joint type
+const rows = await page.locator('[data-mark-table="weld"] [data-mark-row]').evaluateAll((trs) => trs.map((tr) => {
+  const v = (k) => tr.querySelector(`[data-cell="${k}"]`)?.value ?? "";
+  return [v("no"), "", { "weld-shop": "Shop", "weld-field": "Field" }[v("kind")] || "", v("type")];
+}));
 const got = new Map(rows.map((r) => [r[0], r]));
 check(rows.length === GOLD.length && GOLD.every((g) => got.has(g.no)), `every printed joint number, nothing more (${rows.length} of ${GOLD.length})`);
 const locOk = GOLD.filter((g) => got.get(g.no)?.[2] === g.loc).length;
