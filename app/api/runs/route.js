@@ -9,6 +9,7 @@ import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { modelFor } from "../../../lib/register/weld-list.mjs";
 import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
 import { lineForRegister, tieInRefsOf } from "../../../lib/db/repos/spine.mjs";
+import { fillLineList, saveIsoBom } from "../../../lib/db/repos/line-list.mjs";
 
 /**
  * Persist an extraction and the register it produces.
@@ -95,9 +96,20 @@ export async function POST(request) {
         projectId, runId: run.id, documentId, lineId: theLine, model, carryFrom,
       });
       const register = await getRegister(db, { projectId, runId: run.id });
+      // the line list the sheet prints fills the line's empty values — only on a line named by its own
+      // number (a drawing number standing in for it may be a package's, shared by many lines); a value
+      // on file that differs is reported, not written over
+      const named = payload?.meta?.lineNo || (lineNo && lineNo !== docNo ? lineNo : null);
+      const lineList = theLine && named && payload?.lineData
+        ? await fillLineList(db, { projectId, lineId: theLine, lineData: payload.lineData }) : null;
+      // the sheet's BOM as the person checked it, for this revision of the sheet
+      const bomRows = Array.isArray(payload?.bom) && payload.bom.length
+        ? await saveIsoBom(db, { projectId, documentId, runId: run.id, lineId: theLine, bom: payload.bom, createdBy: user.id }) : 0;
       return Response.json({
         run,
         register,
+        ...(lineList ? { lineList } : {}),
+        bomRows,
         carriedIdentities: saved.carried,
         totals: model.totals,
         spools: model.spoolIds,

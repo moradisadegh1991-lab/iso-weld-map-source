@@ -130,6 +130,9 @@ export default function SaveBar({ session, data, model, sourceFile, strictBom, o
       setState({
         phase: "done",
         msg: `${run.register.length} جوش ثبت شد` +
+          (run.bomRows ? ` · BOM ${run.bomRows} ردیف ثبت شد` : "") +
+          (run.lineList?.filled?.length ? ` · مشخصات خط: ${run.lineList.filled.length} مقدار خالی پر شد` : "") +
+          (run.lineList?.conflicts?.length ? ` · مغایرت با مشخصات ثبت‌شدهٔ خط (بازنویسی نشد): ${run.lineList.conflicts.map((c) => `${c.key} ثبت‌شده ${c.onFile} / نقشه ${c.read}`).join("، ")}` : "") +
           (doc.deduplicated ? " · فایل تکراری بود، دوباره ذخیره نشد" : "") +
           (doc.superseded?.length ? ` · رویژن ${doc.superseded.map((d) => d.revision).join("، ")} منسوخ شد` : "") +
           (uploaded ? " · فایل بزرگ مستقیم در MinIO ذخیره شد" : "") +

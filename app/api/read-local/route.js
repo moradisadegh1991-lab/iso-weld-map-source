@@ -81,7 +81,9 @@ export async function POST(request) {
     const weldDots = (Array.isArray(r.weldDots) ? r.weldDots : []).filter((d) => Array.isArray(d) && d.length === 2 && d.every(Number.isFinite));
     // the socket ends drawn on the pipe (the filled block of a socket-weld fitting), each a candidate socket weld
     const socketEnds = (Array.isArray(r.socketEnds) ? r.socketEnds : []).filter((d) => Array.isArray(d) && d.length === 2 && d.every(Number.isFinite));
-    return Response.json({ marks, tags, meta, lineData, bom, cutLengths, weldDots, socketEnds,
+    // the drawing's style: the golden sheets' layout, or another read by its title block's labels
+    const style = r.style === "generic" ? "generic" : "golden";
+    return Response.json({ marks, tags, meta, lineData, bom, cutLengths, weldDots, socketEnds, style,
       orientation: r.orientation, ms: Date.now() - t0, reader: "tools/iso-read.py (OpenCV + tesseract, no model)" });
   } catch (e) { return errorResponse(e); }
   finally { if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {}); }

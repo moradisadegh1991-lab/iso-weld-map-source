@@ -85,3 +85,6 @@ register that is checked, saved and approved.
 
 Next (not in this change): finding the weld points on a sheet with no printed
 weld numbers, measured on the golden sheets first.
+
+A sheet in another designer's style — its title block laid out otherwise —
+is read by its labels instead: 11-drawing-styles.md.

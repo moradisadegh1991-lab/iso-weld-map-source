@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import SaveBar from "./SaveBar";
+import RegistryCheck from "./RegistryCheck";
 import { STATE_COLORS } from "./SheetReview";
 import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
@@ -218,6 +219,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           </label>
         ))}
       </div>
+
+      {!run && <RegistryCheck session={session} meta={meta} lineData={lineData} />}
 
       {lineData && (
         <details className="intake-more" open data-line-data>
