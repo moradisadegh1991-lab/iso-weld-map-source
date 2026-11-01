@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import TableKit from "./ui/TableKit";
 
 /**
  * What is waiting for a piping engineer.
@@ -51,13 +52,13 @@ export default function ReviewQueue({ session, onOpen, currentRunId }) {
       )}
 
       {queue && queue.length > 0 && (
-        <table>
+        <TableKit name="review-queue"><table className="dtable">
           <thead>
             <tr><th>نقشه</th><th>REV</th><th>هشدار</th><th>جوش</th><th>اصلاح</th><th /></tr>
           </thead>
           <tbody>
             {queue.map((r) => (
-              <tr key={r.runId} className={r.runId === currentRunId ? "sel" : ""}>
+              <tr key={r.runId} data-key={r.runId} className={r.runId === currentRunId ? "sel" : ""}>
                 <td className="mono sm">{r.docNo}</td>
                 <td className="mono sm">{r.revision}</td>
                 <td className={"mono " + (r.engineError ? "fld" : r.warnings ? "warnish" : "")}>
@@ -71,7 +72,7 @@ export default function ReviewQueue({ session, onOpen, currentRunId }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></TableKit>
       )}
 
       <p className="muted sm">

@@ -22,6 +22,7 @@ import WeldListEntry from "../../components/WeldListEntry";
 import StyleTemplate from "../../components/StyleTemplate";
 import WorkspaceFrame from "../../components/workspace/WorkspaceFrame";
 import Explorer from "../../components/workspace/Explorer";
+import TableKit from "../../components/ui/TableKit";
 import Inspector from "../../components/workspace/Inspector";
 import CutList from "../../components/CutList";
 import LlmEndpoints from "../../components/LlmEndpoints";
@@ -797,11 +798,11 @@ export default function Page() {
                     }}
                     selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} />
                 ) : (
-                <table>
+                <TableKit name="iso-register"><table className="dtable">
                   <thead><tr><th>No</th><th>Spool</th><th>محل</th><th>نوع</th><th>اتصال</th><th>EL</th><th>NDT</th></tr></thead>
                   <tbody>
                     {model.register.map((w) => (
-                      <tr key={w.no} className={selected === w.no ? "sel" : ""}
+                      <tr key={w.no} data-key={w.no} className={selected === w.no ? "sel" : ""}
                         onClick={() => setSelected(selected === w.no ? null : w.no)}>
                         <td className="mono b">{w.no}</td>
                         <td className="mono">{w.spool}</td>
@@ -813,7 +814,7 @@ export default function Page() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></TableKit>
                 )}
                 <div className="row">
                   <button className="ghost" onClick={() => exportWorkbook(model, data)}>دانلود Excel (۶ شیت)</button>
@@ -848,28 +849,28 @@ export default function Page() {
 
             {tab === "line" && (
               <div className="pane">
-                <table className="kv"><tbody>
+                <TableKit name="iso-meta"><table className="dtable kv"><thead><tr><th>فیلد</th><th>مقدار</th></tr></thead><tbody>
                   {Object.entries(data.meta || {}).map(([k, v]) => (
                     <tr key={k}><td className="muted sm">{k}</td><td className="mono sm">{String(v ?? "—")}</td></tr>
                   ))}
-                </tbody></table>
+                </tbody></table></TableKit>
                 <h4>گره‌ها</h4>
-                <table><thead><tr><th>ID</th><th>نوع</th><th>E</th><th>N</th><th>EL</th></tr></thead>
+                <TableKit name="iso-nodes"><table className="dtable"><thead><tr><th>ID</th><th>نوع</th><th>E</th><th>N</th><th>EL</th></tr></thead>
                   <tbody>{(data.nodes || []).map((n, i) => (
                     <tr key={n.id || i}><td className="mono">{n.id}</td><td className="sm">{TYPE_FA[n.type] || n.type}</td>
                       <td className="mono sm">{n.E}</td><td className="mono sm">{n.N}</td><td className="mono sm">{n.EL}</td></tr>
-                  ))}</tbody></table>
+                  ))}</tbody></table></TableKit>
               </div>
             )}
 
             {tab === "mto" && (
               <div className="pane">
-                <table><thead><tr><th>PT</th><th>شرح</th><th>Ø</th><th>Stock</th><th>Qty</th></tr></thead>
+                <TableKit name="iso-mto"><table className="dtable"><thead><tr><th>PT</th><th>شرح</th><th>Ø</th><th>Stock</th><th>Qty</th></tr></thead>
                   <tbody>{(data.bom || []).map((b, i) => (
                     <tr key={i}><td className="mono">{b.pt}</td><td className="sm">{b.description}</td>
                       <td className="mono sm">{b.diam}</td><td className="mono sm">{b.stockCode}</td>
                       <td className="mono">{b.qty}</td></tr>
-                  ))}</tbody></table>
+                  ))}</tbody></table></TableKit>
               </div>
             )}
 

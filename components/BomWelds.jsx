@@ -1,6 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { compareBomWelds } from "../lib/register/bom-welds.mjs";
+import TableKit from "./ui/TableKit";
 
 const KIND = { BW: "جوش لب‌به‌لب (BW)", SW: "جوش ساکتی (SW)", OLET: "انشعاب روی لوله (OLET)", SO: "فلنج اسلیپ‌آن (SO)", THD: "اتصال رزوه‌ای (THD — جوش نیست)" };
 const sizeText = (s) => (s == null ? "؟" : `${s}"`);
@@ -36,14 +37,14 @@ export default function BomWelds({ bom, welds }) {
         <p className="err sm" data-bom-short>
           فهرست {c.weldCount} جوش دارد، کمتر از حداقلی که BOM می‌گوید ({c.least}): احتمالاً سرجوشی روی نقشه پیدا یا وارد نشده است.
         </p>)}
-      <table className="dtable">
+      <TableKit name="bom-welds"><table className="dtable">
         <thead><tr><th>قطر</th><th>نوع</th><th>سر جوشی در BOM</th><th>ردیف‌های BOM</th><th>در فهرست</th></tr></thead>
         <tbody>{c.rows.map((r) => (
           <tr key={`${r.size}|${r.kind}`} data-bom-weld-row={`${r.size ?? "?"}|${r.kind}`} className={r.bomEnds !== r.welds ? "warn" : undefined}>
             <td className="mono" dir="ltr">{sizeText(r.size)}</td><td className="sm">{KIND[r.kind] || r.kind}</td>
             <td className="mono">{r.bomEnds}</td><td className="mono sm">{r.pts.length ? r.pts.join("، ") : "—"}</td><td className="mono">{r.welds}</td>
           </tr>))}</tbody>
-      </table>
+      </table></TableKit>
       {c.unsized.length > 0 && <p className="muted sm">{c.unsized.length} جوش فهرست هنوز قطر یا نوع ندارد و در جدول نیامده است.</p>}
     </details>
   );
