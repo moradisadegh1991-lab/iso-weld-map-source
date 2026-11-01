@@ -14,6 +14,7 @@ import "./ui-ux-repair.css";
 import "./ui-ux-mobile-inspector.css";
 import "./ui-ux-launchpad.css";
 import "./ui-ux-shell.css";
+import "./ui-ux-workspace.css";
 import { PlatformProvider } from "../lib/client/platform.mjs";
 import { PrefsProvider } from "../lib/client/prefs.mjs";
 import Shell from "../components/platform/Shell";

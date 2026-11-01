@@ -1,0 +1,92 @@
+/*
+ * ISO Weld Map — Engineering workspace
+ * Layout only (components/workspace/*). Colours, borders and focus come from the
+ * theme tokens (globals.css :root, the light block, design.css), so both themes
+ * and any accent need nothing here. Sides are logical (inline-start / inline-end):
+ * the explorer sits at the start — right in Persian, left in English.
+ */
+
+.ws{display:flex;flex-direction:column;min-width:0;border:1px solid var(--rule);border-radius:var(--r-md,8px);background:var(--surf);
+  height:calc(100vh - 150px);min-height:520px}
+.ws-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--rule);background:var(--surf2);flex-wrap:wrap}
+.ws-bar-main{flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ws-bar button[aria-pressed="true"]{border-color:var(--cy);color:var(--cy)}
+.ws-body{flex:1;min-height:0;display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto var(--ws-panel);
+  grid-template-areas:"ex center handle panel"}
+.ws[data-explorer="closed"] .ws-body{grid-template-columns:minmax(0,1fr) auto var(--ws-panel);grid-template-areas:"center handle panel"}
+.ws[data-panel="closed"] .ws-body{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"ex center"}
+.ws[data-panel="closed"][data-explorer="closed"] .ws-body{grid-template-columns:minmax(0,1fr);grid-template-areas:"center"}
+
+.ws-explorer{grid-area:ex;width:230px;overflow:auto;border-inline-end:1px solid var(--rule);background:var(--panel)}
+.ws-center{grid-area:center;min-width:0;min-height:0;overflow:auto;padding:8px;background:var(--surf)}
+.ws-handle{grid-area:handle;width:7px;cursor:col-resize;background:transparent;border-inline:1px solid var(--rule);position:relative;touch-action:none}
+.ws-handle::after{content:"";position:absolute;inset-block:calc(50% - 18px);inset-inline:2px;border-inline:1px solid var(--dim);opacity:.6}
+.ws-handle:hover,.ws-handle:focus-visible{background:var(--cy-soft)}
+.ws-panel{grid-area:panel;min-width:0;min-height:0;overflow:auto;background:var(--panel)}
+
+/* the panel at the bottom: the middle row is the drawing, the last the data */
+.ws[data-dock="bottom"] .ws-body{grid-template-columns:auto minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto var(--ws-panel);
+  grid-template-areas:"ex center" "ex handle" "ex panel"}
+.ws[data-dock="bottom"][data-explorer="closed"] .ws-body{grid-template-columns:minmax(0,1fr);grid-template-areas:"center" "handle" "panel"}
+.ws[data-dock="bottom"][data-panel="closed"] .ws-body{grid-template-rows:minmax(0,1fr);grid-template-areas:"ex center"}
+.ws[data-dock="bottom"][data-panel="closed"][data-explorer="closed"] .ws-body{grid-template-areas:"center"}
+.ws[data-dock="bottom"] .ws-handle{width:auto;height:7px;cursor:row-resize;border-inline:0;border-block:1px solid var(--rule)}
+.ws[data-dock="bottom"] .ws-handle::after{inset-block:2px;inset-inline:calc(50% - 18px);border-inline:0;border-block:1px solid var(--dim)}
+
+/* explorer */
+.ws-ex{padding:8px 0}
+.ws-ex-sec{padding:6px 10px 10px;border-bottom:1px solid var(--rule-soft)}
+.ws-ex-h{font-size:10px;letter-spacing:.1em;color:var(--dim);margin-bottom:6px}
+.ws-ex-dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:11px}
+.ws-ex-dl dt{color:var(--dim)}
+.ws-ex-dl dd{margin:0;overflow-wrap:anywhere}
+.ws-ex-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.ws-ex-list.marks{max-height:240px;overflow:auto}
+.ws-ex-list button{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--ink)}
+.ws-ex-list button:hover{background:var(--hover)}
+.ws-ex-list button.on{background:var(--cy-soft);box-shadow:inset 0 0 0 1px var(--cy)}
+.ws-ex-list button:focus-visible{box-shadow:var(--focus)}
+.ws-ex-list .mk{width:14px;text-align:center;color:var(--cy);font-size:11px}
+.ws-ex-list .st.off{margin-inline-start:auto;font-size:10px;color:var(--warn)}
+.ws-ex-list .ok{margin-inline-start:auto;color:var(--ok)}
+
+/* the panel's tabs */
+.wstabs{display:flex;flex-direction:column;min-height:0}
+.wstabs-list{display:flex;gap:2px;padding:6px 8px;border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--panel);z-index:2;overflow-x:auto}
+.wstabs-list button{all:unset;box-sizing:border-box;flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:5px;border:1px solid transparent;
+  font-size:12px;color:var(--dim);cursor:pointer;white-space:nowrap}
+.wstabs-list button:hover{color:var(--ink);background:var(--hover)}
+.wstabs-list button.on{background:var(--surf);border-color:var(--rule);color:var(--ink)}
+.wstabs-list button:focus-visible{box-shadow:var(--focus)}
+.wstabs-badge{font-family:var(--mono);font-size:10px;padding:0 5px;border-radius:8px;background:var(--hover-strong);color:var(--ink)}
+.wstabs-badge.warn{background:var(--warn-bg);color:var(--warn)}
+.wstabs-badge.bad{background:var(--bad-bg);color:var(--bad-ink)}
+.wstabs-badge.ok{background:var(--ok-bg);color:var(--ok-ink)}
+.wstabs-panel{padding:10px 12px;min-width:0}
+.wstabs-panel[hidden]{display:none}
+
+/* narrow: one column — explorer, drawing, data; the panel takes its content's height */
+@media (max-width:900px){
+  .ws{height:auto;min-height:0}
+  .ws-body,.ws[data-dock="bottom"] .ws-body,.ws[data-explorer="closed"] .ws-body,.ws[data-panel="closed"] .ws-body,.ws[data-dock="bottom"][data-explorer="closed"] .ws-body{
+    display:flex;flex-direction:column}
+  .ws-explorer{width:auto;max-height:200px;border-inline-end:0;border-bottom:1px solid var(--rule)}
+  .ws-center{min-height:360px}
+  .ws-handle{display:none}
+  .ws-panel{border-top:1px solid var(--rule)}
+  [data-ws-toggle="dock"]{display:none}
+}
+
+/* the sheet fills the drawing area (SheetMarkup sets an inline height for its scroll box; here the
+   area decides, so it is overridden on purpose) */
+.ws-center .sheet-markup{display:flex;flex-direction:column;height:100%;min-height:0}
+.ws-center .sheet-markup .sheet-box{flex:1;height:auto !important;min-height:260px}
+.ws-center .wl-sheet{display:flex;flex-direction:column;height:100%;min-height:0;position:static}
+/* inside the panel the register table takes the panel's width */
+.ws-panel .wl-table{max-height:none}
+
+/* the model route keeps its <aside> (TabNav and its panes, styled as aside .note, aside nav …):
+   in the data panel it takes the panel's width instead of its own */
+.ws-panel aside.ws-aside{width:auto;max-width:none;border-inline-start:0;max-height:none;height:100%}
+.ws-center .canvas{min-height:320px;height:100%}
