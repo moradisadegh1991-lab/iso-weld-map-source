@@ -95,6 +95,8 @@ test("a sheet revision's BOM saved again replaces the rows saved before; it read
     equal((await ll.isoBom(db, { projectId: P, documentId: d.id })).map((b) => [b.pt, b.diam, b.qty, b.qtyUnit]), [[1, "60", 1.2, "m"], [3, "60 x 1.1/2", 3, "pcs"]]);
     await ll.saveIsoBom(db, { projectId: P, documentId: d.id, bom: [{ pt: 2, description: "Pipe 3/4", diam: "3/4", qty: 0.3, qtyUnit: "m" }, { pt: 1, description: "Pipe 60", qty: -1, qtyUnit: "kg" }] });
     equal((await ll.isoBom(db, { projectId: P, documentId: d.id })).map((b) => [b.pt, b.qty, b.qtyUnit]), [[1, null, null], [2, 0.3, "m"]], "a negative quantity or an unknown unit is not kept");
+    await ll.saveIsoBom(db, { projectId: P, documentId: d.id, bom: [{ pt: 1, description: "Pipe", qty: 1e20, qtyUnit: "pcs" }] });
+    equal((await ll.isoBom(db, { projectId: P, documentId: d.id }))[0].qty, null, "a quantity the column cannot hold is a misread, not an error that fails the save");
   });
 });
 
