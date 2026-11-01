@@ -85,3 +85,8 @@
 .ws-center .wl-sheet{display:flex;flex-direction:column;height:100%;min-height:0;position:static}
 /* inside the panel the register table takes the panel's width */
 .ws-panel .wl-table{max-height:none}
+
+/* the model route keeps its <aside> (TabNav and its panes, styled as aside .note, aside nav …):
+   in the data panel it takes the panel's width instead of its own */
+.ws-panel aside.ws-aside{width:auto;max-width:none;border-inline-start:0;max-height:none;height:100%}
+.ws-center .canvas{min-height:320px;height:100%}

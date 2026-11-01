@@ -20,6 +20,8 @@ import TruthBar from "../../components/TruthBar";
 import EquipmentBar from "../../components/EquipmentBar";
 import WeldListEntry from "../../components/WeldListEntry";
 import StyleTemplate from "../../components/StyleTemplate";
+import WorkspaceFrame from "../../components/workspace/WorkspaceFrame";
+import Explorer from "../../components/workspace/Explorer";
 import CutList from "../../components/CutList";
 import LlmEndpoints from "../../components/LlmEndpoints";
 import { StageRail } from "../../components/PlatformShell";
@@ -757,108 +759,19 @@ export default function Page() {
       )}
 
       {data && !listed && (
-        <section className="stage">
-          {model.error ? (
-            <div className="canvas empty">
-              <div>
-                <div className="big">هندسه ناقص است</div>
-                <p className="muted sm">{model.error}</p>
-                <p className="muted sm">
-                  در تب JSON، آرایه <code>nodes</code> را کامل کنید: هر گره یک <code>type</code>
-                  (tie-in / elbow90 / elbow45 / tee / reducer / flange-wn / valve-bw) و مختصات
-                  <code>E</code>، <code>N</code>، <code>EL</code> بر حسب میلی‌متر می‌خواهد،
-                  به ترتیب مسیر از یک سر خط تا سر دیگر.
-                </p>
-              </div>
-            </div>
-          ) : SHEET_MARKUP ? (
-            <div className="canvas" data-sheet-stage style={{ overflow: "auto", padding: 12 }}>
-              <SheetMarkup src={openRun ? runSheet?.src : preview}
-                items={data.sheetMarkup?.items || []}
-                selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
-                onSeedEngine={(aspect) => {
-                  // the engine's welds again, where the model saw their nodes: what a person placed or kept stays
-                  const kept = (data.sheetMarkup?.items || []).filter((m) => m.src !== "engine");
-                  const eng = fromEngine(model, data.nodes, aspect, data.bom).items.filter((m) => !kept.some((k) => k.no === m.no && (k.kind === m.kind || (k.kind.startsWith("weld") && m.kind.startsWith("weld")))));
-                  const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks([...kept, ...eng]) } };
-                  setData(next);
-                  setEditing(JSON.stringify(next, null, 2));
-                }}
-                fileName={`${data.meta?.drawingNo || "iso"}-${data.meta?.sheet || "1"}-marked`.replace(/[^\w.-]+/g, "_")}
-                onChange={(items) => {
-                  const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks(items) } };
-                  setData(next);
-                  setEditing(JSON.stringify(next, null, 2));
-                }} />
-            </div>
-          ) : (
-            <div className="canvas">
-            {dim === "3d" ? (
-              <Viewer3D model={model} selected={selected} onSelect={setSelected}
-                exploded={exploded} showTags={showTags} showDims={showDims} view={view}
-                renderMode={renderMode} colorBy={colorBy} />
-            ) : (
-              <WeldMap2D model={model} meta={data.meta} selected={selected} onSelect={setSelected}
-                showDims={showDims} colorBy={colorBy} />
-            )}
-            <div className="ctl">
-              <div className="row seg">
-                {[["3d", "سه‌بعدی"], ["2d", "نقشه ۲بعدی"]].map(([k, t]) => (
-                  <button key={k} className={dim === k ? "on" : ""} onClick={() => setDim(k)}>{t}</button>
-                ))}
-              </div>
-              {dim === "3d" && (
-                <>
-                  <div className="row">
-                    {[["iso", "ایزو"], ["elev", "نما"], ["plan", "پلان"]].map(([k, t]) => (
-                      <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{t}</button>
-                    ))}
-                  </div>
-                  <div className="row">
-                    {[["solid", "توپر"], ["xray", "شفاف"], ["wire", "مش"], ["centerline", "تک‌خط"]].map(([k, t]) => (
-                      <button key={k} className={renderMode === k ? "on" : ""} onClick={() => setRenderMode(k)}>{t}</button>
-                    ))}
-                  </div>
-                </>
-              )}
-              <div className="row">
-                <button className={strictBom ? "on wide" : "wide"} onClick={() => setStrictBom(!strictBom)}
-                  title="اقلام خارج از MTO رسم نشوند">فقط اقلام MTO</button>
-              </div>
-              <div className="row">
-                <span className="lbl">رنگ:</span>
-                {[["spool", "اسپول"], ["size", "قطر"], ["none", "خنثی"]].map(([k, t]) => (
-                  <button key={k} className={colorBy === k ? "on" : ""} onClick={() => setColorBy(k)}>{t}</button>
-                ))}
-              </div>
-              {dim === "3d" && (
-                <button className={exploded ? "on wide" : "wide"} onClick={() => setExploded(!exploded)}>اسپول باز</button>
-              )}
-              {dim === "3d" && (
-                <button className={showTags ? "on wide" : "wide"} onClick={() => setShowTags(!showTags)}>تگ جوش</button>
-              )}
-              <button className={showDims ? "on wide" : "wide"} onClick={() => setShowDims(!showDims)}>ابعاد</button>
-            </div>
-            <div className="legend">
-              {colorBy === "size"
-                ? [...new Set(model.elements.map((e) => e.nps || model.nps))].sort((a, b) => b - a).map((n, i) => (
-                    <span key={n}><i style={{ background: SPOOL_COLORS[i % SPOOL_COLORS.length] }} />
-                      <b className="mono">{n}&quot;</b></span>
-                  ))
-                : colorBy === "spool" && model.spoolIds.map((id, i) => (
-                <span key={id}><i style={{ background: SPOOL_COLORS[i % SPOOL_COLORS.length] }} /><b className="mono">{id}</b></span>
-              ))}
-              <span className="sep" />
-              <span><i className="dot" style={{ background: "#FF6B4A" }} />سایت ({model.totals.field})</span>
-              <span><i className="dot" style={{ background: "#CFDDE6" }} />کارگاه ({model.totals.shop})</span>
-            </div>
-            <div className="hint">{dim === "3d"
-              ? "بکشید تا بچرخد · اسکرول یا پینچ زوم · روی حلقه جوش بزنید"
-              : "بکشید تا جابه‌جا شود · اسکرول زوم · روی تگ جوش بزنید"}</div>
-          </div>
-          )}
-
-          <aside>
+        // the model route's workspace: the drawing or model in the middle, the register's tabs in the data panel
+        <WorkspaceFrame
+          toolbar={(<>
+            <span className="chip mono" dir="ltr" data-ws-chip="drawing">{data.meta?.drawingNo || "؟"} · REV {data.meta?.rev || "؟"} · {data.meta?.sheet || "؟"}</span>
+            {data.meta?.lineNo && <span className="chip mono cy" dir="ltr" data-ws-chip="line">{data.meta.lineNo}</span>}
+            <span className="chip" data-ws-chip="status">{model?.error ? "ناموفق" : openRun?.run?.status === "approved" ? "تأییدشده" : openRun ? "در بازبینی" : "استخراج‌شده"}</span>
+            {!model?.error && <span className="muted sm" data-ws-chip="counts">{model.totals.welds} جوش · {model.spoolIds.length} اسپول</span>}
+          </>)}
+          explorer={<Explorer meta={data.meta || {}} items={data.sheetMarkup?.items || []} selectedId={markSel} onSelect={setMarkSel}
+            sheets={pdf && pdf.pages.length > 1 ? { pages: pdf.pages, current: pdfPage || 1,
+              onPick: (i) => { if (window.confirm("برگ دیگر خوانده شود؟ تغییرات ذخیره‌نشدهٔ این برگ از بین می‌رود.")) onPdfPage(i); } } : null} />}
+          panel={
+            <aside className="ws-aside">
             <TabNav tab={tab} setTab={setTab} model={model} data={data} />
 
             {tab === "weld" && !model.error && (
@@ -1021,8 +934,107 @@ export default function Page() {
             )}
             {note && <div className="note mono">{note}</div>}
             {err && <div className="err">{err}</div>}
-          </aside>
-        </section>
+          </aside>}>
+          {model.error ? (
+            <div className="canvas empty">
+              <div>
+                <div className="big">هندسه ناقص است</div>
+                <p className="muted sm">{model.error}</p>
+                <p className="muted sm">
+                  در تب JSON، آرایه <code>nodes</code> را کامل کنید: هر گره یک <code>type</code>
+                  (tie-in / elbow90 / elbow45 / tee / reducer / flange-wn / valve-bw) و مختصات
+                  <code>E</code>، <code>N</code>، <code>EL</code> بر حسب میلی‌متر می‌خواهد،
+                  به ترتیب مسیر از یک سر خط تا سر دیگر.
+                </p>
+              </div>
+            </div>
+          ) : SHEET_MARKUP ? (
+            <div className="canvas" data-sheet-stage style={{ overflow: "auto", padding: 12 }}>
+              <SheetMarkup src={openRun ? runSheet?.src : preview}
+                items={data.sheetMarkup?.items || []}
+                selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
+                onSeedEngine={(aspect) => {
+                  // the engine's welds again, where the model saw their nodes: what a person placed or kept stays
+                  const kept = (data.sheetMarkup?.items || []).filter((m) => m.src !== "engine");
+                  const eng = fromEngine(model, data.nodes, aspect, data.bom).items.filter((m) => !kept.some((k) => k.no === m.no && (k.kind === m.kind || (k.kind.startsWith("weld") && m.kind.startsWith("weld")))));
+                  const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks([...kept, ...eng]) } };
+                  setData(next);
+                  setEditing(JSON.stringify(next, null, 2));
+                }}
+                fileName={`${data.meta?.drawingNo || "iso"}-${data.meta?.sheet || "1"}-marked`.replace(/[^\w.-]+/g, "_")}
+                onChange={(items) => {
+                  const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks(items) } };
+                  setData(next);
+                  setEditing(JSON.stringify(next, null, 2));
+                }} />
+            </div>
+          ) : (
+            <div className="canvas">
+            {dim === "3d" ? (
+              <Viewer3D model={model} selected={selected} onSelect={setSelected}
+                exploded={exploded} showTags={showTags} showDims={showDims} view={view}
+                renderMode={renderMode} colorBy={colorBy} />
+            ) : (
+              <WeldMap2D model={model} meta={data.meta} selected={selected} onSelect={setSelected}
+                showDims={showDims} colorBy={colorBy} />
+            )}
+            <div className="ctl">
+              <div className="row seg">
+                {[["3d", "سه‌بعدی"], ["2d", "نقشه ۲بعدی"]].map(([k, t]) => (
+                  <button key={k} className={dim === k ? "on" : ""} onClick={() => setDim(k)}>{t}</button>
+                ))}
+              </div>
+              {dim === "3d" && (
+                <>
+                  <div className="row">
+                    {[["iso", "ایزو"], ["elev", "نما"], ["plan", "پلان"]].map(([k, t]) => (
+                      <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{t}</button>
+                    ))}
+                  </div>
+                  <div className="row">
+                    {[["solid", "توپر"], ["xray", "شفاف"], ["wire", "مش"], ["centerline", "تک‌خط"]].map(([k, t]) => (
+                      <button key={k} className={renderMode === k ? "on" : ""} onClick={() => setRenderMode(k)}>{t}</button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="row">
+                <button className={strictBom ? "on wide" : "wide"} onClick={() => setStrictBom(!strictBom)}
+                  title="اقلام خارج از MTO رسم نشوند">فقط اقلام MTO</button>
+              </div>
+              <div className="row">
+                <span className="lbl">رنگ:</span>
+                {[["spool", "اسپول"], ["size", "قطر"], ["none", "خنثی"]].map(([k, t]) => (
+                  <button key={k} className={colorBy === k ? "on" : ""} onClick={() => setColorBy(k)}>{t}</button>
+                ))}
+              </div>
+              {dim === "3d" && (
+                <button className={exploded ? "on wide" : "wide"} onClick={() => setExploded(!exploded)}>اسپول باز</button>
+              )}
+              {dim === "3d" && (
+                <button className={showTags ? "on wide" : "wide"} onClick={() => setShowTags(!showTags)}>تگ جوش</button>
+              )}
+              <button className={showDims ? "on wide" : "wide"} onClick={() => setShowDims(!showDims)}>ابعاد</button>
+            </div>
+            <div className="legend">
+              {colorBy === "size"
+                ? [...new Set(model.elements.map((e) => e.nps || model.nps))].sort((a, b) => b - a).map((n, i) => (
+                    <span key={n}><i style={{ background: SPOOL_COLORS[i % SPOOL_COLORS.length] }} />
+                      <b className="mono">{n}&quot;</b></span>
+                  ))
+                : colorBy === "spool" && model.spoolIds.map((id, i) => (
+                <span key={id}><i style={{ background: SPOOL_COLORS[i % SPOOL_COLORS.length] }} /><b className="mono">{id}</b></span>
+              ))}
+              <span className="sep" />
+              <span><i className="dot" style={{ background: "#FF6B4A" }} />سایت ({model.totals.field})</span>
+              <span><i className="dot" style={{ background: "#CFDDE6" }} />کارگاه ({model.totals.shop})</span>
+            </div>
+            <div className="hint">{dim === "3d"
+              ? "بکشید تا بچرخد · اسکرول یا پینچ زوم · روی حلقه جوش بزنید"
+              : "بکشید تا جابه‌جا شود · اسکرول زوم · روی تگ جوش بزنید"}</div>
+          </div>
+          )}
+        </WorkspaceFrame>
       )}
     </main>
   );
