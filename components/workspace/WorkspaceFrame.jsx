@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *   explorer  the left (right in RTL) panel; collapsible
  *   children  the drawing
  *   panel     the data panel: tabs and what they hold
+ *   inspector the picked mark's properties, above the panel's tabs (collapsible)
  *
  * The panel can be docked at the end or at the bottom, resized by dragging
  * its edge (or with the arrow keys on the focused edge) and collapsed; the
@@ -27,7 +28,7 @@ const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || "null"
 const write = (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* private mode */ } };
 const clamp = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v));
 
-export default function WorkspaceFrame({ toolbar, explorer, panel, children, panelLabel = "داده‌های مهندسی", explorerLabel = "ناوبر" }) {
+export default function WorkspaceFrame({ toolbar, explorer, panel, inspector = null, inspectorLabel = "بازرس مهندسی", children, panelLabel = "داده‌های مهندسی", explorerLabel = "ناوبر" }) {
   const [st, setSt] = useState({ dock: "end", size: { end: 460, bottom: 300 }, explorerOpen: true, panelOpen: true });
   const [ready, setReady] = useState(false);
   const drag = useRef(null);
@@ -96,7 +97,14 @@ export default function WorkspaceFrame({ toolbar, explorer, panel, children, pan
               aria-label="تغییر اندازهٔ پنل" aria-valuemin={lo} aria-valuemax={hi} aria-valuenow={size} data-ws-handle
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onKeyDown={onKey}
               onDoubleClick={() => setSize(st.dock === "bottom" ? 300 : 460)} />
-            <section id="ws-panel" className="ws-panel" aria-label={panelLabel} data-ws-panel>{panel}</section>
+            <section id="ws-panel" className="ws-panel" aria-label={panelLabel} data-ws-panel data-has-inspector={inspector ? "true" : undefined}>
+              {inspector && (
+                <details className="ws-inspector" open data-ws-inspector>
+                  <summary>{inspectorLabel}</summary>
+                  <div className="ws-inspector-body" aria-live="polite">{inspector}</div>
+                </details>)}
+              <div className="ws-panel-body">{panel}</div>
+            </section>
           </>)}
       </div>
     </div>

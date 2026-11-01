@@ -22,6 +22,7 @@ import WeldListEntry from "../../components/WeldListEntry";
 import StyleTemplate from "../../components/StyleTemplate";
 import WorkspaceFrame from "../../components/workspace/WorkspaceFrame";
 import Explorer from "../../components/workspace/Explorer";
+import Inspector from "../../components/workspace/Inspector";
 import CutList from "../../components/CutList";
 import LlmEndpoints from "../../components/LlmEndpoints";
 import { StageRail } from "../../components/PlatformShell";
@@ -770,6 +771,7 @@ export default function Page() {
           explorer={<Explorer meta={data.meta || {}} items={data.sheetMarkup?.items || []} selectedId={markSel} onSelect={setMarkSel}
             sheets={pdf && pdf.pages.length > 1 ? { pages: pdf.pages, current: pdfPage || 1,
               onPick: (i) => { if (window.confirm("برگ دیگر خوانده شود؟ تغییرات ذخیره‌نشدهٔ این برگ از بین می‌رود.")) onPdfPage(i); } } : null} />}
+          inspector={<Inspector item={(data.sheetMarkup?.items || []).find((m) => m.id === markSel) || null} items={data.sheetMarkup?.items || []} model={model} bom={data.bom || []} />}
           panel={
             <aside className="ws-aside">
             <TabNav tab={tab} setTab={setTab} model={model} data={data} />

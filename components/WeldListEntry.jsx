@@ -7,6 +7,7 @@ import BomWelds from "./BomWelds";
 import WorkspaceFrame from "./workspace/WorkspaceFrame";
 import WorkspaceTabs from "./workspace/WorkspaceTabs";
 import Explorer from "./workspace/Explorer";
+import Inspector from "./workspace/Inspector";
 import { STATE_COLORS } from "./SheetReview";
 import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
@@ -504,6 +505,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           <span className="muted sm" data-ws-chip="counts">{nos.length} جوش · {reviewedN} بررسی‌شده{problems ? ` · ${problems} ایراد` : ""}</span>
         </>)}
         explorer={<Explorer meta={meta} sheets={sheets} items={items} selectedId={markSel} onSelect={setMarkSel} checked={locked ? null : { has: (no) => reviewed.has(no) }} />}
+        inspector={<Inspector item={items.find((m) => m.id === markSel) || null} items={items} bom={bom} reviewed={locked ? null : { has: (no) => reviewed.has(no) }} />}
         panel={<WorkspaceTabs tabs={tabs} value={wsTab} onChange={setWsTab} />}>
         {sheetBlock()}
       </WorkspaceFrame>
