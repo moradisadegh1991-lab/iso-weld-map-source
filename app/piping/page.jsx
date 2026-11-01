@@ -476,7 +476,9 @@ export default function Page() {
           thdLabelled: Boolean(profile.data?.project?.weld_thd_labelled) });
       // a sheet with no weld numbers printed: the weld dots found on the pipe, as welds suggested for a person to check
       const printedWelds = r.marks.some((m) => String(m.outline || "").toLowerCase() !== "dashed");
-      const dots = !printedWelds && Array.isArray(r.weldDots) && r.weldDots.length ? suggestFromDots(r.weldDots, canvas.width / canvas.height) : null;
+      const sockets = Array.isArray(r.socketEnds) ? r.socketEnds : [];
+      const dots = !printedWelds && ((Array.isArray(r.weldDots) && r.weldDots.length) || sockets.length)
+        ? suggestFromDots(r.weldDots || [], canvas.width / canvas.height, sockets) : null;
       if (dots) { Object.assign(conv, { weldList: dots.rows, fromDots: true, problems: [], notes: [] }); Object.assign(placed, dots.marks); }
       // the spool numbers (ovals) and support numbers (hexagons) the reader found, to be moved or corrected on the sheet
       const tags = fromReaderTags(r.tags);
@@ -493,7 +495,7 @@ export default function Page() {
       const traced = r.marks.filter((m) => Array.isArray(m.weldAt)).length;
       setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s · ${r.marks.length} نشانگر جوش` +
         (r.marks.length ? ` (${traced} با محل سرجوش روی لوله، از خط رهبرش)` : "") +
-        (dots ? ` · شمارهٔ جوش چاپ نشده: ${dots.rows.length} نقطهٔ جوش روی لوله پیدا شد — پیشنهادی؛ شماره‌ها فقط ترتیبی برای شروع‌اند، محل (کارگاه/سایت) خالی است؛ همه را با نقشه بررسی کنید` : "") + (tags.length ? ` · ${tags.filter((t) => t.kind === "spool").length} اسپول · ${tags.filter((t) => t.kind === "support").length} ساپورت` : "") +
+        (dots ? ` · شمارهٔ جوش چاپ نشده: ${dots.rows.length} سرجوش پیشنهادی روی لوله (نقطهٔ جوش و سر ساکتی) — شماره‌ها فقط ترتیبی برای شروع‌اند، محل (کارگاه/سایت) خالی است؛ همه را با نقشه بررسی کنید` : "") + (tags.length ? ` · ${tags.filter((t) => t.kind === "spool").length} اسپول · ${tags.filter((t) => t.kind === "support").length} ساپورت` : "") +
         (bom.length ? ` · BOM ${bom.length} ردیف` : " · BOM خوانده نشد") +
         (cutLengths.length ? ` · جدول برش ${cutLengths.length} قطعه` : "") +
         (hasLine ? ` · مشخصات خط ${Object.values(line).filter(Boolean).length} مورد` : "") +
@@ -702,9 +704,10 @@ export default function Page() {
               {data.weldMarks.reader === "local" ? (<>
                 {marksInfo.fromDots ? (
                   <p className="note mono" data-reader="local" data-from-dots={marksInfo.weldList.length}>
-                    شمارهٔ جوش روی این نقشه چاپ نشده — خوانده‌شده بدون مدل و بدون توکن (OCR روی سرور): {marksInfo.weldList.length} نقطهٔ جوش روی لوله پیدا شد
-                    و هرکدام سرجوش پیشنهادی است، با خط به همان نقطه. شماره‌ها فقط ترتیبی در امتداد لوله برای شروع‌اند؛ محل (کارگاه/سایت)، نوع و قطر خالی‌اند.
-                    همه را با نقشه بررسی کنید: سرجوشی که نقطه ندارد (رزوه‌ای، ساکتی) پیدا نمی‌شود و باید دستی اضافه شود.
+                    شمارهٔ جوش روی این نقشه چاپ نشده — خوانده‌شده بدون مدل و بدون توکن (OCR روی سرور): {marksInfo.weldList.length} سرجوش پیشنهادی روی لوله
+                    ({marksInfo.weldList.filter((r) => r.kind === "SW").length} از آن‌ها سر ساکتی، با نوع SW از روی نماد)، هرکدام با خط به همان نقطه.
+                    شماره‌ها فقط ترتیبی در امتداد لوله برای شروع‌اند؛ محل (کارگاه/سایت) و قطر خالی‌اند.
+                    همه را با نقشه بررسی کنید: اتصال رزوه‌ای و سرجوشی که نه نقطه دارد نه سر ساکتی پیدا نمی‌شود و باید دستی اضافه شود.
                   </p>
                 ) : (
                 <p className="note mono" data-reader="local">

@@ -131,6 +131,10 @@ for (const def of cases) {
 // pipe found with the frames masked — what a sheet with no numbers printed is read with — against the points traced
 const WP = { frames: 0, traced: 0, onDot: 0, checked: 0, right: 0, wrong: [], untraced: 0, sheets: 0 };
 const DOTS = { points: 0, found: 0, dots: 0, notTraced: 0 };
+// socket ends (a filled blunt block at a socket-weld fitting's end) against the traced points of the
+// socket welds with no dot; and every weld point a sheet with no numbers is read with (dots and socket ends)
+const SOCK = { points: 0, found: 0, ends: 0, notTraced: 0, all: 0, allFound: 0, notWelds: 0, onNotWeld: [] };
+const notWelds = JSON.parse(await readFile("eval/cases/weld-points.json", "utf8")).notWelds || {};
 const wpTruth = JSON.parse(await readFile("eval/cases/weld-points.json", "utf8")).sheets;
 const near = (p, q, aspect) => Math.hypot(p[0] - q[0], (p[1] - q[1]) / aspect) < 0.006;
 for (const def of cases) {
@@ -158,6 +162,19 @@ for (const def of cases) {
   DOTS.found += pts.filter((p) => dots.some((q) => near(p, q, aspect))).length;
   DOTS.dots += dots.length;
   DOTS.notTraced += dots.filter((q) => !pts.some((p) => near(p, q, aspect))).length;
+  const kindOf = Object.fromEntries((def.expect?.register || []).map((w) => [String(w.no), w.kind]));
+  const ends = rd.socketEnds || [];
+  const sw = solid.filter((m) => m.weldAt && !m.weldDot && kindOf[m.no] === "SW").map((m) => m.weldAt);
+  SOCK.points += sw.length;
+  SOCK.found += sw.filter((p) => ends.some((q) => near(p, q, aspect))).length;
+  SOCK.ends += ends.length;
+  SOCK.notTraced += ends.filter((q) => !pts.some((p) => near(p, q, aspect))).length;
+  SOCK.all += pts.length;
+  SOCK.allFound += pts.filter((p) => [...dots, ...ends].some((q) => near(p, q, aspect))).length;
+  for (const p of notWelds[name] || []) {
+    SOCK.notWelds++;
+    if ([...dots, ...ends].some((q) => near(p, q, aspect))) SOCK.onNotWeld.push(`${name} ${p.join(",")}`);
+  }
 }
 for (const def of cases) {
   const gold = marksOf(def).filter((m) => m.outline !== "dashed");
@@ -224,6 +241,8 @@ for (const x of [...CUTS.lengthWrong, ...CUTS.sizeWrong]) console.log(`         
 console.log(`WELD PT   frames' leaders followed to the pipe ${WP.traced}/${WP.frames} (${pct(WP.traced, WP.frames)}), ${WP.onDot} on a weld dot · against ${WP.checked} points checked by eye on ${WP.sheets} sheets: right ${WP.right}, wrong ${WP.wrong.length}, not followed ${WP.untraced}`);
 for (const x of WP.wrong) console.log(`          ${x}`);
 console.log(`DOTS      weld dots on the pipe, frames masked (a sheet with no numbers printed): ${DOTS.found}/${DOTS.points} traced weld points found (${pct(DOTS.found, DOTS.points)}) · ${DOTS.notTraced} of ${DOTS.dots} dots at no traced point (a weld whose frame's leader was not followed, a joint of the next sheet, or not a weld)`);
+console.log(`SOCKETS   socket ends on the pipe: ${SOCK.found}/${SOCK.points} traced socket welds with no dot found (${pct(SOCK.found, SOCK.points)}) · ${SOCK.notTraced} of ${SOCK.ends} ends at no traced point · dots and ends together find ${SOCK.allFound}/${SOCK.all} traced weld points (${pct(SOCK.allFound, SOCK.all)}) · on ${SOCK.onNotWeld.length} of ${SOCK.notWelds} flow arrowheads checked by eye`);
+for (const x of SOCK.onNotWeld) console.log(`          taken for a weld: ${x}`);
 console.log(`JOINT     type set by the rules on ${T.kindOk + T.kindBad} welds, right on ${pct(T.kindOk, T.kindOk + T.kindBad)} · ${T.kindBlank} left for a person (no size is read off the drawing)`);
 console.log(`REGISTER  welds ${T.regMade} made for ${T.regExpected} in the contractor's register · matched by number ${T.regMatched} (${pct(T.regMatched, T.regExpected)}) · shop/field right ${pct(T.locOk, T.regMatched - T.locBlank)} (${T.locBlank} left blank)`);
-await writeFile(path.join(CACHE, "summary.json"), JSON.stringify({ totals: T, title: TB, bom: BOM, cuts: CUTS, weldPoints: WP, dots: DOTS, rows }, null, 2));
+await writeFile(path.join(CACHE, "summary.json"), JSON.stringify({ totals: T, title: TB, bom: BOM, cuts: CUTS, weldPoints: WP, dots: DOTS, sockets: SOCK, rows }, null, 2));
