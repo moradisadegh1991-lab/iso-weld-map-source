@@ -63,31 +63,69 @@ test("the merge survives a failed half", async () => {
   equal(onlyMeta.meta.nps, 36);
 });
 
-test("sanitize corrects an nps the MTO contradicts", async () => {
+// sanitize REPORTS and never changes the reading (architecture review 2026-11-01): it used to drop
+// nodes, merge coincident ones and rewrite sizes, each a silent change to the engineering record.
+
+test("sanitize keeps a line size the MTO does not list, and says so", async () => {
   const d = { meta: { nps: 3 }, bom: [{ diam: 36, qty: 12 }], nodes: [], edges: [] };
+  const before = structuredClone(d);
   const notes = sanitize(d);
-  equal(d.meta.nps, 36, "the MTO DIAM column is the authority");
-  assert(notes.some((n) => n.includes("36")), "the correction is reported, never silent");
+  equal(d, before, "the reading is not changed");
+  assert(notes.some((n) => n.includes("36") && n.includes("3")), "the disagreement is reported, never silent");
 });
 
-test("sanitize drops nodes with no coordinates and the edges that referenced them", async () => {
+test("sanitize keeps a node with no coordinates and the edges to it; the engine names the node", async () => {
   const d = {
     meta: {}, bom: [],
     nodes: [{ id: "N1", E: 0, N: 0, EL: 0 }, { id: "N2", E: null, N: 1, EL: 1 },
             { id: "N3", E: 5, N: 5, EL: 5 }],
-    edges: [{ from: "N1", to: "N2" }, { from: "N1", to: "N3" }],
+    edges: [{ from: "N1", to: "N2" }, { from: "N2", to: "N3" }],
   };
-  sanitize(d);
-  equal(d.nodes.map((n) => n.id), ["N1", "N3"]);
-  equal(d.edges.length, 1, "an edge pointing at a removed node would crash the engine");
+  const notes = sanitize(d);
+  equal(d.nodes.map((n) => n.id), ["N1", "N2", "N3"]);
+  equal(d.edges.length, 2);
+  assert(notes.some((n) => n.includes("مختصات")));
+  // before, N2 and its two edges were dropped and the engine drew N1→N3 straight, with no warning
+  const m = buildModel(d, {});
+  assert(m.error && m.error.includes("N2") && m.error.includes("مختصات"), `the engine names the node: ${m.error}`);
 });
 
-test("sanitize removes a node duplicated at the same point", async () => {
-  const d = { meta: {}, bom: [],
-    nodes: [{ id: "N1", E: 1, N: 2, EL: 3 }, { id: "N2", E: 1, N: 2, EL: 3 }], edges: [] };
+test("sanitize keeps two items at one point (a flange and the valve bolted to it)", async () => {
+  const d = { meta: { nps: 6 }, bom: [],
+    nodes: [{ id: "T1", type: "tie-in", E: 0, N: 0, EL: 0 }, { id: "F1", type: "flange-wn", E: 1000, N: 0, EL: 0 },
+            { id: "V1", type: "valve-bw", E: 1000, N: 0, EL: 0 }, { id: "T2", type: "tie-in", E: 2000, N: 0, EL: 0 }],
+    edges: [{ from: "T1", to: "F1", nps: 6 }, { from: "F1", to: "V1", nps: 6 }, { from: "V1", to: "T2", nps: 6 }] };
   const notes = sanitize(d);
-  equal(d.nodes.length, 1);
-  assert(notes.length === 1, "and says so");
+  equal(d.nodes.length, 4, "both stay");
+  assert(notes.some((n) => n.includes("مختصات مشترک")), "and the shared point is reported");
+});
+
+test("sanitize keeps a branch's own size when the BOM does not list it", async () => {
+  const d = { meta: { nps: 6 }, bom: [{ diam: 6 }], nodes: [], edges: [{ from: "A", to: "B", nps: 0.75 }] };
+  const notes = sanitize(d);
+  equal(d.edges[0].nps, 0.75, "a 3/4\" branch is not a misread 6\"");
+  assert(notes.some((n) => n.includes("DIAM")));
+});
+
+test("a leg with no size and a line with no size: the welds' size is unknown (null), never 0, and a check says so", async () => {
+  const d = { meta: {}, bom: [],
+    nodes: [{ id: "N1", type: "tie-in", E: 0, N: 0, EL: 0 }, { id: "N2", type: "elbow90", E: 3000, N: 0, EL: 0 },
+            { id: "N3", type: "tie-in", E: 3000, N: 2000, EL: 0 }],
+    edges: [{ from: "N1", to: "N2" }, { from: "N2", to: "N3" }] };
+  const m = buildModel(d, {});
+  assert(!m.error, m.error);
+  assert(m.register.length > 0 && m.register.every((w) => w.nps === null && w.size === null), JSON.stringify(m.register.map((w) => w.nps)));
+  assert(m.checks.some((c) => c.label === "قطر لوله خوانده نشد" && c.status === "warn"));
+});
+
+test("a repair that drops an edge of the reading is refused even when its checks improve", async () => {
+  const base = { nodes: [{ id: "A" }, { id: "B" }, { id: "C" }], edges: [{ from: "A", to: "B" }, { from: "B", to: "C" }] };
+  const fixed = { nodes: base.nodes, edges: [{ from: "A", to: "B" }] };
+  const v = acceptRepair({ checks: [{ status: "warn" }] }, { checks: [] }, base, fixed);
+  equal(v.accept, false);
+  assert(v.why.includes("اتصال"));
+  const renamed = { nodes: [{ id: "A" }, { id: "B" }, { id: "X" }], edges: base.edges };
+  equal(acceptRepair({ checks: [{ status: "warn" }] }, { checks: [] }, base, renamed).accept, false, "nor one that replaces a node");
 });
 
 test("a repair that deletes the route is refused even though it has no warnings", async () => {
