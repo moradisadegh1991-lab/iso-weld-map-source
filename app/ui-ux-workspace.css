@@ -95,3 +95,21 @@
 .sheet-markup [data-mark-id]:focus-visible{outline:2px solid var(--cy);outline-offset:4px;box-shadow:none;border-radius:4px}
 .sheet-markup .sheet-box[data-panning="true"]{user-select:none}
 .sheet-markup [data-layers] button.on{border-color:var(--cy);color:var(--cy)}
+
+/* the inspector sits above the panel's tabs; the tabs scroll under it */
+.ws-panel[data-has-inspector]{display:flex;flex-direction:column;overflow:hidden}
+.ws-panel[data-has-inspector] .ws-panel-body{flex:1;min-height:0;overflow:auto}
+.ws-inspector{flex:none;border-bottom:1px solid var(--rule);background:var(--surf)}
+.ws-inspector>summary{cursor:pointer;padding:6px 12px;font-size:11px;letter-spacing:.08em;color:var(--dim);list-style:none}
+.ws-inspector>summary::before{content:"▾ ";}
+.ws-inspector:not([open])>summary::before{content:"◂ ";}
+.ws-inspector-body{max-height:min(38vh,340px);overflow:auto;padding:4px 12px 10px}
+.ws-insp-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.ws-insp-h b{font-size:15px}
+.ws-insp-h .ok{color:var(--ok)}
+.ws-insp-s{font-size:10px;letter-spacing:.08em;color:var(--dim);margin:8px 0 3px}
+.ws-insp-dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0;font-size:12px}
+.ws-insp-dl dt{color:var(--dim)}
+.ws-insp-dl dd{margin:0;overflow-wrap:anywhere}
+.ws-insp-bom{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;font-size:11px}
+@media (max-width:900px){.ws-panel[data-has-inspector]{overflow:visible}.ws-panel[data-has-inspector] .ws-panel-body{overflow:visible}}
