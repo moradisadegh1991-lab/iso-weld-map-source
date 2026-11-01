@@ -54,6 +54,9 @@ src = args[0]
 dpi = int(args[args.index("--dpi") + 1]) if "--dpi" in args else 200
 page = int(args[args.index("--page") + 1]) if "--page" in args else 1
 debug = args[args.index("--debug") + 1] if "--debug" in args else None
+# the project's saved style templates (a JSON list), and, for measuring one, reading by it alone
+templates = json.load(open(args[args.index("--templates") + 1])) if "--templates" in args else []
+template_only = "--template-only" in args
 S = dpi / 200.0                     # every size below is for 200 dpi
 
 
@@ -1260,7 +1263,84 @@ def read_title_generic(T, s):
             line["lineNo"] = got
             break
     out["line"] = line
+    # the style's fingerprint: the title block's printed words (its labels and headings), each once
+    out["labels"] = sorted({re.sub(r"[^A-Z]", "", w["t"]) for w in words if len(re.sub(r"[^A-Z]", "", w["t"])) >= 3})
     return out
+
+
+# ── a saved template: where a style prints each value ─────────────────────
+# A person marks, once, the cell of each value on one sheet of a style
+# (app: components/StyleTemplate.jsx; db: drawing_style). A later sheet whose
+# title block prints the same words is read from those cells too — each
+# value read several ways and kept only when the readings agree, as
+# everywhere. A value the labels and the template both read must be the
+# same, or it is unknown. docs/epc-llm/13-style-templates.md.
+
+ALNUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+iso_part = lambda o: "-".join("ISO" if re.fullmatch(r"[1I][S5][O0]", p) else p for p in o.split("-"))
+
+
+def template_spec(key):
+    """The characters, the pattern and the normal form of a value marked in a template."""
+    num = "0123456789.-"
+    grid = {k: (num + "FV,", ok.replace(r"\s*", ""), lambda o: o, False) for k, _r, _c, ok in GRID_FIELDS}
+    text = ("testFluid", "paint", "insulationType", "pwht")
+    inline = {k: ((num + "%+RTMUPACB ") if k in ("testPressure", "ndt", "insulationThk") else ALNUM + "-/ ",
+                  ok.replace(r"\s*", r"\s?") if k in text else ok.replace(r"\s*", ""), lambda o: o, k in text) for k, _l, ok in INLINE_FIELDS}
+    other = {
+        "drawingNo": (ALNUM + "-", r"[A-Z0-9]{2,8}(-[A-Z0-9]{1,8}){2,8}", iso_part, False),
+        "sheet": ("0123456789OF/", r"\d{1,2}(OF|/)\d{1,2}", lambda o: "%d/%d" % tuple(int(x) for x in re.split(r"OF|/", o)), False),
+        "rev": (ALNUM, r"[A-Z]?[0-9O]{1,2}|[A-Z]", lambda o: o[0] + o[1:].replace("O", "0") if o[:1].isalpha() else o.replace("O", "0"), False),
+        "lineClass": (ALNUM, r"\d[A-Z]\d?|[A-Z]\d[A-Z]?\d?|[A-Z0-9]{2,6}", lambda o: o, False),
+        "lineNo": (ALNUM + "-.\"/", LINE_NO.pattern, lambda o: '%s"-%s' % LINE_NO.fullmatch(o).groups(), False),
+    }
+    return {**grid, **inline, **other}.get(key)
+
+
+def read_template(T, s, tpl, turn=None):
+    """Each value of a template read off its marked cell of T (the page as
+    rendered, unturned; boxes are fractions of it): {key: value or None}."""
+    H, W = T.shape[:2]
+    sc = (0.5, 0.67) if s > 2 else (3, 4)
+    got = {}
+    for key, f in (tpl.get("fields") or {}).items():
+        spec = template_spec(key)
+        box = f.get("box") if isinstance(f, dict) else None
+        if not spec or not (isinstance(box, list) and len(box) == 4):
+            continue
+        x0, y0, x1, y1 = [min(1.0, max(0.0, float(v))) for v in box]
+        crop = T[int(min(y0, y1) * H):int(max(y0, y1) * H), int(min(x0, x1) * W):int(max(x0, x1) * W)]
+        if crop.shape[0] < 12 or crop.shape[1] < 12:
+            got[key] = None
+            continue
+        if turn is not None:
+            crop = cv2.rotate(crop, turn)
+        # the cell's own ruled lines, caught in a box drawn by hand: ink across nearly all of the box
+        # (left in, the 11.1 beside one read "4", the other readings nothing)
+        crop = crop.copy()
+        ink = crop < 150
+        crop[:, ink.mean(0) > 0.85] = 255
+        crop[ink.mean(1) > 0.85, :] = 255
+        white, ok, norm, spaces = spec
+        try:
+            got[key] = cell_vote(crop, white, lambda o: bool(re.fullmatch(ok, o)), key=norm, scales=sc, spaces=spaces)
+        except Exception:
+            got[key] = None
+    return got
+
+
+def best_template(labels, templates):
+    """The saved template whose fingerprint is most like this sheet's, if any is like enough (half its words or more)."""
+    have = set(labels or [])
+    best = None
+    for t in templates or []:
+        fp = set(t.get("fingerprint") or [])
+        if not fp or not have:
+            continue
+        score = len(fp & have) / len(fp | have)
+        if score >= 0.5 and (best is None or score > best[0]):
+            best = (score, t)
+    return best
 
 
 def read_title(g):
@@ -1444,24 +1524,44 @@ def main():
         cv2.imwrite(debug, dbg)
     meta = read_title(g)
     line = meta.pop("line", {})
-    bom, cuts, style = None, None, "golden"
+    bom, cuts, style, template, fingerprint = None, None, "golden", None, None
     # a sheet in another drawing style: the golden sheets' title block is not there (no ISO number in
     # its cell, hardly a line-data value beside its labels) — its title block is read by its labels,
     # and a vector page's text at 600 dpi (the golden layout's 200 dpi blurs a hairline CAD font)
     if not meta.get("drawingNo") and sum(1 for v in line.values() if v) < 3:
         style = "generic"
         vec = is_vector(src, page)
-        T, s = text_image(src, page) if vec else (g0, S)
-        if turn is not None:
-            T = cv2.rotate(T, turn)
+        T0, s = text_image(src, page) if vec else (g0, S)
+        T = cv2.rotate(T0, turn) if turn is not None else T0
         gen = read_title_generic(T, s)
         line = gen.pop("line")
+        fingerprint = gen.pop("labels")
         meta = gen
+        if template_only:
+            # measured alone: what the template reads, with nothing from the labels
+            meta = {k: None for k in meta}
+            line = {k: None for k in line}
+        best = best_template(fingerprint, templates)
+        if best:
+            score, tpl = best
+            tv = read_template(T0, s, tpl, turn)
+            conflicts = []
+            for k, v in tv.items():
+                into = meta if k in ("drawingNo", "sheet", "rev") else line
+                if v is None:
+                    continue
+                if into.get(k) is None:
+                    into[k] = v
+                elif into[k] != v:
+                    # the labels and the template read two values: neither stands
+                    conflicts.append({"key": k, "labels": into[k], "template": v})
+                    into[k] = None
+            template = {"id": tpl.get("id"), "name": tpl.get("name"), "score": round(score, 3), "read": tv, "conflicts": conflicts}
         with at_scale(s):
             bom, cuts = read_bom(T), read_cut_lengths(T)
     if bom is None:
         bom, cuts = read_bom(g), read_cut_lengths(g)
-    print(json.dumps({"orientation": rot, "aspect": round(W0 / H0, 4), "style": style, "meta": meta, "lineData": line, "bom": bom, "cutLengths": cuts, "weldDots": dots_out, "socketEnds": sockets_out, "marks": out, "tags": tags_out, "rejected": rejected}))
+    print(json.dumps({"orientation": rot, "aspect": round(W0 / H0, 4), "style": style, "fingerprint": fingerprint, "template": template, "meta": meta, "lineData": line, "bom": bom, "cutLengths": cuts, "weldDots": dots_out, "socketEnds": sockets_out, "marks": out, "tags": tags_out, "rejected": rejected}))
 
 
 if __name__ == "__main__":

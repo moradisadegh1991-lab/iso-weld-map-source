@@ -126,3 +126,5 @@ some 25 s to the golden route's).
   next change).
 
 The welds a sheet's BOM implies, beside the welds found: 12-bom-welds.md.
+
+A designer's style can also be taught once, by marking where it prints each value: 13-style-templates.md.

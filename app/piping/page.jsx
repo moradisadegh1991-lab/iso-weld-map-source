@@ -19,6 +19,7 @@ import TabNav from "../../components/TabNav";
 import TruthBar from "../../components/TruthBar";
 import EquipmentBar from "../../components/EquipmentBar";
 import WeldListEntry from "../../components/WeldListEntry";
+import StyleTemplate from "../../components/StyleTemplate";
 import CutList from "../../components/CutList";
 import LlmEndpoints from "../../components/LlmEndpoints";
 import { StageRail } from "../../components/PlatformShell";
@@ -64,6 +65,8 @@ export default function Page() {
   const [strictBom, setStrictBom] = useState(true);
   // What the rules said about a register read from the printed joint numbers.
   const [marksInfo, setMarksInfo] = useState(null);
+  // what the no-model read said of the sheet's style: its title block's words and the template it was read by
+  const [styleRead, setStyleRead] = useState(null);
   // How a sheet is read: a model (the three passes), or with no model at all —
   // OpenCV and a local tesseract on this server read the printed weld markers
   // (app/api/read-local, tools/iso-read.py). Remembered on this browser.
@@ -489,6 +492,7 @@ export default function Page() {
         ...(Object.keys(placed).length ? { weldMarkup: { page: index, marks: placed } } : {}),
         ...(tags.length ? { sheetMarkup: { page: index, items: tags } } : {}) };
       setMarksInfo(conv);
+      setStyleRead({ style: r.style, fingerprint: r.fingerprint || null, template: r.template || null, page: index });
       setData(final);
       setEditing(JSON.stringify(final, null, 2));
       setOpenRun(null);
@@ -720,6 +724,9 @@ export default function Page() {
                   جدول عنوان (OCR، پیش از ذخیره بررسی کنید): {[["drawingNo", "شمارهٔ نقشه"], ["sheet", "شیت"], ["rev", "رویژن"]].map(([k, l]) =>
                     `${l} ${data.weldMarks.titleRead?.[k] || "خوانده نشد"}`).join(" · ")}
                 </p>
+                {styleRead?.style === "generic" && preview && (
+                  <StyleTemplate session={session} preview={preview} read={styleRead}
+                    sample={`${sourceFile?.name || ""} · برگ ${styleRead.page}`.slice(0, 200)} />)}
               </>) : (
                 <p className="note mono">
                   رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — مدل فقط شماره و شکل قاب را خواند؛
