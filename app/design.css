@@ -365,3 +365,4 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--cy)}
   .tile .d{min-height:0}
   .lp-tile{min-height:0}
 }
+.dtable tr.warn td{color:var(--warn)}

@@ -124,3 +124,5 @@ some 25 s to the golden route's).
   read from there.
 - The welds a BOM implies (each fitting's ends), against the welds found (the
   next change).
+
+The welds a sheet's BOM implies, beside the welds found: 12-bom-welds.md.
