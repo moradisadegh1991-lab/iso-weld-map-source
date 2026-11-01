@@ -741,6 +741,9 @@ export default function Page() {
             <WeldListEntry key={openRun?.run?.id || "new"} session={session} initial={data} run={openRun}
               sheet={openRun ? runSheet : preview ? { src: preview, page: pdfPage || 1, file: sourceFile } : null}
               progress={openRun ? progress : null}
+              // the sheets of the open PDF, to move between them from the workspace's explorer (a saved run opened from the queue has no PDF here)
+              sheets={!openRun && pdf && pdf.pages.length > 1 ? { pages: pdf.pages, current: pdfPage || 1,
+                onPick: (i) => { if (window.confirm("برگ دیگر خوانده شود؟ تغییرات ذخیره‌نشدهٔ این برگ از بین می‌رود.")) onPdfPage(i); } } : null}
               onSaved={openRunForReview} onClose={() => { setData(null); setOpenRun(null); }} />
           </div>
           {data.weldMarks && (

@@ -4,6 +4,9 @@ import TemplateButton from "./ui/TemplateButton";
 import SaveBar from "./SaveBar";
 import RegistryCheck from "./RegistryCheck";
 import BomWelds from "./BomWelds";
+import WorkspaceFrame from "./workspace/WorkspaceFrame";
+import WorkspaceTabs from "./workspace/WorkspaceTabs";
+import Explorer from "./workspace/Explorer";
 import { STATE_COLORS } from "./SheetReview";
 import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
@@ -59,12 +62,14 @@ const LINE_DATA = [
   ["insulationType", "نوع عایق"], ["insulationThk", "ضخامت عایق"], ["paint", "رنگ"], ["ndt", "NDT"], ["pwht", "PWHT"],
 ];
 const BLANK_META = { drawingNo: "", rev: "", sheet: "1/1", lineNo: "", unit: "", pipingClass: "", nps: "", schedule: "" };
-export default function WeldListEntry({ session, initial = null, run = null, onSaved, onClose, sheet = null, progress = null }) {
+export default function WeldListEntry({ session, initial = null, run = null, onSaved, onClose, sheet = null, progress = null, sheets = null }) {
   const [meta, setMeta] = useState({ ...BLANK_META, ...(initial?.meta || {}) });
   const [rows, setRowsRaw] = useState(() => withRowIds(initial?.weldList?.length ? initial.weldList.map((r) => ({ ...BLANK_ROW, ...r })) : [{ ...BLANK_ROW }, { ...BLANK_ROW }, { ...BLANK_ROW }]));
   // every row keeps an id of its own: its mark on the sheet is the same thing
   const setRows = (rs) => setRowsRaw(withRowIds(rs));
   const [file, setFile] = useState(null);
+  // the workspace panel's tab: the register once there are marks, else the sheet's identity to settle first
+  const [wsTab, setWsTab] = useState(() => (initial?.weldList?.length ? "welds" : "info"));
   const [paste, setPaste] = useState("");
   const [read, setRead] = useState(null);
   const [approval, setApproval] = useState({ phase: "idle" });
@@ -208,23 +213,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   }
 
   const approved = run?.run?.status === "approved";
-  return (
-    <div className="weldlist">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <b>رجیستر جوش از فهرست — ورود دستی یا فایل Excel / CSV</b>
-        {onClose && <button className="ghost" onClick={onClose}>بستن</button>}
-      </div>
-      {run && (
-        <p className="note mono" data-run-status={run.run.status}>
-          در سامانه: {run.run.docNo} · Rev {run.run.revision} · {run.register?.length ?? 0} جوش ·{" "}
-          {approved ? `تأییدشده${run.run.approvedBy ? ` (${run.run.approvedBy})` : ""}` : "منتظر تأیید مهندس"}
-        </p>
-      )}
-      <p className="muted sm">
-        برای نقشه‌ای که هندسه‌اش را وارد نمی‌کنید. هر جوش همان است که شما از وِلد مپ وارد می‌کنید — «دادهٔ واردشده توسط کاربر»؛
-        سامانه فقط بررسی می‌کند (شمارهٔ تکراری، محل نامعلوم، جوش کارگاهی بدون اسپول، قطر) و چیزی را حدس نمی‌زند. تراز و زیرزمینی/روزمینی نامعلوم می‌ماند.
-      </p>
-
+  const metaGrid = (
+    <>
       <div className="wl-grid">
         {[["drawingNo", "شمارهٔ نقشه (ISO)", true], ["rev", "رویژن", true], ["sheet", "شیت"], ["lineNo", "شمارهٔ خط"],
           ["unit", "واحد"], ["pipingClass", "کلاس لوله"], ["nps", "قطر پیش‌فرض NPS"], ["schedule", "Schedule"]].map(([k, label, req]) => (
@@ -235,8 +225,16 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         ))}
       </div>
 
+    </>
+  );
+  const registryBlock = (
+    <>
       {!run && <RegistryCheck session={session} meta={meta} lineData={lineData} />}
 
+    </>
+  );
+  const lineDataBlock = (
+    <>
       {lineData && (
         <details className="intake-more" open data-line-data>
           <summary>مشخصات خط (Line Data) — خوانده‌شده با OCR از title block؛ با نقشه بررسی کنید</summary>
@@ -250,6 +248,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
             ))}
           </div>
         </details>)}
+    </>
+  );
+  const bomBlock = (
+    <>
       {bom.length > 0 && (
         <details className="intake-more" data-bom={bom.length}>
           <summary>BOM همین برگ — {bom.length} ردیف، خوانده‌شده با OCR؛ با نقشه بررسی و اصلاح کنید (همین جدول با رجیستر ذخیره می‌شود)</summary>
@@ -273,8 +275,16 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           {!locked && <button type="button" className="ghost sm" data-bom-add onClick={addBomRow}>+ ردیف BOM (ردیفی که خوانده نشده)</button>}
         </details>)}
 
+    </>
+  );
+  const bomWeldsBlock = (
+    <>
       {bom.length > 0 && <BomWelds bom={bom} welds={typed} />}
 
+    </>
+  );
+  const cutBlock = (
+    <>
       {cutLengths.length > 0 && (
         <details className="intake-more" data-cut-lengths={cutLengths.length}>
           <summary>جدول برش لوله (CUT PIPE LENGTH) — {cutLengths.length} قطعه، خوانده‌شده با OCR؛ با نقشه بررسی کنید</summary>
@@ -285,6 +295,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           </table>
         </details>)}
 
+    </>
+  );
+  const importBlock = (
+    <>
       <details className="intake-more" open={!initial}>
         <summary>خواندن از فایل (Excel / CSV) یا چسباندن از Excel</summary>
         <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -319,10 +333,52 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         )}
       </details>
 
+    </>
+  );
+  const datalists = (
+    <>
       <datalist id="wl-locs"><option value="Shop" /><option value="Field" /></datalist>
       <datalist id="wl-kinds"><option value="BW" /><option value="SW" /><option value="Tie-in" /><option value="Closure" /><option value="Branch" /></datalist>
-      {sheetMode ? (
-      <div className="wl-review">
+    </>
+  );
+  const summaryBlock = (
+    <>
+      {model.problems ? (
+        <div className="err" role="alert"><b>{model.problems.length} ایراد — تا رفع نشود ذخیره نمی‌شود:</b>
+          <ul>{model.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>
+      ) : model.register ? (
+        <p className="note mono">
+          {model.totals.welds} جوش · کارگاه {model.totals.shop} · سایت {model.totals.field} ·
+          اسپول‌ها: {model.spoolIds.join("، ") || "—"}
+        </p>
+      ) : <p className="muted sm">{model.error}</p>}
+
+    </>
+  );
+  const fileBlock = (
+    <>
+      <label className="wl-f">
+        <span className="muted sm">فایل نقشه (اختیاری) — PDF همین شیت، اگر دارید، همراه رجیستر ذخیره می‌شود</span>
+        <input id="wl-drawing" type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+      </label>
+
+    </>
+  );
+  const saveBlock = (
+    <>
+      {!approved && <SaveBar session={session} data={data} model={model} sourceFile={file || sheet?.file || null} onSaved={onSaved} beforeSave={beforeSave} />}
+      {run && !approved && (
+        <div className="row">
+          <button className="ghost" onClick={approve} disabled={approval.phase === "busy"}>تأیید رجیستر (مهندس) — {run.run.docNo} Rev {run.run.revision}</button>
+          {approval.msg && <span className={approval.phase === "error" ? "err" : "note mono"}>{approval.msg}</span>}
+        </div>
+      )}
+      {approved && <p className="muted sm">✓ این رجیستر تأیید شده و قفل است. تغییر بعدی رویژن جدید نقشه می‌خواهد.</p>}
+    </>
+  );
+  // built only with a sheet open (it reads the sheet)
+  const sheetBlock = () => (
+    <>
         <div className="wl-sheet" data-wl-sheet>
           <SheetMarkup src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
             fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
@@ -332,13 +388,47 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
             {nos.length > 0 && !locked && <> · <button type="button" className="ghost sm" onClick={() => setReviewed(new Set(nos))}>همه بررسی شد</button></>}
           </p>
         </div>
+
+    </>
+  );
+  // built only with a sheet open (it reads the sheet)
+  const registerTable = () => (
+    <>
         <div className="wl-table">
           <MarkTables items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
             selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
             checked={locked ? null : { has: (no) => reviewed.has(no), onTick: tick }} />
         </div>
+
+    </>
+  );
+
+  if (!sheetMode) {
+    return (
+      <div className="weldlist">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <b>رجیستر جوش از فهرست — ورود دستی یا فایل Excel / CSV</b>
+        {onClose && <button className="ghost" onClick={onClose}>بستن</button>}
       </div>
-      ) : (
+      {run && (
+        <p className="note mono" data-run-status={run.run.status}>
+          در سامانه: {run.run.docNo} · Rev {run.run.revision} · {run.register?.length ?? 0} جوش ·{" "}
+          {approved ? `تأییدشده${run.run.approvedBy ? ` (${run.run.approvedBy})` : ""}` : "منتظر تأیید مهندس"}
+        </p>
+      )}
+      <p className="muted sm">
+        برای نقشه‌ای که هندسه‌اش را وارد نمی‌کنید. هر جوش همان است که شما از وِلد مپ وارد می‌کنید — «دادهٔ واردشده توسط کاربر»؛
+        سامانه فقط بررسی می‌کند (شمارهٔ تکراری، محل نامعلوم، جوش کارگاهی بدون اسپول، قطر) و چیزی را حدس نمی‌زند. تراز و زیرزمینی/روزمینی نامعلوم می‌ماند.
+      </p>
+
+        {metaGrid}
+        {registryBlock}
+        {lineDataBlock}
+        {bomBlock}
+        {bomWeldsBlock}
+        {cutBlock}
+        {importBlock}
+        {datalists}
       <div>
         <div className="wl-table">
           <table className="dtable">
@@ -362,35 +452,61 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           </table>
         </div>
         </div>
-      )}
-      {!sheetMode && <div className="row">
+
+      <div className="row">
         <button className="ghost" type="button" onClick={() => setRows([...rows, { ...BLANK_ROW }])}>+ ردیف</button>
         <button className="ghost" type="button" onClick={() => setRows([...rows, ...Array.from({ length: 10 }, () => ({ ...BLANK_ROW }))])}>+ ۱۰ ردیف</button>
-      </div>}
+      </div>
 
-      {model.problems ? (
-        <div className="err" role="alert"><b>{model.problems.length} ایراد — تا رفع نشود ذخیره نمی‌شود:</b>
-          <ul>{model.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>
-      ) : model.register ? (
-        <p className="note mono">
-          {model.totals.welds} جوش · کارگاه {model.totals.shop} · سایت {model.totals.field} ·
-          اسپول‌ها: {model.spoolIds.join("، ") || "—"}
+        {summaryBlock}
+        {fileBlock}
+        {saveBlock}
+      </div>
+    );
+  }
+
+  // ── the sheet is open: the engineering workspace (components/workspace) ──────────────────────────
+  // The same sections, in the same components with the same state, in the panel's tabs instead of one
+  // long page, so the drawing stays in view beside the register; nothing is recomputed here.
+  const problems = model.problems?.length || 0;
+  const reviewedN = nos.length - unchecked.length;
+  const runWord = !run ? "ذخیره‌نشده" : approved ? "تأییدشده" : "در بازبینی";
+  const tabs = [
+    { k: "info", label: "مشخصات", hint: "شمارهٔ نقشه، رویژن، خط و مشخصات خط", node: (<>{metaGrid}{registryBlock}{lineDataBlock}</>) },
+    { k: "welds", label: "سرجوش‌ها", hint: "رجیستر جوش‌ها و نشان‌های روی نقشه", badge: nos.length ? `${reviewedN}/${nos.length}` : "",
+      tone: problems ? "bad" : undefined, node: (<>{registerTable()}{summaryBlock}</>) },
+    { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
+      node: (<>{bomBlock}{bomWeldsBlock}{bom.length === 0 && <p className="muted sm">BOM خوانده نشد.</p>}</>) },
+    { k: "cut", label: "برش", hint: "جدول برش لوله", badge: cutLengths.length || "",
+      node: (<>{cutBlock}{cutLengths.length === 0 && <p className="muted sm">جدول برش روی این برگ خوانده نشد.</p>}</>) },
+    { k: "import", label: "ورود", hint: "خواندن از Excel / CSV یا چسباندن", node: (<>{importBlock}</>) },
+    { k: "save", label: "ثبت", hint: "ذخیره و تأیید", tone: problems ? "bad" : undefined, badge: problems || "",
+      node: (<>{fileBlock}{saveBlock}</>) },
+  ];
+  return (
+    <div className="weldlist" data-sheet-mode>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <b>رجیستر جوش — کنار نقشه</b>
+        {onClose && <button className="ghost" onClick={onClose}>بستن</button>}
+      </div>
+      {run && (
+        <p className="note mono" data-run-status={run.run.status}>
+          در سامانه: {run.run.docNo} · Rev {run.run.revision} · {run.register?.length ?? 0} جوش ·{" "}
+          {approved ? `تأییدشده${run.run.approvedBy ? ` (${run.run.approvedBy})` : ""}` : "منتظر تأیید مهندس"}
         </p>
-      ) : <p className="muted sm">{model.error}</p>}
-
-      <label className="wl-f">
-        <span className="muted sm">فایل نقشه (اختیاری) — PDF همین شیت، اگر دارید، همراه رجیستر ذخیره می‌شود</span>
-        <input id="wl-drawing" type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-      </label>
-
-      {!approved && <SaveBar session={session} data={data} model={model} sourceFile={file || sheet?.file || null} onSaved={onSaved} beforeSave={beforeSave} />}
-      {run && !approved && (
-        <div className="row">
-          <button className="ghost" onClick={approve} disabled={approval.phase === "busy"}>تأیید رجیستر (مهندس) — {run.run.docNo} Rev {run.run.revision}</button>
-          {approval.msg && <span className={approval.phase === "error" ? "err" : "note mono"}>{approval.msg}</span>}
-        </div>
       )}
-      {approved && <p className="muted sm">✓ این رجیستر تأیید شده و قفل است. تغییر بعدی رویژن جدید نقشه می‌خواهد.</p>}
+      {datalists}
+      <WorkspaceFrame
+        toolbar={(<>
+          <span className="chip mono" dir="ltr" data-ws-chip="drawing">{meta.drawingNo || "؟"} · REV {meta.rev || "؟"} · {meta.sheet || "؟"}</span>
+          {meta.lineNo && <span className="chip mono cy" dir="ltr" data-ws-chip="line">{meta.lineNo}</span>}
+          <span className={`chip ${approved ? "cy" : ""}`} data-ws-chip="status">{runWord}</span>
+          <span className="muted sm" data-ws-chip="counts">{nos.length} جوش · {reviewedN} بررسی‌شده{problems ? ` · ${problems} ایراد` : ""}</span>
+        </>)}
+        explorer={<Explorer meta={meta} sheets={sheets} items={items} selectedId={markSel} onSelect={setMarkSel} checked={locked ? null : { has: (no) => reviewed.has(no) }} />}
+        panel={<WorkspaceTabs tabs={tabs} value={wsTab} onChange={setWsTab} />}>
+        {sheetBlock()}
+      </WorkspaceFrame>
     </div>
   );
 }
