@@ -1133,6 +1133,7 @@ def read_title_generic(T, s):
                 box = (cc[0], cc[1], rc[2], rc[3])
                 if box[0] <= rc[1]:
                     continue        # the column is the row label's own cell
+                out.setdefault("cells", {}).setdefault(key, [box[0], y0 + box[2], box[1], y0 + box[3]])
                 got = vote(box, num + "FV,", ok.replace(r"\s*", ""))
                 if got:
                     line[key] = got
@@ -1161,6 +1162,7 @@ def read_title_generic(T, s):
                     vb = (end["x"] + end["w"] + 2, r, max(t, end["y"] - end["h"] // 2), min(b, end["y"] + end["h"] + end["h"] // 2))
                     white = (num + "%+RTMUPACB ") if key in ("testPressure", "ndt", "insulationThk") else "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/ "
                     text_field = key in ("testFluid", "paint", "insulationType", "pwht")
+                    out.setdefault("cells", {}).setdefault(key, [vb[0], y0 + vb[2], vb[1], y0 + vb[3]])
                     got = vote(vb, white, ok.replace(r"\s*", r"\s?") if text_field else ok.replace(r"\s*", ""), spaces=text_field, lead=True)
                     if got:
                         line[key] = got
@@ -1427,6 +1429,78 @@ def line_no_from_vector(paths, band):
                      key=lambda o: '%s"-%s' % LINE_NO.fullmatch(o).groups(), scales=(22 / hp, 30 / hp))
 
 
+def vector_cell(paths, box, key):
+    """A value's cell (`box` [x0, y0, x1, y1], points) read off the page's own strokes: drawn afresh, its
+    letters 22 and 30 px tall, read four ways, kept when it reads as the value every way. A percent sign
+    of a CAD font (one stroke the height of the letters and a small closed loop beside it: nothing else
+    of a value is drawn so) is told by its shape, as tesseract reads it 2 or 4: the value is read in the
+    pieces between, each piece the same every way, and joined by %."""
+    spec = template_spec(key)
+    if not spec:
+        return None
+    white, ok, norm, spaces = spec
+    x0, y0, x1, y1 = box
+    sel = [p for p in paths if p["x0"] >= x0 - 0.5 and p["x1"] <= x1 + 0.5 and p["y0"] >= y0 - 0.5 and p["y1"] <= y1 + 0.5]
+    if not sel:
+        return None
+    h = max(p["y1"] - p["y0"] for p in sel)
+    if h <= 0:
+        return None
+    # glyphs: strokes side by side, those whose x extents overlap one glyph
+    glyphs = []
+    for p in sorted(sel, key=lambda p: p["x0"]):
+        if glyphs and p["x0"] <= glyphs[-1]["x1"] + 0.05:
+            glyphs[-1]["ps"].append(p)
+            glyphs[-1]["x1"] = max(glyphs[-1]["x1"], p["x1"])
+        else:
+            glyphs.append({"ps": [p], "x0": p["x0"], "x1": p["x1"]})
+
+    def loop(q):
+        return abs(q[0][0] - q[-1][0]) < 0.05 and abs(q[0][1] - q[-1][1]) < 0.05 and len(q) > 4
+
+    def percent(g):
+        polys = [q for p in g["ps"] for q in p["polys"]]
+        small = [q for q in polys if loop(q) and max(a for a, _ in q) - min(a for a, _ in q) <= 0.4 * h and max(b for _, b in q) - min(b for _, b in q) <= 0.4 * h]
+        tall = [q for q in polys if max(b for _, b in q) - min(b for _, b in q) >= 0.8 * h]
+        return bool(small) and bool(tall)
+
+    Y0, Y1 = min(p["y0"] for p in sel) - 1, max(p["y1"] for p in sel) + 1
+    pieces, cur = [], []
+    for g in glyphs:
+        if percent(g):
+            pieces.append(cur)
+            pieces.append("%")
+            cur = []
+        else:
+            cur.append(g)
+    pieces.append(cur)
+    text = ""
+    for piece in pieces:
+        if piece == "%":
+            text += "%"
+            continue
+        if not piece:
+            continue
+        outs = []
+        for hp in (22, 30):
+            k = hp / h
+            X0, X1 = piece[0]["x0"] - 1, piece[-1]["x1"] + 1
+            img = np.full((int((Y1 - Y0) * k) + 1, int((X1 - X0) * k) + 1), 255, np.uint8)
+            for g in piece:
+                for p in g["ps"]:
+                    for q in p["polys"]:
+                        cv2.polylines(img, [np.array([[(x - X0) * k, (y - Y0) * k] for x, y in q], np.int32)], False, 0, 2)
+            _, bw = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            for im in (img, bw):
+                o = tess(cv2.copyMakeBorder(im, 30, 30, 30, 30, cv2.BORDER_CONSTANT, value=255), 7,
+                         ["-c", "tessedit_char_whitelist=" + white.replace("%", ""), "-c", "preserve_interword_spaces=1"]).strip()
+                outs.append(re.sub(r"\s+", " ", o) if spaces else o.replace(" ", ""))
+        if len(set(outs)) != 1 or not outs[0]:
+            return None
+        text += outs[0]
+    return norm(text) if re.fullmatch(ok, text) else None
+
+
 def read_title(g):
     """The title block: isometric number, sheet "n/m" and revision. Each is
     found by where it is printed — the cell right of the isometric number for
@@ -1621,11 +1695,18 @@ def main():
         line = gen.pop("line")
         fingerprint = gen.pop("labels")
         band = gen.pop("lineBand", None)
-        # not read off the picture: the number's own strokes, on a vector page as drawn (unturned)
-        if line.get("lineNo") is None and vec and turn is None and band:
+        cells = gen.pop("cells", {})
+        # not read off the picture: on a vector page as drawn (unturned), its own strokes — the line
+        # number's, and each value's cell
+        if vec and turn is None and (line.get("lineNo") is None or any(line.get(k) is None for k in cells)):
             try:
                 pt = 72 / (200 * s)
-                line["lineNo"] = line_no_from_vector(vector_paths(src, page), [band[0] * pt, band[1] * pt, band[2] * pt])
+                vp = vector_paths(src, page)
+                if line.get("lineNo") is None and band:
+                    line["lineNo"] = line_no_from_vector(vp, [band[0] * pt, band[1] * pt, band[2] * pt])
+                for k, c in cells.items():
+                    if line.get(k) is None:
+                        line[k] = vector_cell(vp, [v * pt for v in c], k)
             except Exception:
                 pass
         meta = gen

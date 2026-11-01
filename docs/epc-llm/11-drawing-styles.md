@@ -55,9 +55,20 @@ and the cut table are read on that page too, with the reader's sizes scaled.
   (`…-UGHES` with every stroke of the band; `…-UCW14` with the sheet's digits
   kept). On the 4 pages: all four line numbers right. A page that is not
   vector, or is turned, is read as before.
-- **The test pressure and NDT** on this font: two readings disagree (11.1 /
-  14.1 / 17.1; `10%RT+10%MT` read with a % as 0 or 2) — unknown, never one
-  of them.
+- **The test pressure and NDT** in the picture of this font: two readings
+  disagree (11.1 / 14.1 / 17.1; `10%RT+10%MT` with its % read as 0 or 2).
+  **On a vector page a value left unknown is read off its cell's own
+  strokes** (`vector_cell`): the strokes inside the cell the labels pointed to
+  are drawn afresh, their letters 22 and 30 px tall, and read four ways. The
+  CAD font's percent sign — one stroke the height of the letters and a small
+  closed loop beside it, a shape no other character of a value has — is told
+  by its shape (tesseract reads it 2 or 4 even drawn clean, and glyph by glyph
+  it reads worse): the value is read in the pieces between, each the same
+  every way, and joined by %. On the 4 pages: the test pressure 11.1 and NDT
+  10%RT+10%MT right on all four. (Turned off on the example and changing
+  nothing, so not kept: leaving out the cell's own rules; the four readings
+  agreeing is the reader's rule everywhere and stays.)
+
 - **The project document number** on these sheets is the package's
   (AISPC-10-DE-930-PI-ISO-0001 on every line's sheets). It is read and
   prefills the drawing number; the check below says when a sheet with that
