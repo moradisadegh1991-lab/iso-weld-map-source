@@ -1,0 +1,40 @@
+{
+  "style": "cwr-andimeshk",
+  "drawing": "drawings/cwr-andimeshk-14p.pdf",
+  "provenance": "Underground cooling water isometrics of the Andimeshk Ibn Sina ethylene oxide plant, 14 sheets supplied by the owner (2026-11-01) as a drawing style other than the golden sheets': a vector PDF with no text layer, title block across the bottom, BILL OF MATERIAL top right. The title block, BOM and CUT PIPE LENGTH of pages 1, 7, 9 and 13 transcribed by eye from the drawing; sizes and quantities as printed.",
+  "pages": {
+    "1": {
+      "line": { "lineNo": "28\"-CWR-10-930065A-DA01-UCW", "sheet": "1/1", "rev": "A0", "lineClass": "1B",
+                "designPressure": "7.4", "operatingPressure": "2.3", "designTemp": "65", "operatingTemp": "43",
+                "testPressure": "11.1", "testFluid": "FRESH WATER", "ndt": "10%RT+10%MT" },
+      "bom": [[1, "28", 3.3, "m"], [2, "28", 1, "pcs"]],
+      "cut": [[1, 3211, "28"]]
+    },
+    "7": {
+      "line": { "lineNo": "60\"-CWR-10-930001A-DA01-UCW", "sheet": "1/4", "rev": "A0", "lineClass": "1B",
+                "designPressure": "7.4", "operatingPressure": "2.3", "designTemp": "65", "operatingTemp": "43",
+                "testPressure": "11.1", "testFluid": "FRESH WATER", "ndt": "10%RT+10%MT" },
+      "bom": [[1, "60", 0.9, "m"], [2, "3/4", 0.1, "m"], [3, "60 x 3/4", 1, "pcs"], [4, "60", 1, "pcs"], [5, "60", 2, "pcs"],
+              [6, "60", 1, "pcs"], [7, "60", 4, "pcs"], [8, "60", 1, "pcs"], [9, "3/4", 1, "pcs"], [10, "3/4", 1, "pcs"],
+              [11, "1.1/4", 52, "pcs"], [12, "1.1/4", 52, "pcs"]],
+      "cut": [[1, 600, "60"], [2, 100, "3/4"], [3, 300, "60"]]
+    },
+    "9": {
+      "line": { "lineNo": "60\"-CWR-10-930001A-DA01-UCW", "sheet": "3/4", "rev": "A0", "lineClass": "1B",
+                "designPressure": "7.4", "operatingPressure": "2.3", "designTemp": "65", "operatingTemp": "43",
+                "testPressure": "11.1", "testFluid": "FRESH WATER", "ndt": "10%RT+10%MT" },
+      "bom": [[1, "60", 1.2, "m"], [2, "3/4", 0.3, "m"], [3, "60 x 1.1/2", 3, "pcs"], [4, "60 x 3/4", 1, "pcs"], [5, "3/4", 1, "pcs"],
+              [6, "1.1/2", 6, "pcs"], [7, "1.1/2", 2, "pcs"], [8, "1.1/2", 1, "pcs"], [9, "3/4", 24, "pcs"], [10, "1.1/2", 1, "pcs"],
+              [11, "3/4", 2, "pcs"], [12, "1.1/2", 1, "pcs"], [13, "1.1/2", 1, "pcs"]]
+    },
+    "13": {
+      "line": { "lineNo": "60\"-CWS-10-930030A-DA01-UCW", "sheet": "1/2", "rev": "A0", "lineClass": "1B",
+                "designPressure": "7.4", "operatingPressure": "5.9", "designTemp": "65", "operatingTemp": "33",
+                "testPressure": "11.1", "testFluid": "FRESH WATER", "ndt": "10%RT+10%MT" },
+      "bom": [[1, "60", 26.3, "m"], [2, "3/4", 0.4, "m"], [3, "60 x 1.1/2", 2, "pcs"], [4, "60 x 3/4", 2, "pcs"], [5, "60", 1, "pcs"],
+              [6, "3/4", 1, "pcs"], [7, "1.1/2", 1, "pcs"], [8, "1.1/2", 2, "pcs"], [9, "1.1/2", 1, "pcs"], [10, "3/4", 2, "pcs"],
+              [11, "3/4", 1, "pcs"], [12, "1.1/2", 1, "pcs"], [13, "3/4", 1, "pcs"], [14, "3/4", 4, "pcs"], [15, "1.1/2", 1, "pcs"]],
+      "cut": [[1, 12842, "60"], [2, 10865, "60"], [3, 100, "3/4"], [4, 100, "3/4"]]
+    }
+  }
+}

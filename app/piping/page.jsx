@@ -493,7 +493,9 @@ export default function Page() {
       setEditing(JSON.stringify(final, null, 2));
       setOpenRun(null);
       const traced = r.marks.filter((m) => Array.isArray(m.weldAt)).length;
-      setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s · ${r.marks.length} نشانگر جوش` +
+      setNote(`برگ ${index} · بدون مدل و بدون توکن · ${(r.ms / 1000).toFixed(1)}s` +
+        (r.style === "generic" ? " · سبک نقشه‌ای غیر از الگوی شناخته‌شده: جدول عنوان از روی برچسب‌هایش خوانده شد" : "") +
+        ` · ${r.marks.length} نشانگر جوش` +
         (r.marks.length ? ` (${traced} با محل سرجوش روی لوله، از خط رهبرش)` : "") +
         (dots ? ` · شمارهٔ جوش چاپ نشده: ${dots.rows.length} سرجوش پیشنهادی روی لوله (نقطهٔ جوش و سر ساکتی) — شماره‌ها فقط ترتیبی برای شروع‌اند، محل (کارگاه/سایت) خالی است؛ همه را با نقشه بررسی کنید` : "") + (tags.length ? ` · ${tags.filter((t) => t.kind === "spool").length} اسپول · ${tags.filter((t) => t.kind === "support").length} ساپورت` : "") +
         (bom.length ? ` · BOM ${bom.length} ردیف` : " · BOM خوانده نشد") +

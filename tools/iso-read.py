@@ -46,7 +46,7 @@ not closed and are not found; that is the right answer for the register,
 which excludes them, but they are not reported either. The size at each
 weld and branches are not read here (docs/epc-llm/09-iso-symbols.md).
 """
-import sys, json, subprocess, tempfile, os, re
+import sys, json, subprocess, tempfile, os, re, bisect
 import numpy as np, cv2
 
 args = sys.argv[1:]
@@ -405,18 +405,19 @@ def detect_tags(g, tables):
     return tags
 
 
-def cell_vote(cell, whitelist, valid, key=lambda o: o):
+def cell_vote(cell, whitelist, valid, key=lambda o: o, scales=(3, 4), spaces=False):
     """One line of a title-block cell read four ways (grey and two-level, 3x
     and 4x, white margin round it). An answer only when every reading that
     fits the pattern says the same thing; none, or two that disagree, is
     unknown."""
     outs = []
-    for k in (3, 4):
-        big = cv2.resize(cell, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC)
+    for k in scales:
+        big = cv2.resize(cell, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC if k >= 1 else cv2.INTER_AREA)
         _, bw = cv2.threshold(big, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         for im in (big, bw):
             im = cv2.copyMakeBorder(im, 30, 30, 30, 30, cv2.BORDER_CONSTANT, value=255)
-            outs.append(tess(im, 7, ["-c", f"tessedit_char_whitelist={whitelist}"]).strip().replace(" ", ""))
+            o = tess(im, 7, ["-c", f"tessedit_char_whitelist={whitelist}", "-c", "preserve_interword_spaces=1"]).strip()
+            outs.append(re.sub(r"\s+", " ", o) if spaces else o.replace(" ", ""))
     got = {key(o) for o in outs if valid(o)}
     return got.pop() if len(got) == 1 else None
 
@@ -868,6 +869,24 @@ def read_cut_lengths(g):
     return [v[0] for k, v in sorted(seen.items()) if len(v) == 1]
 
 
+def rising(xs):
+    """The indices of the longest strictly rising run of xs (not necessarily adjacent), in order."""
+    best, prev = [], [None] * len(xs)
+    tails = []          # tails[k]: index of the smallest last value of a rising run of length k+1
+    for i, x in enumerate(xs):
+        k = bisect.bisect_left([xs[j] for j in tails], x)
+        prev[i] = tails[k - 1] if k else None
+        if k == len(tails):
+            tails.append(i)
+        else:
+            tails[k] = i
+    i = tails[-1] if tails else None
+    while i is not None:
+        best.append(i)
+        i = prev[i]
+    return best[::-1]
+
+
 def read_bom(g):
     """The bill of material printed beside the drawing (FABRICATION / ERECTION
     MATERIALS): one row per PT number — its group heading, description, size
@@ -926,6 +945,17 @@ def read_bom(g):
             part[k].append(w["t"])
         pt = " ".join(part["pt"]).rstrip(".")
         if re.fullmatch(r"\d{1,3}", pt):
+            # on a page read at 600 dpi (another style's hairline CAD font) the PT number is read again on
+            # its own cell, several ways: a row whose number does not read the same is not trusted (11 read 14)
+            ptw = [w for w in ws if w["x"] + w["w"] < desc - gap / 2] if S > 2 else []
+            if ptw:
+                bx0, by0 = min(w["x"] for w in ptw), min(w["y"] for w in ptw)
+                bx1, by1 = max(w["x"] + w["w"] for w in ptw), max(w["y"] + w["h"] for w in ptw)
+                again = cell_vote(region[max(0, by0 - 4):by1 + 4, max(0, bx0 - 6):bx1 + 6], "0123456789",
+                                  lambda o: bool(re.fullmatch(r"\d{1,3}", o)), scales=(0.5, 0.67))
+                if again != pt:
+                    row = None
+                    continue
             size = bom_size(" ".join(part["ns"]).replace(".x", " x").strip(" ."), " ".join(part["desc"]))
             # 1/2, 1/4, 1/8, 3/4, 3/8 lose their slash as 12, 14, 18, 34, 38: such a size stands only
             # when the cell, read again several ways on its own, says the same
@@ -950,11 +980,287 @@ def read_bom(g):
             continue
         if row and part["desc"] and not part["pt"]:
             row["description"] += " " + " ".join(part["desc"])
+    # the PT numbers run down the table in order: a row out of that order is a misread number (the
+    # rows kept are the longest run of numbers rising down the table; the others are dropped)
+    rows = [rows[i] for i in rising([r["pt"] for r in rows])]
     # one row per PT number, in order; a number read twice is not trusted
     seen = {}
     for r in rows:
         seen.setdefault(r["pt"], []).append(r)
     return [v[0] for k, v in sorted(seen.items()) if len(v) == 1]
+
+
+# ── a drawing style with no template ──────────────────────────────────────
+# A sheet that is not the golden sheets' layout (read_title finds no ISO
+# number in its cell) is read by what its title block says rather than where:
+# each value is found from its label — a row label and a column heading for a
+# value in a grid (PRESS. by DESIGN), a label and the words after it in the
+# same cell (TEST FLUID: …), a label above it (CLASS over 1B). The cells are
+# the title block's own ruled lines. docs/epc-llm/11-drawing-styles.md.
+
+def is_vector(path, pg):
+    """A PDF page drawn as lines (no image on it): it can be rendered as
+    finely as its small text needs."""
+    if not path.lower().endswith(".pdf"):
+        return False
+    r = subprocess.run(["pdfimages", "-list", "-f", str(pg), "-l", str(pg), path], capture_output=True, text=True)
+    return len([l for l in r.stdout.splitlines()[2:] if l.strip()]) == 0
+
+
+def text_image(path, pg):
+    """The page for reading its text: a vector page at 600 dpi with its
+    hairline strokes thickened (tesseract reads a 1 px stroke badly), with
+    the scale of its pixels to 200 dpi."""
+    return cv2.erode(load_at(path, 600), np.ones((3, 3), np.uint8)), 3.0
+
+
+class at_scale:
+    """The module's 200 dpi sizes (S) at another scale, for a function written for them."""
+    def __init__(self, s):
+        self.s = s
+    def __enter__(self):
+        global S
+        self.old, S = S, self.s
+    def __exit__(self, *a):
+        global S
+        S = self.old
+
+
+GRID_FIELDS = [
+    # key, row label, column heading, valid value
+    ("designPressure", r"PRESS\.?\(?(BARG)?\)?:?|PRESSURE", r"DESIGN", r"\d+(?:\.\d+)?(?:\s*,?\s*FV)?|FV"),
+    ("operatingPressure", r"PRESS\.?\(?(BARG)?\)?:?|PRESSURE", r"OP[EK]?R?ATING|OPER\.?", r"\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?"),
+    ("designTemp", r"TE[MN][P>]\.?.*|TEMPERATURE", r"DESIGN", r"-?\d+(?:\.\d+)?"),
+    ("operatingTemp", r"TE[MN][P>]\.?.*|TEMPERATURE", r"OP[EK]?R?ATING|OPER\.?", r"-?\d+(?:\.\d+)?(?:\s*-\s*-?\d+(?:\.\d+)?)?"),
+]
+INLINE_FIELDS = [
+    # key, label (the words of the label, joined), valid value
+    # the label alone, never "any words after it": PRESS.TEST(barg): 11.1 must not take "11." into the label
+    ("testPressure", r"(.?RESS\.?\s?TEST|TEST\s?PRESS(URE)?)\s?\(?\s?(BAR[GQ]?\)?)?:?", r"\d+(?:\.\d+)?"),
+    ("testFluid", r"(TEST\s*)?FLUID:?", r"(FRESH\s*|SEA\s*|DEMIN\.?\s*)?WATER|AIR|NITROGEN|N2|SERVICE|PNEUMATIC|HYDRO(STATIC)?"),
+    ("ndt", r"N[DO0]T:", r"\d{1,3}\s*%\s*[A-Z]{2}(\s*\+\s*\d{1,3}\s*%\s*[A-Z]{2})*|[A-Z]|-"),
+    ("pwht", r"PWHT:?", r"YES|NO|N|Y|N/?A|-"),
+    ("paint", r"PAINT(\s*CODE)?:?", r"[A-Z]{1,3}-?\d{1,3}|NONE|N/?A|-"),
+    ("insulationType", r"INSULATION\s*TYPE:?|INS\.?\s*TYPE:?", r"[A-Z]{1,4}|NONE|N/?A|-"),
+    ("insulationThk", r"INSULATION\s*THK\.?:?|INS\.?\s*THK\.?:?", r"\d{1,3}|-"),
+]
+LINE_NO = re.compile(r"(\d{1,2}(?:\.\d/\d)?)[\"”']{1,2}-?([A-Z]{2,5}-[0-9A-Z]{1,8}(?:-[0-9A-Z]{1,8}){1,5})")
+
+
+def read_title_generic(T, s):
+    """The title block's line data of a sheet in a style with no template,
+    read off T (the page as text_image gives it, s its pixels' scale to 200
+    dpi). Keys as read_title's and read_line_data's; a value not read for
+    certain is None."""
+    H, W = T.shape[:2]
+    y0 = int(H * 0.80)
+    strip = T[y0:, :]
+    ink = (strip < 150).astype(np.uint8) * 255
+    hl = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (int(60 * s), 1)))
+    vl = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, int(25 * s))))
+    clean = 255 - cv2.subtract(ink, cv2.dilate(hl | vl, np.ones((3, 3), np.uint8)))
+    Hs, Ws = strip.shape[:2]
+    # the words, to find the labels by: read at two sizes, as each misses some small labels the
+    # other finds (REV. of the revision table at the one, LINE at the other)
+    words = []
+    for k in ((1.0, 0.5) if s > 2 else (1.0,)):
+        im = clean if k == 1 else cv2.resize(clean, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
+        for line in tess(im, 11, ["tsv"]).splitlines()[1:]:
+            f = line.split("\t")
+            if len(f) >= 12 and f[11].strip():
+                w = {"t": f[11].strip().upper(), "x": int(int(f[6]) / k), "y": int(int(f[7]) / k), "w": int(int(f[8]) / k), "h": int(int(f[9]) / k)}
+                # the same word read alike at both sizes is kept once; read otherwise, both readings stay
+                if not any(abs(v["x"] - w["x"]) < w["h"] and abs(v["y"] - w["y"]) < w["h"] and v["t"] == w["t"] for v in words):
+                    words.append(w)
+
+    def cell_of(w):
+        cx, cy = w["x"] + w["w"] // 2, w["y"] + w["h"] // 2
+        row = vl[max(0, cy - 2):cy + 3, :].max(0) > 0
+        col = hl[:, max(0, cx - 2):cx + 3].max(1) > 0
+        left = next((x for x in range(w["x"] - 2, -1, -1) if row[x]), 0)
+        right = next((x for x in range(w["x"] + w["w"] + 2, Ws) if row[x]), Ws)
+        top = next((y for y in range(cy, -1, -1) if col[y]), 0)
+        bottom = next((y for y in range(cy, Hs) if col[y]), Hs)
+        return left, right, top, bottom
+
+    def inside(v, box):
+        l, r, t, b = box
+        cx, cy = v["x"] + v["w"] / 2, v["y"] + v["h"] / 2
+        return l <= cx <= r and t <= cy <= b
+
+    # a value is read from its own cell, several ways, and kept when they agree: the strip read whole
+    # misreads this kind of single-stroke lettering (7.4 as 7A, 2.3 as 7.3), a cell read alone does not
+    sc = (0.5, 0.67) if s > 2 else (3, 4)
+
+    def vote(box, white, ok, key=lambda o: o, spaces=False, lead=False):
+        l, r, t, b = box
+        # read off the strokes as drawn: taking the ruled lines away nibbles a decimal point (7.4 read 74)
+        crop = strip[max(0, t + 4):b - 3, max(0, l + 4):r - 3]
+        if crop.size == 0 or crop.shape[0] < 12 or crop.shape[1] < 12:
+            return None
+        if lead:
+            # the rest of a label (".:" after THK) left at the value's start: dots, small and round, before the first other mark
+            n, _, st, _ = cv2.connectedComponentsWithStats((crop < 150).astype(np.uint8), 8)
+            marks = sorted(st[1:].tolist())
+            if not marks:
+                return None
+            th = max(m[3] for m in marks)      # the height of the lettering: a dot is small beside it, a "1" is not
+            x = 0
+            for mx, my, mw, mh, _a in marks:
+                if mh < 0.4 * th and mw < 0.4 * th and mw < 2 * mh:
+                    x = mx + mw + 2
+                else:
+                    break
+            crop = crop[:, x:]
+            if crop.shape[1] < 12:
+                return None
+        return cell_vote(crop, white, lambda o: bool(re.fullmatch(ok, o)), key=key, scales=sc, spaces=spaces)
+
+    out = {"drawingNo": None, "sheet": None, "rev": None}
+    line = {k: None for k, *_ in GRID_FIELDS + INLINE_FIELDS}
+    line.update({"lineClass": None, "lineNo": None})
+    num = "0123456789.-"
+
+    # a value in a grid: the cell in its row label's row and its column heading's column
+    for key, rlab, clab, ok in GRID_FIELDS:
+        for R in (w for w in words if re.fullmatch(rlab, w["t"])):
+            rc = cell_of(R)
+            for C in (w for w in words if re.fullmatch(clab, w["t"]) and w["y"] < R["y"] - R["h"]):
+                cc = cell_of(C)
+                box = (cc[0], cc[1], rc[2], rc[3])
+                if box[0] <= rc[1]:
+                    continue        # the column is the row label's own cell
+                got = vote(box, num + "FV,", ok.replace(r"\s*", ""))
+                if got:
+                    line[key] = got
+                    break
+            if line[key]:
+                break
+
+    # a label and the words after it in its cell
+    for key, lab, ok in INLINE_FIELDS:
+        for k, L in enumerate(words):
+            # the label's words: it and the next words to its right on its line, each close to the last
+            # (every reading of them: a word read two ways at the two sizes gives two groups)
+            def groups(g, n):
+                if len(g) == n:
+                    yield g
+                    return
+                last = g[-1]
+                for w in words:
+                    if abs(w["y"] - L["y"]) < L["h"] and last["x"] + last["w"] - 4 <= w["x"] <= last["x"] + last["w"] + 2 * L["h"]:
+                        yield from groups(g + [w], n)
+            for group in (g for n in (3, 2, 1) for g in groups([L], n)):   # the longest label first: PAINT CODE:, not PAINT
+                if re.fullmatch(lab, " ".join(g["t"] for g in group)):
+                    end = group[-1]
+                    l, r, t, b = cell_of(end)
+                    # the value: the rest of the label's line in its cell
+                    vb = (end["x"] + end["w"] + 2, r, max(t, end["y"] - end["h"] // 2), min(b, end["y"] + end["h"] + end["h"] // 2))
+                    white = (num + "%+RTMUPACB ") if key in ("testPressure", "ndt", "insulationThk") else "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/ "
+                    text_field = key in ("testFluid", "paint", "insulationType", "pwht")
+                    got = vote(vb, white, ok.replace(r"\s*", r"\s?") if text_field else ok.replace(r"\s*", ""), spaces=text_field, lead=True)
+                    if got:
+                        line[key] = got
+                        break
+            if line[key]:
+                break
+
+    # labels over their value: CLASS, SHT. NO., REV — in the cells of the line number's row
+    def below(lab, white, ok, key=lambda o: o):
+        # the value under its label: in the same cell, or in the cell under it when the label has a row of its own
+        for L in (w for w in words if re.fullmatch(lab, w["t"])):
+            l, r, t, b = cell_of(L)
+            boxes = [(l, r, L["y"] + L["h"] + 2, b)]
+            col = hl[:, max(0, L["x"] + L["w"] // 2 - 2):L["x"] + L["w"] // 2 + 3].max(1) > 0
+            nxt = next((y for y in range(b + 4, Hs) if col[y]), None)
+            if nxt:
+                boxes.append((l, r, b, nxt))
+            for box in boxes:
+                got = vote(box, white, ok, key=key)
+                if got:
+                    return got
+        return None
+    line["lineClass"] = below(r"CLASS:?|CLASS\.?", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", r"\d[A-Z]\d?|[A-Z]\d[A-Z]?\d?")
+    # the drawing's own number: under a DOCUMENT No. / DWG. No. label, a code of four parts or more (AISPC-10-DE-930-PI-ISO-0001)
+    # (its part ISO is read 1S0 or IS0 as on the golden sheets: that part is the word ISO)
+    out["drawingNo"] = below(r"DOCUMENT|DWG\.?|DRAWING", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-", r"[A-Z0-9]{2,8}(-[A-Z0-9]{1,8}){3,8}",
+                             key=lambda o: "-".join("ISO" if re.fullmatch(r"[1I][S5][O0]", p) else p for p in o.split("-")))
+    sheet = below(r"SHT\.?(NO\.?)?:?|SHEET:?", "0123456789OF/", r"\d{1,2}(OF|/)\d{1,2}")
+    if sheet:
+        a, b_ = re.split(r"OF|/", sheet)
+        if 0 < int(a) <= int(b_):
+            out["sheet"] = f"{int(a)}/{int(b_)}"
+    # the revision: the revision table's topmost written row, in the column over its REV. heading,
+    # and only with a date printed in that row's DATE column (a revision written in by hand is not read)
+    for R in (w for w in words if re.fullmatch(r"REV\.?", w["t"])):
+        D = next((w for w in words if re.fullmatch(r"DATE", w["t"]) and abs(w["y"] - R["y"]) < R["h"] and 0 < w["x"] - R["x"] < 600 * s / 3), None)
+        if not D:
+            continue
+        rl, rr, rt, rb = cell_of(R)
+        dl, dr, _, _ = cell_of(D)
+        colm = hl[:, max(0, R["x"] + R["w"] // 2 - 2):R["x"] + R["w"] // 2 + 3].max(1) > 0
+        ys = [y for y in range(rt - 2, 0, -1) if colm[y] and not colm[y - 1]]   # the rules above, nearest first
+        rows = [(ys[i + 1], ys[i]) for i in range(len(ys) - 1)]
+        written = [(a, b_) for a, b_ in rows if b_ - a > 20 and (strip[a + 6:b_ - 5, rl + 6:rr - 5] < 150).any()]
+        if written:
+            a, b_ = written[-1]           # the topmost
+            # a revision is a letter and a number (A0, B1) or either alone: an O after the letter is the number's 0
+            rev = vote((rl, rr, a, b_), "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", r"[A-Z]?[0-9O]{1,2}|[A-Z]",
+                       key=lambda o: o[0] + o[1:].replace("O", "0") if o[:1].isalpha() else o.replace("O", "0"))
+            date = vote((dl, dr, a, b_), "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ/.-", r"\d{1,2}[./-]?([A-Z]{3}|\d{1,2})[./-]?\d{2,4}")
+            if rev and date:
+                out["rev"] = rev
+        break
+
+    # the line number: the cell labelled LINE No., read several ways; it must read as a line number
+    for L in (w for w in words if re.fullmatch(r"LINE", w["t"])):
+        l, r, t, b = cell_of(L)
+        # the number is printed large and may run on past its cell's border (25-CWR …-UCW into REV):
+        # its own band of ink, from the label's right to where the ink of that band ends
+        # after the label's own words (LINE No.:), small and on its first line
+        lab_end = max([w["x"] + w["w"] for w in words if abs(w["y"] - L["y"]) < L["h"] and L["x"] <= w["x"] < L["x"] + 250 * s / 3 * 2
+                       and re.fullmatch(r"LINE|N[O0]\.?:?|NUMBER:?|LINE\s*N[O0]\.?:?", w["t"])] + [L["x"] + L["w"]])
+        band = strip[max(0, t + 4):b - 3, :]
+        ink = (band < 150).astype(np.uint8)
+        ink[:, :lab_end + 4] = 0
+        ink[vl[max(0, t + 4):b - 3, :] > 0] = 0
+        n, lab, st, _ = cv2.connectedComponentsWithStats(ink, 8)
+        if n < 2:
+            continue
+        # the number is the band's large lettering: its glyphs, and its dashes (flat, at mid height),
+        # not the small words of cells it runs over
+        hbig = np.percentile(st[1:, 3], 90)
+        tall = [i for i in range(1, n) if 0.6 * hbig <= st[i, 3]]
+        if not tall:
+            continue
+        top = min(st[i, 1] for i in tall)
+        bot = max([st[i, 1] + st[i, 3] for i in tall if st[i, 3] <= 1.3 * hbig] + [top + hbig])
+        keep = np.zeros_like(ink)
+        glyphs = []
+        for i in range(1, n):
+            x, y, w_, h_, a = st[i]
+            if 0.6 * hbig <= h_ or (h_ <= 0.15 * hbig and 0.3 * hbig <= w_ <= hbig and top < y < bot):
+                keep[lab == i] = 1
+                glyphs.append((x, x + w_, h_))
+        glyphs.sort()
+        # the number's own run: from the first glyph, until a gap wider than two letters
+        run = [glyphs[0]]
+        for g_ in glyphs[1:]:
+            if g_[0] - run[-1][1] > 2 * hbig:
+                break
+            run.append(g_)
+        # printed over another cell's words (UCW over "REV: A0") its readings disagree or do not read
+        # as a line number: unknown (a guard on the glyphs' height was tried: it changed nothing)
+        x0c, x1 = run[0][0], run[-1][1]
+        crop = 255 - keep[:, max(0, x0c - 6):x1 + 6] * 255
+        crop = crop.astype(np.uint8)
+        got = cell_vote(crop, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-.\"/", lambda o: bool(LINE_NO.fullmatch(o)),
+                        key=lambda o: '%s"-%s' % LINE_NO.fullmatch(o).groups(), scales=sc)
+        if got:
+            line["lineNo"] = got
+            break
+    out["line"] = line
+    return out
 
 
 def read_title(g):
@@ -1138,7 +1444,24 @@ def main():
         cv2.imwrite(debug, dbg)
     meta = read_title(g)
     line = meta.pop("line", {})
-    print(json.dumps({"orientation": rot, "aspect": round(W0 / H0, 4), "meta": meta, "lineData": line, "bom": read_bom(g), "cutLengths": read_cut_lengths(g), "weldDots": dots_out, "socketEnds": sockets_out, "marks": out, "tags": tags_out, "rejected": rejected}))
+    bom, cuts, style = None, None, "golden"
+    # a sheet in another drawing style: the golden sheets' title block is not there (no ISO number in
+    # its cell, hardly a line-data value beside its labels) — its title block is read by its labels,
+    # and a vector page's text at 600 dpi (the golden layout's 200 dpi blurs a hairline CAD font)
+    if not meta.get("drawingNo") and sum(1 for v in line.values() if v) < 3:
+        style = "generic"
+        vec = is_vector(src, page)
+        T, s = text_image(src, page) if vec else (g0, S)
+        if turn is not None:
+            T = cv2.rotate(T, turn)
+        gen = read_title_generic(T, s)
+        line = gen.pop("line")
+        meta = gen
+        with at_scale(s):
+            bom, cuts = read_bom(T), read_cut_lengths(T)
+    if bom is None:
+        bom, cuts = read_bom(g), read_cut_lengths(g)
+    print(json.dumps({"orientation": rot, "aspect": round(W0 / H0, 4), "style": style, "meta": meta, "lineData": line, "bom": bom, "cutLengths": cuts, "weldDots": dots_out, "socketEnds": sockets_out, "marks": out, "tags": tags_out, "rejected": rejected}))
 
 
 if __name__ == "__main__":
