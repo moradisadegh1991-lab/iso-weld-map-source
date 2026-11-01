@@ -397,6 +397,12 @@ test("a sheet with no weld numbers: the weld dots become suggested welds, joined
     assert(Math.hypot((f[i].x - f[j].x) * Math.SQRT2, f[i].y - f[j].y) >= 0.05, `frames ${i + 1} and ${j + 1} apart`);
   // what is not a point of the page is left out
   equal(suggestFromDots([[0.1, 0.1], [NaN, 0.2], [1.5, 0.3], "x"]).rows.length, 1);
+  // a socket end is a weld whose symbol says how it is made: SW; a dot says nothing of it
+  const both = suggestFromDots([[0.2, 0.2]], Math.SQRT2, [[0.3, 0.3], [2, 0]]);
+  equal(both.rows.length, 2, "dots and socket ends together, what is not a point left out");
+  equal(both.rows.map((r) => r.kind).join(","), ",SW");
+  equal(both.marks["2"].src, "reader-socket"); equal(both.marks["1"].src, "reader-dot");
+  assert(both.rows.every((r) => r.loc === ""), "Shop/Field still not guessed");
 });
 
 await run();

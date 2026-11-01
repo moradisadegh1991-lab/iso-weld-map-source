@@ -1,5 +1,5 @@
 {
- "provenance": "Weld points checked by eye: on each sheet the leader of every printed weld frame was followed on the drawing to where it meets the pipe, and the point tools/iso-read.py weld_points gave was kept only where it is that point (2026-10-31). Fractions of the page as rendered, x of its width and y of its height. A frame whose leader the reader did not follow is not listed; on 25-1027 welds 2 and 8 are left out, not settled by eye.",
+ "provenance": "Weld points checked by eye: on each sheet the leader of every printed weld frame was followed on the drawing to where it meets the pipe, and the point tools/iso-read.py weld_points gave was kept only where it is that point (2026-10-31). Fractions of the page as rendered, x of its width and y of its height. A frame whose leader the reader did not follow is not listed; on 25-1027 welds 2 and 8 are left out, not settled by eye. Added 2026-11-01: every frame printed with a label (FFW, THD) whose leader the reader followed on the 54 golden sheets, 29 points, each checked by eye to end where the leader meets the pipe and not on the label \u2014 the error the first version made.",
  "sheets": {
   "25-1001-SH1-0A": {
    "1": [
@@ -41,6 +41,54 @@
    "4-1": [
     0.1707,
     0.2877
+   ]
+  },
+  "25-1003-SH1-0": {
+   "13": [
+    0.2691,
+    0.3547
+   ],
+   "17": [
+    0.1371,
+    0.1658
+   ]
+  },
+  "25-1008-SH1-0": {
+   "3": [
+    0.3952,
+    0.1752
+   ],
+   "10": [
+    0.514,
+    0.2921
+   ],
+   "12": [
+    0.501,
+    0.4694
+   ]
+  },
+  "25-1009-SH1-0": {
+   "4": [
+    0.2607,
+    0.5392
+   ],
+   "9": [
+    0.4667,
+    0.204
+   ],
+   "14": [
+    0.5781,
+    0.2738
+   ]
+  },
+  "25-1011-SH1-0": {
+   "10": [
+    0.5526,
+    0.2561
+   ],
+   "22": [
+    0.4489,
+    0.4805
    ]
   },
   "25-1012-SH1-0": {
@@ -123,6 +171,102 @@
    "29": [
     0.204,
     0.6635
+   ]
+  },
+  "25-1016-SH1-0": {
+   "4": [
+    0.4606,
+    0.4244
+   ],
+   "12": [
+    0.109,
+    0.3278
+   ]
+  },
+  "25-1017-SH2-0": {
+   "29": [
+    0.5228,
+    0.1322
+   ],
+   "30": [
+    0.5099,
+    0.1629
+   ],
+   "33": [
+    0.5222,
+    0.173
+   ],
+   "34": [
+    0.5222,
+    0.419
+   ],
+   "35": [
+    0.5093,
+    0.4498
+   ],
+   "36": [
+    0.4518,
+    0.4926
+   ],
+   "38": [
+    0.3814,
+    0.553
+   ],
+   "39": [
+    0.3686,
+    0.5841
+   ],
+   "40": [
+    0.3707,
+    0.6873
+   ],
+   "43": [
+    0.3559,
+    0.5738
+   ],
+   "44": [
+    0.2916,
+    0.626
+   ],
+   "46": [
+    0.2611,
+    0.656
+   ],
+   "48": [
+    0.2102,
+    0.6888
+   ]
+  },
+  "25-1020-SH1-0": {
+   "7": [
+    0.3203,
+    0.4145
+   ],
+   "27": [
+    0.5777,
+    0.1113
+   ]
+  },
+  "25-1020-SH3-0": {
+   "29": [
+    0.3128,
+    0.7125
+   ]
+  },
+  "25-1021-SH2-0": {
+   "18": [
+    0.3428,
+    0.5735
+   ]
+  },
+  "25-1021-SH4-0": {
+   "29": [
+    0.2323,
+    0.1113
+   ],
+   "33": [
+    0.3044,
+    0.5111
    ]
   },
   "25-1022-SH2-0": {
@@ -231,58 +375,16 @@
     0.2031
    ]
   },
-  "25-1017-SH2-0": {
-   "29": [
-    0.5228,
-    0.1322
-   ],
-   "30": [
-    0.5099,
-    0.1629
-   ],
-   "33": [
-    0.5222,
-    0.173
-   ],
-   "34": [
-    0.5222,
-    0.419
-   ],
-   "35": [
-    0.5093,
-    0.4498
-   ],
-   "36": [
-    0.4518,
-    0.4926
-   ],
-   "38": [
-    0.3814,
-    0.553
-   ],
-   "39": [
-    0.3686,
-    0.5841
-   ],
-   "40": [
-    0.3707,
-    0.6873
-   ],
-   "43": [
-    0.3559,
-    0.5738
-   ],
-   "44": [
-    0.2916,
-    0.626
-   ],
-   "46": [
-    0.2611,
-    0.656
-   ],
-   "48": [
-    0.2102,
-    0.6888
+  "25-1025-SH1-0": {
+   "1": [
+    0.2628,
+    0.0863
+   ]
+  },
+  "25-1026-SH1-0": {
+   "3": [
+    0.1442,
+    0.2543
    ]
   },
   "25-1027-SH1-0": {
@@ -318,6 +420,73 @@
     0.5329,
     0.3749
    ]
+  },
+  "25-1027-SH3-0": {
+   "25": [
+    0.305,
+    0.414
+   ],
+   "32": [
+    0.5798,
+    0.3157
+   ]
+  },
+  "25-1036-SH1-0": {
+   "8": [
+    0.4212,
+    0.6789
+   ]
+  },
+  "25-1037-SH1-0": {
+   "1": [
+    0.614,
+    0.4292
+   ],
+   "4": [
+    0.4922,
+    0.6897
+   ]
+  },
+  "25-1037-SH2-0": {
+   "25": [
+    0.597,
+    0.6132
+   ]
   }
+ },
+ "notWelds": {
+  "_": "Flow arrowheads on the pipe, checked by eye: filled like a socket end, and no weld (2026-11-01). Neither a weld dot nor a socket end may be found at them.",
+  "25-1002-SH1-0": [
+   [
+    0.274,
+    0.1781
+   ],
+   [
+    0.2089,
+    0.2307
+   ]
+  ],
+  "25-1004-SH1-0": [
+   [
+    0.2544,
+    0.4279
+   ]
+  ],
+  "25-1021-SH2-0": [
+   [
+    0.3888,
+    0.2116
+   ]
+  ],
+  "25-1027-SH3-0": [
+   [
+    0.4047,
+    0.3329
+   ],
+   [
+    0.147,
+    0.4699
+   ]
+  ]
  }
 }

@@ -3,7 +3,7 @@
     python3 -I tools/iso-read.py <sheet.pdf|.png|.jpg> [--page 1] [--dpi 200] [--debug out.png]
 
 Prints one JSON object: { "orientation", "meta": {drawingNo, sheet, rev},
-"lineData": {...}, "bom": [...], "cutLengths": [...], "weldDots": [[x, y]],
+"lineData": {...}, "bom": [...], "cutLengths": [...], "weldDots": [[x, y]], "socketEnds": [[x, y]],
 "marks": [ {no, shape, outline, label, box, at, weldAt?, weldDot?} ], "tags": [...],
 "rejected": [...] }. `weldAt` is where the marker's leader meets the pipe and
 `weldDots` the weld dots drawn on the pipe (weld_points;
@@ -606,7 +606,8 @@ def weld_points(g3, frames, avoid):
     leader is not followed to the pipe has none — a frame in a stack drawn
     without a leader of its own included: it is not the stack's point.
 
-    Returns ([ (x, y, on_dot) | None per frame ], [ (x, y) dots on the pipe ]).
+    Returns ([ (x, y, on_dot) | None per frame ], [ (x, y) dots on the pipe ],
+    [ (x, y) socket ends on the pipe ]).
     """
     H, W = g3.shape
     ink = (g3 < 140).astype(np.uint8)
@@ -638,6 +639,14 @@ def weld_points(g3, frames, avoid):
     thick = keep[lab2]
     for x, y in dots:
         cv2.circle(thick, (int(x), int(y)), 5, 1, -1)
+    # the pipe as the dots are tested against it (a smaller bore is drawn thinner than LEAD_DT)
+    tp = ((dt >= PIPE_DT) & (fmask == 0)).astype(np.uint8)
+    n3, lab3, st3, _ = cv2.connectedComponentsWithStats(tp, 8)
+    # long and thin, or sparse in its box as an elbow's L is — not a bold letter (FFW, THD), compact in its box
+    w3, h3, a3 = st3[1:, 2].astype(float), st3[1:, 3].astype(float), st3[1:, 4].astype(float)
+    keep3 = np.zeros(n3, np.uint8)
+    keep3[1:] = (np.maximum(w3, h3) >= PIPE_LEN) & ((np.maximum(w3, h3) / np.maximum(1, np.minimum(w3, h3)) >= 3) | (a3 / (w3 * h3) < 0.25))
+    pipe = keep3[lab3]
     small = (th0 > 0) & (thick == 0)    # a fitting's short body, or a label's bold letters
 
     lmax = int(0.22 * W)
@@ -687,7 +696,9 @@ def weld_points(g3, frames, avoid):
                 continue          # along the frame's own side, not away from it
             total = L
             if not hit and L >= 15:      # a bent leader: one turn more
-                a2, L2, end2, hit2 = scan(end[0], end[1], 0, avoid_ang=a)
+                # the frame's own label (THD, FFW printed beside it) stays out on the second leg too:
+                # turning there, the first version ended 17 leaders on the golden sheets on a label
+                a2, L2, end2, hit2 = scan(end[0], end[1], max(0, min_small - L), avoid_ang=a)
                 if hit2 and L2 >= 8:
                     end, hit, total = end2, True, L + L2
             if not hit or L < 15:
@@ -707,11 +718,6 @@ def weld_points(g3, frames, avoid):
         points.append((float(ex), float(ey), on_dot))
 
     # the dots on the pipe: a ring round each crosses the pipe's heavy line; none near the page's edge
-    tp = ((dt >= PIPE_DT) & (fmask == 0)).astype(np.uint8)
-    n3, lab3, st3, _ = cv2.connectedComponentsWithStats(tp, 8)
-    keep3 = np.zeros(n3, np.uint8)
-    keep3[1:] = np.maximum(st3[1:, 2], st3[1:, 3]) >= PIPE_LEN
-    pipe = keep3[lab3]
     ringpts = [(int(round(14 * np.cos(t))), int(round(14 * np.sin(t)))) for t in np.deg2rad(np.arange(0, 360, 4))]
     on_pipe = []
     for x, y in dots:
@@ -719,7 +725,56 @@ def weld_points(g3, frames, avoid):
             continue
         if any(pipe[min(H - 1, max(0, int(y) + dy)), min(W - 1, max(0, int(x) + dx))] for dx, dy in ringpts):
             on_pipe.append((x, y))
-    return points, on_pipe
+    return points, on_pipe, socket_ends(ink, dt, fmask)
+
+
+# A socket-weld joint with no dot is drawn at the fitting's socket end: a
+# filled, blunt block on the pipe (the ends of a socket-weld valve, either side
+# of its bow-tie). Measured on the golden sheets (docs/epc-llm/10-weld-points.md):
+# the block's inscribed radius is 7 px and more at 300 dpi (a dot's is 6.3 at
+# most), it is short and blunt (elongation under 1.95, its smallest enclosing
+# triangle half as large again as itself) where a flow arrowhead is long and
+# pointed, and the pipe's heavy line runs on from one end only — the other is
+# the valve's thin bow-tie — where an arrowhead sits inside a straight run.
+SOCKET_DT, SOCKET_ELONG, SOCKET_TRI = 7.0, 1.95, 1.58
+
+
+def socket_ends(ink, dt, fmask):
+    H, W = ink.shape
+    op = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
+    op[fmask > 0] = 0
+    n, lab, st, cen = cv2.connectedComponentsWithStats(op, 8)
+    heavy = dt >= 2.0
+    rr = np.arange(22, 46)
+    out = []
+    for i in range(1, n):
+        x, y, w, h, a = st[i]
+        if a < 40 or not (0.03 * W < cen[i][0] < 0.97 * W and 0.03 * H < cen[i][1] < 0.97 * H):
+            continue
+        sub = lab[y:y + h, x:x + w] == i
+        if dt[y:y + h, x:x + w][sub].max() < SOCKET_DT:
+            continue
+        cnt, _ = cv2.findContours(sub.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        c = max(cnt, key=cv2.contourArea)
+        area = max(1.0, cv2.contourArea(c))
+        rw, rh = cv2.minAreaRect(c)[1]
+        if max(rw, rh) / max(1.0, min(rw, rh)) >= SOCKET_ELONG or cv2.minEnclosingTriangle(c)[0] / area < SOCKET_TRI:
+            continue
+        # the pipe's direction through the block, and the heavy line on each side of it
+        px, py = cen[i]
+        best = None
+        for th in np.deg2rad(np.arange(0, 180, 3)):
+            sides = []
+            for sgn in (1, -1):
+                xs = (px + sgn * np.cos(th) * rr).astype(int).clip(0, W - 1)
+                ys = (py + sgn * np.sin(th) * rr).astype(int).clip(0, H - 1)
+                sides.append(float(heavy[ys, xs].mean()))
+            if best is None or sum(sides) > sum(best):
+                best = sides
+        lo, hi = sorted(best)
+        if lo <= 0.35 and hi >= 0.7:
+            out.append((float(px), float(py)))
+    return out
 
 
 def materials_panel(g):
@@ -1063,7 +1118,7 @@ def main():
     avoid.append(up((0, int(Hg * 0.82), Wg, Hg)))                       # the title block
     if edge is not None:
         avoid.append(up((edge - 6, 0, Wg, Hg)))                         # the materials panel
-    pts, dots = weld_points(g3, [up(m["box"]) for m in out], avoid)
+    pts, dots, sockets = weld_points(g3, [up(m["box"]) for m in out], avoid)
     for m, p in zip(out, pts):
         if p:
             # as the marker's `at`: a fraction of the page as rendered
@@ -1071,6 +1126,7 @@ def main():
             m["weldAt"] = page_at([x, y, x, y])
             m["weldDot"] = p[2]
     dots_out = [page_at([x / K, y / K, x / K, y / K]) for x, y in dots]
+    sockets_out = [page_at([x / K, y / K, x / K, y / K]) for x, y in sockets]
     if debug:
         dbg = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
         for t in tables:
@@ -1082,7 +1138,7 @@ def main():
         cv2.imwrite(debug, dbg)
     meta = read_title(g)
     line = meta.pop("line", {})
-    print(json.dumps({"orientation": rot, "aspect": round(W0 / H0, 4), "meta": meta, "lineData": line, "bom": read_bom(g), "cutLengths": read_cut_lengths(g), "weldDots": dots_out, "marks": out, "tags": tags_out, "rejected": rejected}))
+    print(json.dumps({"orientation": rot, "aspect": round(W0 / H0, 4), "meta": meta, "lineData": line, "bom": read_bom(g), "cutLengths": read_cut_lengths(g), "weldDots": dots_out, "socketEnds": sockets_out, "marks": out, "tags": tags_out, "rejected": rejected}))
 
 
 if __name__ == "__main__":
