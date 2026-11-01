@@ -10,6 +10,8 @@ import path from "node:path";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { readerMissing, readerMissingText } from "../../../lib/server/reader-deps.mjs";
+import { withProject } from "../../../lib/db/scope.mjs";
+import { listStyles, forReader } from "../../../lib/db/repos/drawing-styles.mjs";
 
 const run = promisify(execFile);
 
@@ -36,7 +38,7 @@ export async function POST(request) {
     const { projectId, pdfBase64 } = body;
     const page = Math.max(1, Math.floor(Number(body.page) || 1));
     if (!projectId || !pdfBase64) return Response.json({ error: "projectId and pdfBase64 are required" }, { status: 400 });
-    const { membership } = await authenticate(request, { projectId });
+    const { db, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.RUN_EXTRACTION);
     const bytes = Buffer.from(String(pdfBase64), "base64");
@@ -45,10 +47,14 @@ export async function POST(request) {
     dir = await mkdtemp(path.join(tmpdir(), "isoread-"));
     const file = path.join(dir, "sheet.pdf");
     await writeFile(file, bytes);
+    // the project's saved drawing-style templates: a sheet of a style one describes is read by its cells too
+    const styles = forReader(await withProject(db, projectId, () => listStyles(db, { projectId })));
+    const tplFile = path.join(dir, "templates.json");
+    await writeFile(tplFile, JSON.stringify(styles));
     const t0 = Date.now();
     let out;
     try {
-      ({ stdout: out } = await run("python3", ["-I", path.join(process.cwd(), "tools/iso-read.py"), file, "--page", String(page)],
+      ({ stdout: out } = await run("python3", ["-I", path.join(process.cwd(), "tools/iso-read.py"), file, "--page", String(page), "--templates", tplFile],
         { timeout: 110_000, maxBuffer: 1 << 24, env: { ...process.env, OMP_THREAD_LIMIT: "1" } }));
     } catch (e) {
       // name what is missing, with the package that brings it, rather than guess from the error text
@@ -83,7 +89,12 @@ export async function POST(request) {
     const socketEnds = (Array.isArray(r.socketEnds) ? r.socketEnds : []).filter((d) => Array.isArray(d) && d.length === 2 && d.every(Number.isFinite));
     // the drawing's style: the golden sheets' layout, or another read by its title block's labels
     const style = r.style === "generic" ? "generic" : "golden";
-    return Response.json({ marks, tags, meta, lineData, bom, cutLengths, weldDots, socketEnds, style,
+    // the title block's words (a template saved from this sheet is matched by them), and the template
+    // the sheet was read by, with what it read and where it and the labels disagreed
+    const fingerprint = Array.isArray(r.fingerprint) ? r.fingerprint.filter((w) => typeof w === "string").slice(0, 600) : null;
+    const template = r.template && typeof r.template === "object" ? { id: r.template.id ?? null, name: String(r.template.name || ""),
+      score: Number(r.template.score) || 0, read: r.template.read || {}, conflicts: Array.isArray(r.template.conflicts) ? r.template.conflicts : [] } : null;
+    return Response.json({ marks, tags, meta, lineData, bom, cutLengths, weldDots, socketEnds, style, fingerprint, template,
       orientation: r.orientation, ms: Date.now() - t0, reader: "tools/iso-read.py (OpenCV + tesseract, no model)" });
   } catch (e) { return errorResponse(e); }
   finally { if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {}); }

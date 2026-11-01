@@ -31,10 +31,10 @@ const LINE_KEYS = ["lineNo", "lineClass", "designPressure", "operatingPressure",
 const TITLE_KEYS = ["sheet", "rev"];
 const norm = (v) => String(v).replace(/\s+/g, " ").trim().toUpperCase();
 
-async function read(style, pdf, page) {
-  const out = path.join(CACHE, `${style}-p${page}.json`);
+async function read(style, pdf, page, mode = "", extra = []) {
+  const out = path.join(CACHE, `${style}-p${page}${mode}.json`);
   if (existsSync(out)) return JSON.parse(await readFile(out, "utf8"));
-  const { stdout } = await run("python3", ["-I", "tools/iso-read.py", pdf, "--page", String(page)],
+  const { stdout } = await run("python3", ["-I", "tools/iso-read.py", pdf, "--page", String(page), ...extra],
     { timeout: 300_000, maxBuffer: 1 << 26, env: { ...process.env, OMP_THREAD_LIMIT: "1" } });
   await mkdir(CACHE, { recursive: true });
   await writeFile(out, stdout);
@@ -48,15 +48,28 @@ function score(t, what, truth, got) {
   else { t.wrong++; t.wrongs.push(`${what}: read ${got}, printed ${truth}`); }
 }
 
-const files = (await readdir(DIR)).filter((f) => f.endsWith(".json"));
+const files = (await readdir(DIR)).filter((f) => f.endsWith(".json") && !f.endsWith(".template.json"));
 let anyWrong = false;
 for (const f of files) {
   const spec = JSON.parse(await readFile(path.join(DIR, f), "utf8"));
   const pdf = path.join(DIR, spec.drawing);
   const pages = Object.keys(spec.pages);
+  // a saved template of the style (marked by hand on one page), when there is one: read by it alone, and
+  // by the labels and it together
+  const tplFile = path.join(DIR, `${spec.style}.template.json`);
+  const tpl = existsSync(tplFile) ? JSON.parse(await readFile(tplFile, "utf8")) : null;
+  const passes = [["labels", "", []]];
+  if (tpl) {
+    await mkdir(CACHE, { recursive: true });
+    const list = path.join(CACHE, `${spec.style}.templates.json`);
+    await writeFile(list, JSON.stringify([tpl]));
+    passes.push([`template alone (marked on page ${tpl.taughtOn})`, "-tpl-only", ["--templates", list, "--template-only"]],
+      ["labels and template", "-tpl", ["--templates", list]]);
+  }
+  for (const [label, mode, extra] of passes) {
   const got = {};
   for (let i = 0; i < pages.length; i += JOBS) {
-    await Promise.all(pages.slice(i, i + JOBS).map(async (p) => { got[p] = await read(spec.style, pdf, Number(p)); }));
+    await Promise.all(pages.slice(i, i + JOBS).map(async (p) => { got[p] = await read(spec.style, pdf, Number(p), mode, extra); }));
   }
   const style = { generic: 0, golden: 0 };
   const title = tally(), line = tally(), bomRows = tally(), bomSize = tally(), bomQty = tally(), cut = tally();
@@ -88,7 +101,7 @@ for (const f of files) {
     }
   }
   const line_ = (n, t, extra = "") => console.log(`${n.padEnd(12)} right ${t.right}  wrong ${t.wrong}  unknown ${t.unknown}${extra}`);
-  console.log(`\n${spec.style} — ${pages.length} pages (${pages.join(", ")}); read as another style on ${style.generic}, as the golden layout on ${style.golden}`);
+  console.log(`\n${spec.style} · ${label} — ${pages.length} pages (${pages.join(", ")}); read as another style on ${style.generic}, as the golden layout on ${style.golden}`);
   line_("TITLE", title);
   line_("LINE DATA", line);
   console.log(`${"BOM ROWS".padEnd(12)} found ${bomRows.right}  missed ${bomRows.missing}  invented ${bomRows.invented}`);
@@ -98,5 +111,6 @@ for (const f of files) {
   const wrongs = [title, line, bomRows, bomSize, bomQty, cut].flatMap((t) => t.wrongs);
   for (const w of wrongs) console.log(`  WRONG ${w}`);
   if (wrongs.length) anyWrong = true;
+  }
 }
 if (CHECK && anyWrong) process.exit(1);

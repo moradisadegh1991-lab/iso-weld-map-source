@@ -1,0 +1,342 @@
+{
+ "id": "cwr-andimeshk",
+ "name": "CWR Andimeshk (taught on page 9)",
+ "fields": {
+  "designPressure": {
+   "box": [
+    0.3647,
+    0.848,
+    0.421,
+    0.8617
+   ]
+  },
+  "operatingPressure": {
+   "box": [
+    0.4228,
+    0.848,
+    0.4715,
+    0.8617
+   ]
+  },
+  "designTemp": {
+   "box": [
+    0.3647,
+    0.8629,
+    0.421,
+    0.8766
+   ]
+  },
+  "operatingTemp": {
+   "box": [
+    0.4228,
+    0.8629,
+    0.4715,
+    0.8766
+   ]
+  },
+  "testPressure": {
+   "box": [
+    0.3354,
+    0.8783,
+    0.3641,
+    0.8916
+   ]
+  },
+  "testFluid": {
+   "box": [
+    0.3922,
+    0.8783,
+    0.4715,
+    0.8916
+   ]
+  },
+  "insulationThk": {
+   "box": [
+    0.4328,
+    0.8942,
+    0.4715,
+    0.9087
+   ]
+  },
+  "paint": {
+   "box": [
+    0.3196,
+    0.91,
+    0.3913,
+    0.9237
+   ]
+  },
+  "ndt": {
+   "box": [
+    0.4201,
+    0.94,
+    0.4715,
+    0.9537
+   ]
+  },
+  "pwht": {
+   "box": [
+    0.4201,
+    0.9545,
+    0.4715,
+    0.9682
+   ]
+  },
+  "rev": {
+   "box": [
+    0.4733,
+    0.94,
+    0.4896,
+    0.9537
+   ]
+  },
+  "lineNo": {
+   "box": [
+    0.7882,
+    0.9316,
+    0.9479,
+    0.9497
+   ]
+  },
+  "lineClass": {
+   "box": [
+    0.9479,
+    0.9374,
+    0.9616,
+    0.9487
+   ]
+  },
+  "sheet": {
+   "box": [
+    0.9623,
+    0.9374,
+    0.9835,
+    0.9487
+   ]
+  },
+  "drawingNo": {
+   "box": [
+    0.7438,
+    0.9602,
+    0.8156,
+    0.9743
+   ]
+  }
+ },
+ "fingerprint": [
+  "AAEY",
+  "ACTIVITIES",
+  "ACTJOAL",
+  "ACTVAL",
+  "ADJJSTMENT",
+  "ADJOO",
+  "AISCEPIDC",
+  "AISCJEPR",
+  "AISPCDEP",
+  "AISPCDEPIISO",
+  "ALL",
+  "ANALYSIS",
+  "AND",
+  "ANDIMESHK",
+  "ANU",
+  "ANY",
+  "APPROVED",
+  "APROVED",
+  "AQJJSTMENT",
+  "ARE",
+  "AREA",
+  "AUIFEGPS",
+  "AXD",
+  "AXE",
+  "BARE",
+  "BARG",
+  "BEFORE",
+  "CHECKED",
+  "CHECKES",
+  "CHP",
+  "CLASS",
+  "CLOCJMENT",
+  "CODE",
+  "COMPANY",
+  "CON",
+  "CONDSITION",
+  "CONSIDERED",
+  "CONSTR",
+  "CONSTRICTICN",
+  "CONSTRUCTICN",
+  "CONSTRUCTION",
+  "CONT",
+  "CONTISACTO",
+  "CONTRACTCR",
+  "CONTRACTOR",
+  "COOLING",
+  "CPERATING",
+  "CUTTING",
+  "CWRADAOUCW",
+  "CWRADAUC",
+  "CXIDE",
+  "CZRT",
+  "DATE",
+  "DESCRIPTICN",
+  "DESIGN",
+  "DIMENSICNS",
+  "DIMENSIONS",
+  "DIRECTORY",
+  "DOCUMENT",
+  "DOCUMENTS",
+  "DRAWING",
+  "DRAWINGS",
+  "DWG",
+  "EIGN",
+  "EJHES",
+  "EJLW",
+  "ELEC",
+  "ELEVATION",
+  "ESCRIPTION",
+  "ESPE",
+  "EST",
+  "ETEIGN",
+  "ETHYLENE",
+  "EXCET",
+  "EXTRA",
+  "FABRICATION",
+  "FANJOO",
+  "FIELD",
+  "FIRE",
+  "FIRST",
+  "FITTINGS",
+  "FLUID",
+  "FOR",
+  "FORK",
+  "FRESH",
+  "GALE",
+  "GAPS",
+  "GEE",
+  "GEES",
+  "GEL",
+  "GPH",
+  "GUIT",
+  "GULL",
+  "HYP",
+  "IBN",
+  "IDC",
+  "INCLOVED",
+  "INCLUDED",
+  "INDUSTIIES",
+  "INDVENOR",
+  "INFOMATION",
+  "INFORMATION",
+  "INFOSMATION",
+  "INGS",
+  "INSTALLATION",
+  "INSTRUVENT",
+  "INSULATION",
+  "IPADESISGIRYT",
+  "IPE",
+  "ISO",
+  "ISOMETRIC",
+  "ISOVET",
+  "ISOWETRIC",
+  "ISSUE",
+  "ISSUED",
+  "ITEV",
+  "ITEVS",
+  "KEE",
+  "LENGTHS",
+  "LINE",
+  "LIRECTORY",
+  "LOCJWVENT",
+  "LROCHEMICAT",
+  "MAG",
+  "MIMANADEH",
+  "NOT",
+  "NOTE",
+  "NOTES",
+  "OCTION",
+  "ONLY",
+  "OPEATING",
+  "OXIDE",
+  "OZMT",
+  "PAINT",
+  "PEBACHOINKAL",
+  "PEES",
+  "PELIECHEMICAL",
+  "PERTAY",
+  "PGPIC",
+  "PGPIG",
+  "PHASE",
+  "PID",
+  "PILL",
+  "PIP",
+  "PIPE",
+  "PIPING",
+  "PIPINGS",
+  "PIT",
+  "PLANT",
+  "PLE",
+  "PLL",
+  "PLROCHEMICAT",
+  "PRESS",
+  "PROJECT",
+  "PROLECT",
+  "PROUECT",
+  "PWHT",
+  "QILEE",
+  "QRAWING",
+  "QTY",
+  "RAIEN",
+  "RCOFING",
+  "REF",
+  "REFOXE",
+  "RESSTEST",
+  "REV",
+  "REVIEW",
+  "REVISION",
+  "RIC",
+  "ROLTING",
+  "ROOFING",
+  "ROOT",
+  "ROVE",
+  "SACTOL",
+  "SALCE",
+  "SECIAL",
+  "SELECTE",
+  "SHALL",
+  "SHTNO",
+  "SINA",
+  "SITION",
+  "SIZE",
+  "SMALLER",
+  "SOOL",
+  "SORTERS",
+  "SPECIAL",
+  "SROOT",
+  "STEAM",
+  "STEAV",
+  "STRESS",
+  "SUPORTS",
+  "SUPPORTS",
+  "TEAS",
+  "TENC",
+  "TEST",
+  "THK",
+  "TITLE",
+  "TLHE",
+  "TRACING",
+  "TSSUED",
+  "TYE",
+  "UNBSO",
+  "UNDERGROUND",
+  "UNEASO",
+  "UTTWEL",
+  "UTTWELOJING",
+  "VIMANZADEH",
+  "VNCHAVVADI",
+  "VNCHAVWADI",
+  "WATER",
+  "WELD",
+  "WUST"
+ ],
+ "provenance": "Marked on page 9 of the CWR Andimeshk set (2026-11-01) as a person would in the review page: the cell of each value, without its label; the fingerprint is page 9's title-block words as the reader read them.",
+ "taughtOn": 9
+}
