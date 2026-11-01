@@ -69,8 +69,19 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   const [busy, setBusy] = useState("");
   const [aspect, setAspect] = useState(Math.SQRT2);   // the sheet's width / height, once its image is loaded
   const sheet = useRef(null);
+  const box = useRef(null);
+  // which kinds of mark (and the leaders) are drawn: a view setting only, nothing in `items` changes
+  const [hidden, setHidden] = useState(() => new Set());
+  const [panning, setPanning] = useState(false);
+  const pan = useRef(null);          // a drag of the empty sheet: where it started and the scroll then
+  const panned = useRef(false);      // that drag moved: the click that ends it is not a click on the sheet
+  const pickedHere = useRef(false);  // the mark was picked on this sheet (already in view): no need to scroll to it
+  const zoomAt = useRef(null);       // the point under the pointer while zooming with it, to keep it there
+  const layerOf = (m) => KINDS[m.kind].cls;
   const placedItems = items.filter(isPlaced);
+  const shown = placedItems.filter((m) => !hidden.has(layerOf(m)));
   const loose = notOnSheet(items);
+  const toggleLayer = (k) => setHidden((h) => { const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
   const at = (e) => {
     const r = sheet.current.getBoundingClientRect();
@@ -79,6 +90,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   const commit = (next) => onChange?.(next);
 
   function onSheetClick(e) {
+    if (panned.current) { panned.current = false; return; }
     if (drag?.moved) return;
     if (readOnly || e.target.closest("[data-mark-id],[data-anchor-id]")) return;
     const p = at(e);
@@ -101,15 +113,85 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   }
   function down(e, m, part = "frame") {
     e.stopPropagation();
+    pickedHere.current = true;
     setSelectedId(m.id);
     if (readOnly) return;
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* a synthetic pointer: the drag still follows the sheet */ }
     setDrag({ id: m.id, part, moved: false });
   }
-  function move(e) { if (drag) setDrag({ ...drag, moved: true, p: at(e) }); }
-  function up() {
+  function move(e) {
+    if (pan.current) {
+      const dx = e.clientX - pan.current.x, dy = e.clientY - pan.current.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) panned.current = true;
+      box.current.scrollLeft = pan.current.left - dx;
+      box.current.scrollTop = pan.current.top - dy;
+      return;
+    }
+    if (drag) setDrag({ ...drag, moved: true, p: at(e) });
+  }
+  function up(e) {
+    if (pan.current) { pan.current = null; setPanning(false); try { e.currentTarget.releasePointerCapture?.(e.pointerId); } catch { /* not captured */ } return; }
     if (drag?.moved && drag.p) commit(updateMark(items, drag.id, drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : drag.p));
     setTimeout(() => setDrag(null), 0);
+  }
+  // dragging the empty sheet moves it (a mouse or a pen; a finger already scrolls the box); not while a mark is
+  // being put or joined, when the click is the point
+  function startPan(e) {
+    if (e.button !== 0 || e.pointerType === "touch" || tool || pointFor) return;
+    if (e.target.closest("[data-mark-id],[data-anchor-id]")) return;
+    pan.current = { x: e.clientX, y: e.clientY, left: box.current.scrollLeft, top: box.current.scrollTop };
+    panned.current = false;
+    setPanning(true);
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* a synthetic pointer */ }
+  }
+
+  // a mark picked elsewhere (the table, the explorer) is brought into view; one picked here already is
+  useEffect(() => {
+    if (pickedHere.current) { pickedHere.current = false; return; }
+    if (!selectedId || !box.current) return;
+    const el = box.current.querySelector(`[data-mark-id="${CSS.escape(String(selectedId))}"]`);
+    if (!el) return;
+    const b = box.current.getBoundingClientRect(), r = el.getBoundingClientRect(), pad = 40;
+    if (r.left < b.left + pad || r.right > b.right - pad) box.current.scrollLeft += (r.left + r.width / 2) - (b.left + b.width / 2);
+    if (r.top < b.top + pad || r.bottom > b.bottom - pad) box.current.scrollTop += (r.top + r.height / 2) - (b.top + b.height / 2);
+  }, [selectedId]);
+
+  // Ctrl (or Cmd) + wheel zooms about the pointer; the plain wheel still scrolls. A native listener: React's is passive.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const h = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      zoomAt.current = { cx: e.clientX - r.left, cy: e.clientY - r.top,
+        fx: (el.scrollLeft + e.clientX - r.left) / el.scrollWidth, fy: (el.scrollTop + e.clientY - r.top) / el.scrollHeight };
+      setZoom((z) => Math.min(6, Math.max(0.5, z * (e.deltaY < 0 ? 1.12 : 1 / 1.12))));
+    };
+    el.addEventListener("wheel", h, { passive: false });
+    return () => el.removeEventListener("wheel", h);
+  }, []);
+  useEffect(() => {
+    const z = zoomAt.current, el = box.current;
+    if (!z || !el) return;
+    zoomAt.current = null;
+    el.scrollLeft = z.fx * el.scrollWidth - z.cx;
+    el.scrollTop = z.fy * el.scrollHeight - z.cy;
+  }, [zoom]);
+
+  // Arrow keys move through the marks in the order they are listed (the table's), Home and End to the first and last;
+  // Enter or Space picks the one in focus. Only the picked mark (or the first) is a tab stop, so Tab crosses the sheet once.
+  function markKey(e, m) {
+    const ids = shown.map((x) => x.id);
+    const i = ids.indexOf(m.id);
+    const to = e.key === "ArrowRight" || e.key === "ArrowDown" ? ids[Math.min(ids.length - 1, i + 1)]
+      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? ids[Math.max(0, i - 1)]
+      : e.key === "Home" ? ids[0] : e.key === "End" ? ids[ids.length - 1] : null;
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(m.id); return; }
+    if (to == null) return;
+    e.preventDefault();
+    setSelectedId(to);
+    requestAnimationFrame(() => box.current?.querySelector(`[data-mark-id="${CSS.escape(String(to))}"]`)?.focus());
   }
 
   useEffect(() => {
@@ -158,6 +240,13 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
           ))}
         </div>
       )}
+      <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }} data-layers role="group" aria-label="لایه‌های نمایش">
+        <span className="muted sm">نمایش:</span>
+        {[["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["support", "ساپورت‌ها"], ["leader", "خط‌های راهنما"]].map(([k, label]) => (
+          <button key={k} type="button" className={`ghost sm${hidden.has(k) ? "" : " on"}`} aria-pressed={!hidden.has(k)} data-layer={k}
+            onClick={() => toggleLayer(k)}>{hidden.has(k) ? "پنهان: " : ""}{label}</button>))}
+        {hidden.size > 0 && <span className="muted sm" data-layers-note>فقط نمای صفحه است؛ داده و دانلود PNG همهٔ نشان‌ها را دارند.</span>}
+      </div>
       <p className="muted sm" data-hint>
         {readOnly ? "نقشه با نشان‌ها — فقط دیدن."
           : pointFor ? "روی نقشه، محل سرجوش (روی خود لوله) را کلیک کنید تا خط راهنما از آن‌جا به شماره‌اش وصل شود."
@@ -171,17 +260,18 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
       </p>
       {busy && <p className="muted sm">{busy}</p>}
 
-      <div className="sheet-box" style={{ height, overflow: "auto", position: "relative", background: "#fff" }} onPointerMove={move} onPointerUp={up}>
-        <div ref={sheet} data-sheet style={{ position: "relative", width: `${zoom * 100}%`, cursor: (tool || pointFor) ? "crosshair" : "default" }} onClick={onSheetClick}>
+      <div className="sheet-box" ref={box} data-panning={panning ? "true" : "false"} style={{ height, overflow: "auto", position: "relative", background: "#fff" }}
+        onPointerDown={startPan} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+        <div ref={sheet} data-sheet style={{ position: "relative", width: `${zoom * 100}%`, cursor: (tool || pointFor) ? "crosshair" : panning ? "grabbing" : "grab" }} onClick={onSheetClick}>
           {src
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={src} alt="نقشه ایزومتریک" draggable={false} style={{ display: "block", width: "100%", userSelect: "none" }}
                 onLoad={(e) => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setAspect(i.naturalWidth / i.naturalHeight); }} />
             : <div className="muted" style={{ padding: 40 }}>تصویر نقشه در دسترس نیست.</div>}
           {/* each leader from its weld point on the pipe to its frame; the frame drawn over its end */}
-          <svg viewBox={`0 0 1000 ${1000 / aspect}`} data-leaders
+          <svg viewBox={`0 0 1000 ${1000 / aspect}`} data-leaders hidden={hidden.has("leader")}
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
-            {placedItems.filter((m) => m.ax != null && m.ay != null).map((m) => {
+            {shown.filter((m) => m.ax != null && m.ay != null).map((m) => {
               const f = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
               const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
               const k = 1000 / aspect;
@@ -191,7 +281,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
                 stroke={m.id === selectedId ? "#b8860b" : "#111"} strokeWidth={SHEET_SIZE.leader * 1000 * (m.id === selectedId ? 2 : 1)} />;
             })}
           </svg>
-          {placedItems.filter((m) => m.ax != null && m.ay != null).map((m) => {
+          {shown.filter((m) => m.ax != null && m.ay != null).map((m) => {
             const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
             const on = m.id === selectedId;
             return (
@@ -202,10 +292,12 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
                   border: on ? "2px solid #b8860b" : 0, cursor: on && !readOnly ? "grab" : "default", touchAction: "none",
                   pointerEvents: on && !readOnly ? "auto" : "none" }} />);
           })}
-          {placedItems.map((m) => {
+          {shown.map((m, mi) => {
             const p = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
+            const stop = selectedId != null && shown.some((x) => x.id === selectedId) ? m.id === selectedId : mi === 0;
             return (
-              <div key={m.id} data-mark-id={m.id} data-picked={m.id === selectedId ? "true" : "false"} data-state={states?.[m.id]?.state} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
+              <div key={m.id} data-mark-id={m.id} role="button" aria-pressed={m.id === selectedId} tabIndex={stop ? 0 : -1}
+                aria-label={`${KINDS[m.kind].label} ${m.no}`} onKeyDown={(e) => markKey(e, m)} data-picked={m.id === selectedId ? "true" : "false"} data-state={states?.[m.id]?.state} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
                 title={`${KINDS[m.kind].label} ${m.no}${m.src === "model" ? " (پیشنهاد مدل)" : ""}`}
                 onPointerDown={(e) => down(e, m)}
                 style={{ position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
