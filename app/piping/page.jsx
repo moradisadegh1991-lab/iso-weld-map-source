@@ -399,7 +399,7 @@ export default function Page() {
       setNote(`${prefix}${w}×${h} px · شبکه ${grid}×${grid} · ${images.length} کاشی · ${(bytes / 1e6).toFixed(2)} MB · ` +
         `${(a || b).model} · meta ${a ? (a.ms / 1000).toFixed(1) + "s " + tok(a) : "ناموفق"} · ` +
         `nodes ${b ? (b.ms / 1000).toFixed(1) + "s " + tok(b) : "ناموفق"}` +
-        (fixes.length ? ` · اصلاح خودکار: ${fixes.join(" · ")}` : "") +
+        (fixes.length ? ` · بررسی خوانش (چیزی تغییر داده نشد): ${fixes.join(" · ")}` : "") +
         (rep.ran
           ? rep.failed ? ` · پاس اصلاح ناموفق (${rep.why || "?"})`
             : rep.kept ? ` · پاس اصلاح رد شد (${rep.why}) — نسخه اول نگه داشته شد`
