@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { diffPayload } from "../lib/review/payload-diff.mjs";
+import TableKit from "./ui/TableKit";
 
 /**
  * Correcting a persisted run.
@@ -76,7 +77,7 @@ export default function EditPanel({ session, run, edited, onApplied }) {
 
           {pending.length > 0 && (
             <>
-              <table className="difftable">
+              <TableKit name="edit-pending"><table className="dtable difftable">
                 <thead><tr><th>فیلد</th><th>از</th><th>به</th></tr></thead>
                 <tbody>
                   {pending.slice(0, 12).map((e) => (
@@ -87,7 +88,7 @@ export default function EditPanel({ session, run, edited, onApplied }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></TableKit>
               {pending.length > 12 && (
                 <p className="muted sm">و {pending.length - 12} فیلد دیگر.</p>
               )}
@@ -106,7 +107,8 @@ export default function EditPanel({ session, run, edited, onApplied }) {
       {run?.edits?.length > 0 && (
         <details className="editlog">
           <summary>{run.edits.length} اصلاح ثبت‌شده</summary>
-          <table className="difftable">
+          <TableKit name="edit-log"><table className="dtable difftable">
+            <thead><tr><th>فیلد</th><th>از</th><th>به</th><th>اصلاح‌کننده</th></tr></thead>
             <tbody>
               {run.edits.map((e) => (
                 <tr key={e.id}>
@@ -117,7 +119,7 @@ export default function EditPanel({ session, run, edited, onApplied }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></TableKit>
         </details>
       )}
 

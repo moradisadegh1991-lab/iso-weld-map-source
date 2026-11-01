@@ -3,6 +3,7 @@ import { useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import { parseDelimited, guessMapping, toRegister, scopeRows } from "../lib/truth/parse.mjs";
 import { compareRegister, toGoldenExpect } from "../lib/truth/compare.mjs";
+import TableKit from "./ui/TableKit";
 
 /**
  * The contractor's weld register, against ours.
@@ -174,7 +175,7 @@ export default function TruthBar({ model, data, computed: given = null }) {
             </p>
           )}
 
-          <table>
+          <TableKit name="truth-fields"><table className="dtable">
             <thead><tr><th>فیلد</th><th>سنجیده</th><th>درست</th><th>دقت</th></tr></thead>
             <tbody>
               {Object.entries(result.fields).map(([f, s]) => (
@@ -188,12 +189,12 @@ export default function TruthBar({ model, data, computed: given = null }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></TableKit>
 
           {result.matched.some((m) => m.diffs.some((d) => !d.same)) && (
             <>
               <div className="tot mono">اختلاف‌ها</div>
-              <table>
+              <TableKit name="truth-diffs"><table className="dtable">
                 <thead><tr><th>جوش</th><th>فیلد</th><th>پیمانکار</th><th>محاسبه</th></tr></thead>
                 <tbody>
                   {result.matched.flatMap((m) =>
@@ -206,7 +207,7 @@ export default function TruthBar({ model, data, computed: given = null }) {
                       </tr>
                     )))}
                 </tbody>
-              </table>
+              </table></TableKit>
             </>
           )}
 

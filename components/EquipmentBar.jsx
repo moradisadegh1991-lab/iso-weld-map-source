@@ -3,6 +3,7 @@ import { useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import { parseEquipmentList, summarise } from "../lib/equipment/parse.mjs";
 import { EQUIPMENT_KINDS } from "../lib/platform/precedence.mjs";
+import TableKit from "./ui/TableKit";
 
 /**
  * Importing an equipment list.
@@ -128,7 +129,7 @@ export default function EquipmentBar() {
                 دوّار الایمنت و کنترل تنش لوله دارد و یک تجهیز ثابت ندارد؛ حدسِ
                 غلط یعنی برداشتن یک hold point واقعی.
               </p>
-              <table>
+              <TableKit name="equip-unplaced"><table className="dtable">
                 <thead><tr><th>تگ</th><th>شرح</th><th>چرا تعیین نشد</th></tr></thead>
                 <tbody>
                   {unplaced.map((t) => (
@@ -139,12 +140,12 @@ export default function EquipmentBar() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></TableKit>
             </>
           )}
 
           <div className="tot mono">تگ‌های خوانده‌شده</div>
-          <table>
+          <TableKit name="equip-tags"><table className="dtable">
             <thead><tr><th>تگ</th><th>شرح</th><th>نوع</th><th>زیرسیستم</th></tr></thead>
             <tbody>
               {parsed.tags.map((t) => (
@@ -156,7 +157,7 @@ export default function EquipmentBar() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></TableKit>
 
           {parsed.skipped.length > 0 && (
             <p className="muted sm">

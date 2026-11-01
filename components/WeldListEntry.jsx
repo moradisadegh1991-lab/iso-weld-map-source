@@ -1,6 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
+import TableKit from "./ui/TableKit";
+import Pick, { useValueLists } from "./ui/Pick";
+import { COLUMN_LIST } from "../lib/register/value-lists.mjs";
 import SaveBar from "./SaveBar";
 import RegistryCheck from "./RegistryCheck";
 import BomWelds from "./BomWelds";
@@ -64,6 +67,7 @@ const LINE_DATA = [
 ];
 const BLANK_META = { drawingNo: "", rev: "", sheet: "1/1", lineNo: "", unit: "", pipingClass: "", nps: "", schedule: "" };
 export default function WeldListEntry({ session, initial = null, run = null, onSaved, onClose, sheet = null, progress = null, sheets = null }) {
+  const lists = useValueLists();
   const [meta, setMeta] = useState({ ...BLANK_META, ...(initial?.meta || {}) });
   const [rows, setRowsRaw] = useState(() => withRowIds(initial?.weldList?.length ? initial.weldList.map((r) => ({ ...BLANK_ROW, ...r })) : [{ ...BLANK_ROW }, { ...BLANK_ROW }, { ...BLANK_ROW }]));
   // every row keeps an id of its own: its mark on the sheet is the same thing
@@ -221,7 +225,9 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           ["unit", "واحد"], ["pipingClass", "کلاس لوله"], ["nps", "قطر پیش‌فرض NPS"], ["schedule", "Schedule"]].map(([k, label, req]) => (
           <label key={k} className="wl-f">
             <span className="muted sm">{label}{req && " *"}</span>
-            <input id={`wl-${k}`} dir="ltr" value={meta[k] ?? ""} onChange={onMeta(k)} required={req} />
+            {COLUMN_LIST[k]
+              ? <Pick id={`wl-${k}`} list={COLUMN_LIST[k]} lists={lists} value={meta[k]} onChange={(v) => setMeta({ ...meta, [k]: v })} />
+              : <input id={`wl-${k}`} dir="ltr" value={meta[k] ?? ""} onChange={onMeta(k)} required={req} />}
           </label>
         ))}
       </div>
@@ -243,8 +249,11 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
             {LINE_DATA.map(([k, label]) => (
               <label key={k} className="wl-f">
                 <span className="muted sm">{label}</span>
-                <input data-line={k} dir="ltr" value={lineData[k] ?? ""} placeholder="خوانده نشد" disabled={locked}
-                  onChange={(e) => setLineData({ ...lineData, [k]: e.target.value })} />
+                {COLUMN_LIST[k]
+                  ? <Pick data-line={k} list={COLUMN_LIST[k]} lists={lists} value={lineData[k]} placeholder="خوانده نشد" empty="خوانده نشد" disabled={locked}
+                    onChange={(v) => setLineData({ ...lineData, [k]: v })} />
+                  : <input data-line={k} dir="ltr" value={lineData[k] ?? ""} placeholder="خوانده نشد" disabled={locked}
+                    onChange={(e) => setLineData({ ...lineData, [k]: e.target.value })} />}
               </label>
             ))}
           </div>
@@ -257,21 +266,21 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         <details className="intake-more" data-bom={bom.length}>
           <summary>BOM همین برگ — {bom.length} ردیف، خوانده‌شده با OCR؛ با نقشه بررسی و اصلاح کنید (همین جدول با رجیستر ذخیره می‌شود)</summary>
           <div style={{ overflowX: "auto" }}>
-            <table className="dtable">
+            <TableKit name="iso-bom"><table className="dtable">
               <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th><th>واحد</th><th></th></tr></thead>
               <tbody>{bomRows.map((b, i) => (
                 <tr key={i} data-bom-row={b.pt}>
                   <td><input data-bom-cell="pt" dir="ltr" className="mono" style={{ width: 44 }} value={b.pt ?? ""} disabled={locked} onChange={(e) => setBom(i, "pt", e.target.value)} /></td>
-                  <td><input data-bom-cell="group" dir="ltr" className="sm" style={{ width: 90 }} value={b.group ?? ""} disabled={locked} onChange={(e) => setBom(i, "group", e.target.value)} /></td>
+                  <td><Pick data-bom-cell="group" list="bomGroup" lists={lists} className="sm" style={{ width: 110 }} value={b.group} disabled={locked} onChange={(v) => setBom(i, "group", v)} /></td>
                   <td><input data-bom-cell="description" dir="ltr" className="sm" style={{ width: 360 }} value={b.description ?? ""} disabled={locked} onChange={(e) => setBom(i, "description", e.target.value)} /></td>
-                  <td><input data-bom-cell="diam" dir="ltr" className="mono" style={{ width: 80 }} value={b.diam ?? ""} placeholder="؟" disabled={locked} onChange={(e) => setBom(i, "diam", e.target.value)} /></td>
+                  <td><Pick data-bom-cell="diam" list="nps" lists={lists} className="mono" style={{ width: 90 }} value={b.diam} placeholder="؟" empty="؟" disabled={locked} onChange={(v) => setBom(i, "diam", v)} /></td>
                   <td><input data-bom-cell="stockCode" dir="ltr" className="mono sm" style={{ width: 110 }} value={b.stockCode ?? ""} disabled={locked} onChange={(e) => setBom(i, "stockCode", e.target.value)} /></td>
                   <td><input data-bom-cell="qty" dir="ltr" className="mono" style={{ width: 56 }} value={b.qty ?? ""} placeholder="؟" disabled={locked} onChange={(e) => setBom(i, "qty", e.target.value)} /></td>
                   <td><select data-bom-cell="qtyUnit" value={b.qtyUnit || ""} disabled={locked} onChange={(e) => setBom(i, "qtyUnit", e.target.value || null)}>
                     <option value="">؟</option><option value="pcs">عدد</option><option value="m">m</option></select></td>
                   <td>{!locked && <button type="button" className="ghost sm" onClick={() => setBomRows(bomRows.filter((_, j) => j !== i))}>حذف</button>}</td>
                 </tr>))}</tbody>
-            </table>
+            </table></TableKit>
           </div>
           {!locked && <button type="button" className="ghost sm" data-bom-add onClick={addBomRow}>+ ردیف BOM (ردیفی که خوانده نشده)</button>}
         </details>)}
@@ -289,11 +298,11 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       {cutLengths.length > 0 && (
         <details className="intake-more" data-cut-lengths={cutLengths.length}>
           <summary>جدول برش لوله (CUT PIPE LENGTH) — {cutLengths.length} قطعه، خوانده‌شده با OCR؛ با نقشه بررسی کنید</summary>
-          <table className="dtable">
+          <TableKit name="iso-cut-read"><table className="dtable">
             <thead><tr><th>قطعه</th><th>طول برش (mm)</th><th>N.S.</th></tr></thead>
             <tbody>{cutLengths.map((c) => (
               <tr key={c.piece} data-cut-row={c.piece}><td className="mono">&lt;{c.piece}&gt;</td><td className="mono">{c.lengthMm}</td><td className="mono" dir="ltr">{c.ns ?? "؟"}</td></tr>))}</tbody>
-          </table>
+          </table></TableKit>
         </details>)}
 
     </>
@@ -432,7 +441,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         {datalists}
       <div>
         <div className="wl-table">
-          <table className="dtable">
+          <TableKit name="weld-list-typed"><table className="dtable">
             <thead><tr><th>#</th>{COLS.map(([k, label]) => <th key={k}>{label}</th>)}<th /></tr></thead>
             <tbody>
               {rows.map((r, i) => { const no = String(r.no ?? "").trim(); return (
@@ -440,17 +449,17 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
                   <td className="mono sm">{i + 1}</td>
                   {COLS.map(([k, label, ph]) => (
                     <td key={k}>
-                      <input aria-label={`${label} ردیف ${i + 1}`} dir="ltr" value={r[k] ?? ""} placeholder={i === 0 ? ph : ""}
-                        list={k === "loc" ? "wl-locs" : k === "kind" ? "wl-kinds" : undefined}
-                        inputMode={k === "nps" ? "decimal" : undefined}
-                        onChange={(e) => setCell(i, k, e.target.value)} />
+                      {COLUMN_LIST[k]
+                        ? <Pick aria-label={`${label} ردیف ${i + 1}`} list={COLUMN_LIST[k]} lists={lists} value={r[k]} onChange={(v) => setCell(i, k, v)} />
+                        : <input aria-label={`${label} ردیف ${i + 1}`} dir="ltr" value={r[k] ?? ""} placeholder={i === 0 ? ph : ""}
+                          onChange={(e) => setCell(i, k, e.target.value)} />}
                     </td>
                   ))}
                   <td><button className="ghost" type="button" aria-label={`حذف ردیف ${i + 1}`}
                     onClick={() => setRows(rows.length > 1 ? rows.filter((_, j) => j !== i) : [{ ...BLANK_ROW }])}>×</button></td>
                 </tr>); })}
             </tbody>
-          </table>
+          </table></TableKit>
         </div>
         </div>
 

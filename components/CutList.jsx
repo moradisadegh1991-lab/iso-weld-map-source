@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import { cutList, cutListTable } from "../lib/register/cut-list.mjs";
 import { DISCLAIMER_EN } from "../lib/disclaimer.mjs";
+import TableKit from "./ui/TableKit";
 
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -41,7 +42,7 @@ ${cl.unmatchedPrinted.map((c) => `<p class="warn">Drawing piece &lt;${esc(c.piec
         {cl.rows.length} قطعه · {(cl.total / 1000).toFixed(3)} m ·{" "}
         {cl.bySize.map((g) => `${g.key}": ${g.pieces} قطعه ${(g.lengthMm / 1000).toFixed(2)} m`).join(" · ")}
       </div>
-      <table>
+      <TableKit name="cut-list"><table className="dtable">
         <thead><tr><th>#</th><th>اسپول</th><th>قطعه</th><th>Ø</th><th>طول برش mm</th><th>دو سر</th><th>جدول نقشه</th></tr></thead>
         <tbody>{cl.rows.map((r) => (
           <tr key={r.no} data-piece={r.no}>
@@ -51,7 +52,7 @@ ${cl.unmatchedPrinted.map((c) => `<p class="warn">Drawing piece &lt;${esc(c.piec
             <td className="mono sm">{r.endA || "?"} ↔ {r.endB || "?"}</td>
             <td className="mono sm" data-printed={r.printed ? r.printed.piece : ""}>{r.printed ? `<${r.printed.piece}> ${r.printed.len}` : cl.printedCount ? "—" : ""}</td>
           </tr>))}</tbody>
-      </table>
+      </table></TableKit>
       {cl.unmatchedPrinted.length > 0 && (
         <div className="check warn" data-cut-unmatched><b>! در جدول CUT PIPE LENGTH نقشه هست، در محاسبه نیست</b>
           <span className="mono sm">{cl.unmatchedPrinted.map((c) => `<${c.piece}> ${c.len} mm (${c.nps}")`).join("، ")}</span></div>)}

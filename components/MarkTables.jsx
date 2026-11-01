@@ -2,6 +2,15 @@
 import { useState } from "react";
 import { KINDS, ATTRS, addMark, updateMark, removeMark, unplace, isPlaced, notOnSheet, engineRow, problems, rules } from "../lib/sheet/markup.mjs";
 import MarkShape from "./MarkShape";
+import TableKit from "./ui/TableKit";
+import Pick, { useValueLists } from "./ui/Pick";
+
+// which list each column picks from, by the table it is in (null: typed by hand — numbers, lengths and notes)
+const PICK = {
+  weld: { type: "jointType", size: "nps", schedule: "schedule", material: "material", spool: "spools", wps: "wps" },
+  spool: { size: "nps", material: "material" },
+  support: { type: "supportType", size: "nps" },
+};
 
 /**
  * The one table of a sheet's welds, spools and supports. A row and its mark
@@ -36,6 +45,9 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
   readOnly = false, tabs = ["weld", "spool", "support"], weldList = null, checked = null }) {
   const shown = TABS.filter(([k]) => tabs.includes(k));
   const [tab, setTab] = useState(shown[0]?.[0] || "weld");
+  const lists = useValueLists();
+  // a weld's spool is one of the spools on this sheet, when there are any
+  const spoolNos = [...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))];
   const rows = items.filter((m) => KINDS[m.kind]?.cls === tab);
   const loose = notOnSheet(items);
   const issues = [...problems(items), ...rules(items, weldList)];
@@ -73,7 +85,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
       {attachId && <p className="note sm" data-attach-hint>روی نقشه، همان‌جا که سرجوش (یا اسپول/ساپورت) روی لوله است کلیک کنید. <button type="button" className="ghost sm" onClick={() => onAttach?.(null)}>انصراف</button></p>}
 
       <div style={{ overflowX: "auto" }}>
-        <table className="dtable" data-mark-table={tab}>
+        <TableKit key={tab} name={`marks-${tab}`}><table className="dtable" data-mark-table={tab}>
           <thead><tr>
             {ticks && <th title="با نقشه بررسی شد">✓</th>}
             <th>شماره</th>
@@ -98,10 +110,17 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
                       <option value="weld-field">سایت (مربع)</option>
                       <option value="weld-unknown">نامعلوم</option>
                     </select></td>)}
-                  {ATTRS[tab].map(([k, , ph]) => (
-                    <td key={k}><input data-cell={k} dir="ltr" style={{ width: k === "note" ? 130 : 84 }} placeholder={ph}
-                      value={m.attrs?.[k] ?? ""} disabled={readOnly} onChange={(ev) => set(m.id, { attrs: { [k]: ev.target.value } })} /></td>
-                  ))}
+                  {ATTRS[tab].map(([k, , ph]) => {
+                    const list = PICK[tab][k];
+                    const onPick = (v) => set(m.id, { attrs: { [k]: v } });
+                    return (
+                      <td key={k}>{list
+                        ? <Pick data-cell={k} list={list} lists={lists} items={list === "spools" ? (spoolNos.length ? spoolNos : null) : undefined}
+                          style={{ width: 96 }} placeholder={ph} value={m.attrs?.[k]} disabled={readOnly} onChange={onPick}
+                          onClick={(ev) => ev.stopPropagation()} />
+                        : <input data-cell={k} dir="ltr" style={{ width: k === "note" ? 130 : 84 }} placeholder={ph}
+                          value={m.attrs?.[k] ?? ""} disabled={readOnly} onChange={(ev) => onPick(ev.target.value)} />}</td>);
+                  })}
                   {withEngine && <>
                     <td className="mono sm" data-engine="ndt">{e?.ndt ?? "—"}</td>
                     <td className="mono sm" data-engine="el">{e?.el != null ? Math.round(e.el).toLocaleString("en-US") : "—"}</td>
@@ -123,7 +142,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
             })}
             {!rows.length && <tr><td colSpan={colSpan} className="muted sm">هنوز چیزی در این جدول نیست — «+ {WORD[tab]}» را بزنید.</td></tr>}
           </tbody>
-        </table>
+        </table></TableKit>
       </div>
       {issues.length > 0 && (
         <ul className="sm" data-mark-rules style={{ margin: "6px 0", paddingInlineStart: 18 }}>
