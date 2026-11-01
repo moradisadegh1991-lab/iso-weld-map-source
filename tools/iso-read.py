@@ -1223,6 +1223,8 @@ def read_title_generic(T, s):
         # after the label's own words (LINE No.:), small and on its first line
         lab_end = max([w["x"] + w["w"] for w in words if abs(w["y"] - L["y"]) < L["h"] and L["x"] <= w["x"] < L["x"] + 250 * s / 3 * 2
                        and re.fullmatch(r"LINE|N[O0]\.?:?|NUMBER:?|LINE\s*N[O0]\.?:?", w["t"])] + [L["x"] + L["w"]])
+        # where the number is printed, for a vector page's own strokes to be read there (line_no_from_vector)
+        out.setdefault("lineBand", [lab_end + 4, y0 + max(0, t + 4), y0 + b - 3])
         band = strip[max(0, t + 4):b - 3, :]
         ink = (band < 150).astype(np.uint8)
         ink[:, :lab_end + 4] = 0
@@ -1341,6 +1343,88 @@ def best_template(labels, templates):
         if score >= 0.5 and (best is None or score > best[0]):
             best = (score, t)
     return best
+
+
+# ── a vector page's own strokes ────────────────────────────────────────────
+# A CAD PDF draws its lettering as strokes, and draws a piece of text all at
+# once: the line number's strokes follow one another in the page's drawing
+# order, the words of the cell it is printed over are drawn at another time.
+# So the number can be taken apart from what it overprints by its strokes,
+# where the picture cannot (`…-UCW` over `REV: A0`).
+
+def vector_paths(path, pg):
+    """The page's stroked paths in drawing order (pdftocairo's SVG, in points from the top left):
+    [{i, polys, x0, y0, x1, y1}]."""
+    with tempfile.TemporaryDirectory() as d:
+        subprocess.run(["pdftocairo", "-svg", "-f", str(pg), "-l", str(pg), path, f"{d}/p.svg"], check=True, capture_output=True)
+        svg = open(f"{d}/p.svg").read()
+    out = []
+    for i, (dd, m) in enumerate(re.findall(r'<path [^>]*?d="([^"]+)"[^>]*?transform="matrix\(([^)]*)\)"', svg)):
+        a, b, c, e2, e, f = map(float, m.split(","))
+        polys, cur = [], []
+        for cmd, argv in re.findall(r"([MLCZ])([^MLCZ]*)", dd):
+            v = list(map(float, re.findall(r"-?\d+\.?\d*", argv)))
+            pts = [(a * x + c * y + e, b * x + e2 * y + f) for x, y in zip(v[0::2], v[1::2])]
+            if cmd == "M":
+                if len(cur) > 1:
+                    polys.append(cur)
+                cur = pts[:]
+            elif cmd in "LC":
+                cur += pts
+            elif cmd == "Z" and cur:
+                cur.append(cur[0])
+        if len(cur) > 1:
+            polys.append(cur)
+        if polys:
+            P = [q for poly in polys for q in poly]
+            out.append({"i": i, "polys": polys, "x0": min(q[0] for q in P), "x1": max(q[0] for q in P),
+                        "y0": min(q[1] for q in P), "y1": max(q[1] for q in P)})
+    return out
+
+
+def line_no_from_vector(paths, band):
+    """The line number drawn in `band` ([x from, y top, y bottom], points), read off its own strokes:
+    the run of paths drawn one after another that holds the band's tallest lettering, the strokes of that
+    run beside it (not a digit of the next cell drawn in the same run), drawn afresh and read several
+    ways; a line number or None."""
+    x0, y0, y1 = band
+    # the strokes in the band, not the cell's own border (a rule across the band's height)
+    inb = [p for p in paths if p["y0"] >= y0 - 1 and p["y1"] <= y1 + 1 and p["x0"] >= x0 and p["y1"] - p["y0"] < 0.8 * (y1 - y0)]
+    if not inb:
+        return None
+    hmax = max(p["y1"] - p["y0"] for p in inb)
+    tall = {p["i"] for p in inb if p["y1"] - p["y0"] >= 0.8 * hmax}
+    # runs of paths drawn one after another
+    idx = sorted(p["i"] for p in inb)
+    runs, run = [], [idx[0]]
+    for k in idx[1:]:
+        if k - run[-1] <= 3:
+            run.append(k)
+        else:
+            runs.append(run)
+            run = [k]
+    runs.append(run)
+    keep = {k for r in runs if tall & set(r) for k in r}
+    sel = sorted((p for p in inb if p["i"] in keep), key=lambda p: p["x0"])
+    # the number's own strokes: side by side, a gap of more than two letters ends it
+    group, best = [sel[0]], []
+    for p in sel[1:]:
+        if p["x0"] - max(q["x1"] for q in group) > 2 * hmax:
+            best = max(best, group, key=lambda g: sum(q["i"] in tall for q in g))
+            group = []
+        group.append(p)
+    best = max(best, group, key=lambda g: sum(q["i"] in tall for q in g))
+    k = 600 / 72
+    X0, Y0 = min(p["x0"] for p in best) - 3, min(p["y0"] for p in best) - 3
+    X1, Y1 = max(p["x1"] for p in best) + 3, max(p["y1"] for p in best) + 3
+    img = np.full((int((Y1 - Y0) * k) + 1, int((X1 - X0) * k) + 1), 255, np.uint8)
+    for p in best:
+        for poly in p["polys"]:
+            cv2.polylines(img, [np.array([[(x - X0) * k, (y - Y0) * k] for x, y in poly], np.int32)], False, 0, 3)
+    # read with its letters 22 and 30 px tall, where tesseract reads a line best
+    hp = hmax * k
+    return cell_vote(img, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-.\"/", lambda o: bool(LINE_NO.fullmatch(o)),
+                     key=lambda o: '%s"-%s' % LINE_NO.fullmatch(o).groups(), scales=(22 / hp, 30 / hp))
 
 
 def read_title(g):
@@ -1536,6 +1620,14 @@ def main():
         gen = read_title_generic(T, s)
         line = gen.pop("line")
         fingerprint = gen.pop("labels")
+        band = gen.pop("lineBand", None)
+        # not read off the picture: the number's own strokes, on a vector page as drawn (unturned)
+        if line.get("lineNo") is None and vec and turn is None and band:
+            try:
+                pt = 72 / (200 * s)
+                line["lineNo"] = line_no_from_vector(vector_paths(src, page), [band[0] * pt, band[1] * pt, band[2] * pt])
+            except Exception:
+                pass
         meta = gen
         if template_only:
             # measured alone: what the template reads, with nothing from the labels

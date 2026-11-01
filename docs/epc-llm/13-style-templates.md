@@ -55,18 +55,19 @@ The template was marked on page 9 as a person would
 
 | Line data (36 values) | right | wrong | unknown |
 |---|---|---|---|
-| labels alone | 24 | **0** | 12 |
+| labels alone (with the line number off a vector page's strokes, 11-drawing-styles.md) | 28 | **0** | 8 |
 | template alone | 28 | **0** | 8 |
-| labels and template | 28 | **0** | 8 |
+| labels and template | 32 | **0** | 4 |
 
 The template reads the **test pressure 11.1 on all four pages** — three of
 them not the page it was marked on — where the labels' cell gave two readings
 (11.1 / 14.1). Title block (sheet, revision) 8 of 8 either way; the BOM and
 cut table are read as before.
 
-Still unknown with the template: NDT (`10%RT+10%MT`, its % read as 0 or 2)
-and the line number (printed over the neighbour cell's REV: A0) — a cell's
-place does not change how its glyphs read.
+Still unknown: NDT (`10%RT+10%MT`, its % read as 0 or 2) on all four
+pages — a cell's place does not change how its glyphs read. (The line number,
+printed over the neighbour cell, is not read from a template's box; it is
+read off the page's own strokes.)
 
 **How exactly the box is drawn matters**, and the answer is then unknown,
 never a near value: in the browser the test-pressure box was drawn half a

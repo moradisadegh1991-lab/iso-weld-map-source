@@ -39,15 +39,22 @@ and the cut table are read on that page too, with the reader's sizes scaled.
 
 ## What is not read, and why
 
-- **The line number**, on the example drawings: it is printed large and runs
-  over the REV: and A0 of the next cell (`60"-CWR-…-UCW` over `REV: A0`). The
-  number's own large lettering is read apart from the small words around it,
-  and the whole of it must read as a line number, the same every way it is
-  read; over the neighbour cell's words it does not (…-UCK, …-UCH, …-UGHESS),
-  so it is unknown and the person types it. (A guard on the height of an
-  overprinted glyph was tried and turned off again: with it off the answer was
-  still unknown. Taking the vector strokes apart in the PDF itself is the way
-  to read it; not done.)
+- **The line number** is printed large and runs over the REV: and A0 of the
+  next cell (`60"-CWR-…-UCW` over `REV: A0`): in the picture the overprinted
+  letters cannot be told from the cell's own, and its readings disagree or do
+  not read as a line number (…-UCK, …-UGHESS). **On a vector page it is read
+  off its own strokes** (`line_no_from_vector`): the page is converted to SVG
+  (pdftocairo, poppler-utils as already installed), and a CAD PDF draws a
+  piece of text all at once — the number's strokes follow one another in the
+  drawing order, the overprinted cell's words were drawn at another time. In
+  the number's band (from the LINE No. label's cell) the run of consecutive
+  strokes that holds the tallest lettering is kept, cut where a gap wider than
+  two letters follows (the same run also draws the sheet's "3 4"), drawn
+  afresh and read four ways, its letters 22 and 30 px tall; it must read as a
+  line number every way. Each of the two cuts turned off gave a wrong number
+  (`…-UGHES` with every stroke of the band; `…-UCW14` with the sheet's digits
+  kept). On the 4 pages: all four line numbers right. A page that is not
+  vector, or is turned, is read as before.
 - **The test pressure and NDT** on this font: two readings disagree (11.1 /
   14.1 / 17.1; `10%RT+10%MT` read with a % as 0 or 2) — unknown, never one
   of them.
