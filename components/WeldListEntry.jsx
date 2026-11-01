@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import SaveBar from "./SaveBar";
 import RegistryCheck from "./RegistryCheck";
+import BomWelds from "./BomWelds";
 import { STATE_COLORS } from "./SheetReview";
 import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
@@ -74,7 +75,21 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [reviewed, setReviewed] = useState(() => new Set(initial?.reviewed || []));
   // the line data and the BOM read off the sheet (OCR, for a person to check): kept with the payload
   const [lineData, setLineData] = useState(() => (initial?.lineData ? { ...initial.lineData } : null));
-  const bom = Array.isArray(initial?.bom) ? initial.bom : [];
+  // the sheet's BOM as read, corrected and completed here by a person (a row the OCR did not read, a
+  // quantity, a size): it is what is saved as the sheet's BOM, and what its welds are counted from
+  const [bomRows, setBomRows] = useState(() => (Array.isArray(initial?.bom) ? initial.bom.map((b) => ({ ...b })) : []));
+  const bom = useMemo(() => bomRows.map((b) => ({ ...b,
+    pt: b.pt === "" || b.pt == null ? null : Number(b.pt),
+    qty: b.qty === "" || b.qty == null || !Number.isFinite(Number(b.qty)) ? null : Number(b.qty) })), [bomRows]);
+  const setBom = (i, k, v) => setBomRows(bomRows.map((b, j) => (j === i ? { ...b, [k]: v } : b)));
+  const addBomRow = () => {
+    const pts = new Set(bom.map((b) => b.pt).filter(Number.isInteger));
+    const last = pts.size ? Math.max(...pts) : 0;
+    // the first PT number missing from the run, else the next one
+    const pt = Array.from({ length: last }, (_, i) => i + 1).find((n) => !pts.has(n)) ?? last + 1;
+    setBomRows([...bomRows, { pt, group: "", description: "", diam: "", stockCode: "", qty: "", qtyUnit: "pcs" }]
+      .sort((a, b) => (Number(a.pt) || 0) - (Number(b.pt) || 0)));
+  };
   const cutLengths = Array.isArray(initial?.cutLengths) ? initial.cutLengths : [];
   // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
   const [extras, setExtras] = useState(() => normalizeMarks(initial?.sheetMarkup?.items).filter((m) => m.kind === "spool" || m.kind === "support"));
@@ -95,7 +110,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     ...(cutLengths.length ? { cutLengths } : {}),
     ...(extras.length ? { sheetMarkup: { page: sheet?.page ?? initial?.sheetMarkup?.page ?? 1, items: extras } } : {}) }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [meta, typed, initial, JSON.stringify(keptMarks), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras), JSON.stringify(lineData)]);
+  [meta, typed, initial, JSON.stringify(keptMarks), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras), JSON.stringify(lineData), JSON.stringify(bom)]);
   const model = useMemo(() => (typed.length ? modelFromWeldList(data) : { error: "هنوز جوشی وارد نشده است." }), [data, typed.length]);
 
   const setCell = (i, k, v) => {
@@ -237,19 +252,28 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         </details>)}
       {bom.length > 0 && (
         <details className="intake-more" data-bom={bom.length}>
-          <summary>BOM همین برگ — {bom.length} ردیف، خوانده‌شده با OCR (شرح و کد کالا متن خام OCR است؛ با نقشه بررسی کنید)</summary>
+          <summary>BOM همین برگ — {bom.length} ردیف، خوانده‌شده با OCR؛ با نقشه بررسی و اصلاح کنید (همین جدول با رجیستر ذخیره می‌شود)</summary>
           <div style={{ overflowX: "auto" }}>
             <table className="dtable">
-              <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th></tr></thead>
-              <tbody>{bom.map((b) => (
-                <tr key={b.pt} data-bom-row={b.pt}>
-                  <td className="mono">{b.pt}</td><td className="sm">{b.group || "—"}</td><td dir="ltr" className="sm">{b.description}</td>
-                  <td className="mono" dir="ltr">{b.diam ?? "؟"}</td><td className="mono sm" dir="ltr">{b.stockCode || "—"}</td>
-                  <td className="mono" dir="ltr">{b.qty != null ? `${b.qty}${b.qtyUnit === "m" ? " m" : ""}` : "؟"}</td>
+              <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th><th>واحد</th><th></th></tr></thead>
+              <tbody>{bomRows.map((b, i) => (
+                <tr key={i} data-bom-row={b.pt}>
+                  <td><input data-bom-cell="pt" dir="ltr" className="mono" style={{ width: 44 }} value={b.pt ?? ""} disabled={locked} onChange={(e) => setBom(i, "pt", e.target.value)} /></td>
+                  <td><input data-bom-cell="group" dir="ltr" className="sm" style={{ width: 90 }} value={b.group ?? ""} disabled={locked} onChange={(e) => setBom(i, "group", e.target.value)} /></td>
+                  <td><input data-bom-cell="description" dir="ltr" className="sm" style={{ width: 360 }} value={b.description ?? ""} disabled={locked} onChange={(e) => setBom(i, "description", e.target.value)} /></td>
+                  <td><input data-bom-cell="diam" dir="ltr" className="mono" style={{ width: 80 }} value={b.diam ?? ""} placeholder="؟" disabled={locked} onChange={(e) => setBom(i, "diam", e.target.value)} /></td>
+                  <td><input data-bom-cell="stockCode" dir="ltr" className="mono sm" style={{ width: 110 }} value={b.stockCode ?? ""} disabled={locked} onChange={(e) => setBom(i, "stockCode", e.target.value)} /></td>
+                  <td><input data-bom-cell="qty" dir="ltr" className="mono" style={{ width: 56 }} value={b.qty ?? ""} placeholder="؟" disabled={locked} onChange={(e) => setBom(i, "qty", e.target.value)} /></td>
+                  <td><select data-bom-cell="qtyUnit" value={b.qtyUnit || ""} disabled={locked} onChange={(e) => setBom(i, "qtyUnit", e.target.value || null)}>
+                    <option value="">؟</option><option value="pcs">عدد</option><option value="m">m</option></select></td>
+                  <td>{!locked && <button type="button" className="ghost sm" onClick={() => setBomRows(bomRows.filter((_, j) => j !== i))}>حذف</button>}</td>
                 </tr>))}</tbody>
             </table>
           </div>
+          {!locked && <button type="button" className="ghost sm" data-bom-add onClick={addBomRow}>+ ردیف BOM (ردیفی که خوانده نشده)</button>}
         </details>)}
+
+      {bom.length > 0 && <BomWelds bom={bom} welds={typed} />}
 
       {cutLengths.length > 0 && (
         <details className="intake-more" data-cut-lengths={cutLengths.length}>
