@@ -113,3 +113,16 @@
 .ws-insp-dl dd{margin:0;overflow-wrap:anywhere}
 .ws-insp-bom{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;font-size:11px}
 @media (max-width:900px){.ws-panel[data-has-inspector]{overflow:visible}.ws-panel[data-has-inspector] .ws-panel-body{overflow:visible}}
+
+/* the sheet's right-click menu (components/SheetMarkup.jsx): compact, the destructive action set apart */
+.sheet-menu{min-width:210px;max-width:min(320px,calc(100vw - 12px));padding:4px;background:var(--surf);color:var(--ink);
+  border:1px solid var(--rule);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:13px}
+.sheet-menu-h{display:flex;align-items:center;gap:6px;padding:4px 8px 6px;margin-bottom:2px;border-bottom:1px solid var(--rule-soft);color:var(--dim);font-size:12px}
+.sheet-menu-h b{color:var(--ink)}
+.sheet-menu [role=menuitem]{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:5px;background:transparent;
+  color:inherit;font:inherit;text-align:start;cursor:pointer}
+.sheet-menu [role=menuitem]:hover,.sheet-menu [role=menuitem]:focus-visible{background:var(--hover);outline:none}
+.sheet-menu [role=menuitem]:focus-visible{box-shadow:inset 0 0 0 2px var(--focus)}
+.sheet-menu [role=menuitem] .ic{display:inline-flex;width:18px;justify-content:center;color:var(--dim)}
+.sheet-menu [role=menuitem].danger{color:var(--bad-ink,var(--bad));margin-top:3px;border-top:1px solid var(--rule-soft);border-radius:0 0 5px 5px}
+.sheet-menu [role=menuitem].danger .ic{color:inherit}
