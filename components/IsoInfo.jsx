@@ -11,9 +11,10 @@ import { INFO_SECTIONS, infoProblems, infoValue } from "../lib/register/iso-info
  *         register keeps of the run beside it.
  *   Edit  the same values as fields (project lists as pickers), with the
  *         problems that apply — a missing drawing number or revision blocks
- *         «اعمال», the rest are warnings. «اعمال» takes the edit into the page's
- *         state (it is saved with the register); «انصراف» puts every value
- *         back as it was when Edit was opened; leaving a changed form asks.
+ *         «اعمال»; the rest are warnings. The values show on the page as typed
+ *         (header, explorer, registry check) and are saved with the register;
+ *         «اعمال» closes Edit, «انصراف» puts every value back as it was when
+ *         Edit was opened (asking first when something changed).
  *
  *   meta, lineData       the page's two stores (lineData may be null: not read)
  *   onMeta(next), onLineData(next)   called with the whole new object
