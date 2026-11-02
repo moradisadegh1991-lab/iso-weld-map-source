@@ -78,8 +78,12 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
   // a weld's spool is one of the spools on this sheet, when there are any
   const spoolNos = [...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))];
   const rows = items.filter((m) => KINDS[m.kind]?.cls === tab);
-  const loose = notOnSheet(items);
-  const issues = [...problems(items), ...rules(items, weldList), ...componentChecks(items, bom), ...allocationChecks(items, bom)];
+  // a table of one class (the workspace's own tab for spools or supports) speaks of its own class
+  const mine = new Set(shown.map(([k]) => k));
+  const loose = notOnSheet(items).filter((m) => mine.has(KINDS[m.kind]?.cls));
+  const only = shown.length === 1 && !mine.has("weld") ? shown[0][0] : null;
+  const all = [...problems(items), ...rules(items, weldList), ...componentChecks(items, bom), ...allocationChecks(items, bom)];
+  const issues = only === "spool" ? all.filter((x) => /اسپول/.test(x)) : only === "support" ? all.filter((x) => /ساپورت/.test(x)) : all;
   // the Tie-in references this sheet already uses, and its Tie-in welds: offered, a new one still typed
   const refs = [...new Set([...items.filter((m) => KINDS[m.kind]?.cls === "weld").map((m) => String(m.attrs?.ref ?? "").trim()),
     ...items.filter((m) => KINDS[m.kind]?.cls === "weld" && /tie[\s-]?in/i.test(String(m.attrs?.type ?? ""))).map((m) => String(m.no ?? "").trim())].filter(Boolean))];
@@ -108,11 +112,14 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
   };
   const withEngine = tab === "weld" && model && !model.error;
   const ticks = tab === "weld" && checked;
-  const colSpan = ATTRS[tab].length + 3 + (tab === "weld" ? 1 : 0) + (withEngine ? 2 : 0) + (ticks ? 1 : 0);
+  const colSpan = ATTRS[tab].length + 3 + (tab === "weld" ? 1 : 0) + (tab === "spool" ? 1 : 0) + (withEngine ? 2 : 0) + (ticks ? 1 : 0);
+  // a spool's welds: the weld marks that name it (read-only, from the sheet)
+  const weldsOfSpool = (no) => items.filter((w) => KINDS[w.kind]?.cls === "weld" && String(w.attrs?.spool ?? "").trim() === String(no ?? "").trim() && String(no ?? "").trim()).map((w) => w.no);
   return (
     <div className="mark-tables" data-mark-tables ref={box}>
-      <div className="row" style={{ gap: 4, flexWrap: "wrap" }} role="tablist">
-        {shown.map(([k, label]) => (
+      <div className="row" style={{ gap: 4, flexWrap: "wrap" }} role={shown.length > 1 ? "tablist" : undefined}>
+        {shown.length === 1 && <b data-mark-title>{shown[0][1]} ({rows.length})</b>}
+        {shown.length > 1 && shown.map(([k, label]) => (
           <button key={k} type="button" role="tab" data-mark-tab={k} className={tab === k ? "on" : "ghost"} onClick={() => setTab(k)}
             style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <MarkShape kind={k === "weld" ? "weld-shop" : k} no="" size={0.5} />
@@ -129,7 +136,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
           {loose.length} ردیف به نقشه وصل نیست: {loose.slice(0, 8).map((m) => `${WORD[KINDS[m.kind].cls]} ${m.no || "بدون شماره"}`).join("، ")}
           {loose.length > 8 ? "، …" : ""} — روی «اتصال به نقشه» در انتهای ردیف بزنید و محلش را روی نقشه کلیک کنید.
         </p>)}
-      {attachId && <p className="note sm" data-attach-hint>روی نقشه، همان‌جا که سرجوش (یا اسپول/ساپورت) روی لوله است کلیک کنید. <button type="button" className="ghost sm" onClick={() => onAttach?.(null)}>انصراف</button></p>}
+      {attachId && mine.has(KINDS[items.find((m) => m.id === attachId)?.kind]?.cls) && <p className="note sm" data-attach-hint>روی نقشه، همان‌جا که سرجوش (یا اسپول/ساپورت) روی لوله است کلیک کنید. <button type="button" className="ghost sm" onClick={() => onAttach?.(null)}>انصراف</button></p>}
 
       <div style={{ overflowX: "auto" }}>
         <TableKit key={tab} name={`marks-${tab}`}><table className="dtable" data-mark-table={tab}>
@@ -139,6 +146,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
             {tab === "weld" && <th>محل</th>}
             {ATTRS[tab].map(([k, label]) => <th key={k}>{label}</th>)}
             {withEngine && <><th title="از رجیستر موتور">NDT</th><th title="از رجیستر موتور">EL</th></>}
+            {tab === "spool" && <th title="سرجوش‌هایی که این اسپول را نام برده‌اند">سرجوش‌ها</th>}
             <th>روی نقشه</th>
           </tr></thead>
           <tbody>
@@ -174,6 +182,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
                         : <input data-cell={k} dir="ltr" style={{ width: k === "note" ? 130 : 84 }} placeholder={ph}
                           value={m.attrs?.[k] ?? ""} disabled={readOnly} onChange={(ev) => onPick(ev.target.value)} />}</td>);
                   })}
+                  {tab === "spool" && (() => { const ws = weldsOfSpool(m.no); return <td className="mono sm" data-spool-welds={ws.length}>{ws.length ? `${ws.length}: ${ws.slice(0, 8).join("، ")}${ws.length > 8 ? "…" : ""}` : "—"}</td>; })()}
                   {withEngine && <>
                     <td className="mono sm" data-engine="ndt">{e?.ndt ?? "—"}</td>
                     <td className="mono sm" data-engine="el">{e?.el != null ? Math.round(e.el).toLocaleString("en-US") : "—"}</td>
