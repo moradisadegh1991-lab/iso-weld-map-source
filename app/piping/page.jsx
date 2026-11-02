@@ -9,7 +9,7 @@ import { TYPE_FA } from "../../lib/standards";
 import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../../lib/extraction/merge.mjs";
 import { compareReads } from "../../lib/extraction/second-read.mjs";
-import { seedFromPass, fromReaderTags, fromEngine, normalize as normalizeMarks } from "../../lib/sheet/markup.mjs";
+import { seedFromPass, fromReaderTags, fromEngine, normalize as normalizeMarks, addMark, updateMark, placeAt } from "../../lib/sheet/markup.mjs";
 import { suggestFromDots } from "../../lib/sheet/weld-dots.mjs";
 import SheetMarkup from "../../components/SheetMarkup";
 import MarkTables from "../../components/MarkTables";
@@ -23,7 +23,8 @@ import StyleTemplate from "../../components/StyleTemplate";
 import WorkspaceFrame from "../../components/workspace/WorkspaceFrame";
 import Explorer from "../../components/workspace/Explorer";
 import TableKit from "../../components/ui/TableKit";
-import Inspector from "../../components/workspace/Inspector";
+import MarkForm from "../../components/MarkForm";
+import { useValueLists } from "../../components/ui/Pick";
 import CutList from "../../components/CutList";
 import LlmEndpoints from "../../components/LlmEndpoints";
 import { StageRail } from "../../components/PlatformShell";
@@ -62,6 +63,12 @@ export default function Page() {
   const [tab, setTab] = useState("weld");
   // «edit» from the sheet's menu: the mark's row in the weld tab's table, in focus
   const [editFocus, setEditFocus] = useState(null);
+  // the model route's marks: a mark is viewed, edited and added in its form (components/MarkForm.jsx); the sheet's layers
+  // are toggled in the navigator
+  const [markForm, setMarkForm] = useState(null);     // { mode, id, kind, point, aspect }
+  const [hiddenLayers, setHiddenLayers] = useState(() => new Set());
+  const toggleLayer = (k) => setHiddenLayers((h) => { const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const valueLists = useValueLists();
   const [selected, setSelected] = useState(null);
   const [exploded, setExploded] = useState(false);
   const [showTags, setShowTags] = useState(true);
@@ -711,38 +718,6 @@ export default function Page() {
       {data && listed && (
         // one column: the weld list (and the drawing beside its rows) takes the page's width
         <section className="stage listed">
-          {data.weldMarks && marksInfo && (
-            <div className="pane" data-weld-marks>
-              {data.weldMarks.reader === "local" ? (<>
-                {marksInfo.fromDots ? (
-                  <p className="note mono" data-reader="local" data-from-dots={marksInfo.weldList.length}>
-                    شمارهٔ جوش روی این نقشه چاپ نشده — خوانده‌شده بدون مدل و بدون توکن (OCR روی سرور): {marksInfo.weldList.length} سرجوش پیشنهادی روی لوله
-                    ({marksInfo.weldList.filter((r) => r.kind === "SW").length} از آن‌ها سر ساکتی، با نوع SW از روی نماد)، هرکدام با خط به همان نقطه.
-                    شماره‌ها فقط ترتیبی در امتداد لوله برای شروع‌اند؛ محل (کارگاه/سایت) و قطر خالی‌اند.
-                    همه را با نقشه بررسی کنید: اتصال رزوه‌ای و سرجوشی که نه نقطه دارد نه سر ساکتی پیدا نمی‌شود و باید دستی اضافه شود.
-                  </p>
-                ) : (
-                <p className="note mono" data-reader="local">
-                  رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — خوانده‌شده بدون مدل و بدون توکن (OCR روی سرور):
-                  شماره، شکل قاب و برچسب کنار آن؛ محل از نماد اعلام‌شدهٔ پروژه تعیین شد. قطر، نوع اتصال و اسپول را تکمیل کنید.
-                </p>)}
-                <p className="note mono" data-title-read>
-                  جدول عنوان (OCR، پیش از ذخیره بررسی کنید): {[["drawingNo", "شمارهٔ نقشه"], ["sheet", "شیت"], ["rev", "رویژن"]].map(([k, l]) =>
-                    `${l} ${data.weldMarks.titleRead?.[k] || "خوانده نشد"}`).join(" · ")}
-                </p>
-                {styleRead?.style === "generic" && preview && (
-                  <StyleTemplate session={session} preview={preview} read={styleRead}
-                    sample={`${sourceFile?.name || ""} · برگ ${styleRead.page}`.slice(0, 200)} />)}
-              </>) : (
-                <p className="note mono">
-                  رجیستر از {marksInfo.weldList.length} شمارهٔ جوش چاپ‌شده روی نقشه — مدل فقط شماره و شکل قاب را خواند؛
-                  محل از نماد اعلام‌شدهٔ پروژه و نوع از BOM همین برگ تعیین شد. جای خالی را تکمیل کنید.
-                </p>
-              )}
-              {marksInfo.problems.map((x) => <p key={x} className="err sm">{x}</p>)}
-              {marksInfo.notes.map((x) => <p key={x} className="muted sm">{x}</p>)}
-            </div>
-          )}
           <div className="pane">
             <WeldListEntry key={openRun?.run?.id || "new"} session={session} initial={data} run={openRun}
               sheet={openRun ? runSheet : preview ? { src: preview, page: pdfPage || 1, file: sourceFile } : null}
@@ -750,7 +725,11 @@ export default function Page() {
               // the sheets of the open PDF, to move between them from the workspace's explorer (a saved run opened from the queue has no PDF here)
               sheets={!openRun && pdf && pdf.pages.length > 1 ? { pages: pdf.pages, current: pdfPage || 1,
                 onPick: (i) => { if (window.confirm("برگ دیگر خوانده شود؟ تغییرات ذخیره‌نشدهٔ این برگ از بین می‌رود.")) onPdfPage(i); } } : null}
-              onSaved={openRunForReview} onClose={() => { setData(null); setOpenRun(null); }} />
+              onSaved={openRunForReview} onClose={() => { setData(null); setOpenRun(null); }}
+              // the drawing style's template (another designer's sheets): its own tab of the workspace
+              styleTab={data.weldMarks?.reader === "local" && styleRead?.style === "generic" && preview ? (
+                <StyleTemplate session={session} preview={preview} read={styleRead} open
+                  sample={`${sourceFile?.name || ""} · برگ ${styleRead.page}`.slice(0, 200)} />) : null} />
           </div>
           {data.weldMarks && (
             <details className="pane">
@@ -772,9 +751,9 @@ export default function Page() {
             {!model?.error && <span className="muted sm" data-ws-chip="counts">{model.totals.welds} جوش · {model.spoolIds.length} اسپول</span>}
           </>)}
           explorer={<Explorer meta={data.meta || {}} items={data.sheetMarkup?.items || []} selectedId={markSel} onSelect={setMarkSel}
+            layers={SHEET_MARKUP ? { hidden: hiddenLayers, onToggle: toggleLayer } : null}
             sheets={pdf && pdf.pages.length > 1 ? { pages: pdf.pages, current: pdfPage || 1,
               onPick: (i) => { if (window.confirm("برگ دیگر خوانده شود؟ تغییرات ذخیره‌نشدهٔ این برگ از بین می‌رود.")) onPdfPage(i); } } : null} />}
-          inspector={<Inspector item={(data.sheetMarkup?.items || []).find((m) => m.id === markSel) || null} items={data.sheetMarkup?.items || []} model={model} bom={data.bom || []} />}
           panel={
             <aside className="ws-aside">
             <TabNav tab={tab} setTab={setTab} model={model} data={data} />
@@ -799,7 +778,8 @@ export default function Page() {
                       setEditing(JSON.stringify(next, null, 2));
                     }}
                     selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
-                    bom={data.bom || []} focus={editFocus} />
+                    bom={data.bom || []} focus={editFocus}
+                    onOpen={(mode, id, kind) => { if (id) setMarkSel(id); setMarkForm({ mode, id, kind }); }} />
                 ) : (
                 <TableKit name="iso-register"><table className="dtable">
                   <thead><tr><th>No</th><th>Spool</th><th>محل</th><th>نوع</th><th>اتصال</th><th>EL</th><th>NDT</th></tr></thead>
@@ -959,7 +939,10 @@ export default function Page() {
               <SheetMarkup src={openRun ? runSheet?.src : preview}
                 items={data.sheetMarkup?.items || []}
                 selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
-                onEdit={(id) => { setMarkSel(id); setTab("weld"); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }}
+                onEdit={(id, kind) => { setMarkSel(id); setTab("weld"); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); setMarkForm({ mode: "edit", id, kind }); }}
+                onView={(id, kind) => { setMarkSel(id); setMarkForm({ mode: "view", id, kind }); }}
+                onAdd={(kind, point, aspect) => setMarkForm({ mode: "create", id: null, kind, point, aspect })}
+                hidden={hiddenLayers} onToggleLayer={toggleLayer}
                 onSeedEngine={(aspect) => {
                   // the engine's welds again, where the model saw their nodes: what a person placed or kept stays
                   const kept = (data.sheetMarkup?.items || []).filter((m) => m.src !== "engine");
@@ -1042,6 +1025,26 @@ export default function Page() {
           </div>
           )}
         </WorkspaceFrame>
+      )}
+      {data && !listed && markForm && (
+        <MarkForm key={`${markForm.mode}-${markForm.id || "new"}-${markForm.kind}`} mode={markForm.mode}
+          mark={markForm.id ? (data.sheetMarkup?.items || []).find((m) => m.id === markForm.id) : { kind: markForm.kind }}
+          items={data.sheetMarkup?.items || []} bom={data.bom || []} lists={valueLists} readOnly={openRun?.run?.status === "approved"}
+          onClose={() => setMarkForm(null)}
+          onSave={(d) => {
+            const items0 = data.sheetMarkup?.items || [];
+            let items = items0, sel = markForm.id;
+            if (markForm.id) items = updateMark(items0, markForm.id, { kind: d.kind, no: d.no, attrs: d.attrs });
+            else {
+              items = addMark(items0, { kind: d.kind, no: d.no });
+              sel = items[items.length - 1].id;
+              items = updateMark(items, sel, { attrs: d.attrs });
+              if (markForm.point) items = placeAt(items, sel, markForm.point, markForm.aspect);
+              else setAttachId(sel);
+            }
+            const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks(items) } };
+            setData(next); setEditing(JSON.stringify(next, null, 2)); setMarkSel(sel); setMarkForm(null);
+          }} />
       )}
     </main>
   );

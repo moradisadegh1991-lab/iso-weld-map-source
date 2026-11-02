@@ -12,7 +12,9 @@
  *   items      the marks (lib/sheet/markup.mjs): { id, kind, no, x, y, ax, ay, attrs }
  *   selectedId, onSelect(id)
  *   checked    { has(no) } — a weld ticked as checked against the drawing, when the review tracks it
+ *   layers     { hidden: Set, onToggle(k) } — which marks the sheet draws (a view setting only): its toggles live here
  */
+const LAYERS = [["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["support", "ساپورت‌ها"], ["equipment", "تجهیزات"], ["leader", "خط‌های راهنما"]];
 const GROUPS = [
   ["weld", "سرجوش‌ها", (k) => String(k).startsWith("weld")],
   ["spool", "اسپول‌ها", (k) => k === "spool"],
@@ -22,7 +24,7 @@ const GROUPS = [
 const placed = (m) => Number.isFinite(m?.x) && Number.isFinite(m?.y);
 const KIND_MARK = { "weld-shop": "●", "weld-field": "■", "weld-unknown": "○", spool: "⬭", support: "⬢", equipment: "▲" };
 
-export default function Explorer({ meta = {}, sheets = null, items = [], selectedId = null, onSelect, checked = null }) {
+export default function Explorer({ meta = {}, sheets = null, items = [], selectedId = null, onSelect, checked = null, layers = null }) {
   const unk = <span className="muted">نامعلوم</span>;
   return (
     <div className="ws-ex" data-explorer-body>
@@ -35,6 +37,16 @@ export default function Explorer({ meta = {}, sheets = null, items = [], selecte
           <dt>خط</dt><dd className="mono" dir="ltr">{meta.lineNo || unk}</dd>
         </dl>
       </div>
+      {layers && (
+        <div className="ws-ex-sec" data-ex="layers" data-layers role="group" aria-label="لایه‌های نمایش">
+          <div className="ws-ex-h">نمایش روی نقشه</div>
+          <div className="ws-ex-layers">
+            {LAYERS.map(([k, label]) => (
+              <button key={k} type="button" className={`ghost sm${layers.hidden.has(k) ? "" : " on"}`} aria-pressed={!layers.hidden.has(k)} data-layer={k}
+                onClick={() => layers.onToggle(k)}>{layers.hidden.has(k) ? "پنهان: " : ""}{label}</button>))}
+          </div>
+          {layers.hidden.size > 0 && <p className="muted sm" data-layers-note>فقط نمای صفحه است؛ داده و دانلود PNG همهٔ نشان‌ها را دارند.</p>}
+        </div>)}
       {sheets?.pages?.length > 1 && (
         <div className="ws-ex-sec" data-ex="sheets">
           <div className="ws-ex-h">برگ‌های فایل ({sheets.pages.length})</div>

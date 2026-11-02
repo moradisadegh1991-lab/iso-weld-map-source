@@ -18,7 +18,12 @@ import Shape, { COLOR, geometryOf } from "./MarkShape";
  *   states    { [id]: { state, color } } — a mark painted in its state's colour (where its joint
  *             stands on site); without it every mark is black, as the designer draws them
  *   legend    [[color, label]] for those colours
- *   onEdit    (id, kind) — open the mark's row for editing (the page shows its table); without it, the mark is picked
+ *   onEdit    (id, kind) — open the mark's form for editing; without it, the mark is picked
+ *   onView    (id, kind) — open the mark's form to look at it
+ *   onAdd     (kind, point, aspect) — open a new mark's form for this point of the sheet; without it the mark is
+ *             put there at once
+ *   hidden, onToggleLayer   the layers shown (a Set of weld | spool | support | equipment | leader), when the
+ *             page holds them (its navigator shows the toggles); otherwise this sheet keeps and shows its own
  *
  * A right click (or the menu key, or Shift+F10, on a mark in focus) opens the
  * sheet's menu: on a mark — its properties, edit, a copy with everything it
@@ -66,7 +71,8 @@ export async function renderMarkedPng(src, items) {
 }
 
 export default function SheetMarkup({ src, items = [], onChange, readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null,
-  selectedId: selectedProp, onSelect, attachId: attachProp, onAttach, states = null, legend = [], onEdit = null }) {
+  selectedId: selectedProp, onSelect, attachId: attachProp, onAttach, states = null, legend = [], onEdit = null, onView = null, onAdd = null,
+  hidden: hiddenProp = null, onToggleLayer = null }) {
   const [zoom, setZoom] = useState(1);
   // the picked mark and the mark waiting for its weld point may be held by the page, whose table picks the same mark
   const [selectedOwn, setSelectedOwn] = useState(null);
@@ -82,7 +88,8 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   const sheet = useRef(null);
   const box = useRef(null);
   // which kinds of mark (and the leaders) are drawn: a view setting only, nothing in `items` changes
-  const [hidden, setHidden] = useState(() => new Set());
+  const [hiddenOwn, setHidden] = useState(() => new Set());
+  const hidden = hiddenProp || hiddenOwn;
   const [panning, setPanning] = useState(false);
   const pan = useRef(null);          // a drag of the empty sheet: where it started and the scroll then
   const panned = useRef(false);      // that drag moved: the click that ends it is not a click on the sheet
@@ -92,7 +99,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   const placedItems = items.filter(isPlaced);
   const shown = placedItems.filter((m) => !hidden.has(layerOf(m)));
   const loose = notOnSheet(items);
-  const toggleLayer = (k) => setHidden((h) => { const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const toggleLayer = (k) => (onToggleLayer ? onToggleLayer(k) : setHidden((h) => { const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; }));
 
   const at = (e) => {
     const r = sheet.current.getBoundingClientRect();
@@ -159,12 +166,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
     setMenu({ x: e.clientX, y: e.clientY, id, p: id ? null : at(e) });
   }
   const closeMenu = () => setMenu(null);
-  const view = (id) => {
-    setSelectedId(id);
-    // the workspace's inspector, when this sheet is in one: opened and brought into view
-    const insp = document.querySelector("[data-ws-inspector]");
-    if (insp) { insp.open = true; insp.scrollIntoView({ block: "nearest" }); }
-  };
+  const view = (id) => { setSelectedId(id); onView?.(id, items.find((m) => m.id === id)?.kind); };
   const edit = (id) => { setSelectedId(id); onEdit?.(id, items.find((m) => m.id === id)?.kind); };
   function duplicate(id) {
     const { items: next, id: nid } = duplicateMark(items, id, aspect);
@@ -184,6 +186,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
     commit(removeMark(items, id));
   }
   function addHere(kind, p) {
+    if (onAdd) { onAdd(kind, p, aspect); return; }
     const next = addMark(items, { kind });
     const id = next[next.length - 1].id;
     commit(placeAt(next, id, p, aspect));
@@ -330,29 +333,18 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
           </button>)}
         <button type="button" className="ghost sm" data-download onClick={download} disabled={!src}>دانلود نقشهٔ نشان‌دار (PNG)</button>
       </div>
-      {!readOnly && (
-        <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }} data-tools>
-          <span className="muted sm">افزودن مستقیم روی نقشه:</span>
-          {KIND_IDS.filter((k) => k !== "weld-unknown").map((k) => (
-            <button key={k} type="button" data-tool={k} className={tool === k ? "on" : "ghost"} onClick={() => { setTool(tool === k ? null : k); setPointFor(null); }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <Shape kind={k} no="" size={0.5} />{KINDS[k].label}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }} data-layers role="group" aria-label="لایه‌های نمایش">
+      {!onToggleLayer && <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }} data-layers role="group" aria-label="لایه‌های نمایش">
         <span className="muted sm">نمایش:</span>
         {[["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["support", "ساپورت‌ها"], ["equipment", "تجهیزات"], ["leader", "خط‌های راهنما"]].map(([k, label]) => (
           <button key={k} type="button" className={`ghost sm${hidden.has(k) ? "" : " on"}`} aria-pressed={!hidden.has(k)} data-layer={k}
             onClick={() => toggleLayer(k)}>{hidden.has(k) ? "پنهان: " : ""}{label}</button>))}
         {hidden.size > 0 && <span className="muted sm" data-layers-note>فقط نمای صفحه است؛ داده و دانلود PNG همهٔ نشان‌ها را دارند.</span>}
-      </div>
+      </div>}
       <p className="muted sm" data-hint>
         {readOnly ? "نقشه با نشان‌ها — فقط دیدن."
           : pointFor ? "روی نقشه، محل سرجوش (روی خود لوله) را کلیک کنید تا خط راهنما از آن‌جا به شماره‌اش وصل شود."
           : tool ? `${KINDS[tool].label}: محل آن را روی لوله کلیک کنید.`
-          : "قاب را بکشید تا جابه‌جا شود؛ نقطهٔ اتصال هر نشان با کشیدن سر خطِ نشان انتخاب‌شده عوض می‌شود. شماره، جزئیات، اتصال به نقشه و حذف در جدول سمت چپ/زیر نقشه است."}
+          : "قاب را بکشید تا جابه‌جا شود؛ نقطهٔ اتصال هر نشان با کشیدن سر خطِ نشان انتخاب‌شده عوض می‌شود. برای افزودن، مشاهده، ویرایش، کپی یا حذف روی نقشه راست‌کلیک کنید."}
       </p>
       <p className="mono sm" data-counts>
         سرجوش‌ها {count("weld")} · اسپول‌ها {count("spool")} · ساپورت‌ها {count("support")}{count("equipment") > 0 && ` · تجهیزات ${count("equipment")}`}

@@ -10,7 +10,7 @@ import BomWelds from "./BomWelds";
 import WorkspaceFrame from "./workspace/WorkspaceFrame";
 import WorkspaceTabs from "./workspace/WorkspaceTabs";
 import Explorer from "./workspace/Explorer";
-import Inspector from "./workspace/Inspector";
+import MarkForm from "./MarkForm";
 import { STATE_COLORS } from "./SheetReview";
 import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
@@ -18,7 +18,7 @@ import EquipmentTable from "./EquipmentTable";
 import IsoInfo from "./IsoInfo";
 import { cutVsBom } from "../lib/register/cut-bom.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
-import { normalize as normalizeMarks } from "../lib/sheet/markup.mjs";
+import { normalize as normalizeMarks, addMark, updateMark, placeAt } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
@@ -70,7 +70,7 @@ const LINE_DATA = [
   ["insulationType", "نوع عایق"], ["insulationThk", "ضخامت عایق"], ["paint", "رنگ"], ["ndt", "NDT"], ["pwht", "PWHT"],
 ];
 const BLANK_META = { drawingNo: "", rev: "", sheet: "1/1", lineNo: "", unit: "", pipingClass: "", nps: "", schedule: "" };
-export default function WeldListEntry({ session, initial = null, run = null, onSaved, onClose, sheet = null, progress = null, sheets = null }) {
+export default function WeldListEntry({ session, initial = null, run = null, onSaved, onClose, sheet = null, progress = null, sheets = null, styleTab = null }) {
   const lists = useValueLists();
   const [meta, setMeta] = useState({ ...BLANK_META, ...(initial?.meta || {}) });
   const [rows, setRowsRaw] = useState(() => withRowIds(initial?.weldList?.length ? initial.weldList.map((r) => ({ ...BLANK_ROW, ...r })) : [{ ...BLANK_ROW }, { ...BLANK_ROW }, { ...BLANK_ROW }]));
@@ -148,12 +148,19 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [markSel, setMarkSel] = useState(null);
   // «edit» from the sheet's menu: the welds tab, the mark's row in focus
   const [editFocus, setEditFocus] = useState(null);
-  const editMark = (id, kind) => {
-    setMarkSel(id);
+  // a mark is viewed, edited and added in its form (components/MarkForm.jsx), from the tables and from the sheet's menu alike
+  const [form, setForm] = useState(null);   // { mode, id, kind, point, aspect }
+  const tabOf = (k) => (k === "equipment" ? "equip" : k === "spool" ? "spools" : k === "support" ? "supports" : "welds");
+  const openForm = (mode, id, kind, point = null, aspect = Math.SQRT2) => {
     const k = kind || itemsRef.current.find((m) => m.id === id)?.kind;
-    setWsTab(k === "equipment" ? "equip" : k === "spool" ? "spools" : k === "support" ? "supports" : "welds");
-    setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 }));
+    if (id) { setMarkSel(id); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }
+    setWsTab(tabOf(k));
+    setForm({ mode: locked ? "view" : mode, id, kind: k, point, aspect });
   };
+  const editMark = (id, kind) => openForm("edit", id, kind);
+  // layers of the sheet (a view setting): toggled from the navigator
+  const [hiddenLayers, setHiddenLayers] = useState(() => new Set());
+  const toggleLayer = (k) => setHiddenLayers((h) => { const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const [attachId, setAttachId] = useState(null);
   const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras) : []), [sheetMode, rows, marks, extras]);
   const itemsRef = useRef(items); itemsRef.current = items;
@@ -424,7 +431,9 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         <div className="wl-sheet" data-wl-sheet>
           <SheetMarkup src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
             fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
-            onEdit={locked ? null : editMark} states={progressStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
+            onEdit={locked ? null : editMark} onView={(id, k) => openForm("view", id, k)}
+            onAdd={locked ? null : (k, p, aspect) => openForm("create", null, k, p, aspect)}
+            hidden={hiddenLayers} onToggleLayer={toggleLayer} states={progressStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
           <p className="note mono sm" data-wl-review-count>
             {nos.length - unchecked.length} از {nos.length} جوش با نقشه بررسی شد · {Object.keys(keptMarks).length} روی نقشه جا دارد
             {nos.length > 0 && !locked && <> · <button type="button" className="ghost sm" onClick={() => setReviewed(new Set(nos))}>همه بررسی شد</button></>}
@@ -439,6 +448,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         <div className="wl-table">
           <MarkTables tabs={tabs} items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
             selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} bom={bom} focus={editFocus}
+            onOpen={(mode, id, k) => openForm(mode, id, k)}
             checked={locked ? null : { has: (no) => reviewed.has(no), onTick: tick }} />
         </div>
 
@@ -523,11 +533,12 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       node: (<>{registerTable(["support"])}</>) },
     { k: "equip", label: "تجهیزات", hint: "تجهیزات نصب، سرجوش‌های متصل و متعلقات", badge: items.filter((m) => m.kind === "equipment").length || "",
       node: (<EquipmentTable items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
-        attachId={attachId} onAttach={setAttachId} focus={editFocus} />) },
+        attachId={attachId} onAttach={setAttachId} focus={editFocus} onOpen={(mode, id, k) => openForm(mode, id, k)} />) },
     { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
       node: (<>{bomBlock}{bomWeldsBlock}{bom.length === 0 && <p className="muted sm">BOM خوانده نشد.</p>}</>) },
     { k: "cut", label: "برش", hint: "جدول برش لوله و مقایسه با BOM", badge: cutLengths.length || "", tone: cutBom.problems.length ? "bad" : undefined,
       node: (<>{cutBlock}{cutLengths.length === 0 && <p className="muted sm">جدول برش روی این برگ خوانده نشد.</p>}</>) },
+    ...(styleTab ? [{ k: "style", label: "الگوی نقشه", hint: "الگوی این سبک نقشه: خانهٔ هر مقدار روی نقشه", node: styleTab }] : []),
     { k: "import", label: "ورود", hint: "خواندن از Excel / CSV یا چسباندن", node: (<>{importBlock}</>) },
     { k: "save", label: "ثبت", hint: "ذخیره و تأیید", tone: problems ? "bad" : undefined, badge: problems || "",
       node: (<>{fileBlock}{saveBlock}</>) },
@@ -552,11 +563,28 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           <span className={`chip ${approved ? "cy" : ""}`} data-ws-chip="status">{runWord}</span>
           <span className="muted sm" data-ws-chip="counts">{nos.length} جوش · {reviewedN} بررسی‌شده{problems ? ` · ${problems} ایراد` : ""}</span>
         </>)}
-        explorer={<Explorer meta={meta} sheets={sheets} items={items} selectedId={markSel} onSelect={setMarkSel} checked={locked ? null : { has: (no) => reviewed.has(no) }} />}
-        inspector={<Inspector item={items.find((m) => m.id === markSel) || null} items={items} bom={bom} reviewed={locked ? null : { has: (no) => reviewed.has(no) }} />}
+        explorer={<Explorer meta={meta} sheets={sheets} items={items} selectedId={markSel} onSelect={setMarkSel} checked={locked ? null : { has: (no) => reviewed.has(no) }}
+          layers={{ hidden: hiddenLayers, onToggle: toggleLayer }} />}
         panel={<WorkspaceTabs tabs={tabs} value={wsTab} onChange={setWsTab} />}>
         {sheetBlock()}
       </WorkspaceFrame>
+      {form && (
+        <MarkForm key={`${form.mode}-${form.id || "new"}-${form.kind}`} mode={form.mode}
+          mark={form.id ? items.find((m) => m.id === form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked}
+          onClose={() => setForm(null)}
+          onSave={(d) => {
+            if (form.id) onItems(updateMark(items, form.id, { kind: d.kind, no: d.no, attrs: d.attrs }));
+            else {
+              let next = addMark(items, { kind: d.kind, no: d.no });
+              const nid = next[next.length - 1].id;
+              next = updateMark(next, nid, { attrs: d.attrs });
+              // added on the sheet: where it was clicked; added from a table: the sheet waits for its place
+              if (form.point) next = placeAt(next, nid, form.point, form.aspect);
+              onItems(next); setMarkSel(nid);
+              if (!form.point) setAttachId(nid);
+            }
+            setForm(null);
+          }} />)}
     </div>
   );
 }
