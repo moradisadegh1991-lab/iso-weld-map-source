@@ -27,3 +27,9 @@ The owner's request (2026-11-02, from screenshots of the workspace):
    off the sheet, checked against the drawing in place).
 
 The same holds on the model route's workspace (app/piping/page.jsx).
+
+## BOM table (follow-up)
+
+The BOM table of the sheet is now display-only too: «مشاهده» / «ویرایش» per row and
+«+ ردیف BOM» open `components/BomForm.jsx` (same `FormDialog`). PT is required and unique;
+nothing reaches the sheet until «ذخیره»/«افزودن». The allocation column (reserved/capacity) stays read-only.

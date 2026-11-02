@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
+import BomForm from "./BomForm";
 import TableKit from "./ui/TableKit";
 import Pick, { useValueLists } from "./ui/Pick";
 import { COLUMN_LIST } from "../lib/register/value-lists.mjs";
@@ -96,13 +97,12 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     pt: b.pt === "" || b.pt == null ? null : Number(b.pt),
     qty: b.qty === "" || b.qty == null || !Number.isFinite(Number(b.qty)) ? null : Number(b.qty) })), [bomRows]);
   const setBom = (i, k, v) => setBomRows(bomRows.map((b, j) => (j === i ? { ...b, [k]: v } : b)));
-  const addBomRow = () => {
+  const [bomForm, setBomForm] = useState(null);  // { mode: "view"|"edit"|"create", i } — the BOM row's form
+  // the first PT number missing from the run, else the next one
+  const nextBomPt = () => {
     const pts = new Set(bom.map((b) => b.pt).filter(Number.isInteger));
     const last = pts.size ? Math.max(...pts) : 0;
-    // the first PT number missing from the run, else the next one
-    const pt = Array.from({ length: last }, (_, i) => i + 1).find((n) => !pts.has(n)) ?? last + 1;
-    setBomRows([...bomRows, { pt, group: "", description: "", diam: "", stockCode: "", qty: "", qtyUnit: "pcs" }]
-      .sort((a, b) => (Number(a.pt) || 0) - (Number(b.pt) || 0)));
+    return Array.from({ length: last }, (_, i) => i + 1).find((n) => !pts.has(n)) ?? last + 1;
   };
   const cutLengths = Array.isArray(initial?.cutLengths) ? initial.cutLengths : [];
   // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
@@ -292,21 +292,32 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
               <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th><th>واحد</th><th title="سرهای جوشی‌شدنی این ردیف که سرجوش‌ها نام برده‌اند">سر جوش: رزرو/ظرفیت</th><th></th></tr></thead>
               <tbody>{bomRows.map((b, i) => (
                 <tr key={i} data-bom-row={b.pt}>
-                  <td><input data-bom-cell="pt" dir="ltr" className="mono" style={{ width: 44 }} value={b.pt ?? ""} disabled={locked} onChange={(e) => setBom(i, "pt", e.target.value)} /></td>
-                  <td><Pick data-bom-cell="group" list="bomGroup" lists={lists} className="sm" style={{ width: 110 }} value={b.group} disabled={locked} onChange={(v) => setBom(i, "group", v)} /></td>
-                  <td><input data-bom-cell="description" dir="ltr" className="sm" style={{ width: 360 }} value={b.description ?? ""} disabled={locked} onChange={(e) => setBom(i, "description", e.target.value)} /></td>
-                  <td><Pick data-bom-cell="diam" list="nps" lists={lists} className="mono" style={{ width: 90 }} value={b.diam} placeholder="؟" empty="؟" disabled={locked} onChange={(v) => setBom(i, "diam", v)} /></td>
-                  <td><input data-bom-cell="stockCode" dir="ltr" className="mono sm" style={{ width: 110 }} value={b.stockCode ?? ""} disabled={locked} onChange={(e) => setBom(i, "stockCode", e.target.value)} /></td>
-                  <td><input data-bom-cell="qty" dir="ltr" className="mono" style={{ width: 56 }} value={b.qty ?? ""} placeholder="؟" disabled={locked} onChange={(e) => setBom(i, "qty", e.target.value)} /></td>
-                  <td><select data-bom-cell="qtyUnit" value={b.qtyUnit || ""} disabled={locked} onChange={(e) => setBom(i, "qtyUnit", e.target.value || null)}>
-                    <option value="">؟</option><option value="pcs">عدد</option><option value="m">m</option></select></td>
+                  <td className="mono b" dir="ltr" data-bom-cell="pt">{b.pt ?? "—"}</td>
+                  <td className="sm" data-bom-cell="group">{b.group || "—"}</td>
+                  <td className="sm" dir="ltr" data-bom-cell="description">{b.description || "—"}</td>
+                  <td className="mono" data-bom-cell="diam">{b.diam || "؟"}</td>
+                  <td className="mono sm" dir="ltr" data-bom-cell="stockCode">{b.stockCode || "—"}</td>
+                  <td className="mono" dir="ltr" data-bom-cell="qty">{b.qty === "" || b.qty == null ? "؟" : b.qty}</td>
+                  <td className="sm" data-bom-cell="qtyUnit">{b.qtyUnit === "pcs" ? "عدد" : b.qtyUnit === "m" ? "m" : "؟"}</td>
                   <td className="mono sm" data-bom-alloc={b.pt} dir="ltr">{(() => { const u = alloc.get(String(b.pt)); if (!u) return "—"; if (u.cap.mode === "length") return "طولی"; if (u.cap.mode === "none") return u.used ? `${u.used}/۰` : "—"; return u.cap.capacity == null ? (u.used ? `${u.used}/؟` : "؟") : `${u.used}/${u.cap.capacity}`; })()}</td>
-                  <td>{!locked && <button type="button" className="ghost sm" onClick={() => setBomRows(bomRows.filter((_, j) => j !== i))}>حذف</button>}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button type="button" className="ghost sm" data-bom-view={b.pt} onClick={() => setBomForm({ mode: "view", i })}>مشاهده</button>
+                    {!locked && <button type="button" className="ghost sm" data-bom-edit={b.pt} onClick={() => setBomForm({ mode: "edit", i })}>ویرایش</button>}
+                    {!locked && <button type="button" className="ghost sm" onClick={() => setBomRows(bomRows.filter((_, j) => j !== i))}>حذف</button>}
+                  </td>
                 </tr>))}</tbody>
             </table></TableKit>
           </div>
-          {!locked && <button type="button" className="ghost sm" data-bom-add onClick={addBomRow}>+ ردیف BOM (ردیفی که خوانده نشده)</button>}
+          {!locked && <button type="button" className="ghost sm" data-bom-add onClick={() => setBomForm({ mode: "create", i: -1 })}>+ ردیف BOM (ردیفی که خوانده نشده)</button>}
         </details>)}
+      {bomForm && (
+        <BomForm key={`${bomForm.mode}-${bomForm.i}`} mode={bomForm.mode} lists={lists} readOnly={locked} rows={bomRows}
+          row={bomForm.i >= 0 ? bomRows[bomForm.i] : { pt: nextBomPt() }}
+          onClose={() => setBomForm(null)}
+          onSave={(r) => {
+            setBomRows(bomForm.i >= 0 ? bomRows.map((x, j) => (j === bomForm.i ? r : x)) : [...bomRows, r].sort((a, b) => (Number(a.pt) || 0) - (Number(b.pt) || 0)));
+            setBomForm(null);
+          }} />)}
 
     </>
   );
