@@ -18,7 +18,7 @@ import Shape, { COLOR, geometryOf } from "./MarkShape";
  *   states    { [id]: { state, color } } — a mark painted in its state's colour (where its joint
  *             stands on site); without it every mark is black, as the designer draws them
  *   legend    [[color, label]] for those colours
- *   onEdit    (id) — open the mark's row for editing (the page shows its table); without it, the mark is picked
+ *   onEdit    (id, kind) — open the mark's row for editing (the page shows its table); without it, the mark is picked
  *
  * A right click (or the menu key, or Shift+F10, on a mark in focus) opens the
  * sheet's menu: on a mark — its properties, edit, a copy with everything it
@@ -51,13 +51,15 @@ export async function renderMarkedPng(src, items) {
     if (shape === "circle" || shape === "circle-dashed") g.arc(vw / 2, vh / 2, 13, 0, Math.PI * 2);
     else if (shape === "square") g.rect(2, 2, 26, 26);
     else if (shape === "oval") g.ellipse(30, 14, 28, 12.4, 0, 0, Math.PI * 2);
+    else if (shape === "triangle") { g.moveTo(20, 2.5); g.lineTo(38, 33.5); g.lineTo(2, 33.5); g.closePath(); }
     else { [[2, 18], [11, 2.4], [33, 2.4], [42, 18], [33, 33.6], [11, 33.6]].forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); }
     g.fill(); g.stroke();
     g.setLineDash([]); g.fillStyle = "#111"; g.textAlign = "center"; g.textBaseline = "middle";
     g.font = `700 ${geo.font}px "Times New Roman",Times,serif`;
     const label = KINDS[m.kind].cls === "weld" ? plainNo(m.no) : String(m.no), wide = g.measureText(label).width;
-    if (wide > geo.fit) { g.translate(vw / 2, vh / 2); g.scale(geo.fit / wide, 1); g.fillText(label, 0, 0.5); }
-    else g.fillText(label, vw / 2, vh / 2 + 0.5);
+    const ly = shape === "triangle" ? vh * 0.66 : vh / 2;
+    if (wide > geo.fit) { g.translate(vw / 2, ly); g.scale(geo.fit / wide, 1); g.fillText(label, 0, 0.5); }
+    else g.fillText(label, vw / 2, ly + 0.5);
     g.restore();
   }
   return cv.toDataURL("image/png");
@@ -163,7 +165,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
     const insp = document.querySelector("[data-ws-inspector]");
     if (insp) { insp.open = true; insp.scrollIntoView({ block: "nearest" }); }
   };
-  const edit = (id) => { setSelectedId(id); onEdit?.(id); };
+  const edit = (id) => { setSelectedId(id); onEdit?.(id, items.find((m) => m.id === id)?.kind); };
   function duplicate(id) {
     const { items: next, id: nid } = duplicateMark(items, id, aspect);
     if (!nid) return;
@@ -186,7 +188,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
     const id = next[next.length - 1].id;
     commit(placeAt(next, id, p, aspect));
     setSelectedId(id);
-    onEdit?.(id);
+    onEdit?.(id, kind);
   }
   const menuItems = !menu ? [] : menu.id ? [
     { k: "view", label: "مشاهدهٔ مشخصات", icon: "ⓘ", run: () => view(menu.id) },
@@ -341,7 +343,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
       )}
       <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }} data-layers role="group" aria-label="لایه‌های نمایش">
         <span className="muted sm">نمایش:</span>
-        {[["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["support", "ساپورت‌ها"], ["leader", "خط‌های راهنما"]].map(([k, label]) => (
+        {[["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["support", "ساپورت‌ها"], ["equipment", "تجهیزات"], ["leader", "خط‌های راهنما"]].map(([k, label]) => (
           <button key={k} type="button" className={`ghost sm${hidden.has(k) ? "" : " on"}`} aria-pressed={!hidden.has(k)} data-layer={k}
             onClick={() => toggleLayer(k)}>{hidden.has(k) ? "پنهان: " : ""}{label}</button>))}
         {hidden.size > 0 && <span className="muted sm" data-layers-note>فقط نمای صفحه است؛ داده و دانلود PNG همهٔ نشان‌ها را دارند.</span>}
@@ -353,7 +355,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
           : "قاب را بکشید تا جابه‌جا شود؛ نقطهٔ اتصال هر نشان با کشیدن سر خطِ نشان انتخاب‌شده عوض می‌شود. شماره، جزئیات، اتصال به نقشه و حذف در جدول سمت چپ/زیر نقشه است."}
       </p>
       <p className="mono sm" data-counts>
-        سرجوش‌ها {count("weld")} · اسپول‌ها {count("spool")} · ساپورت‌ها {count("support")}
+        سرجوش‌ها {count("weld")} · اسپول‌ها {count("spool")} · ساپورت‌ها {count("support")}{count("equipment") > 0 && ` · تجهیزات ${count("equipment")}`}
         {loose.length > 0 && ` · ${loose.length} ردیف به نقشه وصل نیست`}
         {items.some((m) => m.src === "model" || m.src === "engine") && " · محل نشان‌های خودکار تقریبی است (سرجوش‌ها را موتور تعیین کرده، جایشان روی نقشه را مدل)، با نقشه بسنجید"}
       </p>

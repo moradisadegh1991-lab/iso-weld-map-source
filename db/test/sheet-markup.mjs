@@ -7,7 +7,7 @@
 import { test, run, assert, equal } from "./harness.mjs";
 import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
-import { KINDS, SHEET_SIZE, plainNo, isPlaced, notOnSheet, engineRow, frameSpot, placeAt, unplace, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, problems, normalize, duplicateMark, dependents, componentChecks, bomSnapshot } from "../../lib/sheet/markup.mjs";
+import { KINDS, SHEET_SIZE, plainNo, isPlaced, notOnSheet, engineRow, frameSpot, placeAt, unplace, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, problems, normalize, duplicateMark, dependents, componentChecks, bomSnapshot, weldsOf, accessoriesOf, accessoriesText, equipmentChecks } from "../../lib/sheet/markup.mjs";
 
 import { suggestFromDots, orderAlongPipe } from "../../lib/sheet/weld-dots.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../../lib/sheet/weld-list-marks.mjs";
@@ -484,6 +484,43 @@ test("the components and their snapshots survive the weld list and back, and an 
   equal(sorted(back[0].attrs), sorted(SHEET[0].attrs));
   equal(["c1", "c2"].some((k) => k in rows[1]), false, "a weld without components has none");
   equal(normalize([{ kind: "weld-shop", no: "5", attrs: { type: "BW", size: "2" } }])[0].attrs, { type: "BW", size: "2" }, "saved marks from before are unchanged");
+});
+
+const W = (id, no, c1, c2) => ({ id, kind: "weld-shop", no, attrs: { ...(c1 ? { c1 } : {}), ...(c2 ? { c2 } : {}) } });
+const EQ = (id, no, attrs) => ({ id, kind: "equipment", no, x: 0.4, y: 0.4, ax: 0.38, ay: 0.42, attrs });
+
+test("equipment: its welds and accessories as written, validated; a mark with a triangle shape and its own number series", () => {
+  equal(weldsOf(" 1, 4 ,W-7;4 "), ["1", "4", "W-7"]);
+  equal(accessoriesOf("10×1, 11x10, 10 × 2, bad, 12×0, 13×2.5"), [{ pt: "10", qty: 3 }, { pt: "11", qty: 10 }, { pt: "13", qty: 2.5 }]);
+  equal(accessoriesText(accessoriesOf("10×1, 11x10")), "10×1, 11×10");
+  equal(KINDS.equipment.shape, "triangle");
+  equal(nextNo([EQ("a", "GV-1", {}), EQ("b", "GV-2", {})], "equipment"), "GV-3");
+  equal(addMark([], { kind: "equipment" }).at(-1).no, "1");
+  assert(isPlaced(addMark([], { kind: "equipment", x: 0.5, y: 0.5 }).at(-1)));
+});
+
+test("equipment attributes are cleaned and kept: unknown ones dropped, the BOM snapshot rides along", () => {
+  const [m] = normalize([{ kind: "equipment", no: "GV-1", x: 0.5, y: 0.5, attrs: { type: "Gate Valve", tag: "GV-001", c1: "12", c1s: "VALVE | 4", welds: "1, 2", acc: "10×1", junk: "x" } }]);
+  const sorted = (o) => Object.fromEntries(Object.entries(o).sort());
+  equal(sorted(m.attrs), sorted({ type: "Gate Valve", tag: "GV-001", c1: "12", c1s: "VALVE | 4", welds: "1, 2", acc: "10×1" }));
+  const back = updateMark([m], m.id, { attrs: { status: "installed" } })[0];
+  equal(back.attrs.status, "installed");
+});
+
+test("equipment checks: its BOM row, the welds it joins, its spool and accessories must be on this sheet — warned, never corrected", () => {
+  const welds = [W("w1", "1", "2", "1"), W("w2", "2", "2")];
+  const sheet = [...welds, { id: "s1", kind: "spool", no: "SP-1", x: 0.2, y: 0.2 }];
+  equal(equipmentChecks([...sheet, EQ("e1", "GV-1", { c1: "12", welds: "1, 2", spool: "SP-1", acc: "7×1" })], BOM), []);
+  const bad = equipmentChecks([...sheet, EQ("e2", "GV-2", { c1: "99", welds: "1, 9", spool: "SP-9", acc: "50×1" })], BOM);
+  equal(bad, ["تجهیز GV-2: PT 99 در BOM این برگ نیست", "تجهیز GV-2: سرجوش 9 روی این برگ نیست", "تجهیز GV-2: اسپول SP-9 روی این برگ نیست", "تجهیز GV-2: متعلقِ PT 50 در BOM این برگ نیست"]);
+  equal(equipmentChecks([EQ("e3", "GV-3", {})], BOM), ["تجهیز GV-3: ردیف BOM آن انتخاب نشده", "تجهیز GV-3: به هیچ سرجوشی وصل نیست"]);
+  equal(equipmentChecks([...sheet, EQ("e4", "GV-4", { c1: "12", welds: "1", acc: "garbage" })], BOM), ["تجهیز GV-4: متعلقات را به صورت «PT×تعداد، PT×تعداد» بنویسید"]);
+});
+
+test("deleting a weld an equipment joins, or an equipment with accessories, says so first", () => {
+  const items = [W("w1", "1", "2"), EQ("e1", "GV-1", { c1: "12", welds: "1", acc: "4×2" })];
+  equal(dependents(items, "w1"), ["تجهیز GV-1 به این سرجوش وصل است"]);
+  assert(/متعلقات دارد \(4×2\)/.test(dependents(items, "e1")[0]));
 });
 
 await run();

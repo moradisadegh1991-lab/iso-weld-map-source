@@ -10,7 +10,8 @@ import { modelFor } from "../../../lib/register/weld-list.mjs";
 import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
 import { lineForRegister, tieInRefsOf } from "../../../lib/db/repos/spine.mjs";
 import { fillLineList, saveIsoBom } from "../../../lib/db/repos/line-list.mjs";
-import { syncWeldAllocations } from "../../../lib/db/repos/bom-allocation.mjs";
+import { syncAllocations } from "../../../lib/db/repos/bom-allocation.mjs";
+import { syncEquipment } from "../../../lib/db/repos/iso-equipment.mjs";
 import { ledgerDemands } from "../../../lib/register/bom-allocation.mjs";
 
 /**
@@ -107,11 +108,14 @@ export async function POST(request) {
           ? await saveIsoBom(tx, { projectId, documentId, runId: run.id, lineId: theLine, bom: payload.bom, createdBy: user.id }) : 0;
         // who uses what of that BOM: the welds' reservations made to match the sheet's marks, all in
         // this transaction (a refusal — more taken than the BOM has, an installed line — undoes the save)
+        const equipment = bomRows || payload?.sheetMarkup?.items?.length
+          ? await syncEquipment(tx, { projectId, documentId, runId: run.id, userId: user.id, items: payload?.sheetMarkup?.items || [], bom: payload?.bom || [] })
+          : null;
         const allocation = bomRows
-          ? await syncWeldAllocations(tx, { projectId, documentId, runId: run.id, userId: user.id,
+          ? await syncAllocations(tx, { projectId, documentId, runId: run.id, userId: user.id,
               demands: ledgerDemands(payload?.sheetMarkup?.items || [], payload.bom) })
           : null;
-        return { run, register, saved, lineList, bomRows, allocation };
+        return { run, register, saved, lineList, bomRows, allocation, equipment };
       });
 
       if (out.signed) {
@@ -130,6 +134,7 @@ export async function POST(request) {
         ...(out.lineList ? { lineList: out.lineList } : {}),
         bomRows: out.bomRows,
         ...(out.allocation ? { allocation: out.allocation } : {}),
+        ...(out.equipment?.equipment || out.equipment?.removed ? { equipment: out.equipment } : {}),
         carriedIdentities: out.saved.carried,
         totals: model.totals,
         spools: model.spoolIds,

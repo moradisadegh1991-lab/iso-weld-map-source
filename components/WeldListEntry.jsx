@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import TableKit from "./ui/TableKit";
 import Pick, { useValueLists } from "./ui/Pick";
@@ -14,6 +14,7 @@ import Inspector from "./workspace/Inspector";
 import { STATE_COLORS } from "./SheetReview";
 import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
+import EquipmentTable from "./EquipmentTable";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
@@ -145,9 +146,14 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [markSel, setMarkSel] = useState(null);
   // «edit» from the sheet's menu: the welds tab, the mark's row in focus
   const [editFocus, setEditFocus] = useState(null);
-  const editMark = (id) => { setMarkSel(id); setWsTab("welds"); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); };
+  const editMark = (id, kind) => {
+    setMarkSel(id);
+    setWsTab((kind || itemsRef.current.find((m) => m.id === id)?.kind) === "equipment" ? "equip" : "welds");
+    setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 }));
+  };
   const [attachId, setAttachId] = useState(null);
   const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras) : []), [sheetMode, rows, marks, extras]);
+  const itemsRef = useRef(items); itemsRef.current = items;
   // who uses what of this sheet's BOM: the welds' ends against each row's (lib/register/bom-allocation.mjs)
   const alloc = useMemo(() => usage(items, bom), [items, bom]);
   // a saved sheet: each weld painted by where its joint stands on site
@@ -492,6 +498,9 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     { k: "info", label: "مشخصات", hint: "شمارهٔ نقشه، رویژن، خط و مشخصات خط", node: (<>{metaGrid}{registryBlock}{lineDataBlock}</>) },
     { k: "welds", label: "سرجوش‌ها", hint: "رجیستر جوش‌ها و نشان‌های روی نقشه", badge: nos.length ? `${reviewedN}/${nos.length}` : "",
       tone: problems ? "bad" : undefined, node: (<>{registerTable()}{summaryBlock}</>) },
+    { k: "equip", label: "تجهیزات", hint: "تجهیزات نصب، سرجوش‌های متصل و متعلقات", badge: items.filter((m) => m.kind === "equipment").length || "",
+      node: (<EquipmentTable items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
+        attachId={attachId} onAttach={setAttachId} focus={editFocus} />) },
     { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
       node: (<>{bomBlock}{bomWeldsBlock}{bom.length === 0 && <p className="muted sm">BOM خوانده نشد.</p>}</>) },
     { k: "cut", label: "برش", hint: "جدول برش لوله", badge: cutLengths.length || "",
