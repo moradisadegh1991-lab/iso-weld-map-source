@@ -137,3 +137,9 @@
 .equip-acc{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-wrap:wrap;gap:4px}
 .equip-acc li{display:inline-flex;align-items:center;gap:2px;padding:1px 6px;border:1px solid var(--rule);border-radius:999px;font-size:12px;font-family:var(--mono,monospace)}
 .equip-acc li button{padding:0 4px;line-height:1}
+
+/* the isometric's information, View / Edit (components/IsoInfo.jsx) */
+.iso-info-sec{margin-top:12px}
+.iso-info-sec > h4{margin:0 0 6px;font-size:12px;font-weight:700;color:var(--dim);letter-spacing:.02em;padding-bottom:3px;border-bottom:1px solid var(--rule-soft)}
+.iso-info .wl-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+.iso-info input[aria-invalid="true"]{border-color:var(--bad)}
