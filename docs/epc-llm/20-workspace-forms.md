@@ -43,3 +43,16 @@ nothing reaches the sheet until «ذخیره»/«افزودن». The allocation 
 - **Cut table** (`components/CutForm.jsx`): display-only with «مشاهده / ویرایش / حذف» per piece and «+ ثبت قطعه».
   Fields: piece number (unique), length mm (> 0), N.S., spool (from the sheet's spools), cut angle, note.
   Saved with the register's `cutLengths`; the cut-vs-BOM check recomputes from the edited pieces.
+
+## Live Tie-in and the cut model
+
+- **Live Tie-in**: a reference to another drawing now carries the weld's identity:
+  `ISO | sheet | weld | weld_uid` (`lib/sheet/tie-in.mjs`). `POST /api/tie-in-targets` answers where each stands
+  now (`classifyTarget`): ok · renamed (with the reference to put in its place; the form's «اصلاح» button applies it) ·
+  gone · missing. The weld form shows it under the picker and the weld table marks a reference that is not ok with ⚠.
+  Older references without the uid are looked up by their number. Not done: a list of *who refers to this weld*,
+  and rewriting other sheets' references automatically — the stored text is only ever changed by a person.
+- **Cut model** (`lib/register/cut-model.mjs`, `components/CutForm.jsx`): a piece also has the weld at each end
+  (`from`, `to`), the spool and the cut angle (0–90°). The cut tab says: an end weld not on the sheet, the same weld
+  at both ends, a spool the sheet has no mark of, a spool that is not the spool of the welds it ends at, a bad angle.
+  Picking an end weld fills the spool when both ends agree on one.

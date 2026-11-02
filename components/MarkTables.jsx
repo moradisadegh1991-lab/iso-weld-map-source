@@ -4,6 +4,7 @@ import { KINDS, ATTRS, addMark, updateMark, removeMark, unplace, isPlaced, notOn
 import { allocationChecks } from "../lib/register/bom-allocation.mjs";
 import MarkShape from "./MarkShape";
 import TableKit from "./ui/TableKit";
+import { useTieInStatus, TIE_TEXT } from "./TieInPick";
 
 // which list each column picks from, by the table it is in (null: typed by hand — numbers, lengths and notes)
 const PICK = {
@@ -46,6 +47,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
   const shown = TABS.filter(([k]) => tabs.includes(k));
   const [tab, setTab] = useState(shown[0]?.[0] || "weld");
   const rows = items.filter((m) => KINDS[m.kind]?.cls === tab);
+  const tieStatus = useTieInStatus(items.filter((m) => KINDS[m.kind]?.cls === "weld").map((m) => m.attrs?.ref));
   // a table of one class (the workspace's own tab for spools or supports) speaks of its own class
   const mine = new Set(shown.map(([k]) => k));
   const loose = notOnSheet(items).filter((m) => mine.has(KINDS[m.kind]?.cls));
@@ -132,6 +134,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
                     <td key={k} data-cell={k} className={k === "note" ? "sm" : "mono sm"} dir={k === "note" ? "auto" : "ltr"}
                       title={k === "c1" || k === "c2" ? bomText(m.attrs?.[k]) : undefined}>
                       {k === "c1" || k === "c2" ? (m.attrs?.[k] ? bomText(m.attrs[k]) : "—") : (m.attrs?.[k] || "—")}
+                      {k === "ref" && tieStatus[m.attrs?.ref] && tieStatus[m.attrs.ref].status !== "ok" && <span className="warnish" data-tie-status={tieStatus[m.attrs.ref].status} title={TIE_TEXT[tieStatus[m.attrs.ref].status]}> ⚠</span>}
                     </td>))}
                   {tab === "spool" && (() => { const ws = weldsOfSpool(m.no); return <td className="mono sm" data-spool-welds={ws.length}>{ws.length ? `${ws.length}: ${ws.slice(0, 8).join("، ")}${ws.length > 8 ? "…" : ""}` : "—"}</td>; })()}
                   {withEngine && <>

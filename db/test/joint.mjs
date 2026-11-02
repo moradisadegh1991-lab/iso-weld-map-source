@@ -211,4 +211,23 @@ test("an unknown weld is 404, and another project cannot read this one", async (
   });
 });
 
+test("a Tie-in written with a weld's old number is followed to where that weld is now (by identity, not by number)", async () => {
+  await inP(async () => {
+    const old = rev0.find((x) => x.weld_uid === W.weld_uid).weld_no;
+    assert(old !== W.weld_no, "the fixture's weld was renumbered");
+    const [renamed, ok, missing, noSheet, gone] = await joint.resolveTieIns(db, { projectId: P, refs: [
+      { doc: "ISO-1", sheet: "1/1", weld: old, uid: W.weld_uid }, { doc: "ISO-1", sheet: "1/1", weld: W.weld_no },
+      { doc: "ISO-1", sheet: "1/1", weld: "NO-SUCH" }, { doc: "ISO-1", sheet: "9/9", weld: W.weld_no },
+      { doc: "ISO-1", sheet: "1/1", weld: "X", uid: "no-such-uid" }] });
+    equal(renamed, { status: "renamed", current: { doc: "ISO-1", sheet: "1/1", weld: W.weld_no } });
+    equal(ok.status, "ok");
+    equal(missing.status, "missing", "no register ever held that number");
+    equal(noSheet.status, "missing", "the sheet is part of the reference");
+    equal(gone.status, "missing", "an identity no register holds");
+  });
+  await withProject(db, other.id, async () => {
+    equal((await joint.resolveTieIns(db, { projectId: other.id, refs: [{ doc: "ISO-1", sheet: "1/1", weld: W.weld_no }] }))[0].status, "missing", "another project's welds are not visible");
+  });
+});
+
 await run();
