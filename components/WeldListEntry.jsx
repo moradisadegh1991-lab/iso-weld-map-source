@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import BomForm from "./BomForm";
 import CutForm from "./CutForm";
+import { cutChecks } from "../lib/register/cut-model.mjs";
 import TableKit from "./ui/TableKit";
 import Pick, { useValueLists } from "./ui/Pick";
 import { COLUMN_LIST } from "../lib/register/value-lists.mjs";
@@ -332,6 +333,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     </>
   );
   const nextCutPiece = () => { const n = cutRows.map((c) => Number(c.piece)).filter(Number.isFinite); return (n.length ? Math.max(...n) : 0) + 1; };
+  const cutProblems = useMemo(() => cutChecks(cutRows, items), [cutRows, items]);
   const cutBom = useMemo(() => cutVsBom(cutLengths, bom), [cutLengths, bom]);
   const SZ = (n) => (n == null ? "؟" : `${n}"`);
   const cutBlock = (
@@ -357,13 +359,16 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           <span className="grow" />
           {!locked && <button type="button" className="ghost sm" data-cut-add onClick={() => setCutForm({ mode: "create", i: -1 })}>+ ثبت قطعه</button>}
         </div>
+        {cutLengths.length > 0 && cutProblems.length > 0 && <ul className="sm" data-cut-model-problems style={{ margin: "6px 0", paddingInlineStart: 18 }}>{cutProblems.map((x) => <li key={x} className="err">{x}</li>)}</ul>}
         {cutLengths.length > 0 && (
           <TableKit name="iso-cut-read"><table className="dtable">
-            <thead><tr><th>قطعه</th><th>طول برش (mm)</th><th>N.S.</th><th>اسپول</th><th>زاویه</th><th>توضیح</th><th></th></tr></thead>
+            <thead><tr><th>قطعه</th><th>طول برش (mm)</th><th>N.S.</th><th>ابتدا</th><th>انتها</th><th>اسپول</th><th>زاویه</th><th>توضیح</th><th></th></tr></thead>
             <tbody>{cutRows.map((c, i) => (
               <tr key={i} data-cut-row={c.piece}>
                 <td className="mono" data-cut-cell="piece">&lt;{c.piece}&gt;</td><td className="mono" data-cut-cell="lengthMm">{c.lengthMm}</td>
                 <td className="mono" dir="ltr" data-cut-cell="ns">{c.ns ?? "؟"}</td>
+                <td className="mono sm" dir="ltr" data-cut-cell="from">{c.from || "—"}</td>
+                <td className="mono sm" dir="ltr" data-cut-cell="to">{c.to || "—"}</td>
                 <td className="mono sm" dir="ltr" data-cut-cell="spool">{c.spool || "—"}</td>
                 <td className="mono sm" dir="ltr" data-cut-cell="angle">{c.angle || "—"}</td>
                 <td className="sm" data-cut-cell="note">{c.note || "—"}</td>
@@ -376,7 +381,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           </table></TableKit>)}
       </div>
       {cutForm && (
-        <CutForm key={`${cutForm.mode}-${cutForm.i}`} mode={cutForm.mode} lists={lists} readOnly={locked} cuts={cutRows}
+        <CutForm key={`${cutForm.mode}-${cutForm.i}`} mode={cutForm.mode} lists={lists} readOnly={locked} cuts={cutRows} items={items}
           spools={[...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))]}
           cut={cutForm.i >= 0 ? cutRows[cutForm.i] : { piece: nextCutPiece() }}
           onClose={() => setCutForm(null)}
@@ -577,7 +582,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         attachId={attachId} onAttach={setAttachId} focus={editFocus} onOpen={(mode, id, k) => openForm(mode, id, k)} />) },
     { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
       node: (<>{bomBlock}{bomWeldsBlock}{bom.length === 0 && <p className="muted sm">BOM خوانده نشد.</p>}</>) },
-    { k: "cut", label: "برش", hint: "جدول برش لوله و مقایسه با BOM", badge: cutLengths.length || "", tone: cutBom.problems.length ? "bad" : undefined,
+    { k: "cut", label: "برش", hint: "جدول برش لوله و مقایسه با BOM", badge: cutLengths.length || "", tone: cutBom.problems.length || cutProblems.length ? "bad" : undefined,
       node: (<>{cutBlock}{cutLengths.length === 0 && <p className="muted sm">جدول برش روی این برگ خوانده نشد.</p>}</>) },
     ...(styleTab ? [{ k: "style", label: "الگوی نقشه", hint: "الگوی این سبک نقشه: خانهٔ هر مقدار روی نقشه", node: styleTab }] : []),
     { k: "import", label: "ورود", hint: "خواندن از Excel / CSV یا چسباندن", node: (<>{importBlock}</>) },

@@ -13,6 +13,26 @@ import { formatRef, parseRef } from "../lib/sheet/tie-in.mjs";
  *   thisDoc                this sheet's drawing number, left out of the other isometrics
  */
 const THIS = "__this__", FREE = "__free__";
+
+/**
+ * Where each Tie-in of another drawing stands now (POST /api/tie-in-targets): ref → { status, current? }.
+ * `refs` are the references as stored; only those naming another drawing are asked about.
+ */
+export function useTieInStatus(refs) {
+  const platform = usePlatformMaybe();
+  const key = JSON.stringify([...new Set((refs || []).map((r) => String(r ?? "")).filter((r) => parseRef(r).doc && parseRef(r).weld))].sort());
+  const [map, setMap] = useState({});
+  useEffect(() => {
+    const list = JSON.parse(key);
+    if (!list.length || !platform?.projectId || !platform.call) { setMap({}); return undefined; }
+    let live = true;
+    platform.call("/api/tie-in-targets", { method: "POST", body: JSON.stringify({ projectId: platform.projectId, refs: list }) })
+      .then((r) => { if (live) setMap(Object.fromEntries((r.results || []).map((x) => [x.ref, x]))); }).catch(() => {});
+    return () => { live = false; };
+  }, [key, platform?.projectId, platform?.call]);
+  return map;
+}
+export const TIE_TEXT = { ok: "✓ در سامانه هست", renamed: "⚠ شمارهٔ این جوش (یا شیت آن) عوض شده", gone: "⚠ این جوش دیگر در رجیستر فعلی نیست", missing: "⚠ چنین جوشی در سامانه ثبت نشده" };
 export default function TieInPick({ value, onChange, weldNos = [], thisDoc = "", disabled, ...rest }) {
   const platform = usePlatformMaybe();
   const [iso, setIso] = useState([]);
@@ -32,6 +52,7 @@ export default function TieInPick({ value, onChange, weldNos = [], thisDoc = "",
   const sheets = cur?.sheets || [];
   const sh = sheets.find((s) => s.sheet === p.sheet);
   const emit = (n) => onChange?.(formatRef(n));
+  const status = useTieInStatus([value])[String(value ?? "")];
   return (
     <div className="mk-tie" data-tie-in {...rest}>
       <select data-tie="doc" aria-label="شمارهٔ ایزومتریک" disabled={disabled} value={mode}
@@ -54,12 +75,17 @@ export default function TieInPick({ value, onChange, weldNos = [], thisDoc = "",
           {p.sheet && !sh && <option value={p.sheet}>{p.sheet}</option>}
           {sheets.map((s) => <option key={s.sheet} value={s.sheet}>{s.sheet} · Rev {s.revision}</option>)}
         </select>
-        <select data-tie="weld" aria-label="سرجوش" dir="ltr" disabled={disabled} value={p.weld} onChange={(e) => emit({ doc: p.doc, sheet: p.sheet, weld: e.target.value })}>
+        <select data-tie="weld" aria-label="سرجوش" dir="ltr" disabled={disabled} value={p.weld} onChange={(e) => emit({ doc: p.doc, sheet: p.sheet, weld: e.target.value, uid: sh?.uids?.[e.target.value] || "" })}>
           <option value="">سرجوش…</option>
           {p.weld && !(sh?.welds || []).includes(p.weld) && <option value={p.weld}>{p.weld}</option>}
           {(sh?.welds || []).map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       </>)}
+      {status && (
+        <p className={`sm ${status.status === "ok" ? "muted" : "warnish"}`} data-tie-status={status.status} style={{ gridColumn: "1 / -1", margin: "2px 0 0" }}>
+          {TIE_TEXT[status.status]}
+          {status.status === "renamed" && status.current && !disabled && <> — <button type="button" className="ghost sm" data-tie-fix onClick={() => onChange?.(status.current)}>اصلاح به {parseRef(status.current).doc} · {parseRef(status.current).sheet} · {parseRef(status.current).weld}</button></>}
+        </p>)}
     </div>
   );
 }
