@@ -1,5 +1,5 @@
 "use client";
-import { KINDS, ATTRS, isPlaced, engineRow } from "../../lib/sheet/markup.mjs";
+import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, engineRow } from "../../lib/sheet/markup.mjs";
 import { sizesOf } from "../../lib/register/weld-marks.mjs";
 
 /**
@@ -48,6 +48,7 @@ export default function Inspector({ item, items = [], model = null, bom = [], re
             const row = bom.find((r) => String(r.pt) === String(a[k]));
             return <Row key={k} k={labels[k]} v={row ? `PT ${a[k]} — ${row.description || row.group || ""}${row.diam ? ` (${row.diam})` : ""}` : `PT ${a[k]} (در BOM این برگ نیست)`} />;
           }
+          if (cls === "equipment" && k === "status") return <Row key={k} k={labels[k]} v={Object.fromEntries(EQUIPMENT_STATUS)[a[k]] || a[k] || "برنامه‌ریزی‌شده"} />;
           return <Row key={k} k={labels[k]} v={a[k]} />;
         })}
         {cls === "spool" && <Row k="سرجوش‌های این اسپول" v={onSpool.length ? onSpool.map((m) => m.no).join("، ") : undefined} />}

@@ -17,9 +17,10 @@ const GROUPS = [
   ["weld", "سرجوش‌ها", (k) => String(k).startsWith("weld")],
   ["spool", "اسپول‌ها", (k) => k === "spool"],
   ["support", "ساپورت‌ها", (k) => k === "support"],
+  ["equipment", "تجهیزات نصب", (k) => k === "equipment"],
 ];
 const placed = (m) => Number.isFinite(m?.x) && Number.isFinite(m?.y);
-const KIND_MARK = { "weld-shop": "●", "weld-field": "■", "weld-unknown": "○", spool: "⬭", support: "⬢" };
+const KIND_MARK = { "weld-shop": "●", "weld-field": "■", "weld-unknown": "○", spool: "⬭", support: "⬢", equipment: "▲" };
 
 export default function Explorer({ meta = {}, sheets = null, items = [], selectedId = null, onSelect, checked = null }) {
   const unk = <span className="muted">نامعلوم</span>;

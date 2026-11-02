@@ -14,7 +14,7 @@ import { KINDS, SHEET_SIZE } from "../lib/sheet/markup.mjs";
  * white text, where the kind alone is told by the shape.
  */
 export const COLOR = {
-  "weld-shop": "#111", "weld-field": "#111", "weld-unknown": "#6b7280", spool: "#111", support: "#111",
+  "weld-shop": "#111", "weld-field": "#111", "weld-unknown": "#6b7280", spool: "#111", support: "#111", equipment: "#111",
 };
 
 /**
@@ -26,6 +26,8 @@ export const GEOMETRY = {
   weld: { vb: [30, 30], frame: 26, font: 15, fit: 23, box: SHEET_SIZE.weld.w * 30 / 26, stroke: 1 },
   spool: { vb: [60, 28], frame: 56, font: 12.5, fit: 46, box: SHEET_SIZE.spool.w * 60 / 56, stroke: 1.15 },
   support: { vb: [44, 36], frame: 40, font: 12, fit: 32, box: SHEET_SIZE.support.w * 44 / 40, stroke: 1.1 },
+  // a triangle point-up: its label sits in the lower, wider part
+  equipment: { vb: [40, 36], frame: 36, font: 10, fit: 20, box: SHEET_SIZE.equipment.w * 40 / 36, stroke: 1.15 },
 };
 export const geometryOf = (kind) => GEOMETRY[KINDS[kind]?.cls] || GEOMETRY.weld;
 
@@ -48,8 +50,9 @@ export default function MarkShape({ kind, no, on = false, size = 1, tint = null,
       {shape === "square" && <rect x={2} y={2} width={26} height={26} {...common} />}
       {shape === "oval" && <ellipse cx={30} cy={14} rx={28} ry={12.4} {...common} />}
       {shape === "hexagon" && <polygon points="2,18 11,2.4 33,2.4 42,18 33,33.6 11,33.6" {...common} />}
+      {shape === "triangle" && <polygon points="20,2.5 38,33.5 2,33.5" {...common} />}
       {label && (
-        <text x={W / 2} y={H / 2} dominantBaseline="central" textAnchor="middle" fontSize={g.font}
+        <text x={W / 2} y={shape === "triangle" ? H * 0.66 : H / 2} dominantBaseline="central" textAnchor="middle" fontSize={g.font}
           fontFamily="'Times New Roman',Times,serif" fontWeight="700" fill={tint ? "#fff" : "#111"}
           {...(long ? { textLength: g.fit, lengthAdjust: "spacingAndGlyphs" } : {})} style={{ userSelect: "none" }}>{label}</text>
       )}
