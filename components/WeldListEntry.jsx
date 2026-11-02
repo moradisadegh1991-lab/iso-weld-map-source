@@ -15,6 +15,7 @@ import { STATE_COLORS } from "./SheetReview";
 import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
 import EquipmentTable from "./EquipmentTable";
+import IsoInfo from "./IsoInfo";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
@@ -495,7 +496,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const reviewedN = nos.length - unchecked.length;
   const runWord = !run ? "ذخیره‌نشده" : approved ? "تأییدشده" : "در بازبینی";
   const tabs = [
-    { k: "info", label: "مشخصات", hint: "شمارهٔ نقشه، رویژن، خط و مشخصات خط", node: (<>{metaGrid}{registryBlock}{lineDataBlock}</>) },
+    { k: "info", label: "مشخصات", hint: "شمارهٔ نقشه، رویژن، خط و مشخصات خط", node: (<><IsoInfo meta={meta} lineData={lineData} onMeta={setMeta} onLineData={setLineData} lists={lists} locked={locked} run={run} />{registryBlock}</>) },
     { k: "welds", label: "سرجوش‌ها", hint: "رجیستر جوش‌ها و نشان‌های روی نقشه", badge: nos.length ? `${reviewedN}/${nos.length}` : "",
       tone: problems ? "bad" : undefined, node: (<>{registerTable()}{summaryBlock}</>) },
     { k: "equip", label: "تجهیزات", hint: "تجهیزات نصب، سرجوش‌های متصل و متعلقات", badge: items.filter((m) => m.kind === "equipment").length || "",
