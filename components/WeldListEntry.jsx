@@ -16,6 +16,7 @@ import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks } from "../lib/sheet/markup.mjs";
+import { usage } from "../lib/register/bom-allocation.mjs";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
 import { splitWeldLog, weldLogSheetName } from "../lib/register/weld-log-import.mjs";
@@ -147,6 +148,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const editMark = (id) => { setMarkSel(id); setWsTab("welds"); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); };
   const [attachId, setAttachId] = useState(null);
   const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras) : []), [sheetMode, rows, marks, extras]);
+  // who uses what of this sheet's BOM: the welds' ends against each row's (lib/register/bom-allocation.mjs)
+  const alloc = useMemo(() => usage(items, bom), [items, bom]);
   // a saved sheet: each weld painted by where its joint stands on site
   const progressStates = progress ? Object.fromEntries(items.filter((m) => m.kind.startsWith("weld")).map((m) => {
     const st = progress[m.no] || "open";
@@ -270,7 +273,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           <summary>BOM همین برگ — {bom.length} ردیف، خوانده‌شده با OCR؛ با نقشه بررسی و اصلاح کنید (همین جدول با رجیستر ذخیره می‌شود)</summary>
           <div style={{ overflowX: "auto" }}>
             <TableKit name="iso-bom"><table className="dtable">
-              <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th><th>واحد</th><th></th></tr></thead>
+              <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th><th>واحد</th><th title="سرهای جوشی‌شدنی این ردیف که سرجوش‌ها نام برده‌اند">سر جوش: رزرو/ظرفیت</th><th></th></tr></thead>
               <tbody>{bomRows.map((b, i) => (
                 <tr key={i} data-bom-row={b.pt}>
                   <td><input data-bom-cell="pt" dir="ltr" className="mono" style={{ width: 44 }} value={b.pt ?? ""} disabled={locked} onChange={(e) => setBom(i, "pt", e.target.value)} /></td>
@@ -281,6 +284,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
                   <td><input data-bom-cell="qty" dir="ltr" className="mono" style={{ width: 56 }} value={b.qty ?? ""} placeholder="؟" disabled={locked} onChange={(e) => setBom(i, "qty", e.target.value)} /></td>
                   <td><select data-bom-cell="qtyUnit" value={b.qtyUnit || ""} disabled={locked} onChange={(e) => setBom(i, "qtyUnit", e.target.value || null)}>
                     <option value="">؟</option><option value="pcs">عدد</option><option value="m">m</option></select></td>
+                  <td className="mono sm" data-bom-alloc={b.pt} dir="ltr">{(() => { const u = alloc.get(String(b.pt)); if (!u) return "—"; if (u.cap.mode === "length") return "طولی"; if (u.cap.mode === "none") return u.used ? `${u.used}/۰` : "—"; return u.cap.capacity == null ? (u.used ? `${u.used}/؟` : "؟") : `${u.used}/${u.cap.capacity}`; })()}</td>
                   <td>{!locked && <button type="button" className="ghost sm" onClick={() => setBomRows(bomRows.filter((_, j) => j !== i))}>حذف</button>}</td>
                 </tr>))}</tbody>
             </table></TableKit>

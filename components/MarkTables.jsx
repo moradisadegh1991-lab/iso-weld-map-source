@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { KINDS, ATTRS, addMark, updateMark, removeMark, unplace, isPlaced, notOnSheet, engineRow, problems, rules, componentChecks, bomSnapshot, dependents } from "../lib/sheet/markup.mjs";
+import { allocationChecks, canTake, usage } from "../lib/register/bom-allocation.mjs";
 import MarkShape from "./MarkShape";
 import TableKit from "./ui/TableKit";
 import Pick, { useValueLists } from "./ui/Pick";
@@ -11,9 +12,12 @@ import Pick, { useValueLists } from "./ui/Pick";
  * so a BOM row changed later is reported. A PT the BOM does not have stays,
  * marked; with no BOM on the sheet the PT is typed.
  */
-function BomPick({ bom, value, onPick, disabled, ...rest }) {
+function BomPick({ bom, value, onPick, disabled, items, weldId, slot, ...rest }) {
   const v = String(value ?? "").trim();
   const rows = (bom || []).filter((b) => b && b.pt != null && String(b.pt).trim());
+  // a row with none of its welded ends left is not offered to another weld, and says why (lib/register/bom-allocation.mjs)
+  const take = new Map(rows.map((b) => [String(b.pt), canTake(items, bom, weldId, slot, b.pt)]));
+  const use = usage(items, bom);
   if (!rows.length) return <input dir="ltr" className="mono" style={{ width: 70 }} value={v} placeholder="PT" disabled={disabled} onChange={(e) => onPick(e.target.value, null)} {...rest} />;
   const known = !v || rows.some((b) => String(b.pt) === v);
   return (
@@ -21,7 +25,11 @@ function BomPick({ bom, value, onPick, disabled, ...rest }) {
       onChange={(e) => onPick(e.target.value, rows.find((b) => String(b.pt) === e.target.value) || null)} {...rest}>
       <option value="">—</option>
       {!known && <option value={v}>PT {v} (در BOM نیست)</option>}
-      {rows.map((b) => <option key={b.pt} value={String(b.pt)}>{`PT ${b.pt} — ${String(b.description || b.group || "").slice(0, 42)}${b.diam ? ` (${b.diam})` : ""}`}</option>)}
+      {rows.map((b) => {
+        const t = take.get(String(b.pt)), u = use.get(String(b.pt));
+        const left = u?.cap?.capacity != null ? ` · مانده ${Math.max(0, u.left)}/${u.cap.capacity}` : "";
+        return <option key={b.pt} value={String(b.pt)} disabled={!t.ok} title={t.why || undefined}>{`PT ${b.pt} — ${String(b.description || b.group || "").slice(0, 38)}${b.diam ? ` (${b.diam})` : ""}${left}${t.ok ? "" : " ✕"}`}</option>;
+      })}
     </select>
   );
 }
@@ -71,7 +79,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
   const spoolNos = [...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))];
   const rows = items.filter((m) => KINDS[m.kind]?.cls === tab);
   const loose = notOnSheet(items);
-  const issues = [...problems(items), ...rules(items, weldList), ...componentChecks(items, bom)];
+  const issues = [...problems(items), ...rules(items, weldList), ...componentChecks(items, bom), ...allocationChecks(items, bom)];
   // the Tie-in references this sheet already uses, and its Tie-in welds: offered, a new one still typed
   const refs = [...new Set([...items.filter((m) => KINDS[m.kind]?.cls === "weld").map((m) => String(m.attrs?.ref ?? "").trim()),
     ...items.filter((m) => KINDS[m.kind]?.cls === "weld" && /tie[\s-]?in/i.test(String(m.attrs?.type ?? ""))).map((m) => String(m.no ?? "").trim())].filter(Boolean))];
@@ -153,7 +161,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
                     const list = PICK[tab][k];
                     const onPick = (v) => set(m.id, { attrs: { [k]: v } });
                     if (list === "bom") return (
-                      <td key={k}><BomPick data-cell={k} bom={bom} value={m.attrs?.[k]} disabled={readOnly} onClick={(ev) => ev.stopPropagation()}
+                      <td key={k}><BomPick data-cell={k} bom={bom} items={items} weldId={m.id} slot={k} value={m.attrs?.[k]} disabled={readOnly} onClick={(ev) => ev.stopPropagation()}
                         onPick={(v, row) => set(m.id, { attrs: { [k]: v, [`${k}s`]: row ? bomSnapshot(row) : "" } })} /></td>);
                     if (k === "ref") return (
                       <td key={k}><input data-cell={k} dir="ltr" style={{ width: 96 }} list={refs.length ? `mt-refs-${tab}` : undefined}
