@@ -179,7 +179,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     const fl = Object.entries(filters).map(([k, f]) => [idx.get(k), f]).filter(([i, f]) => i !== undefined && active(f));
     let shown = 0;
     for (const g of groups) {
-      const ok = (!needle || norm(g.main.textContent).includes(needle))
+      const ok = (!needle || norm([...g.main.cells].map(cellText).join(" ")).includes(needle))
         && (ci < 0 || val === "" || cellOf(g.main, ci) === val)
         && fl.every(([i, f]) => passes(cellOf(g.main, i), f));
       g.ok = ok;
@@ -485,7 +485,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     const hr = box.current?.querySelector("thead tr"); if (hr) flag(hr, "tkPickAll", false);
     setPicks(0);
   }
-  const rowsText = (rows) => rows.map((r) => [...r.cells].map((c) => c.textContent.replace(/\s+/g, " ").trim()));
+  const rowsText = (rows) => rows.map((r) => [...r.cells].map(cellText));
   function copyRows(rows) {
     const data = rowsText(rows);
     // copied from a table that edits its rows: each row's own field values too, so a paste here takes them exactly
@@ -630,7 +630,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     const rows = [];
     for (const r of table.tBodies[0]?.rows || []) {
       if (r.hidden || r.classList.contains("tk-grp") || isDetail(r)) continue;
-      rows.push(cols.map((h) => (r.cells[h.i]?.textContent || "").replace(/\s+/g, " ").trim()));
+      rows.push(cols.map((h) => cellText(r.cells[h.i])));
     }
     return { head: cols.map((h) => h.label), rows };
   }
@@ -660,7 +660,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   const clearAll = () => { setQ(""); setCol(""); setVal(""); setFilters({}); setLay((l) => ({ ...l, sort: [] })); };
   // A table with row actions always shows its bar: the actions live there.
   const showBar = meta.total >= min || (meta.total > 0 && !!(onEdit || onDelete)) || filtering;
-  const cells = sel ? [...sel.row.cells].map((c, i) => [heads[i]?.label || "", c.textContent.replace(/\s+/g, " ").trim()]).filter(([h, v]) => h || v) : [];
+  const cells = sel ? [...sel.row.cells].map((c, i) => [heads[i]?.label || "", cellText(c)]).filter(([h, v]) => h || v) : [];
   const title = cells.find(([, v]) => v)?.[1] || t("tk.row");
   const css = useMemo(() => layoutCss(`.tk[data-tk-id="${uid}"]`, mode, heads, disp, lay, pinOff, live), [uid, mode, heads, disp, lay, pinOff, live]);
   const MODES = [["table", "☰"], ["grid", "▦"], ["cards", "▣"]];
@@ -1063,7 +1063,14 @@ const own = (r) => !r.classList?.contains("tk-grp") && !r.classList?.contains("t
 const BOX = 24;
 const inBox = (cell, x, dir) => { const r = cell.getBoundingClientRect(); return dir === "rtl" ? r.right - x <= BOX : x - r.left <= BOX; };
 const isDetail = (r) => r.cells.length === 1 && r.cells[0].colSpan > 1;
-const cellOf = (r, i) => (r.cells[i]?.textContent || "").replace(/\s+/g, " ").trim();
+// A cell's text as a person reads it: what is typed or picked in its field when it holds one (a table that
+// edits its rows in place has inputs and selects, whose textContent is empty), else its text.
+const cellText = (c) => {
+  const f = c?.querySelector?.("input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select,textarea");
+  const v = f ? (f.tagName === "SELECT" ? (f.selectedOptions?.[0]?.textContent ?? "") : f.value) : (c?.textContent || "");
+  return String(v).replace(/\s+/g, " ").trim();
+};
+const cellOf = (r, i) => cellText(r.cells[i]);
 const flag = (el, k, on) => { if (on) { if (!(k in el.dataset)) el.dataset[k] = ""; } else if (k in el.dataset) delete el.dataset[k]; };
 const DIGITS = { "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4", "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",   // i18n: letters and digits the search and sort normalise, not text shown
   "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };   // i18n: letters and digits the search and sort normalise, not text shown

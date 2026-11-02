@@ -405,4 +405,15 @@ test("a sheet with no weld numbers: the weld dots become suggested welds, joined
   assert(both.rows.every((r) => r.loc === ""), "Shop/Field still not guessed");
 });
 
+test("a weld's note typed on the mark's table is kept through the weld list and back, not dropped (it has no column of its own)", () => {
+  const rows = withRowIds([{ no: "5", loc: "Shop", kind: "BW", nps: "2", note: "see detail A" }, { no: "6", loc: "Field" }]);
+  const items = itemsFromWeldRows(rows);
+  equal(items[0].attrs.note, "see detail A");
+  items[1] = { ...items[1], attrs: { ...(items[1].attrs || {}), note: "typed on the table" } };
+  const back = weldRowsFromItems(items, rows);
+  equal([back.rows[0].note, back.rows[1].note], ["see detail A", "typed on the table"]);
+  equal("note" in weldRowsFromItems(itemsFromWeldRows(withRowIds([{ no: "7", loc: "Shop" }])), []).rows[0], false, "no note, no key");
+  assert(!rowTyped({ note: "only a note" }), "a note alone does not make a row a weld");
+});
+
 await run();
