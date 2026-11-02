@@ -10,6 +10,8 @@ import { modelFor } from "../../../lib/register/weld-list.mjs";
 import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
 import { lineForRegister, tieInRefsOf } from "../../../lib/db/repos/spine.mjs";
 import { fillLineList, saveIsoBom } from "../../../lib/db/repos/line-list.mjs";
+import { syncWeldAllocations } from "../../../lib/db/repos/bom-allocation.mjs";
+import { ledgerDemands } from "../../../lib/register/bom-allocation.mjs";
 
 /**
  * Persist an extraction and the register it produces.
@@ -103,7 +105,13 @@ export async function POST(request) {
         // the sheet's BOM as the person checked it, for this revision of the sheet
         const bomRows = Array.isArray(payload?.bom) && payload.bom.length
           ? await saveIsoBom(tx, { projectId, documentId, runId: run.id, lineId: theLine, bom: payload.bom, createdBy: user.id }) : 0;
-        return { run, register, saved, lineList, bomRows };
+        // who uses what of that BOM: the welds' reservations made to match the sheet's marks, all in
+        // this transaction (a refusal — more taken than the BOM has, an installed line — undoes the save)
+        const allocation = bomRows
+          ? await syncWeldAllocations(tx, { projectId, documentId, runId: run.id, userId: user.id,
+              demands: ledgerDemands(payload?.sheetMarkup?.items || [], payload.bom) })
+          : null;
+        return { run, register, saved, lineList, bomRows, allocation };
       });
 
       if (out.signed) {
@@ -121,6 +129,7 @@ export async function POST(request) {
         register: out.register,
         ...(out.lineList ? { lineList: out.lineList } : {}),
         bomRows: out.bomRows,
+        ...(out.allocation ? { allocation: out.allocation } : {}),
         carriedIdentities: out.saved.carried,
         totals: model.totals,
         spools: model.spoolIds,
