@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo } from "../lib/sheet/markup.mjs";
+import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo, duplicateMark, removeMark, dependents } from "../lib/sheet/markup.mjs";
 import Shape, { COLOR, geometryOf } from "./MarkShape";
 
 /**
@@ -18,6 +18,13 @@ import Shape, { COLOR, geometryOf } from "./MarkShape";
  *   states    { [id]: { state, color } } — a mark painted in its state's colour (where its joint
  *             stands on site); without it every mark is black, as the designer draws them
  *   legend    [[color, label]] for those colours
+ *   onEdit    (id) — open the mark's row for editing (the page shows its table); without it, the mark is picked
+ *
+ * A right click (or the menu key, or Shift+F10, on a mark in focus) opens the
+ * sheet's menu: on a mark — its properties, edit, a copy with everything it
+ * records, move (the next click on the sheet is its new weld point; Escape
+ * cancels), delete (what else names it said first); on the empty sheet — a
+ * weld, spool or support put where it was clicked.
  *
  * Nothing here decides Shop or Field: a mark's kind is what the project's
  * symbols, the engine's register or the person said.
@@ -57,7 +64,7 @@ export async function renderMarkedPng(src, items) {
 }
 
 export default function SheetMarkup({ src, items = [], onChange, readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null,
-  selectedId: selectedProp, onSelect, attachId: attachProp, onAttach, states = null, legend = [] }) {
+  selectedId: selectedProp, onSelect, attachId: attachProp, onAttach, states = null, legend = [], onEdit = null }) {
   const [zoom, setZoom] = useState(1);
   // the picked mark and the mark waiting for its weld point may be held by the page, whose table picks the same mark
   const [selectedOwn, setSelectedOwn] = useState(null);
@@ -67,6 +74,8 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   const [tool, setTool] = useState(null);     // a kind, to be put where the sheet is next clicked
   const [drag, setDrag] = useState(null);
   const [busy, setBusy] = useState("");
+  const [menu, setMenu] = useState(null);     // the right-click menu: { x, y (viewport px), id (a mark) | p (a sheet point) }
+  const menuRef = useRef(null);
   const [aspect, setAspect] = useState(Math.SQRT2);   // the sheet's width / height, once its image is loaded
   const sheet = useRef(null);
   const box = useRef(null);
@@ -115,7 +124,8 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
     e.stopPropagation();
     pickedHere.current = true;
     setSelectedId(m.id);
-    if (readOnly) return;
+    // a right (or middle) button picks the mark only: its menu opens, nothing is dragged
+    if (readOnly || (e.pointerType === "mouse" && e.button !== 0)) return;
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* a synthetic pointer: the drag still follows the sheet */ }
     setDrag({ id: m.id, part, moved: false });
   }
@@ -136,6 +146,88 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   }
   // dragging the empty sheet moves it (a mouse or a pen; a finger already scrolls the box); not while a mark is
   // being put or joined, when the click is the point
+  // ── the right-click menu ──────────────────────────────────────────────
+  function openMenu(e) {
+    const el = e.target.closest?.("[data-mark-id]");
+    const id = el?.getAttribute("data-mark-id") || null;
+    if (!id && (readOnly || !sheet.current)) return;      // look-only: no menu on the empty sheet (the browser's own stays)
+    e.preventDefault();
+    e.stopPropagation();
+    if (id) { pickedHere.current = true; setSelectedId(id); }
+    setMenu({ x: e.clientX, y: e.clientY, id, p: id ? null : at(e) });
+  }
+  const closeMenu = () => setMenu(null);
+  const view = (id) => {
+    setSelectedId(id);
+    // the workspace's inspector, when this sheet is in one: opened and brought into view
+    const insp = document.querySelector("[data-ws-inspector]");
+    if (insp) { insp.open = true; insp.scrollIntoView({ block: "nearest" }); }
+  };
+  const edit = (id) => { setSelectedId(id); onEdit?.(id); };
+  function duplicate(id) {
+    const { items: next, id: nid } = duplicateMark(items, id, aspect);
+    if (!nid) return;
+    commit(next);
+    setSelectedId(nid);
+  }
+  function remove(id) {
+    const m = items.find((x) => x.id === id);
+    if (!m) return;
+    const deps = dependents(items, id);
+    const ask = `${KINDS[m.kind].label} ${m.no || ""} حذف شود؟` +
+      (deps.length ? `\n\nاین‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند (بعد از حذف در قاعده‌ها دیده می‌شوند):\n– ${deps.slice(0, 12).join("\n– ")}${deps.length > 12 ? "\n…" : ""}` : "");
+    if (!window.confirm(ask)) return;
+    if (pointFor === id) setPointFor(null);
+    if (selectedId === id) setSelectedId(null);
+    commit(removeMark(items, id));
+  }
+  function addHere(kind, p) {
+    const next = addMark(items, { kind });
+    const id = next[next.length - 1].id;
+    commit(placeAt(next, id, p, aspect));
+    setSelectedId(id);
+    onEdit?.(id);
+  }
+  const menuItems = !menu ? [] : menu.id ? [
+    { k: "view", label: "مشاهدهٔ مشخصات", icon: "ⓘ", run: () => view(menu.id) },
+    ...(readOnly ? [] : [
+      { k: "edit", label: "ویرایش مشخصات", icon: "✎", run: () => edit(menu.id) },
+      { k: "duplicate", label: "کپی با همهٔ مشخصات", icon: "⧉", run: () => duplicate(menu.id) },
+      { k: "move", label: "جابه‌جایی روی نقشه", icon: "✥", run: () => { setTool(null); setSelectedId(menu.id); setPointFor(menu.id); } },
+      { k: "delete", label: "حذف…", icon: "✕", danger: true, run: () => remove(menu.id) },
+    ]),
+  ] : [
+    ...KIND_IDS.filter((k) => k !== "weld-unknown").map((k) => ({ k: `add-${k}`, label: `افزودن ${KINDS[k].label} همین‌جا`, kind: k, run: () => addHere(k, menu.p) })),
+  ];
+  // the menu stays inside the window, opens toward the space there is, and takes the keys while open
+  useEffect(() => {
+    if (!menu) return undefined;
+    const el = menuRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect(), pad = 6;
+      const x = Math.max(pad, Math.min(menu.x, window.innerWidth - r.width - pad));
+      const y = Math.max(pad, Math.min(menu.y, window.innerHeight - r.height - pad));
+      el.style.left = `${x}px`; el.style.top = `${y}px`; el.style.visibility = "visible";
+      el.querySelector("[role=menuitem]")?.focus();
+    }
+    const out = (e) => { if (!menuRef.current?.contains(e.target)) closeMenu(); };
+    const key = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); closeMenu(); return; }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+      const els = [...(menuRef.current?.querySelectorAll("[role=menuitem]") || [])];
+      const i = els.indexOf(document.activeElement);
+      const to = e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : (i + (e.key === "ArrowDown" ? 1 : -1) + els.length) % els.length;
+      e.preventDefault(); els[to]?.focus();
+    };
+    const gone = () => closeMenu();
+    window.addEventListener("pointerdown", out, true);
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("resize", gone);
+    box.current?.addEventListener("scroll", gone);
+    const b = box.current;
+    return () => { window.removeEventListener("pointerdown", out, true); window.removeEventListener("keydown", key, true); window.removeEventListener("resize", gone); b?.removeEventListener("scroll", gone); };
+  }, [menu]);
+
   function startPan(e) {
     if (e.button !== 0 || e.pointerType === "touch" || tool || pointFor) return;
     if (e.target.closest("[data-mark-id],[data-anchor-id]")) return;
@@ -188,6 +280,13 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
       : e.key === "ArrowLeft" || e.key === "ArrowUp" ? ids[Math.max(0, i - 1)]
       : e.key === "Home" ? ids[0] : e.key === "End" ? ids[ids.length - 1] : null;
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(m.id); return; }
+    if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+      e.preventDefault();
+      const r = e.currentTarget.getBoundingClientRect();
+      setSelectedId(m.id);
+      setMenu({ x: r.left + r.width / 2, y: r.bottom, id: m.id, p: null });
+      return;
+    }
     if (to == null) return;
     e.preventDefault();
     setSelectedId(to);
@@ -197,7 +296,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   useEffect(() => {
     const h = (e) => {
       if (readOnly || !selectedId || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
-      if (e.key === "Escape") { setSelectedId(null); setTool(null); setPointFor(null); }
+      if (e.key === "Escape" && !menu) { setSelectedId(null); setTool(null); setPointFor(null); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -262,7 +361,8 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
 
       <div className="sheet-box" ref={box} data-panning={panning ? "true" : "false"} style={{ height, overflow: "auto", position: "relative", background: "#fff" }}
         onPointerDown={startPan} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-        <div ref={sheet} data-sheet style={{ position: "relative", width: `${zoom * 100}%`, cursor: (tool || pointFor) ? "crosshair" : panning ? "grabbing" : "grab" }} onClick={onSheetClick}>
+        <div ref={sheet} data-sheet style={{ position: "relative", width: `${zoom * 100}%`, cursor: (tool || pointFor) ? "crosshair" : panning ? "grabbing" : "grab" }} onClick={onSheetClick}
+          onContextMenu={openMenu}>
           {src
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={src} alt="نقشه ایزومتریک" draggable={false} style={{ display: "block", width: "100%", userSelect: "none" }}
@@ -308,6 +408,19 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
           })}
         </div>
       </div>
+      {menu && menuItems.length > 0 && (
+        <div ref={menuRef} className="sheet-menu" role="menu" data-sheet-menu={menu.id ? "mark" : "sheet"}
+          aria-label={menu.id ? `${KINDS[items.find((m) => m.id === menu.id)?.kind]?.label || ""} ${items.find((m) => m.id === menu.id)?.no || ""}` : "افزودن روی نقشه"}
+          style={{ position: "fixed", left: menu.x, top: menu.y, visibility: "hidden", zIndex: 1000 }}
+          onContextMenu={(e) => e.preventDefault()}>
+          {menu.id && (() => { const m = items.find((x) => x.id === menu.id); return m ? <div className="sheet-menu-h" aria-hidden><Shape kind={m.kind} no="" size={0.45} /> {KINDS[m.kind].label} <b className="mono">{m.no}</b></div> : null; })()}
+          {!menu.id && <div className="sheet-menu-h" aria-hidden>افزودن روی نقشه</div>}
+          {menuItems.map((it) => (
+            <button key={it.k} type="button" role="menuitem" data-menu-item={it.k} className={it.danger ? "danger" : undefined}
+              onClick={() => { closeMenu(); it.run(); }}>
+              <span className="ic" aria-hidden>{it.kind ? <Shape kind={it.kind} no="" size={0.4} /> : it.icon}</span>{it.label}
+            </button>))}
+        </div>)}
     </div>
   );
 }

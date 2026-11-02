@@ -42,7 +42,14 @@ export default function Inspector({ item, items = [], model = null, bom = [], re
         {tickable && <span className={reviewed.has(no) ? "ok" : "muted sm"}>{reviewed.has(no) ? "✓ با نقشه بررسی شد" : "هنوز بررسی نشده"}</span>}
       </div>
       <dl className="ws-insp-dl">
-        {(ATTRS[cls] || []).map(([k]) => <Row key={k} k={labels[k]} v={a[k]} />)}
+        {(ATTRS[cls] || []).map(([k]) => {
+          // a weld's BOM component: its PT row as the sheet's BOM gives it now
+          if ((k === "c1" || k === "c2") && a[k]) {
+            const row = bom.find((r) => String(r.pt) === String(a[k]));
+            return <Row key={k} k={labels[k]} v={row ? `PT ${a[k]} — ${row.description || row.group || ""}${row.diam ? ` (${row.diam})` : ""}` : `PT ${a[k]} (در BOM این برگ نیست)`} />;
+          }
+          return <Row key={k} k={labels[k]} v={a[k]} />;
+        })}
         {cls === "spool" && <Row k="سرجوش‌های این اسپول" v={onSpool.length ? onSpool.map((m) => m.no).join("، ") : undefined} />}
         {spoolOf && <Row k="اسپول در نقشه" v={`${spoolOf.no}${spoolOf.attrs?.lengthMm ? ` · ${spoolOf.attrs.lengthMm} mm` : ""}`} />}
       </dl>

@@ -60,6 +60,8 @@ export default function Page() {
   const [markSel, setMarkSel] = useState(null);
   const [attachId, setAttachId] = useState(null);
   const [tab, setTab] = useState("weld");
+  // «edit» from the sheet's menu: the mark's row in the weld tab's table, in focus
+  const [editFocus, setEditFocus] = useState(null);
   const [selected, setSelected] = useState(null);
   const [exploded, setExploded] = useState(false);
   const [showTags, setShowTags] = useState(true);
@@ -796,7 +798,8 @@ export default function Page() {
                       setData(next);
                       setEditing(JSON.stringify(next, null, 2));
                     }}
-                    selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} />
+                    selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
+                    bom={data.bom || []} focus={editFocus} />
                 ) : (
                 <TableKit name="iso-register"><table className="dtable">
                   <thead><tr><th>No</th><th>Spool</th><th>محل</th><th>نوع</th><th>اتصال</th><th>EL</th><th>NDT</th></tr></thead>
@@ -956,6 +959,7 @@ export default function Page() {
               <SheetMarkup src={openRun ? runSheet?.src : preview}
                 items={data.sheetMarkup?.items || []}
                 selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
+                onEdit={(id) => { setMarkSel(id); setTab("weld"); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }}
                 onSeedEngine={(aspect) => {
                   // the engine's welds again, where the model saw their nodes: what a person placed or kept stays
                   const kept = (data.sheetMarkup?.items || []).filter((m) => m.src !== "engine");

@@ -142,6 +142,9 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const locked = run?.run?.status === "approved";
   const sheetMode = Boolean(sheet);
   const [markSel, setMarkSel] = useState(null);
+  // «edit» from the sheet's menu: the welds tab, the mark's row in focus
+  const [editFocus, setEditFocus] = useState(null);
+  const editMark = (id) => { setMarkSel(id); setWsTab("welds"); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); };
   const [attachId, setAttachId] = useState(null);
   const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras) : []), [sheetMode, rows, marks, extras]);
   // a saved sheet: each weld painted by where its joint stands on site
@@ -392,7 +395,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
         <div className="wl-sheet" data-wl-sheet>
           <SheetMarkup src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
             fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
-            states={progressStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
+            onEdit={locked ? null : editMark} states={progressStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
           <p className="note mono sm" data-wl-review-count>
             {nos.length - unchecked.length} از {nos.length} جوش با نقشه بررسی شد · {Object.keys(keptMarks).length} روی نقشه جا دارد
             {nos.length > 0 && !locked && <> · <button type="button" className="ghost sm" onClick={() => setReviewed(new Set(nos))}>همه بررسی شد</button></>}
@@ -406,7 +409,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     <>
         <div className="wl-table">
           <MarkTables items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
-            selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
+            selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} bom={bom} focus={editFocus}
             checked={locked ? null : { has: (no) => reviewed.has(no), onTick: tick }} />
         </div>
 

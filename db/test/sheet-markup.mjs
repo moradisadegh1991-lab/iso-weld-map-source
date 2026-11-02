@@ -7,7 +7,7 @@
 import { test, run, assert, equal } from "./harness.mjs";
 import { buildModel } from "../../lib/engine.js";
 import { DEMO } from "../../lib/demo.js";
-import { KINDS, SHEET_SIZE, plainNo, isPlaced, notOnSheet, engineRow, frameSpot, placeAt, unplace, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, problems, normalize } from "../../lib/sheet/markup.mjs";
+import { KINDS, SHEET_SIZE, plainNo, isPlaced, notOnSheet, engineRow, frameSpot, placeAt, unplace, materialAt, scheduleOf, rules, fromReaderTags, fromEngine, seedFromPass, addMark, updateMark, removeMark, nextNo, problems, normalize, duplicateMark, dependents, componentChecks, bomSnapshot } from "../../lib/sheet/markup.mjs";
 
 import { suggestFromDots, orderAlongPipe } from "../../lib/sheet/weld-dots.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../../lib/sheet/weld-list-marks.mjs";
@@ -107,7 +107,7 @@ test("a person adds, moves, renumbers, retypes and deletes; an edit makes the ma
 test("the next number is one past the largest in that class", () => {
   const items = [{ kind: "weld-shop", no: "7" }, { kind: "weld-field", no: "3" }, { kind: "spool", no: "SP-9" }];
   equal(nextNo(items, "weld-shop"), "8", "shop and field welds share one series");
-  equal(nextNo(items, "spool"), "1", "a spool number that is not a plain number does not count");
+  equal(nextNo(items, "spool"), "SP-10", "a spool numbered SP-9: the next one is written the same way");
   equal(nextNo([], "support"), "1");
 });
 
@@ -414,6 +414,76 @@ test("a weld's note typed on the mark's table is kept through the weld list and 
   equal([back.rows[0].note, back.rows[1].note], ["see detail A", "typed on the table"]);
   equal("note" in weldRowsFromItems(itemsFromWeldRows(withRowIds([{ no: "7", loc: "Shop" }])), []).rows[0], false, "no note, no key");
   assert(!rowTyped({ note: "only a note" }), "a note alone does not make a row a weld");
+});
+
+const BOM = [{ pt: 12, group: "FLANGES", description: "FLANGE WN 300#", diam: "4", qty: 1 }, { pt: 18, group: "PIPE", description: "PIPE A106-B", diam: "4", qty: 6.2 },
+  { pt: 7, group: "FITTINGS", description: "ELBOW 90 LR", diam: "2", qty: 1 }, { pt: 8, group: "FITTINGS", description: "ELBOW 90 LR", diam: "4", qty: 2 }];
+const SHEET = [
+  { id: "w1", kind: "weld-shop", no: "1", x: 0.5, y: 0.5, ax: 0.48, ay: 0.52, src: "reader",
+    attrs: { c1: "12", c1s: bomSnapshot(BOM[0]), c2: "18", c2s: bomSnapshot(BOM[1]), type: "BW", size: "4", spool: "SP-1", wps: "WPS-01", material: "A106-B" } },
+  { id: "w2", kind: "weld-field", no: "2", x: 0.6, y: 0.4, ax: 0.62, ay: 0.42, attrs: { type: "Tie-in", ref: "TI-01" } },
+  { id: "w3", kind: "weld-field", no: "3", attrs: { ref: "2" } },
+  { id: "s1", kind: "spool", no: "SP-1", x: 0.3, y: 0.3 }, { id: "p1", kind: "support", no: "1", x: 0.2, y: 0.8, attrs: { type: "FS133" } },
+];
+
+test("a copy keeps everything the mark records — components with their snapshots, spool, WPS — with a new id and number, set beside the original", () => {
+  const { items, id } = duplicateMark(SHEET, "w1");
+  const c = items.find((m) => m.id === id), o = SHEET[0];
+  equal(items.length, SHEET.length + 1);
+  assert(id && !SHEET.some((m) => m.id === id), "a new id");
+  equal(c.no, "4", "the next weld number (1, 2, 3 in use)");
+  equal(c.attrs, o.attrs, "every attribute copied");
+  assert(c.attrs !== o.attrs, "its own copy: editing it does not edit the original");
+  equal([c.kind, c.src], ["weld-shop", "hand"]);
+  assert(c.x > o.x && c.y > o.y && c.ax > o.ax && c.ay > o.ay, "frame and weld point moved by the same small step");
+  equal(Math.round((c.x - c.ax) * 1e4), Math.round((o.x - o.ax) * 1e4), "its leader the same shape");
+  equal(items.find((m) => m.id === "w1"), o, "the original untouched");
+  const row = duplicateMark(SHEET, "w3");
+  equal([isPlaced(row.items.at(-1)), row.items.at(-1).no], [false, "4"], "a row not on the drawing is copied as a row");
+  equal(duplicateMark(SHEET, "s1").items.at(-1).no, "SP-2", "numbered the way the sheet numbers spools");
+  equal(duplicateMark(SHEET, "nope").id, null);
+});
+
+test("a new mark is numbered the way the sheet numbers its class", () => {
+  const k = (nos, kind = "spool") => nextNo(nos.map((no, i) => ({ id: `x${i}`, kind, no })), kind);
+  equal([k(["SP-1", "SP-3"]), k(["SW-1", "SW-2"], "support"), k(["1", "2", "12"], "weld-shop"), k([]), k(["SP-1", "SP-2", "7"]), k(["A", "SP-01"])], ["SP-4", "SW-3", "13", "1", "SP-3", "SP-2"]);
+  equal(k(["SP-1", "4"]), "5", "a tie: plain numbers");
+});
+
+test("moving a mark changes only where it is: its id, number and everything it records stay", () => {
+  const moved = placeAt(SHEET, "w1", { x: 0.1, y: 0.2 }).find((m) => m.id === "w1");
+  equal([moved.id, moved.no, moved.attrs, moved.ax, moved.ay], ["w1", "1", SHEET[0].attrs, 0.1, 0.2]);
+});
+
+test("before a delete: what names the mark — a spool's welds, the welds that give a weld as their Tie-in reference; a support, nothing", () => {
+  equal(dependents(SHEET, "s1"), ["سرجوش 1 در اسپول SP-1"]);
+  equal(dependents(SHEET, "w2"), ["سرجوش 3 به 2 ارجاع داده (Tie-in)"]);
+  equal(dependents(SHEET, "p1"), []);
+  equal(dependents(removeMark(SHEET, "w3"), "w2"), [], "nothing names it once that weld is gone");
+});
+
+test("a weld's two BOM components are checked against this sheet's BOM, never corrected", () => {
+  equal(componentChecks(SHEET, BOM), [], "flange and pipe of the weld's size, as picked: nothing to say");
+  const c = (attrs) => componentChecks([{ id: "x", kind: "weld-shop", no: "9", attrs }], BOM);
+  equal(c({ c1: "99", c2: "18" }), ["سرجوش 9: قطعهٔ ۱ (PT 99) در BOM این برگ نیست"]);
+  equal(c({ c1: "12", c2: "7", size: "4" }), ["سرجوش 9: قطر جوش (4) با قطر قطعهٔ ۲ (PT 7: 2) نمی‌خواند"]);
+  equal(c({ c1: "7", c2: "7" }), ["سرجوش 9: هر دو قطعه PT 7 است ولی BOM از آن 1 عدد دارد — بررسی کنید"]);
+  equal(c({ c1: "8", c2: "8" }), [], "two of one fitting (qty 2): elbow to elbow is a weld");
+  equal(c({ c1: "18", c2: "18" }), [], "two pieces of one pipe item");
+  equal(c({ c1: "12", c1s: "FLANGE SO 150# | 4" }), ["سرجوش 9: ردیف PT 12 در BOM از وقتی انتخاب شد عوض شده («FLANGE SO 150# | 4» → «FLANGE WN 300# | 4»)"]);
+  equal(c({ type: "BW", size: "4" }), [], "a weld with no components picked: nothing checked");
+  equal(c({ c1: "12", c2: "18", size: "2 x 4" }), [], "a reducing size names both");
+});
+
+test("the components and their snapshots survive the weld list and back, and an old mark without them reads as before", () => {
+  const items = SHEET.filter((m) => KINDS[m.kind].cls === "weld");
+  const { rows } = weldRowsFromItems(items, []);
+  equal([rows[0].c1, rows[0].c2, rows[0].c1s], ["12", "18", "FLANGE WN 300# | 4"]);
+  const back = itemsFromWeldRows(rows);
+  const sorted = (o) => Object.fromEntries(Object.entries(o).sort());
+  equal(sorted(back[0].attrs), sorted(SHEET[0].attrs));
+  equal(["c1", "c2"].some((k) => k in rows[1]), false, "a weld without components has none");
+  equal(normalize([{ kind: "weld-shop", no: "5", attrs: { type: "BW", size: "2" } }])[0].attrs, { type: "BW", size: "2" }, "saved marks from before are unchanged");
 });
 
 await run();
