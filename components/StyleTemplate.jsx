@@ -18,7 +18,7 @@ const LABEL = Object.fromEntries(FIELDS);
  * a later sheet of the style is read from those cells, each value kept only
  * when its readings agree.
  */
-export default function StyleTemplate({ session, preview, read, sample }) {
+export default function StyleTemplate({ session, preview, read, sample, open = false }) {
   const [styles, setStyles] = useState([]);
   const [fields, setFields] = useState({});
   const [name, setName] = useState("");
@@ -83,7 +83,7 @@ export default function StyleTemplate({ session, preview, read, sample }) {
       ) : (
         <p className="muted sm">برای این سبک نقشه الگویی ذخیره نشده — اگر مقداری خوانده نشد، خانه‌اش را یک بار روی نقشه نشان دهید تا برگ‌های بعدی همین طراح از همان خانه خوانده شوند.</p>
       ))}
-      <details className="intake-more" data-template-teach>
+      <details className="intake-more" data-template-teach open={open || undefined}>
         <summary>الگوی این سبک نقشه — خانهٔ هر مقدار را روی نقشه نشان دهید ({Object.keys(fields).length} خانه)</summary>
         <p className="muted sm">
           فقط جای هر مقدار ذخیره می‌شود، نه خود مقدار: هر برگ، خانهٔ خودش را چند بار می‌خواند و فقط وقتی همه یکی باشند می‌پذیرد.

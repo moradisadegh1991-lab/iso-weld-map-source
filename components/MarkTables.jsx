@@ -1,38 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { KINDS, ATTRS, addMark, updateMark, removeMark, unplace, isPlaced, notOnSheet, engineRow, problems, rules, componentChecks, bomSnapshot, dependents } from "../lib/sheet/markup.mjs";
-import { allocationChecks, canTake, usage } from "../lib/register/bom-allocation.mjs";
+import { allocationChecks } from "../lib/register/bom-allocation.mjs";
 import MarkShape from "./MarkShape";
 import TableKit from "./ui/TableKit";
-import Pick, { useValueLists } from "./ui/Pick";
-
-/**
- * A weld's component: one PT row of this sheet's BOM, shown with its
- * description and size. What it was when picked is kept beside it (c1s/c2s)
- * so a BOM row changed later is reported. A PT the BOM does not have stays,
- * marked; with no BOM on the sheet the PT is typed.
- */
-function BomPick({ bom, value, onPick, disabled, items, weldId, slot, ...rest }) {
-  const v = String(value ?? "").trim();
-  const rows = (bom || []).filter((b) => b && b.pt != null && String(b.pt).trim());
-  // a row with none of its welded ends left is not offered to another weld, and says why (lib/register/bom-allocation.mjs)
-  const take = new Map(rows.map((b) => [String(b.pt), canTake(items, bom, weldId, slot, b.pt)]));
-  const use = usage(items, bom);
-  if (!rows.length) return <input dir="ltr" className="mono" style={{ width: 70 }} value={v} placeholder="PT" disabled={disabled} onChange={(e) => onPick(e.target.value, null)} {...rest} />;
-  const known = !v || rows.some((b) => String(b.pt) === v);
-  return (
-    <select dir="ltr" style={{ width: 170 }} value={v} disabled={disabled} data-bom-pick title={known ? undefined : `PT ${v} در BOM این برگ نیست`}
-      onChange={(e) => onPick(e.target.value, rows.find((b) => String(b.pt) === e.target.value) || null)} {...rest}>
-      <option value="">—</option>
-      {!known && <option value={v}>PT {v} (در BOM نیست)</option>}
-      {rows.map((b) => {
-        const t = take.get(String(b.pt)), u = use.get(String(b.pt));
-        const left = u?.cap?.capacity != null ? ` · مانده ${Math.max(0, u.left)}/${u.cap.capacity}` : "";
-        return <option key={b.pt} value={String(b.pt)} disabled={!t.ok} title={t.why || undefined}>{`PT ${b.pt} — ${String(b.description || b.group || "").slice(0, 38)}${b.diam ? ` (${b.diam})` : ""}${left}${t.ok ? "" : " ✕"}`}</option>;
-      })}
-    </select>
-  );
-}
 
 // which list each column picks from, by the table it is in (null: typed by hand — numbers, lengths and notes)
 const PICK = {
@@ -71,12 +42,9 @@ const NEW_KIND = { weld: "weld-unknown", spool: "spool", support: "support" };
 const WORD = { weld: "سرجوش", spool: "اسپول", support: "ساپورت" };
 
 export default function MarkTables({ items = [], onChange, model = null, selectedId = null, onSelect, attachId = null, onAttach,
-  readOnly = false, tabs = ["weld", "spool", "support"], weldList = null, checked = null, bom = [], focus = null }) {
+  readOnly = false, tabs = ["weld", "spool", "support"], weldList = null, checked = null, bom = [], focus = null, onOpen = null }) {
   const shown = TABS.filter(([k]) => tabs.includes(k));
   const [tab, setTab] = useState(shown[0]?.[0] || "weld");
-  const lists = useValueLists();
-  // a weld's spool is one of the spools on this sheet, when there are any
-  const spoolNos = [...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))];
   const rows = items.filter((m) => KINDS[m.kind]?.cls === tab);
   // a table of one class (the workspace's own tab for spools or supports) speaks of its own class
   const mine = new Set(shown.map(([k]) => k));
@@ -84,9 +52,6 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
   const only = shown.length === 1 && !mine.has("weld") ? shown[0][0] : null;
   const all = [...problems(items), ...rules(items, weldList), ...componentChecks(items, bom), ...allocationChecks(items, bom)];
   const issues = only === "spool" ? all.filter((x) => /اسپول/.test(x)) : only === "support" ? all.filter((x) => /ساپورت/.test(x)) : all;
-  // the Tie-in references this sheet already uses, and its Tie-in welds: offered, a new one still typed
-  const refs = [...new Set([...items.filter((m) => KINDS[m.kind]?.cls === "weld").map((m) => String(m.attrs?.ref ?? "").trim()),
-    ...items.filter((m) => KINDS[m.kind]?.cls === "weld" && /tie[\s-]?in/i.test(String(m.attrs?.type ?? ""))).map((m) => String(m.no ?? "").trim())].filter(Boolean))];
   // «edit» from the sheet's menu: this mark's table, its row in view, its first field in focus
   const box = useRef(null);
   const done = useRef(null);      // the «edit» already acted on: the person may change tab after it
@@ -100,10 +65,12 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
     const row = box.current?.querySelector(`[data-mark-row="${CSS.escape(String(focus.id))}"]`);
     if (!row) return;
     row.scrollIntoView({ block: "nearest" });
-    (row.querySelector("[data-cell]:not([data-cell=no])") || row.querySelector("[data-cell]"))?.focus();
+    row.querySelector("[data-row-edit]")?.focus();
   }, [focus?.id, focus?.n, tab]);  // eslint-disable-line react-hooks/exhaustive-deps
-  const set = (id, patch) => onChange?.(updateMark(items, id, patch));
+  // a row is added, viewed and edited in its form (components/MarkForm.jsx), which the page holds
+  const open = (mode, m) => onOpen?.(mode, m?.id || null, m?.kind || NEW_KIND[tab]);
   const add = () => {
+    if (onOpen) { open("create", null); return; }
     const next = addMark(items, { kind: NEW_KIND[tab] });
     onChange?.(next);
     const row = next[next.length - 1];
@@ -112,6 +79,8 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
   };
   const withEngine = tab === "weld" && model && !model.error;
   const ticks = tab === "weld" && checked;
+  const bomText = (pt) => { if (!pt) return "—"; const b = (bom || []).find((r) => String(r.pt) === String(pt)); return b ? `PT ${pt} — ${String(b.description || b.group || "").slice(0, 28)}` : `PT ${pt} (در BOM نیست)`; };
+  const KIND_TEXT = { "weld-shop": "کارگاه", "weld-field": "سایت", "weld-unknown": "نامعلوم" };
   const colSpan = ATTRS[tab].length + 3 + (tab === "weld" ? 1 : 0) + (tab === "spool" ? 1 : 0) + (withEngine ? 2 : 0) + (ticks ? 1 : 0);
   // a spool's welds: the weld marks that name it (read-only, from the sheet)
   const weldsOfSpool = (no) => items.filter((w) => KINDS[w.kind]?.cls === "weld" && String(w.attrs?.spool ?? "").trim() === String(no ?? "").trim() && String(no ?? "").trim()).map((w) => w.no);
@@ -128,7 +97,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
         ))}
         <span className="grow" />
         {!readOnly && (
-          <button type="button" className="ghost sm" data-mark-add={tab} onClick={add}>+ {WORD[tab]} (بعد روی نقشه، محل آن را کلیک کنید)</button>)}
+          <button type="button" className="ghost sm" data-mark-add={tab} onClick={add}>+ {WORD[tab]}</button>)}
       </div>
 
       {loose.length > 0 && (
@@ -157,37 +126,21 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
                 <tr key={m.id} data-mark-row={m.id} data-placed={placed ? "yes" : "no"} className={m.id === selectedId ? "sel" : undefined} onClick={() => onSelect?.(m.id)}>
                   {ticks && <td><input type="checkbox" aria-label={`جوش ${m.no} با نقشه بررسی شد`} disabled={!m.no} data-wl-check={m.no}
                     checked={Boolean(m.no) && checked.has(m.no)} onClick={(ev) => ev.stopPropagation()} onChange={(ev) => checked.onTick(m.no, ev.target.checked)} /></td>}
-                  <td><input data-cell="no" dir="ltr" className="mono" style={{ width: 64 }} value={m.no} disabled={readOnly}
-                    onChange={(ev) => set(m.id, { no: ev.target.value })} /></td>
-                  {tab === "weld" && (
-                    <td><select data-cell="kind" value={m.kind} disabled={readOnly} onChange={(ev) => set(m.id, { kind: ev.target.value })}>
-                      <option value="weld-shop">کارگاه (دایره)</option>
-                      <option value="weld-field">سایت (مربع)</option>
-                      <option value="weld-unknown">نامعلوم</option>
-                    </select></td>)}
-                  {ATTRS[tab].map(([k, , ph]) => {
-                    const list = PICK[tab][k];
-                    const onPick = (v) => set(m.id, { attrs: { [k]: v } });
-                    if (list === "bom") return (
-                      <td key={k}><BomPick data-cell={k} bom={bom} items={items} weldId={m.id} slot={k} value={m.attrs?.[k]} disabled={readOnly} onClick={(ev) => ev.stopPropagation()}
-                        onPick={(v, row) => set(m.id, { attrs: { [k]: v, [`${k}s`]: row ? bomSnapshot(row) : "" } })} /></td>);
-                    if (k === "ref") return (
-                      <td key={k}><input data-cell={k} dir="ltr" style={{ width: 96 }} list={refs.length ? `mt-refs-${tab}` : undefined}
-                        value={m.attrs?.[k] ?? ""} disabled={readOnly} onChange={(ev) => onPick(ev.target.value)} /></td>);
-                    return (
-                      <td key={k}>{list
-                        ? <Pick data-cell={k} list={list} lists={lists} items={list === "spools" ? (spoolNos.length ? spoolNos : null) : undefined}
-                          style={{ width: 96 }} placeholder={ph} value={m.attrs?.[k]} disabled={readOnly} onChange={onPick}
-                          onClick={(ev) => ev.stopPropagation()} />
-                        : <input data-cell={k} dir="ltr" style={{ width: k === "note" ? 130 : 84 }} placeholder={ph}
-                          value={m.attrs?.[k] ?? ""} disabled={readOnly} onChange={(ev) => onPick(ev.target.value)} />}</td>);
-                  })}
+                  <td className="mono b" data-cell="no" dir="ltr">{m.no || "—"}</td>
+                  {tab === "weld" && <td data-cell="kind">{KIND_TEXT[m.kind]}</td>}
+                  {ATTRS[tab].map(([k]) => (
+                    <td key={k} data-cell={k} className={k === "note" ? "sm" : "mono sm"} dir={k === "note" ? "auto" : "ltr"}
+                      title={k === "c1" || k === "c2" ? bomText(m.attrs?.[k]) : undefined}>
+                      {k === "c1" || k === "c2" ? (m.attrs?.[k] ? bomText(m.attrs[k]) : "—") : (m.attrs?.[k] || "—")}
+                    </td>))}
                   {tab === "spool" && (() => { const ws = weldsOfSpool(m.no); return <td className="mono sm" data-spool-welds={ws.length}>{ws.length ? `${ws.length}: ${ws.slice(0, 8).join("، ")}${ws.length > 8 ? "…" : ""}` : "—"}</td>; })()}
                   {withEngine && <>
                     <td className="mono sm" data-engine="ndt">{e?.ndt ?? "—"}</td>
                     <td className="mono sm" data-engine="el">{e?.el != null ? Math.round(e.el).toLocaleString("en-US") : "—"}</td>
                   </>}
                   <td style={{ whiteSpace: "nowrap" }}>
+                    {onOpen && <button type="button" className="ghost sm" data-row-view={m.id} onClick={(ev) => { ev.stopPropagation(); onSelect?.(m.id); open("view", m); }}>مشاهده</button>}
+                    {onOpen && !readOnly && <button type="button" className="ghost sm" data-row-edit={m.id} onClick={(ev) => { ev.stopPropagation(); onSelect?.(m.id); open("edit", m); }}>ویرایش</button>}
                     {!readOnly && (<>
                       <button type="button" className={attachId === m.id ? "on sm" : "ghost sm"} data-row-attach={m.id}
                         onClick={(ev) => { ev.stopPropagation(); onSelect?.(m.id); onAttach?.(attachId === m.id ? null : m.id); }}>
@@ -211,7 +164,6 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
             {!rows.length && <tr><td colSpan={colSpan} className="muted sm">هنوز چیزی در این جدول نیست — «+ {WORD[tab]}» را بزنید.</td></tr>}
           </tbody>
         </table></TableKit>
-        {refs.length > 0 && <datalist id={`mt-refs-${tab}`}>{refs.map((r) => <option key={r} value={r} />)}</datalist>}
       </div>
       {issues.length > 0 && (
         <ul className="sm" data-mark-rules style={{ margin: "6px 0", paddingInlineStart: 18 }}>
