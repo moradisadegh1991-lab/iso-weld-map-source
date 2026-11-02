@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import FormDialog from "./ui/FormDialog";
 import BomPick from "./BomPick";
 import Pick from "./ui/Pick";
+import TieInPick from "./TieInPick";
 import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, weldsOf, accessoriesOf, accessoriesText, bomSnapshot, nextNo } from "../lib/sheet/markup.mjs";
 
 /**
@@ -31,7 +32,7 @@ const LIST_OF = {
 const NEW_ID = "__draft__";
 const rowText = (b) => `PT ${b.pt} — ${String(b.description || b.group || "").slice(0, 46)}${b.diam ? ` (${b.diam})` : ""}`;
 
-export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom = [], lists, onSave, onClose, readOnly = false }) {
+export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom = [], lists, onSave, onClose, readOnly = false, thisDoc = "" }) {
   const [mode, setMode] = useState(readOnly ? "view" : mode0);
   const cls = KINDS[mark?.kind]?.cls || "weld";
   const start = useMemo(() => ({
@@ -52,8 +53,6 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
   }, [items, d, id]);
   const spools = [...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))];
   const welds = items.filter((m) => KINDS[m.kind]?.cls === "weld" && m.id !== id);
-  const refs = [...new Set(items.filter((m) => KINDS[m.kind]?.cls === "weld").flatMap((m) => [String(m.attrs?.ref ?? "").trim(),
-    /tie[\s-]?in/i.test(String(m.attrs?.type ?? "")) ? String(m.no ?? "").trim() : ""]).filter(Boolean))];
   const bomRows = (bom || []).filter((b) => b && b.pt != null && String(b.pt).trim());
   const labels = Object.fromEntries((ATTRS[cls] || []).map(([k, l, ph]) => [k, [l, ph]]));
   const acc = accessoriesOf(a.acc);
@@ -103,8 +102,7 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
         <h4 className="mk-h">مشخصات جوش</h4>
         <div className="mk-grid">
           {pick("type")}{pick("size")}{pick("schedule")}{pick("material")}{spoolSel("spool")}{pick("wps")}
-          {field("ref", <><input data-input="ref" dir="ltr" list={refs.length ? "mk-refs" : undefined} value={a.ref ?? ""} onChange={(e) => setA({ ref: e.target.value })} />
-            {refs.length > 0 && <datalist id="mk-refs">{refs.map((r) => <option key={r} value={r} />)}</datalist>}</>)}
+          {field("ref", <TieInPick data-input="ref" value={a.ref} weldNos={welds.map((w) => String(w.no ?? "").trim()).filter(Boolean)} thisDoc={thisDoc} onChange={(v) => setA({ ref: v })} />)}
         </div>
         <div className="mk-grid one">{text("note")}</div>
       </>)}

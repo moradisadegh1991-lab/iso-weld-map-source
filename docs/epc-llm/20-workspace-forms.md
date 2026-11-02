@@ -33,3 +33,13 @@ The same holds on the model route's workspace (app/piping/page.jsx).
 The BOM table of the sheet is now display-only too: «مشاهده» / «ویرایش» per row and
 «+ ردیف BOM» open `components/BomForm.jsx` (same `FormDialog`). PT is required and unique;
 nothing reaches the sheet until «ذخیره»/«افزودن». The allocation column (reserved/capacity) stays read-only.
+
+## Tie-in picked, and the cut table as a form
+
+- **Tie-in** (`components/TieInPick.jsx`, `lib/sheet/tie-in.mjs`, `GET /api/tie-in-targets`): the weld form picks
+  the isometric («همین برگ» or another drawing of the project), its sheet and the weld; the reference is kept in
+  `attrs.ref` as `ISO | sheet | weld` (a plain weld number is this sheet's; «متن آزاد» keeps an external note
+  as typed). It is a stored reference, not yet a live link: renaming the target does not rewrite it.
+- **Cut table** (`components/CutForm.jsx`): display-only with «مشاهده / ویرایش / حذف» per piece and «+ ثبت قطعه».
+  Fields: piece number (unique), length mm (> 0), N.S., spool (from the sheet's spools), cut angle, note.
+  Saved with the register's `cutLengths`; the cut-vs-BOM check recomputes from the edited pieces.

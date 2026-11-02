@@ -2,6 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import BomForm from "./BomForm";
+import CutForm from "./CutForm";
 import TableKit from "./ui/TableKit";
 import Pick, { useValueLists } from "./ui/Pick";
 import { COLUMN_LIST } from "../lib/register/value-lists.mjs";
@@ -104,7 +105,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     const last = pts.size ? Math.max(...pts) : 0;
     return Array.from({ length: last }, (_, i) => i + 1).find((n) => !pts.has(n)) ?? last + 1;
   };
-  const cutLengths = Array.isArray(initial?.cutLengths) ? initial.cutLengths : [];
+  // the sheet's cut table (CUT PIPE LENGTH) as read, corrected and completed by a person through its form
+  const [cutRows, setCutRows] = useState(() => (Array.isArray(initial?.cutLengths) ? initial.cutLengths.map((c) => ({ ...c })) : []));
+  const cutLengths = cutRows;
+  const [cutForm, setCutForm] = useState(null);  // { mode, i }
   // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
   const [extras, setExtras] = useState(() => normalizeMarks(initial?.sheetMarkup?.items).filter((m) => m.kind === "spool" || m.kind === "support"));
 
@@ -327,6 +331,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
 
     </>
   );
+  const nextCutPiece = () => { const n = cutRows.map((c) => Number(c.piece)).filter(Number.isFinite); return (n.length ? Math.max(...n) : 0) + 1; };
   const cutBom = useMemo(() => cutVsBom(cutLengths, bom), [cutLengths, bom]);
   const SZ = (n) => (n == null ? "؟" : `${n}"`);
   const cutBlock = (
@@ -345,16 +350,41 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           </table></TableKit>
           {cutBom.problems.length > 0 && <ul className="sm" data-cut-problems style={{ margin: "6px 0", paddingInlineStart: 18 }}>{cutBom.problems.map((x) => <li key={x} className="err">{x}</li>)}</ul>}
         </div>)}
-      {cutLengths.length > 0 && (
-        <details className="intake-more" data-cut-lengths={cutLengths.length}>
-          <summary>جدول برش لوله (CUT PIPE LENGTH) — {cutLengths.length} قطعه، خوانده‌شده با OCR؛ با نقشه بررسی کنید</summary>
+      <div className="cut-read" data-cut-lengths={cutLengths.length}>
+        <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <b className="sm">جدول برش لوله (CUT PIPE LENGTH) — {cutLengths.length} قطعه</b>
+          <span className="muted sm">خوانده‌شده با OCR؛ با نقشه بررسی کنید</span>
+          <span className="grow" />
+          {!locked && <button type="button" className="ghost sm" data-cut-add onClick={() => setCutForm({ mode: "create", i: -1 })}>+ ثبت قطعه</button>}
+        </div>
+        {cutLengths.length > 0 && (
           <TableKit name="iso-cut-read"><table className="dtable">
-            <thead><tr><th>قطعه</th><th>طول برش (mm)</th><th>N.S.</th></tr></thead>
-            <tbody>{cutLengths.map((c) => (
-              <tr key={c.piece} data-cut-row={c.piece}><td className="mono">&lt;{c.piece}&gt;</td><td className="mono">{c.lengthMm}</td><td className="mono" dir="ltr">{c.ns ?? "؟"}</td></tr>))}</tbody>
-          </table></TableKit>
-        </details>)}
-
+            <thead><tr><th>قطعه</th><th>طول برش (mm)</th><th>N.S.</th><th>اسپول</th><th>زاویه</th><th>توضیح</th><th></th></tr></thead>
+            <tbody>{cutRows.map((c, i) => (
+              <tr key={i} data-cut-row={c.piece}>
+                <td className="mono" data-cut-cell="piece">&lt;{c.piece}&gt;</td><td className="mono" data-cut-cell="lengthMm">{c.lengthMm}</td>
+                <td className="mono" dir="ltr" data-cut-cell="ns">{c.ns ?? "؟"}</td>
+                <td className="mono sm" dir="ltr" data-cut-cell="spool">{c.spool || "—"}</td>
+                <td className="mono sm" dir="ltr" data-cut-cell="angle">{c.angle || "—"}</td>
+                <td className="sm" data-cut-cell="note">{c.note || "—"}</td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  <button type="button" className="ghost sm" data-cut-view={c.piece} onClick={() => setCutForm({ mode: "view", i })}>مشاهده</button>
+                  {!locked && <button type="button" className="ghost sm" data-cut-edit={c.piece} onClick={() => setCutForm({ mode: "edit", i })}>ویرایش</button>}
+                  {!locked && <button type="button" className="ghost sm" data-cut-delete={c.piece} onClick={() => { if (window.confirm(`قطعهٔ برش <${c.piece}> حذف شود؟`)) setCutRows(cutRows.filter((_, j) => j !== i)); }}>حذف</button>}
+                </td>
+              </tr>))}</tbody>
+          </table></TableKit>)}
+      </div>
+      {cutForm && (
+        <CutForm key={`${cutForm.mode}-${cutForm.i}`} mode={cutForm.mode} lists={lists} readOnly={locked} cuts={cutRows}
+          spools={[...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))]}
+          cut={cutForm.i >= 0 ? cutRows[cutForm.i] : { piece: nextCutPiece() }}
+          onClose={() => setCutForm(null)}
+          onSave={(c) => {
+            setCutRows(cutForm.i >= 0 ? cutRows.map((x, j) => (j === cutForm.i ? c : x))
+              : [...cutRows, c].sort((a, b) => (Number(a.piece) || 0) - (Number(b.piece) || 0)));
+            setCutForm(null);
+          }} />)}
     </>
   );
   const importBlock = (
@@ -581,7 +611,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       </WorkspaceFrame>
       {form && (
         <MarkForm key={`${form.mode}-${form.id || "new"}-${form.kind}`} mode={form.mode}
-          mark={form.id ? items.find((m) => m.id === form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked}
+          mark={form.id ? items.find((m) => m.id === form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo}
           onClose={() => setForm(null)}
           onSave={(d) => {
             if (form.id) onItems(updateMark(items, form.id, { kind: d.kind, no: d.no, attrs: d.attrs }));
