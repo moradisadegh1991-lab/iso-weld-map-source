@@ -16,6 +16,7 @@ import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
 import EquipmentTable from "./EquipmentTable";
 import IsoInfo from "./IsoInfo";
+import { cutVsBom } from "../lib/register/cut-bom.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
@@ -149,7 +150,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [editFocus, setEditFocus] = useState(null);
   const editMark = (id, kind) => {
     setMarkSel(id);
-    setWsTab((kind || itemsRef.current.find((m) => m.id === id)?.kind) === "equipment" ? "equip" : "welds");
+    const k = kind || itemsRef.current.find((m) => m.id === id)?.kind;
+    setWsTab(k === "equipment" ? "equip" : k === "spool" ? "spools" : k === "support" ? "supports" : "welds");
     setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 }));
   };
   const [attachId, setAttachId] = useState(null);
@@ -307,8 +309,24 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
 
     </>
   );
+  const cutBom = useMemo(() => cutVsBom(cutLengths, bom), [cutLengths, bom]);
+  const SZ = (n) => (n == null ? "؟" : `${n}"`);
   const cutBlock = (
     <>
+      {cutLengths.length > 0 && (
+        <div className="cut-bom" data-cut-bom>
+          <b className="sm">برش در برابر BOM</b>
+          <TableKit name="iso-cut-bom"><table className="dtable">
+            <thead><tr><th>قطر</th><th>قطعه</th><th>جمع برش (m)</th><th>لولهٔ BOM (m)</th><th>وضعیت</th></tr></thead>
+            <tbody>{cutBom.sizes.map((z) => (
+              <tr key={String(z.size)} data-cut-size={z.size ?? "?"} data-cut-status={z.status}>
+                <td className="mono" dir="ltr">{SZ(z.size)}</td><td className="mono">{z.pieces}</td><td className="mono">{z.cutM}</td>
+                <td className="mono">{z.bomM ?? "—"}</td>
+                <td className={z.status === "ok" ? "ok sm" : "sm warnish"}>{{ ok: "هم‌خوان", over: "برش بیش از BOM", noBom: "ردیف لولهٔ BOM نیست", noSize: "قطر خوانده نشد" }[z.status]}</td>
+              </tr>))}</tbody>
+          </table></TableKit>
+          {cutBom.problems.length > 0 && <ul className="sm" data-cut-problems style={{ margin: "6px 0", paddingInlineStart: 18 }}>{cutBom.problems.map((x) => <li key={x} className="err">{x}</li>)}</ul>}
+        </div>)}
       {cutLengths.length > 0 && (
         <details className="intake-more" data-cut-lengths={cutLengths.length}>
           <summary>جدول برش لوله (CUT PIPE LENGTH) — {cutLengths.length} قطعه، خوانده‌شده با OCR؛ با نقشه بررسی کنید</summary>
@@ -416,10 +434,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     </>
   );
   // built only with a sheet open (it reads the sheet)
-  const registerTable = () => (
+  const registerTable = (tabs = ["weld"]) => (
     <>
         <div className="wl-table">
-          <MarkTables items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
+          <MarkTables tabs={tabs} items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
             selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} bom={bom} focus={editFocus}
             checked={locked ? null : { has: (no) => reviewed.has(no), onTick: tick }} />
         </div>
@@ -499,12 +517,16 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     { k: "info", label: "مشخصات", hint: "شمارهٔ نقشه، رویژن، خط و مشخصات خط", node: (<><IsoInfo meta={meta} lineData={lineData} onMeta={setMeta} onLineData={setLineData} lists={lists} locked={locked} run={run} />{registryBlock}</>) },
     { k: "welds", label: "سرجوش‌ها", hint: "رجیستر جوش‌ها و نشان‌های روی نقشه", badge: nos.length ? `${reviewedN}/${nos.length}` : "",
       tone: problems ? "bad" : undefined, node: (<>{registerTable()}{summaryBlock}</>) },
+    { k: "spools", label: "اسپول‌ها", hint: "اسپول‌های نقشه و سرجوش‌های هر کدام", badge: items.filter((m) => m.kind === "spool").length || "",
+      node: (<>{registerTable(["spool"])}</>) },
+    { k: "supports", label: "ساپورت‌ها", hint: "ساپورت‌های نقشه", badge: items.filter((m) => m.kind === "support").length || "",
+      node: (<>{registerTable(["support"])}</>) },
     { k: "equip", label: "تجهیزات", hint: "تجهیزات نصب، سرجوش‌های متصل و متعلقات", badge: items.filter((m) => m.kind === "equipment").length || "",
       node: (<EquipmentTable items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
         attachId={attachId} onAttach={setAttachId} focus={editFocus} />) },
     { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
       node: (<>{bomBlock}{bomWeldsBlock}{bom.length === 0 && <p className="muted sm">BOM خوانده نشد.</p>}</>) },
-    { k: "cut", label: "برش", hint: "جدول برش لوله", badge: cutLengths.length || "",
+    { k: "cut", label: "برش", hint: "جدول برش لوله و مقایسه با BOM", badge: cutLengths.length || "", tone: cutBom.problems.length ? "bad" : undefined,
       node: (<>{cutBlock}{cutLengths.length === 0 && <p className="muted sm">جدول برش روی این برگ خوانده نشد.</p>}</>) },
     { k: "import", label: "ورود", hint: "خواندن از Excel / CSV یا چسباندن", node: (<>{importBlock}</>) },
     { k: "save", label: "ثبت", hint: "ذخیره و تأیید", tone: problems ? "bad" : undefined, badge: problems || "",
