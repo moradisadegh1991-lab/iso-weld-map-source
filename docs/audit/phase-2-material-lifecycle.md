@@ -64,7 +64,21 @@ insert-only; the recall list (`destinations`) is unchanged.
 
 ## 5. Tests and results
 
-RESULTS_PLACEHOLDER
+| Command | Result |
+|---|---|
+| `npm run db:test` (PGlite, whole chain) | exit 0, 0 `FAIL` |
+| `npm run eval:check` | `GATE PASSED` |
+| `npx next build` | no errors |
+| `PG_TEST_URL=… npm run db:test:pg` (PostgreSQL 16.15, local) | pg-scope **8/8**, material-concurrency **8/8** |
+| material-concurrency, three more runs, fresh database each | 8/8, 8/8, 8/8 (no flake seen) |
+| the same material-concurrency tests on the **code before the fix** | **1/8** — only the cross-project test passed; B1, B2, B2b, B4, B5, B6, B6b failed (red first) |
+| `db/test/material-atomic.mjs` (PGlite **and** PostgreSQL) | 3/3; **0/3 before the fix** (a reservation, a shipment header, an unlinked lot survived the failure) |
+| every `db/test/*.mjs` file, one fresh PostgreSQL 16 database each, `DATABASE_URL` set (108 files) | 105 pass in full; `run` fails by design (it asserts no `DATABASE_URL`); `migrations` is written for PGlite and failed identically on the old client (Phase 1); `pg-scope` and `material-concurrency` print SKIPPED in this loop (no `PG_TEST_URL`) and were run on their own, above |
+| area guards: `users.mjs` (+3 tests: reviewed routes, records per kind, every area storable) | 15/15; the area-storable test failed before migration 099 (`member_areas_known`) |
+| CI | `pg-scope` job now runs both PostgreSQL files |
+
+**NOT RUN:** a managed or remote PostgreSQL; load; the 15-step end-to-end scenario (C5); VDRL / expediting / BOM-revision
+behaviour. Tests that need a real server print SKIPPED without `PG_TEST_URL` and are never counted as passed.
 
 ## 6. Findings not fixed (read, for the owner)
 
