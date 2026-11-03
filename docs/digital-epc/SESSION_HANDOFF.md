@@ -87,7 +87,7 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   dispute drops spoolCount from expect. 54/54 pass; 251 fields left blank
   for a person. The real `welds` pass still needs an API key to be scored.
 - 2026-10-09, K110 P&ID (owner: «read the olefin P&ID and bring it in as a
-  project»): `P&ID K1.zip`, 242 AutoCAD sheets with text as strokes. Page
+  project»): `data/source-archives/P&ID K1.zip`, 242 AutoCAD sheets with text as strokes. Page
   OCR (`tools/pid-ocr.py`, RapidOCR) + instrument bubbles from geometry
   (`tools/pid-bubbles.py`) → `lib/pid/ocr-parse.mjs` → registers by the
   set's own legend (`lib/pid/legend-k110.mjs`) → `tools/pid-registers.mjs`
@@ -138,7 +138,7 @@ from a TQ or a site change (site-run / as-built), with the designer's part.
   EPC reference (`/reference`, lib/reference/epc.mjs, 064 project_standard, docs/digital-epc/05-epc-reference.md):
   phases/gates, deliverables, certificates, 8 adoptable ITR-B/commissioning checklists, standards + project register
   with editions (missing edition → missing information). Not built yet: PAC/FAC records, ITR-A sheets, CFIHOS export.
-  Reviewed `daily report.zip` (Access, 6 projects incl. Kavian furnace 10,
+  Reviewed `data/source-archives/daily report.zip` (Access, 6 projects incl. Kavian furnace 10,
   116k manpower rows mixing people/machines/materials in one column; most
   reports undated in this file; holds a plaintext password and contractor
   national IDs) — not imported yet.
