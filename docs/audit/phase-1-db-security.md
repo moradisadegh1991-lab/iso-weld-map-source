@@ -66,7 +66,7 @@ workspace, like `/api/extract`). `ndt-joints` per operation (`areaForNdtJoint`):
 piping (the matrix, the register, site welding); `ndt`, `sample`, `progressive` → quality. Admin/developer bypass and
 "no areas = all" are unchanged (same `inArea`).
 
-**For the owner to decide (REVIEW_ROUTES, not changed — restricting them takes work away from members who have it now):**
+**Reviewed in Phase 1.1 (see `docs/audit/phase-2-material-lifecycle.md` part A2):**
 `assumptions`, `changes`, `contract-reports`, `contractors`, `daily-reports`, `eps`, `eps/activities`, `eps/planning`,
 `reference`, `subsystems`, `work`, `records`.
 

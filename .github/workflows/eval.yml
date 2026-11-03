@@ -98,7 +98,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Project scope on node-postgres
+      - name: Project scope and material lifecycle on node-postgres
         run: npm run db:test:pg
         env:
           PG_TEST_URL: postgres://iw:iw@localhost:5432/iw

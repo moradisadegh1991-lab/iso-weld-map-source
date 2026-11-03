@@ -179,6 +179,45 @@ test("the isometric workspace's routes and each ndt-joints operation are held to
   assert(!(await outOfArea(() => ndtPost(ndt("rule")))) && !(await outOfArea(() => ndtPost(ndt("sample")))), "no areas works in all of them");
 });
 
+test("every work area the code names can be given to a member (the table's list is the code's list)", async () => {
+  const m = await projects.ensureUser(db, { subject: "kc|member-all-areas", email: "all@x.ir" });
+  await projects.addMember(db, { projectId: pA.id, userId: m.id, role: "engineer" });
+  await db.query("UPDATE project_member SET areas = $2 WHERE user_id = $1", [m.id, Object.keys(AREAS)]);   // all of them: the check refuses an unknown one
+  const { rows: [r] } = await db.query("SELECT cardinality(areas) AS n FROM project_member WHERE user_id = $1", [m.id]);
+  equal(r.n, Object.keys(AREAS).length);
+  await throws(() => db.query("UPDATE project_member SET areas = '{rocketry}' WHERE user_id = $1", [m.id]), "member_areas_known");
+});
+
+test("the reviewed routes: contractors are the contracts desk's; a record is removed in its own area; cross-functional routes stay open to a member of any area", async () => {
+  const hdr = { authorization: "Bearer kc|member-4", "content-type": "application/json" };
+  const m4 = await projects.ensureUser(db, { subject: "kc|member-4", email: "m4@x.ir" });
+  await projects.addMember(db, { projectId: pA.id, userId: m4.id, role: "engineer" });
+  const as = (areas) => db.query("UPDATE project_member SET areas = $2 WHERE user_id = $1", [m4.id, areas]);
+  const post = (p) => new Request(`http://x${p}?projectId=${pA.id}`, { method: "POST", headers: hdr });
+  const del = (entity) => new Request("http://x/api/records", { method: "DELETE", headers: hdr, body: JSON.stringify({ projectId: pA.id, entity, id: globalThis.crypto.randomUUID() }) });
+  const { DELETE: recordsDelete } = await import("../../app/api/records/route.js");
+  const outOfArea = async (fn) => { try { const r = await fn(); return r instanceof Response ? (await r.json()).code === "OUT_OF_AREA" : false; } catch (e) { return e?.code === "OUT_OF_AREA"; } };
+
+  await as(["piping"]);
+  assert(await outOfArea(() => authenticate(post("/api/contractors"), { projectId: pA.id })), "the contractor registry is the contracts desk's");
+  assert(await outOfArea(() => recordsDelete(del("hse-person"))), "an HSE person is removed by HSE");
+  assert(await outOfArea(() => recordsDelete(del("mdr-document"))), "a document by document control");
+  assert(await outOfArea(() => recordsDelete(del("weld-joint"))), "a structural weld joint by structure or equipment");
+  // cross-functional: not shut by an area, whatever the member's
+  for (const p of ["/api/assumptions", "/api/changes", "/api/contract-reports", "/api/daily-reports", "/api/eps", "/api/eps/activities", "/api/eps/planning", "/api/reference", "/api/subsystems", "/api/work"])
+    await authenticate(post(p), { projectId: pA.id });
+
+  await as(["hse"]);
+  assert(!(await outOfArea(() => recordsDelete(del("hse-person")))), "an HSE member may remove an HSE person");
+  assert(await outOfArea(() => recordsDelete(del("coating-system"))), "but not a coating system");
+  await as(["equipment"]);
+  assert(!(await outOfArea(() => recordsDelete(del("weld-joint")))), "an equipment member may remove a weld joint");
+  await as(["contracts"]);
+  await authenticate(post("/api/contractors"), { projectId: pA.id });
+  await as([]);
+  assert(!(await outOfArea(() => recordsDelete(del("hse-person")))) && !(await outOfArea(() => recordsDelete(del("mdr-document")))), "no areas works in all of them");
+});
+
 test("on site, each operation is judged by its own area", async () => {
   const f = await inA(() => spine.upsertTag(db, { projectId: pA.id, tagNo: "FDN-1", discipline: "civil", kind: "foundation" }));
   const pump = await inA(() => spine.upsertTag(db, { projectId: pA.id, tagNo: "P-1", discipline: "equipment", kind: "rotating" }));

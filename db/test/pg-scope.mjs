@@ -132,13 +132,14 @@ test("12. the same field operation sent twice at once is applied once; both answ
   const results = await Promise.all(Array.from({ length: 6 }, () => fld.applyOps(db, { projectId: A, userId: alice.id, membership: member, ops: [op] })));
   const rs = results.flat();
   equal(rs.length, 6);
-  const applied = rs.filter((r) => r.status === "applied" && !r.duplicate).length;
-  assert(applied <= 1, `applied ${applied} times`);
-  assert(rs.every((r) => r.status === "applied" || r.status === "retry"), `unexpected: ${JSON.stringify(rs.map((r) => r.status))}`);
-  const stored = await withProject(db, A, async () => (await db.query("SELECT count(*)::int AS n FROM field_op WHERE op_id = $1", [uid])).rows[0].n);
-  equal(stored, 1, "one record of the operation");
-  const steps = await withProject(db, A, async () => (await db.query("SELECT count(*)::int AS n FROM field_op WHERE op_id = $1 AND status = 'applied'", [uid])).rows[0].n);
-  assert(steps <= 1);
+  // Exactly one request applied it; the other five got the stored outcome — not "retry", not an error (Phase 1.1 / A1).
+  equal(rs.filter((r) => r.status === "applied" && !r.duplicate).length, 1, `exactly one applies: ${JSON.stringify(rs.map((r) => [r.status, !!r.duplicate]))}`);
+  equal(rs.filter((r) => r.status === "applied" && r.duplicate).length, 5, "the others return the stored outcome, marked duplicate");
+  equal(rs.filter((r) => r.status === "retry" || r.status === "rejected").length, 0, "no retry or rejection is a passing answer");
+  equal(new Set(rs.map((r) => r.result?.activityId)).size, 1, "all six name the same business effect");
+  // The business effect, in the tables: one record of the operation, one activity.
+  equal(await withProject(db, A, async () => (await db.query("SELECT count(*)::int AS n FROM field_op WHERE op_id = $1", [uid])).rows[0].n), 1, "one record of the operation");
+  equal(await withProject(db, A, async () => (await db.query("SELECT count(*)::int AS n FROM tag_activity WHERE tag_id = $1 AND code = 'grout'", [tag.id])).rows[0].n), 1, "one business effect");
   const again = await fld.applyOps(db, { projectId: A, userId: alice.id, membership: member, ops: [op] });
   equal([again[0].status, again[0].duplicate], ["applied", true], "a later copy gets the stored outcome");
 });

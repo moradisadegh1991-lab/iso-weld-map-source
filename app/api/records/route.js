@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan } from "../../../lib/authz.mjs";
+import { AREAS, areasForRecord, inAnyArea } from "../../../lib/platform/areas.mjs";
 import { entityOf, removalBlocker, removeRecord } from "../../../lib/db/repos/removal.mjs";
 
 /**
@@ -23,7 +24,7 @@ async function scope(request, { projectId, entity }) {
   const { db, user, membership } = await authenticate(request, { projectId });
   if (!membership) throw Object.assign(new Error("not found"), { status: 404 });
   assertCan(membership, e.need);
-  return { db, user };
+  return { db, user, membership };
 }
 
 export async function GET(request) {
@@ -37,8 +38,13 @@ export async function GET(request) {
 export async function DELETE(request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { db, user } = await scope(request, body);
+    const { db, user, membership } = await scope(request, body);
     const { projectId, entity, id } = body;
+    // the area of the record's kind: a member who works in HSE removes an HSE person, not a coating system (audit 2026-11-03)
+    const areas = areasForRecord(entity);
+    if (!inAnyArea(membership, areas)) {
+      throw Object.assign(new Error(`حذف در بخش «${areas.map((a) => AREAS[a]).join(" / ")}» در حوزهٔ کاری شما نیست.`), { status: 403, code: "OUT_OF_AREA" });
+    }
     return await withProject(db, projectId, async () => Response.json({ removed: await removeRecord(db, { projectId, entity, id, userId: user.id }) }));
   } catch (e) { return errorResponse(e); }
 }
