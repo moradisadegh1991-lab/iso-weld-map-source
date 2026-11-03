@@ -20,6 +20,7 @@ const projects = await import("../../lib/db/repos/projects.mjs");
 const wh = await import("../../lib/db/repos/warehouse.mjs");
 const rs = await import("../../lib/db/repos/reserve.mjs");
 const prc = await import("../../lib/db/repos/procurement.mjs");
+const td = await import("../../lib/db/repos/tender.mjs");
 
 const db = await createClient({ url: URL });
 await migrate(db);
@@ -119,6 +120,70 @@ test("B6b. an issue is never written after a MIR correction that leaves less acc
   const accepted = await num("SELECT qty_accepted AS n FROM material_lot WHERE id = $1", [lot.id]);
   assert(issued <= accepted, `issued ${issued} of an accepted ${accepted}`);
   assert(issuedAt === "refused" || actAt === "refused" || issuedAt <= actAt, "the issue was written after the correction had committed");
+});
+
+test("B8. four awards of one MR at once place exactly one PO with all its lines", async () => {
+  const { mr, bid } = await inP(async () => {
+    const item = await wh.upsertItem(db, { projectId: P, code: "PIPE-B8", description: "x", category: "pipe", uom: "m" });
+    const mr = await td.createMr(db, { projectId: P, mrNo: "mr-b8", title: "B8", userId: alice.id });
+    await td.addMrLine(db, { projectId: P, mrId: mr.id, itemId: item.id, qty: 10 });
+    await td.addMrLine(db, { projectId: P, mrId: mr.id, itemId: item.id, qty: 5 });
+    await td.issueMr(db, { projectId: P, mrId: mr.id, reason: "IFQ", userId: alice.id });
+    const v = await prc.upsertVendor(db, { projectId: P, code: "v-b8", name: "V" });
+    const bid = await td.recordBid(db, { projectId: P, mrId: mr.id, vendorId: v.id, receivedOn: "2026-09-01", validUntil: "2099-01-01", currency: "EUR", totalPrice: 100 });
+    await td.evaluateBid(db, { projectId: P, bidId: bid.id, techStatus: "acceptable", userId: alice.id });
+    return { mr, bid };
+  });
+  const v = await verdicts(Array.from({ length: 4 }, (_, i) => inP(() => td.awardMr(db, { projectId: P, mrId: mr.id, bidId: bid.id, poNo: `PO-B8-${i}`, placedOn: "2026-09-02", userId: alice.id }))));
+  equal(v.filter((x) => x === "ok").length, 1, JSON.stringify(v));
+  equal(await num("SELECT count(*) AS n FROM purchase_order WHERE mr_id = $1", [mr.id]), 1, "one PO for the MR");
+  equal(await num("SELECT count(*) AS n FROM mr_award WHERE mr_id = $1", [mr.id]), 1, "one award record");
+  equal(await num("SELECT count(*) AS n FROM po_line l JOIN purchase_order o ON o.id = l.po_id WHERE o.mr_id = $1", [mr.id]), 2, "its two lines");
+});
+
+test("B9. four submissions of one vendor document at once: exactly one is recorded", async () => {
+  const { po } = await newPoLine("B9", 10);
+  const doc = await inP(() => prc.addVendorDoc(db, { projectId: P, poId: po.id, docCode: "dwg-1", title: "GA drawing" }));
+  const v = await verdicts(Array.from({ length: 4 }, (_, i) => inP(() => prc.submitDoc(db, { projectId: P, docId: doc.id, revision: `R${i}`, submittedOn: "2026-09-01", userId: alice.id }))));
+  equal(v.filter((x) => x === "ok").length, 1, JSON.stringify(v));
+  equal(await num("SELECT count(*) AS n FROM vendor_doc_submission WHERE doc_id = $1", [doc.id]), 1);
+});
+
+test("B9b. two reviews of one submission at once: exactly one code is recorded", async () => {
+  const { po } = await newPoLine("B9B", 10);
+  const doc = await inP(() => prc.addVendorDoc(db, { projectId: P, poId: po.id, docCode: "dwg-2", title: "x" }));
+  await inP(() => prc.submitDoc(db, { projectId: P, docId: doc.id, revision: "R0", submittedOn: "2026-09-01", userId: alice.id }));
+  const v = await verdicts([1, 3, 2, 4].map((code) => inP(() => prc.returnDoc(db, { projectId: P, docId: doc.id, returnedOn: "2026-09-05", code, comment: "c" }))));
+  equal(v.filter((x) => x === "ok").length, 1, JSON.stringify(v));
+});
+
+test("B10. forecasts set at once leave the line with the latest one in its history", async () => {
+  const { line } = await newPoLine("B10", 10);
+  await Promise.all(Array.from({ length: 8 }, (_, i) => inP(() => prc.setForecast(db, { projectId: P, poLineId: line.id, forecastOn: `2026-1${i % 3}-0${i + 1}`, source: `s${i}`, userId: alice.id }))));
+  const last = await inP(async () => (await db.query("SELECT forecast_on::text AS d FROM po_forecast WHERE po_line_id = $1 ORDER BY at DESC, id DESC LIMIT 1", [line.id])).rows[0].d);
+  const now = await inP(async () => (await db.query("SELECT forecast_on::text AS d FROM po_line WHERE id = $1", [line.id])).rows[0].d);
+  equal(now, last, "the line's date is the latest recorded");
+});
+
+test("B11. a shipment is never written after the FAT failure that withdraws its release has committed", async () => {
+  const { po, line } = await inP(async () => {
+    const vendor = await prc.upsertVendor(db, { projectId: P, code: "v-b11", name: "V" });
+    const po = await prc.createPo(db, { projectId: P, poNo: "po-b11", vendorId: vendor.id, title: "T", currency: "EUR", placedOn: "2026-08-01", userId: alice.id });
+    const item = await wh.upsertItem(db, { projectId: P, code: "PO-B11", description: "x", category: "pipe", uom: "m" });
+    const line = await prc.addPoLine(db, { projectId: P, poId: po.id, itemId: item.id, qty: 10, fatRequired: true });
+    await prc.recordFat(db, { projectId: P, poLineId: line.id, inspectedOn: "2026-09-01", result: "pass", irnNo: "IRN-1", userId: alice.id });
+    return { po, line };
+  });
+  let open; const gate = new Promise((r) => { open = r; });
+  const held = { ...db, query: async (sql, p2) => { if (/INSERT INTO shipment /.test(sql)) await gate; return db.query(sql, p2); } };
+  let shippedAt = null, failedAt = null;
+  const shipping = inP(() => prc.createShipment(held, { projectId: P, shipmentNo: "SH-B11", poId: po.id, shippedOn: "2026-09-02", lines: [{ poLineId: line.id, qty: 5 }], userId: alice.id })).then(() => { shippedAt = Date.now(); }, () => { shippedAt = "refused"; });
+  await new Promise((r) => setTimeout(r, 150));
+  const failing = inP(() => prc.recordFat(db, { projectId: P, poLineId: line.id, inspectedOn: "2026-09-03", result: "fail", note: "weld defects", userId: alice.id })).then(() => { failedAt = Date.now(); }, () => { failedAt = "refused"; });
+  await new Promise((r) => setTimeout(r, 300));
+  open();
+  await Promise.all([shipping, failing]);
+  assert(shippedAt === "refused" || failedAt === "refused" || shippedAt <= failedAt, "the shipment was written after the FAT failure had committed");
 });
 
 test("cross-project: another project cannot see, issue from, reserve, receive against or ship against this project's rows", async () => {

@@ -44,12 +44,15 @@ test("FAT: a release needs an IRN, a waiver and a failure need a reason, and doc
 });
 
 test("shipping and receiving never exceed the order, and a receipt matches item and unit", async () => {
-  const line = { qty: 10, uom: "m", itemId: "I1", shippedQty: 6, receivedQty: 6, fatRequired: false };
-  equal(shipProblems(line, 4), []);
-  equal(shipProblems(line, 4.5).length, 1);
-  equal(shipProblems({ ...line, fatRequired: true, fat: null }, 1).length, 1);
+  const line = { qty: 10, uom: "m", itemId: "I1", shippedQty: 10, receivedQty: 6, fatRequired: false };
+  equal(shipProblems({ ...line, shippedQty: 6 }, 4), []);
+  equal(shipProblems({ ...line, shippedQty: 6 }, 4.5).length, 1);
+  equal(shipProblems({ ...line, shippedQty: 6, fatRequired: true, fat: null }, 1).length, 1);
   equal(receiveProblems(line, { qty: 4 }), []);
   equal(receiveProblems(line, { qty: 5 }).length, 1);
+  equal(receiveProblems({ ...line, shippedQty: 8 }, { qty: 3 }).length, 1, "6 received + 3 is more than the 8 shipped");
+  equal(receiveProblems({ ...line, shippedQty: 8 }, { qty: 2 }), [], "exactly what was shipped");
+  equal(receiveProblems({ ...line, shippedQty: 0 }, { qty: 4 }), [], "no shipment recorded: the order alone");
   equal(receiveProblems(line, { qty: 1, uom: "ft" }).length, 1);
   equal(receiveProblems(line, { qty: 1, itemId: "I2" }).length, 1);
   equal(receiveProblems({ ...line, itemId: null, tagId: "T" }, { qty: 1 }).length, 1, "a pump is not a warehouse lot");
