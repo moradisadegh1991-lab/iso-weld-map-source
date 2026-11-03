@@ -13,6 +13,7 @@ The engine rules and what counts as proof are in `.claude/skills/epc-platform/SK
 2. `npx next build`
 3. `npm run eval:check` — must print `GATE PASSED`.
 4. `npm run db:test` — **over 10 minutes**: run it in the background.
+Browser drives start from `tools/drive-lib.mjs` (`openWorkspace`: sign in, pick the project, open a sheet; see `tools/drive-example.mjs`; needs `DRIVE_EMAIL`/`DRIVE_PASSWORD`).
 Prove a guard by reverting the code it protects and watching the test fail; for UI work, drive the real page in the browser (Playwright is pre-installed) on a sample PDF, not just unit tests.
 
 ## Gotchas
