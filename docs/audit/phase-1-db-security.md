@@ -74,10 +74,12 @@ piping (the matrix, the register, site welding); `ndt`, `sample`, `progressive` 
 
 | Command | Result |
 |---|---|
-| `npm run db:test` (PGlite) | see the PR |
-| `PG_TEST_URL=… npm run db:test:pg` (real PostgreSQL 16) | 8/8 on the new code; **3/8 on the old code** (it fails 1-2, parallel, 5-6, 8, outsideScope) |
-| every `db/test/*.mjs` file against a fresh PostgreSQL 16 database | see the PR |
-| `npm run build`, `npm run eval:check` | see the PR |
+| `npm run db:test` (PGlite, the whole chain) | exit 0, 0 `FAIL` |
+| `npm run eval:check` | `GATE PASSED` |
+| `npx next build` | no errors |
+| `PG_TEST_URL=… npm run db:test:pg` (real PostgreSQL 16) | 8/8 on the new code; **3/8 on the old code** (it fails 1-2, parallel queries, 5-6, 8, outsideScope) |
+| each of the 104 `db/test/*.mjs` files, one fresh PostgreSQL 16 database each, `DATABASE_URL` set | 102 pass in full. **`run`: 1 expected failure** — it asserts the suites never see a `DATABASE_URL`, which is what this run sets. **`migrations`: crashes (`itp_scope_known`) the same way on the old client** — it is written for PGlite; not caused by this change. |
+| revert check of the area guards | with the `ndt-joints` check and the two `API_AREAS` entries removed, `area-coverage` and `users` fail |
 | CI | new job `pg-scope` (postgres:16 service) |
 
 `db:test:pg` without `PG_TEST_URL` prints SKIPPED and exits 0 — that is not a pass. PGlite tests prove nothing about
