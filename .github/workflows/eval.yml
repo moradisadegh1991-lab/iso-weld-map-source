@@ -70,3 +70,35 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Project scope on a REAL node-postgres pool. PGlite is one connection and cannot show what a pool does
+  # (db/test/pg-scope.mjs), so this is the only place that proves it.
+  pg-scope:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: iw
+          POSTGRES_PASSWORD: iw
+          POSTGRES_DB: iw
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U iw"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Project scope on node-postgres
+        run: npm run db:test:pg
+        env:
+          PG_TEST_URL: postgres://iw:iw@localhost:5432/iw

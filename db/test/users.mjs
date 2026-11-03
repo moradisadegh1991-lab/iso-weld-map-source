@@ -150,6 +150,35 @@ test("a write outside the member's areas is refused for every route, in one plac
   await authenticate(req("POST", "/api/civil"), { projectId: pA.id });
 });
 
+test("the isometric workspace's routes and each ndt-joints operation are held to their areas", async () => {
+  const hdr = { authorization: "Bearer kc|member-3", "content-type": "application/json" };
+  const m3 = await projects.ensureUser(db, { subject: "kc|member-3", email: "m3@x.ir" });
+  await projects.addMember(db, { projectId: pA.id, userId: m3.id, role: "engineer" });
+  const post = (p) => new Request(`http://x${p}?projectId=${pA.id}`, { method: "POST", headers: hdr });
+  const ndt = (kind) => new Request("http://x/api/ndt-joints", { method: "POST", headers: hdr, body: JSON.stringify({ projectId: pA.id, kind }) });
+  const outOfArea = async (fn) => { try { const r = await fn(); return r instanceof Response ? (await r.json()).code === "OUT_OF_AREA" : false; } catch (e) { return e?.code === "OUT_OF_AREA"; } };
+  const { POST: ndtPost } = await import("../../app/api/ndt-joints/route.js");
+  const as = (areas) => db.query("UPDATE project_member SET areas = $2 WHERE user_id = $1", [m3.id, areas]);
+
+  await as(["civil"]);   // not a piping or quality member
+  for (const p of ["/api/bom-allocations", "/api/iso-equipment"]) assert(await outOfArea(() => authenticate(post(p), { projectId: pA.id })), `${p} refused outside piping`);
+  for (const kind of ["rule", "weld", "sample"]) assert(await outOfArea(() => ndtPost(ndt(kind))), `ndt-joints ${kind} refused for a civil member`);
+
+  await as(["piping"]);
+  for (const p of ["/api/bom-allocations", "/api/iso-equipment"]) await authenticate(post(p), { projectId: pA.id });
+  assert(!(await outOfArea(() => ndtPost(ndt("rule")))), "the register's rules are piping's");
+  assert(await outOfArea(() => ndtPost(ndt("sample"))), "the draw of NDT samples is quality's, not piping's");
+
+  await as(["quality"]);
+  assert(await outOfArea(() => ndtPost(ndt("rule"))), "the matrix is piping's, not quality's");
+  assert(!(await outOfArea(() => ndtPost(ndt("sample")))), "the draw is quality's");
+  assert(await outOfArea(() => authenticate(post("/api/iso-equipment"), { projectId: pA.id })), "iso-equipment is piping's");
+
+  await as([]);          // no areas = all
+  for (const p of ["/api/bom-allocations", "/api/iso-equipment"]) await authenticate(post(p), { projectId: pA.id });
+  assert(!(await outOfArea(() => ndtPost(ndt("rule")))) && !(await outOfArea(() => ndtPost(ndt("sample")))), "no areas works in all of them");
+});
+
 test("on site, each operation is judged by its own area", async () => {
   const f = await inA(() => spine.upsertTag(db, { projectId: pA.id, tagNo: "FDN-1", discipline: "civil", kind: "foundation" }));
   const pump = await inA(() => spine.upsertTag(db, { projectId: pA.id, tagNo: "P-1", discipline: "equipment", kind: "rotating" }));
