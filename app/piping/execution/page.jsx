@@ -53,7 +53,7 @@ function PipingExecutionBody() {
       setMsg(e.message);
       // The step uses material that is not all issued: issue it, or go on with a reason (kept in the step's note).
       if (/materialOverride/.test(e.message || "")) {
-        const why = window.prompt(`${e.message}\n\nدلیل ادامه بدون حوالهٔ کامل مواد (در یادداشت این مرحله می‌ماند):`);
+        const why = window.prompt(`${e.message}\n\n${t("pi.ex.materialWhy")}`);
         if (why && why.trim()) return record(spoolId, code, refNo, why.trim());
       }
     }
