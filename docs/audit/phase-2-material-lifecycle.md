@@ -80,23 +80,46 @@ insert-only; the recall list (`destinations`) is unchanged.
 **NOT RUN:** a managed or remote PostgreSQL; load; the 15-step end-to-end scenario (C5); VDRL / expediting / BOM-revision
 behaviour. Tests that need a real server print SKIPPED without `PG_TEST_URL` and are never counted as passed.
 
-## 6. Findings not fixed (read, for the owner)
+## 6. Follow-up (Phase 2b): the three findings, the award, VDRL, forecasts, and the end-to-end scenario
 
-- **MTO inflates across revisions (C1, read):** `shortages()` sums every `material_requirement` row of an item over
-  *all* sources; `setRequirement` upserts on `(item, source)`, so «MTO rev 2» and «MTO rev 3» both count. Nothing marks
-  the older one obsolete. The sheet's BOM (`spool_material`) and the MTO are two unconnected notions of "required".
-- **Receipt is not tied to shipment (C2, read):** `receiveProblems` compares received to *ordered*, not to *shipped/arrived*;
-  a lot can be received with no shipment recorded, or more than was shipped.
-- **Installation is not blocked by missing material (C4, read):** `recordSpoolActivity` does not consult
-  `spoolMaterial`; the workfront shows readiness, but a shop/field step can be recorded without issued material.
-  Blocking would stop legitimate site work, so this is the owner's decision (warn vs block).
+All with a failing test first; PGlite and PostgreSQL 16.
+
+- **C1 MTO revisions** (`lib/warehouse/mto.mjs`): the latest revision of each MTO series is the requirement; earlier
+  ones are superseded — shown in `supersededSources`, no longer counted. «Piping MTO rev 1» and «rev 2» replace each other;
+  «Piping MTO» and «Civil MTO» add; a source with no revision («Site request 17») is its own series. Read-time only —
+  nothing is deleted or migrated. Letters order before numbers (A < B < 0 < 1), 10 after 9. Before: 220 instead of 120.
+- **C2 receipt vs shipment** (`receiveProblems`): once shipments are recorded for a line, received ≤ shipped (and ≤ ordered).
+  A line with no shipment recorded is received against the order alone, as before. An existing unit test whose fixture
+  was 6 shipped / 6 received had pinned only the order ceiling; its fixture was aligned.
+- **C4 spool step without issued material** (`recordSpoolActivity`): **warns, does not block** — it is recorded, and the
+  answer carries `materialWarnings` (additive; also in the offline sync result) when a material-consuming step
+  (`fit_up`, `erected`) is done with the spool's list not all issued. A spool with no list says nothing. Blocking would stop
+  legitimate site work (material reaches a spool in ways the platform may not know); changing warn → block is one line if
+  the owner wants it.
+- **C2 award** (`awardMr`): the PO, its lines, the award record and the MR's closing are one transaction, the MR locked.
+  Before: a failure left a PO without its lines; four awards at once placed **four POs**. Now exactly one (B8).
+- **VDRL** (`submitDoc`, `returnDoc`): the document is locked. Before: four submissions at once recorded **3**; four review
+  codes at once **all succeeded** (the last overwrote) — now one each (B9, B9b).
+- **Expediting** (`setForecast`): history row and the line's date in one transaction, the PO line locked. Before: the line's
+  date could differ from the latest recorded forecast, and a failure left a history row for a date the line never took (B10).
+- **FAT vs shipment (B11): not a defect.** The FAT insert's foreign key already locks the PO line the shipment holds; kept
+  as a guard test.
+- **C5 scenario** (`db/test/material-lifecycle.mjs`, PGlite and PostgreSQL): register → spool material → items → MTO
+  (rev 0 replaced by rev 1) → MR → bid → award → PO → partial shipment → refused over-receipt → partial receipt → MIR →
+  MTC → spool reservation → issue filling it → return re-opening the spool's line → stock, reservation and shortage
+  checked against arithmetic done in the test → MTC rejected after issue (recall names the spool and the net quantity;
+  no new issue) → another project sees nothing.
+
+## 6b. Still open (read, for the owner)
+
+- **Receipt without any shipment** is still allowed (collected by the site, bought locally); only a shipment-backed line is capped.
+- **Arrival** (`arrived_on`) is not required before receipt; the cap is the quantity *shipped*.
 - **Slow work inside a scope holds a pooled connection** (`DATABASE_POOL_MAX`).
 
 ## 7. Remaining gaps
 
-Part C was audited by reading plus the reproductions above, not by a complete 15-step end-to-end scenario (C5), and
-BOM-revision/obsolete-requirement behaviour, VDRL and expediting forecasts were not exercised. Not run: any load test,
-or a managed/remote PostgreSQL.
+Not run: any load test, or a managed/remote PostgreSQL. VDRL/expediting were audited for the races and atomicity above,
+not for report layouts or the overdue arithmetic (already unit-tested in `procurement.mjs`).
 
 ## 8. Migration and deployment
 

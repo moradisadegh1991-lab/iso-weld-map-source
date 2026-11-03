@@ -19,6 +19,7 @@ const runs = await import("../../lib/db/repos/runs.mjs");
 const wh = await import("../../lib/db/repos/warehouse.mjs");
 const spm = await import("../../lib/db/repos/spool-material.mjs");
 const prc = await import("../../lib/db/repos/procurement.mjs");
+const td = await import("../../lib/db/repos/tender.mjs");
 
 const db = await getDb();
 const alice = await projects.ensureUser(db, { subject: "kc|alice" });
@@ -77,6 +78,34 @@ test("a shipment is its header and all its lines, or nothing", async () => {
 test("a receipt against a PO is the lot and its link to the line, or nothing", async () => {
   await throws(() => inP(() => prc.receiveAgainstPo(failOn(/UPDATE material_lot SET po_line_id/), { projectId: P, poLineId: poLines.l1.id, receiptNo: "MRR-PO-1", receivedOn: "2026-09-05", qty: 10, heatNo: "H", mtcRef: "M" })), "injected failure");
   equal(await count("SELECT count(*) AS n FROM material_lot WHERE receipt_no = 'MRR-PO-1'"), 0, "no lot left unlinked to the line it came against");
+});
+
+let mr;
+await inP(async () => {
+  mr = await td.createMr(db, { projectId: P, mrNo: "mr-1", title: "Pipe and fittings", userId: alice.id });
+  const { rows: [a] } = await db.query("SELECT id FROM material_item WHERE code = 'PO-A'");
+  const { rows: [b] } = await db.query("SELECT id FROM material_item WHERE code = 'PO-B'");
+  await td.addMrLine(db, { projectId: P, mrId: mr.id, itemId: a.id, qty: 10 });
+  await td.addMrLine(db, { projectId: P, mrId: mr.id, itemId: b.id, qty: 20 });
+  await td.issueMr(db, { projectId: P, mrId: mr.id, reason: "IFQ", userId: alice.id });
+});
+test("an award is the PO, its lines, the award record and the MR's closing, or nothing", async () => {
+  const bid = await inP(async () => {
+    const v = await prc.upsertVendor(db, { projectId: P, code: "v-aw", name: "Award vendor" });
+    const b = await td.recordBid(db, { projectId: P, mrId: mr.id, vendorId: v.id, receivedOn: "2026-09-01", validUntil: "2099-01-01", currency: "EUR", totalPrice: 1000 });
+    await td.evaluateBid(db, { projectId: P, bidId: b.id, techStatus: "acceptable", userId: alice.id });
+    return b;
+  });
+  await throws(() => inP(() => td.awardMr(failOn(/INSERT INTO po_line/, 2), { projectId: P, mrId: mr.id, bidId: bid.id, poNo: "PO-AW-1", placedOn: "2026-09-02", userId: alice.id })), "injected failure");
+  equal(await count("SELECT count(*) AS n FROM purchase_order WHERE po_no = 'PO-AW-1'"), 0, "no PO without all its lines");
+  equal(await count("SELECT count(*) AS n FROM material_requisition WHERE id = $1 AND status = 'issued'", [mr.id]), 1, "the MR is still open for award");
+  const ok = await inP(() => td.awardMr(db, { projectId: P, mrId: mr.id, bidId: bid.id, poNo: "PO-AW-1", placedOn: "2026-09-02", userId: alice.id }));
+  equal(ok.lines, 2, "and the same award without the failure goes through");
+});
+
+test("a forecast is its history row and the line's date, or nothing", async () => {
+  await throws(() => inP(() => prc.setForecast(failOn(/UPDATE po_line SET forecast_on/), { projectId: P, poLineId: poLines.l1.id, forecastOn: "2026-12-01", source: "vendor", userId: alice.id })), "injected failure");
+  equal(await count("SELECT count(*) AS n FROM po_forecast WHERE po_line_id = $1", [poLines.l1.id]), 0, "no history row for a date the line never took");
 });
 
 await run();
