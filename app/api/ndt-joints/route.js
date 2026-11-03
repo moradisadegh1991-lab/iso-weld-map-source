@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
+import { AREAS, areaForNdtJoint, inArea } from "../../../lib/platform/areas.mjs";
 import {
   jointBoard, setRule, removeRule, upsertJoint, recordJointWeld, recordJointNdt, drawJointSample, drawJointProgressive,
 } from "../../../lib/db/repos/joint-ndt.mjs";
@@ -43,6 +44,11 @@ export async function POST(request) {
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS[NEED[kind]]);
+    // the work area, per operation: the matrix and the register are piping's, the examination and its draws quality's
+    const area = areaForNdtJoint(kind);
+    if (!inArea(membership, area)) {
+      throw Object.assign(new Error(`ثبت در بخش «${AREAS[area]}» در حوزهٔ کاری شما نیست.`), { status: 403, code: "OUT_OF_AREA" });
+    }
     return await withProject(db, projectId, async () => {
       const args = { ...body, projectId, userId: user.id };
       const run = { rule: setRule, "rule-remove": removeRule, joint: upsertJoint, weld: recordJointWeld, ndt: recordJointNdt,
