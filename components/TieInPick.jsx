@@ -89,3 +89,26 @@ export default function TieInPick({ value, onChange, weldNos = [], thisDoc = "",
     </div>
   );
 }
+
+/**
+ * Who refers to this weld (the Tie-in reverse): the welds of the project's other drawings whose reference names it.
+ * Shown in the weld's form once the weld has a number and a drawing; empty and silent otherwise.
+ */
+export function TieInReferrers({ doc, sheet, weld }) {
+  const platform = usePlatformMaybe();
+  const [list, setList] = useState(null);
+  useEffect(() => {
+    const w = String(weld ?? "").trim(), d = String(doc ?? "").trim();
+    if (!d || !w || !platform?.projectId || !platform.call) { setList(null); return undefined; }
+    let live = true;
+    const q = new URLSearchParams({ projectId: platform.projectId, doc: d, sheet: String(sheet ?? ""), weld: w });
+    platform.call(`/api/tie-in-targets?${q}`).then((r) => { if (live) setList(r.referrers || []); }).catch(() => { if (live) setList(null); });
+    return () => { live = false; };
+  }, [doc, sheet, weld, platform?.projectId, platform?.call]);
+  if (!list || !list.length) return null;
+  return (
+    <p className="sm" data-tie-referrers={list.length} style={{ margin: "6px 0 0" }}>
+      <span className="muted">سرجوش‌های دیگری که به این جوش ارجاع داده‌اند ({list.length}): </span>
+      <span className="mono" dir="ltr">{list.map((x) => `${x.doc} · ${x.sheet} · ${x.weld}`).join("، ")}</span>
+    </p>);
+}

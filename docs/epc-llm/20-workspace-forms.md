@@ -50,8 +50,10 @@ nothing reaches the sheet until «ذخیره»/«افزودن». The allocation 
   `ISO | sheet | weld | weld_uid` (`lib/sheet/tie-in.mjs`). `POST /api/tie-in-targets` answers where each stands
   now (`classifyTarget`): ok · renamed (with the reference to put in its place; the form's «اصلاح» button applies it) ·
   gone · missing. The weld form shows it under the picker and the weld table marks a reference that is not ok with ⚠.
-  Older references without the uid are looked up by their number. Not done: a list of *who refers to this weld*,
-  and rewriting other sheets' references automatically — the stored text is only ever changed by a person.
+  Older references without the uid are looked up by their number. Not done: rewriting other sheets' references automatically — the stored text is only ever changed by a person.
+- **Who refers to this weld** (`GET /api/tie-in-targets?doc=&sheet=&weld=`, `tieInReferrers`): the weld's form lists the
+  welds of other *current* drawings whose Tie-in names it — by identity when the reference carries one, else by drawing,
+  sheet and number. References are read from each saved payload's weld list and sheet welds (`refsOfPayload`).
 - **Cut model** (`lib/register/cut-model.mjs`, `components/CutForm.jsx`): a piece also has the weld at each end
   (`from`, `to`), the spool and the cut angle (0–90°). The cut tab says: an end weld not on the sheet, the same weld
   at both ends, a spool the sheet has no mark of, a spool that is not the spool of the welds it ends at, a bad angle.

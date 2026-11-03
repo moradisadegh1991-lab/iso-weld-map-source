@@ -5,7 +5,7 @@
  * note stays as typed, and the project's welds group into isometric → sheet → welds.
  */
 import { test, run, equal } from "./harness.mjs";
-import { formatRef, parseRef, groupTargets, classifyTarget } from "../../lib/sheet/tie-in.mjs";
+import { formatRef, parseRef, groupTargets, classifyTarget, refsOfPayload, refersTo } from "../../lib/sheet/tie-in.mjs";
 
 test("a picked reference reads back as the same three choices", () => {
   const ref = formatRef({ doc: "ISO-12", sheet: "2/3", weld: "W5" });
@@ -51,6 +51,19 @@ test("where a reference stands: ok, renamed (with the new reference), gone, miss
   equal(classifyTarget(f, { ...f, sheet_no: "2/2" }).status, "renamed", "moved to another sheet");
   equal(classifyTarget(f, null), { status: "gone" });
   equal(classifyTarget(null, null), { status: "missing" });
+});
+
+test("a payload's references are read from the weld list and the sheet's welds, once each", () => {
+  const p = { weldList: [{ no: "1", ref: "ISO-2 | 1/1 | 4" }, { no: "2" }], sheetMarkup: { items: [
+    { kind: "weld-shop", no: "1", attrs: { ref: "ISO-2 | 1/1 | 4" } }, { kind: "weld-field", no: "3", attrs: { ref: "9" } }, { kind: "spool", no: "SP-1", attrs: { ref: "x | y | z" } }] } };
+  equal(refsOfPayload(p), [{ from: "1", ref: "ISO-2 | 1/1 | 4" }, { from: "3", ref: "9" }]);
+});
+
+test("a reference names a weld by identity when it has one, else by drawing, sheet and number; this sheet's own are not cross-sheet", () => {
+  const t = { doc: "ISO-1", sheet: "1/1", weld: "5", uid: "u5" };
+  equal([refersTo("ISO-1 | 1/1 | 5", t), refersTo("ISO-1 | | 5", t), refersTo("ISO-1 | 2/2 | 5", t), refersTo("ISO-1 | 1/1 | 6", t)], [true, true, false, false]);
+  equal([refersTo("ISO-1 | 1/1 | 9 | u5", t), refersTo("ISO-1 | 1/1 | 5 | u6", t)], [true, false], "identity wins over the number written");
+  equal(refersTo("5", t), false);
 });
 
 await run();
