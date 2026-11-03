@@ -80,6 +80,18 @@ insert-only; the recall list (`destinations`) is unchanged.
 **NOT RUN:** a managed or remote PostgreSQL; load; the 15-step end-to-end scenario (C5); VDRL / expediting / BOM-revision
 behaviour. Tests that need a real server print SKIPPED without `PG_TEST_URL` and are never counted as passed.
 
+### 5b. Results of the follow-up (Phase 2b)
+
+| Command | Result |
+|---|---|
+| `npm run db:test` (PGlite, whole chain, now with `mto-revisions`, `receipt-shipment`, `spool-step-material`, `material-lifecycle`) | exit 0, 0 `FAIL` |
+| `npm run eval:check` / `npx next build` | `GATE PASSED` / no errors |
+| `npm run db:test:pg` (PostgreSQL 16.15) | pg-scope 8/8, **material-concurrency 13/13** |
+| the new concurrency tests on the code **before** the fixes | B8 (award) 4 POs instead of 1; B9 submissions 3 instead of 1; B9b all four review codes "succeeded"; B10 forecast order wrong — 3 of 3 runs red; after: 3 of 3 green |
+| `material-atomic` (PGlite and PostgreSQL) | 5/5 (award and forecast tests red before) |
+| `mto-revisions` 6/6, `receipt-shipment` 3/3, `spool-step-material` 4/4, `material-lifecycle` 9/9 | red first where it changes behaviour (MTO 220 vs 120; over-receipt accepted; no warning) |
+| every `db/test/*.mjs` file on a fresh PostgreSQL 16 database each (112 files) | 109 pass in full; `run` fails by design; `migrations` is PGlite-specific (same on the old client); `pg-scope` and `material-concurrency` need `PG_TEST_URL` and were run on their own, above |
+
 ## 6. Follow-up (Phase 2b): the three findings, the award, VDRL, forecasts, and the end-to-end scenario
 
 All with a failing test first; PGlite and PostgreSQL 16.
