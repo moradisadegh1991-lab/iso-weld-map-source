@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /**
+ * (Phase 2c adds the project's switch `receipt_needs_shipment`, off by default; see the tests at the end.)
  * Receipt against shipment (audit 2026-11-03, Phase 2 finding C2): a PO line is shipped in parts and received in parts.
  * Once shipments are recorded for a line, what is received cannot exceed what was shipped; a line with no shipment
  * recorded (collected by the site, bought locally) is received against the order alone, as before.
@@ -48,6 +49,48 @@ test("a line with no shipment recorded is received against the order alone (as b
   await receive(bought, 60, 6);
   await receive(bought, 40, 7);
   await throws(() => receive(bought, 1, 8), "INVALID_INPUT", "over the order");
+});
+
+// ── the project's switch: receive only what has ARRIVED ─────────────────────────────────────────────────
+let strict, strictPo;
+await inP(async () => {
+  const vendor = await prc.upsertVendor(db, { projectId: P, code: "v-2", name: "V2" });
+  strictPo = await prc.createPo(db, { projectId: P, poNo: "po-2", vendorId: vendor.id, title: "T2", currency: "EUR", placedOn: "2026-08-01", userId: alice.id });
+  const c = await wh.upsertItem(db, { projectId: P, code: "RS-C", description: "C", category: "pipe", uom: "m" });
+  strict = await prc.addPoLine(db, { projectId: P, poId: strictPo.id, itemId: c.id, qty: 100 });
+});
+const setSwitch = (on) => inP(() => projects.updateProjectProfile(db, { projectId: P, patch: { receipt_needs_shipment: on } }));
+
+test("the switch is off by default, and a project can turn it on", async () => {
+  equal((await inP(() => projects.getProjectProfile(db, { projectId: P }))).receipt_needs_shipment, false);
+  equal((await setSwitch(true)).receipt_needs_shipment, true);
+});
+
+test("switch on: no receipt without a shipment, none beyond what has arrived", async () => {
+  const e = await throws(() => receive(strict, 10, 20), "INVALID_INPUT", "no shipment recorded");
+  assert(/محموله/.test(e.message), e.message);
+  const sh = await inP(() => prc.createShipment(db, { projectId: P, shipmentNo: "SH-S1", poId: strictPo.id, shippedOn: "2026-09-01", lines: [{ poLineId: strict.id, qty: 40 }], userId: alice.id }));
+  const e2 = await throws(() => receive(strict, 10, 21), "INVALID_INPUT", "shipped, not arrived");
+  assert(/وارد/.test(e2.message), e2.message);
+  await inP(() => prc.arriveShipment(db, { projectId: P, shipmentId: sh.id, arrivedOn: "2026-09-05" }));
+  await throws(() => receive(strict, 41, 22), "INVALID_INPUT", "more than arrived");
+  await receive(strict, 40, 23);
+  await throws(() => receive(strict, 1, 24), "INVALID_INPUT", "all that arrived is received");
+});
+
+test("switch on: a second shipment opens the rest once it has arrived", async () => {
+  const sh = await inP(() => prc.createShipment(db, { projectId: P, shipmentNo: "SH-S2", poId: strictPo.id, shippedOn: "2026-09-10", lines: [{ poLineId: strict.id, qty: 60 }], userId: alice.id }));
+  await throws(() => receive(strict, 1, 25), "INVALID_INPUT", "not arrived yet");
+  await inP(() => prc.arriveShipment(db, { projectId: P, shipmentId: sh.id, arrivedOn: "2026-09-12" }));
+  await receive(strict, 60, 26);
+});
+
+test("switch off again: a line with no shipment is received against the order, as before", async () => {
+  await setSwitch(false);
+  const vendor = (await inP(() => prc.upsertVendor(db, { projectId: P, code: "v-2", name: "V2" })));
+  const d = await inP(async () => { const it = await wh.upsertItem(db, { projectId: P, code: "RS-D", description: "D", category: "pipe", uom: "m" }); return prc.addPoLine(db, { projectId: P, poId: strictPo.id, itemId: it.id, qty: 5 }); });
+  await receive(d, 5, 27);
+  assert(vendor.id);
 });
 
 await run();
