@@ -1029,7 +1029,7 @@ export default function Page() {
       {data && !listed && markForm && (
         <MarkForm key={`${markForm.mode}-${markForm.id || "new"}-${markForm.kind}`} mode={markForm.mode}
           mark={markForm.id ? (data.sheetMarkup?.items || []).find((m) => m.id === markForm.id) : { kind: markForm.kind }}
-          items={data.sheetMarkup?.items || []} bom={data.bom || []} lists={valueLists} readOnly={openRun?.run?.status === "approved"} thisDoc={data.meta?.drawingNo}
+          items={data.sheetMarkup?.items || []} bom={data.bom || []} lists={valueLists} readOnly={openRun?.run?.status === "approved"} thisDoc={data.meta?.drawingNo} thisSheet={data.meta?.sheet}
           onClose={() => setMarkForm(null)}
           onSave={(d) => {
             const items0 = data.sheetMarkup?.items || [];

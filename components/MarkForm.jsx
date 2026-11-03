@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import FormDialog from "./ui/FormDialog";
 import BomPick from "./BomPick";
 import Pick from "./ui/Pick";
-import TieInPick from "./TieInPick";
+import TieInPick, { TieInReferrers } from "./TieInPick";
 import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, weldsOf, accessoriesOf, accessoriesText, bomSnapshot, nextNo } from "../lib/sheet/markup.mjs";
 
 /**
@@ -32,7 +32,7 @@ const LIST_OF = {
 const NEW_ID = "__draft__";
 const rowText = (b) => `PT ${b.pt} — ${String(b.description || b.group || "").slice(0, 46)}${b.diam ? ` (${b.diam})` : ""}`;
 
-export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom = [], lists, onSave, onClose, readOnly = false, thisDoc = "" }) {
+export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom = [], lists, onSave, onClose, readOnly = false, thisDoc = "", thisSheet = "" }) {
   const [mode, setMode] = useState(readOnly ? "view" : mode0);
   const cls = KINDS[mark?.kind]?.cls || "weld";
   const start = useMemo(() => ({
@@ -105,6 +105,7 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
           {field("ref", <TieInPick data-input="ref" value={a.ref} weldNos={welds.map((w) => String(w.no ?? "").trim()).filter(Boolean)} thisDoc={thisDoc} onChange={(v) => setA({ ref: v })} />)}
         </div>
         <div className="mk-grid one">{text("note")}</div>
+        {mode !== "create" && mark?.no && <TieInReferrers doc={thisDoc} sheet={thisSheet} weld={start.no} />}
       </>)}
 
       {cls === "spool" && <div className="mk-grid">{pick("size")}{pick("material")}{text("lengthMm", { inputMode: "decimal" })}{text("note")}</div>}

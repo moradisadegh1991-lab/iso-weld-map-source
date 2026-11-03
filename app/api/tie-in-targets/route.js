@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
-import { tieInTargets, resolveTieIns } from "../../../lib/db/repos/joint.mjs";
+import { tieInTargets, resolveTieIns, tieInReferrers } from "../../../lib/db/repos/joint.mjs";
 import { groupTargets, parseRef, formatRef } from "../../../lib/sheet/tie-in.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 
@@ -15,6 +15,11 @@ export async function GET(request) {
     const { db, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.VIEW_PROJECT);
+    const sp = new URL(request.url).searchParams;
+    // ?doc=&sheet=&weld=   who refers to that weld (its Tie-in reverse), instead of the list of targets
+    if (sp.get("weld") && sp.get("doc"))
+      return await withProject(db, projectId, async () =>
+        Response.json({ referrers: await tieInReferrers(db, { projectId, doc: sp.get("doc"), sheet: sp.get("sheet") || "", weld: sp.get("weld") }) }));
     return await withProject(db, projectId, async () =>
       Response.json({ isometrics: groupTargets(await tieInTargets(db, { projectId })) }));
   } catch (e) { return errorResponse(e); }

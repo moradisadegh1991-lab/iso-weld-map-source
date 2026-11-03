@@ -616,7 +616,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       </WorkspaceFrame>
       {form && (
         <MarkForm key={`${form.mode}-${form.id || "new"}-${form.kind}`} mode={form.mode}
-          mark={form.id ? items.find((m) => m.id === form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo}
+          mark={form.id ? items.find((m) => m.id === form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo} thisSheet={meta.sheet}
           onClose={() => setForm(null)}
           onSave={(d) => {
             if (form.id) onItems(updateMark(items, form.id, { kind: d.kind, no: d.no, attrs: d.attrs }));

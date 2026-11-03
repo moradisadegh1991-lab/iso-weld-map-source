@@ -230,4 +230,24 @@ test("a Tie-in written with a weld's old number is followed to where that weld i
   });
 });
 
+test("who refers to a weld: the other current drawings whose Tie-in names it, by identity or by number; never its own sheet", async () => {
+  await inP(async () => {
+    const { document: d2 } = await docs.registerDocument(db, { projectId: P, docNo: "ISO-2", revision: "0", revisionDate: "2026-09-01",
+      fileSha256: "c".repeat(64), storageUri: "local://c" });
+    const pay = { ...clone(DEMO), weldList: [
+      { no: "A1", ref: `ISO-1 | 1/1 | ${rev0.find((x) => x.weld_uid === W.weld_uid).weld_no} | ${W.weld_uid}` },   // by identity, under the old number
+      { no: "A2", ref: `ISO-1 | 1/1 | ${W2.weld_no}` },                                                       // by number only
+      { no: "A3", ref: "ISO-1 | 1/1 | NO-SUCH" }, { no: "A4", ref: "free note" }] };
+    const r2 = await runs.createRun(db, { projectId: P, documentId: d2.id, lineId, payload: pay });
+    await runs.saveRegister(db, { projectId: P, runId: r2.id, documentId: d2.id, lineId, model: buildModel(DEMO, {}) });
+    equal((await joint.tieInReferrers(db, { projectId: P, doc: "ISO-1", sheet: "1/1", weld: W.weld_no })).map((x) => [x.doc, x.weld]), [["ISO-2", "A1"]], "found by identity although written with the old number");
+    equal((await joint.tieInReferrers(db, { projectId: P, doc: "ISO-1", sheet: "1/1", weld: W2.weld_no })).map((x) => x.weld), ["A2"]);
+    equal((await joint.tieInReferrers(db, { projectId: P, doc: "ISO-2", sheet: "1/1", weld: "A1" })).length, 0, "nothing refers to a referrer");
+    equal((await joint.tieInReferrers(db, { projectId: P, doc: "ISO-1", sheet: "1/1", weld: W4.weld_no })).length, 0);
+  });
+  await withProject(db, other.id, async () => {
+    equal((await joint.tieInReferrers(db, { projectId: other.id, doc: "ISO-1", sheet: "1/1", weld: W.weld_no })).length, 0, "another project sees none");
+  });
+});
+
 await run();
