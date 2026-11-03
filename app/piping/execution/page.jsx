@@ -42,14 +42,21 @@ function PipingExecutionBody() {
     try { setDetail(await call(detailUrl(spoolId))); } catch (e) { setMsg(e.message); }
   }
 
-  async function record(spoolId, code, refNo = null) {
+  async function record(spoolId, code, refNo = null, materialOverride = null) {
     setMsg(null);
     try {
       await call("/api/piping/execution", { method: "POST", body: JSON.stringify({
-        projectId, kind: "activity", spoolId, code, doneAt: workOn, refNo }) });
+        projectId, kind: "activity", spoolId, code, doneAt: workOn, refNo, ...(materialOverride ? { materialOverride } : {}) }) });
       setDetail(await call(detailUrl(spoolId)));
       reload();
-    } catch (e) { setMsg(e.message); }
+    } catch (e) {
+      setMsg(e.message);
+      // The step uses material that is not all issued: issue it, or go on with a reason (kept in the step's note).
+      if (/materialOverride/.test(e.message || "")) {
+        const why = window.prompt(`${e.message}\n\n${t("pi.ex.materialWhy")}`);
+        if (why && why.trim()) return record(spoolId, code, refNo, why.trim());
+      }
+    }
   }
 
   async function reserveMaterial(spoolId) {

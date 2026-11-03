@@ -103,11 +103,20 @@ All with a failing test first; PGlite and PostgreSQL 16.
 - **C2 receipt vs shipment** (`receiveProblems`): once shipments are recorded for a line, received ≤ shipped (and ≤ ordered).
   A line with no shipment recorded is received against the order alone, as before. An existing unit test whose fixture
   was 6 shipped / 6 received had pinned only the order ceiling; its fixture was aligned.
-- **C4 spool step without issued material** (`recordSpoolActivity`): **warns, does not block** — it is recorded, and the
-  answer carries `materialWarnings` (additive; also in the offline sync result) when a material-consuming step
-  (`fit_up`, `erected`) is done with the spool's list not all issued. A spool with no list says nothing. Blocking would stop
-  legitimate site work (material reaches a spool in ways the platform may not know); changing warn → block is one line if
-  the owner wants it.
+- **C4 spool step without issued material** (`recordSpoolActivity`) — **blocks** (Phase 2c, the owner's decision; Phase 2b first
+  warned): fit-up and erection are refused while the spool's *tracked* material (lines whose code is a warehouse item:
+  available, reserved or short) is not all issued. Untracked lines (a code not in the catalogue, a unit mismatch) cannot be
+  issued through the platform and are not counted — the guided scenario showed blocking on them would stop work on
+  material the project never runs through the warehouse. The way through: `materialOverride`, a reason in words (blank is
+  refused), records the step, keeps the reason in its note, and the answer still carries `materialWarnings`. Same on
+  site (offline sync: a refused op comes back `rejected` with the message; the op with `materialOverride` applies). The
+  execution page asks for the reason when a step is refused. The guided scenario (`lib/scenario/dm-pump.mjs` step 5.4) now
+  issues each spool's remaining tracked material before fit-up, as a user would.
+- **Receipt switch** (migration 100, `project.receipt_needs_shipment`, off by default, project settings page): when on, a PO
+  line is received only from a shipment that is recorded **and has arrived** (`arrived_on`), and never beyond the arrived
+  quantity; with it off, receipt is against the order (capped by shipped quantity when shipments exist), as in Phase 2b.
+  Chosen as a project switch because the guided scenario's «PO مستقیم و رسید در انبار» (and local purchases) receive with
+  no shipment.
 - **C2 award** (`awardMr`): the PO, its lines, the award record and the MR's closing are one transaction, the MR locked.
   Before: a failure left a PO without its lines; four awards at once placed **four POs**. Now exactly one (B8).
 - **VDRL** (`submitDoc`, `returnDoc`): the document is locked. Before: four submissions at once recorded **3**; four review
@@ -124,9 +133,9 @@ All with a failing test first; PGlite and PostgreSQL 16.
 
 ## 6b. Still open (read, for the owner)
 
-- **Receipt without any shipment** is still allowed (collected by the site, bought locally); only a shipment-backed line is capped.
-- **Arrival** (`arrived_on`) is not required before receipt; the cap is the quantity *shipped*.
+- With the receipt switch **off** (default) a line with no shipment is received against the order alone.
 - **Slow work inside a scope holds a pooled connection** (`DATABASE_POOL_MAX`).
+- The UI drive of the guided scenario (`tools/drive-scenario-dm-ui.mjs`) was not run; its step 5.4 text changed.
 
 ## 7. Remaining gaps
 
@@ -135,6 +144,7 @@ not for report layouts or the overdue arithmetic (already unit-tested in `procur
 
 ## 8. Migration and deployment
 
+- **Migration 100** (`100_receipt_needs_shipment.sql`): one boolean column on `project`, default false. Additive. Run it on the server.
 - **Migration 099** (`db/migrations/099_member_areas_complete.sql`): widens `member_areas_known` from 15 to 18 areas. No
   row changes, nothing refused that was accepted. Run it on the server (`sudo epc update` applies pending migrations).
 - **VPS (PGlite):** `sudo epc backup && sudo epc update`. The row locks are inert there (one connection) but the

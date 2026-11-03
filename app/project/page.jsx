@@ -131,6 +131,7 @@ export default function ProjectPage() {
                ["steel_erection_standard", p.steel_erection_standard ?? ""],
                ["weld_symbol_shop", p.weld_symbol_shop ?? ""], ["weld_symbol_field", p.weld_symbol_field ?? ""],
                ["weld_thd_labelled", Boolean(p.weld_thd_labelled)],
+               ["receipt_needs_shipment", Boolean(p.receipt_needs_shipment)],
                ...[...ELECTRICAL, ...INSTRUMENTS, ...COATING, ...HSE, ...QUALITY, ...CMMS].map(([k]) => [k, p[k] ?? ""])])));
   }, [data]);
 
@@ -317,6 +318,16 @@ export default function ProjectPage() {
             </div>
           ))}
         </div>
+
+        <label className="sm" style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
+          <input type="checkbox" disabled={!editable} checked={Boolean(form.receipt_needs_shipment)}
+                 onChange={(e) => set("receipt_needs_shipment", e.target.checked)} data-receipt-needs-shipment />
+          رسید کالای PO <b>فقط</b> از محمولهٔ ثبت‌شده و واردشده پذیرفته شود
+        </label>
+        <p className="hint" style={{ marginTop: -4 }}>
+          خاموش (پیش‌فرض): خرید مستقیم، خرید محلی و کالایی که سایت خودش برمی‌دارد، فقط با مقدار سفارش سنجیده می‌شود.
+          روشن: هر رسید به محمولهٔ ثبت‌شده (و تاریخ ورودش) وصل است و از مقدار واردشده بیشتر نمی‌شود.
+        </p>
 
         <h2 style={{ marginTop: 8 }}>تحویل به نگهداری (CMMS)</h2>
         <div className="grid2">
