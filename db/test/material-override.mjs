@@ -102,26 +102,80 @@ test("7. updating the same step keeps every earlier event", async () => {
   equal((await events(s.id)).map((e) => e.reason), ["first reason", "second reason"]);
 });
 
-/** An UPDATE is refused by the trigger (PGlite: one superuser) or, for the application role, by the revoked privilege (PostgreSQL). */
+/** For the application role an UPDATE is refused by the revoked privilege; the trigger (owner-level) is proved in material-override-migration.mjs and, on PostgreSQL, in B13. */
 const refused = async (fn) => { try { await fn(); } catch (e) { assert(/append-only|permission denied/.test(String(e.message)), `wrong error: ${e.message}`); return; } throw new Error("expected the change to be refused"); };
 
-test("append-only: the table refuses an UPDATE of an event, and the application role cannot DELETE one", async () => {
-  const s = await newSpool();
-  await step(s.id, "fit_up", { materialOverride: "r" });
-  await refused(() => inP(() => db.query("UPDATE material_override SET reason = 'edited' WHERE spool_id = $1", [s.id])));
-  await refused(() => inP(() => db.query("UPDATE material_override SET authorized_by = $2 WHERE spool_id = $1", [s.id, qc.id])));
-  // The application role has no DELETE grant. PGlite has no roles to enforce it (one superuser); PostgreSQL does.
-  if (process.env.DATABASE_URL) await throws(() => inP(() => db.query("DELETE FROM material_override WHERE spool_id = $1", [s.id])), "permission denied");
-  equal((await events(s.id)).map((e) => e.reason), ["r"]);
-  await throws(() => inP(() => db.query("INSERT INTO material_override (project_id, spool_id, code, reason, authorized_by, source) VALUES ($1,$2,'fit_up','  ',$3,'web')", [P, s.id, eng.id])), "material_override_reason_not_blank");
-});
-
-test("deleting the activity detaches the event; the event keeps its spool and step", async () => {
+test("append-only: every UPDATE is refused, whichever column; DELETE and TRUNCATE are refused for the application role", async () => {
   const s = await newSpool();
   const r = await step(s.id, "fit_up", { materialOverride: "r" });
-  await inP(() => db.query("DELETE FROM spool_activity WHERE id = $1", [r.id]));
+  const changes = [
+    ["reason = 'edited'", []], ["warnings = '[]'::jsonb", []], ["authorized_by = $2", [qc.id]], ["authorized_at = now()", []],
+    ["authorized_at = authorized_at - interval '1 day'", []], ["source = 'offline', op_id = gen_random_uuid()", []], ["code = 'erected'", []],
+    ["spool_id = $2", [(await newSpool()).id]], ["project_id = $2", [Q]], ["activity_id = NULL", []], ["activity_id = activity_id", []],
+  ];
+  for (const [set, extra] of changes) {
+    await refused(() => inP(() => db.query(`UPDATE material_override SET ${set} WHERE spool_id = $1`, [s.id, ...extra])));
+  }
+  // The same, as the owner/superuser of the table, outside the application role: the trigger has no exception left
+  // (on PostgreSQL the privilege stops app_rw first; the trigger is what stops everyone else — see the PostgreSQL-only test below).
   const [e] = await events(s.id);
-  equal([e.activity_id, e.code, e.reason], [null, "fit_up", "r"]);
+  equal([e.reason, e.activity_id, e.authorized_by, e.code, e.source], ["r", r.id, eng.id, "fit_up", "web"]);
+  // The application role has no DELETE or TRUNCATE grant (PGlite enforces the role inside a project scope too).
+  await throws(() => inP(() => db.query("DELETE FROM material_override WHERE spool_id = $1", [s.id])), "permission denied");
+  await throws(() => inP(() => db.query("TRUNCATE material_override")), "permission denied");
+  equal((await events(s.id)).length, 1);
+  await throws(() => inP(() => db.query("INSERT INTO material_override (project_id, spool_id, activity_id, code, reason, authorized_by, source) VALUES ($1,$2,$3,'fit_up','  ',$4,'web')", [P, s.id, r.id, eng.id])), "material_override_reason_not_blank");
+});
+
+test("activity deletion policy: a step that has override events cannot be deleted on its own; deleting its spool removes both together", async () => {
+  const s = await newSpool();
+  const r = await step(s.id, "fit_up", { materialOverride: "r" });
+  await throws(() => inP(() => db.query("DELETE FROM spool_activity WHERE id = $1", [r.id])), "material_override_activity_fkey");
+  const [e] = await events(s.id);
+  equal([e.activity_id, e.code, e.reason], [r.id, "fit_up", "r"], "the event is untouched by the refused delete");
+  equal(await acts(s.id, "fit_up"), 1);
+  // a step with no event deletes as before
+  const plain = await step(s.id, "released");
+  await inP(() => db.query("DELETE FROM spool_activity WHERE id = $1", [plain.id]));
+  // the spool goes: its steps and its events go in the one statement
+  await inP(() => db.query("DELETE FROM spool WHERE id = $1", [s.id]));
+  equal(await acts(s.id, "fit_up"), 0);
+  equal((await events(s.id)).length, 0);
+});
+
+/** A second project with a spool that has a step, built directly: the targets of the cross-project attempts. */
+let foreign;
+await withProject(db, Q, async () => {
+  const { rows: [doc] } = await db.query(`INSERT INTO document (project_id, doc_no, revision, file_sha256, storage_uri) VALUES ($1,'ISO-Q','0',$2,'local://q') RETURNING id`, [Q, "e".repeat(64)]);
+  const rn = await runs.createRun(db, { projectId: Q, documentId: doc.id, lineId: null, payload: DEMO });
+  const { rows: [sp] } = await db.query("INSERT INTO spool (project_id, extraction_run_id, spool_no) VALUES ($1,$2,'SP-Q') RETURNING id", [Q, rn.id]);
+  const { rows: [ac] } = await db.query("INSERT INTO spool_activity (project_id, spool_id, code, status, done_at) VALUES ($1,$2,'fit_up','done','2026-09-10') RETURNING id", [Q, sp.id]);
+  foreign = { spool: sp.id, activity: ac.id };
+});
+const rawEvent = (scopeProject, { project, spool, activity }) => withProject(db, scopeProject, () => db.query(
+  "INSERT INTO material_override (project_id, spool_id, activity_id, code, reason, authorized_by, source) VALUES ($1,$2,$3,'fit_up','direct',$4,'web')",
+  [project, spool, activity, eng.id]));
+
+test("composite keys: an event must name its own project's spool and an activity of that spool (direct SQL, no repository)", async () => {
+  const s = await newSpool();
+  const other = await newSpool();
+  const mine = await step(s.id, "fit_up", { materialOverride: "r" });
+  const otherAct = await step(other.id, "fit_up", { materialOverride: "r2" });
+  // the valid shape is accepted and kept
+  await rawEvent(P, { project: P, spool: s.id, activity: mine.id });
+  equal((await events(s.id)).map((e) => e.activity_id), [mine.id, mine.id]);
+  // project Q's scope naming project P's spool: the spool is not Q's
+  await throws(() => rawEvent(Q, { project: Q, spool: s.id, activity: mine.id }), "material_override_spool_fkey");
+  // project P's scope claiming P but with Q's spool
+  await throws(() => rawEvent(P, { project: P, spool: foreign.spool, activity: foreign.activity }), "material_override_spool_fkey");
+  // Q's own spool but P's activity, and the reverse
+  await throws(() => rawEvent(Q, { project: Q, spool: foreign.spool, activity: mine.id }), "material_override_activity_fkey");
+  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: foreign.activity }), "material_override_activity_fkey");
+  // an activity of another spool of the SAME project
+  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: otherAct.id }), "material_override_activity_fkey");
+  // an event with no activity
+  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: null }), "null value");
+  equal((await events(s.id)).length, 2, "none of the refused rows was written");
 });
 
 test("11. without the override permission: refused, nothing written (online)", async () => {

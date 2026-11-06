@@ -227,5 +227,46 @@ test("B12. the same offline override sent twice at once: one step, one audit eve
   void px;
 });
 
+test("B13. material_override on PostgreSQL (Phase 2d.1): composite keys, no UPDATE for anyone, no DELETE/TRUNCATE for app_rw", async () => {
+  const runs = await import("../../lib/db/repos/runs.mjs");
+  const { DEMO } = await import("../../lib/demo.js");
+  const mk = async (proj, no) => inP(async () => {
+    const { rows: [doc] } = await db.query(`INSERT INTO document (project_id, doc_no, revision, file_sha256, storage_uri) VALUES ($1,$2,'0',$3,'local://b') RETURNING id`, [proj, `ISO-${no}`, no.padEnd(64, "f").slice(0, 64)]);
+    const r = await runs.createRun(db, { projectId: proj, documentId: doc.id, lineId: null, payload: DEMO });
+    const { rows: [sp] } = await db.query("INSERT INTO spool (project_id, extraction_run_id, spool_no) VALUES ($1,$2,$3) RETURNING id", [proj, r.id, `S-${no}`]);
+    const { rows: [ac] } = await db.query("INSERT INTO spool_activity (project_id, spool_id, code, status, done_at) VALUES ($1,$2,'fit_up','done','2026-09-10') RETURNING id", [proj, sp.id]);
+    return { spool: sp.id, activity: ac.id };
+  }, proj);
+  const a = await mk(P, "b13a"), b = await mk(Q, "b13b");
+  const ins = (scope, project, spool, activity) => inP(() => db.query(
+    "INSERT INTO material_override (project_id, spool_id, activity_id, code, reason, authorized_by, source) VALUES ($1,$2,$3,'fit_up','r',$4,'web') RETURNING id", [project, spool, activity, alice.id]), scope);
+  const good = (await ins(P, P, a.spool, a.activity)).rows[0];
+  // other project's spool / activity, from either project's scope
+  for (const [scope, project, x] of [[P, P, b], [Q, Q, a], [P, P, { spool: a.spool, activity: b.activity }], [Q, Q, { spool: b.spool, activity: a.activity }]]) {
+    const v = await verdicts([ins(scope, project, x.spool, x.activity)]);
+    assert(v[0] !== "ok", `${scope === P ? "P" : "Q"} scope accepted a foreign reference`);
+  }
+  // a step that has events cannot be deleted alone
+  assert((await verdicts([inP(() => db.query("DELETE FROM spool_activity WHERE id = $1", [a.activity]))]))[0] !== "ok", "step with events was deleted");
+  // application role: no UPDATE of any column, no DELETE, no TRUNCATE
+  for (const set of ["reason = 'x'", "warnings = '[]'::jsonb", "authorized_at = now()", "activity_id = NULL", "authorized_by = authorized_by"])
+    assert((await verdicts([inP(() => db.query(`UPDATE material_override SET ${set} WHERE id = $1`, [good.id]))]))[0] !== "ok", `app_rw updated: ${set}`);
+  for (const sql of ["DELETE FROM material_override WHERE id = $1", "TRUNCATE material_override"])
+    assert((await verdicts([inP(() => db.query(sql, sql.includes("$1") ? [good.id] : []))]))[0] !== "ok", `app_rw ran: ${sql}`);
+  // the owner (this connection, outside any scope): the trigger refuses every update, including the one 101 allowed
+  for (const set of ["reason = 'x'", "activity_id = NULL", "authorized_at = now()"]) {
+    let msg = null; try { await db.query(`UPDATE material_override SET ${set} WHERE id = $1`, [good.id]); } catch (e) { msg = e.message; }
+    assert(msg && /append-only/.test(msg), `owner UPDATE ${set}: ${msg}`);
+  }
+  // catalog: the keys are what the migration says; the activity key does NOT set null
+  const { rows: fk } = await db.query(`SELECT conname, confdeltype FROM pg_constraint WHERE conrelid = 'material_override'::regclass AND contype = 'f' ORDER BY conname`);
+  equal(fk.map((r) => [r.conname, r.confdeltype]), [["material_override_activity_fkey", "a"], ["material_override_authorized_by_fkey", "a"], ["material_override_spool_fkey", "c"]]);
+  // the event is untouched by all of it, and goes with its spool
+  equal(await num("SELECT count(*) AS n FROM material_override WHERE id = $1 AND reason = 'r' AND activity_id = $2", [good.id, a.activity]), 1);
+  await inP(() => db.query("DELETE FROM spool WHERE id = $1", [a.spool]));
+  equal(await num("SELECT count(*) AS n FROM material_override WHERE id = $1", [good.id]), 0);
+  equal(await num("SELECT count(*) AS n FROM spool_activity WHERE id = $1", [a.activity]), 0);
+});
+
 await run();
 await db.close();

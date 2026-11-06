@@ -20,7 +20,7 @@ A dedicated, **append-only** table `material_override` (migration 101): one row 
 | `id` | event id |
 | `project_id` → `project` (cascade) | scope; RLS `project_isolation` |
 | `spool_id` → `spool` (cascade) | the spool |
-| `activity_id` → `spool_activity` (**SET NULL**) | the step row that was written; if that row is ever removed the event stays, detached |
+| `activity_id` → `spool_activity` | the step row that was written. *(101: ON DELETE SET NULL, nullable. **Superseded by 102 — see `phase-2d1-database-integrity.md`:** NOT NULL, NO ACTION, composite key.)* |
 | `code` | the step (`fit_up` / `erected`) — kept on the event itself |
 | `reason` | normalised (trimmed, whitespace collapsed, ≤ 1000 chars); CHECK non-blank |
 | `warnings` jsonb | what was outstanding when it was overridden (the same text the answer carries) |
@@ -33,7 +33,7 @@ Indexes: `(project_id, authorized_at DESC)`, `(spool_id, authorized_at DESC)`, `
 
 Append-only is enforced three ways: (1) `REVOKE UPDATE, DELETE, TRUNCATE … FROM app_rw` (as 018/019/020 do — the default
 privileges of 001 grant everything, the first run on PostgreSQL showed the GRANT alone is not enough); (2) a `BEFORE
-UPDATE` trigger that refuses any change (the owner included) except the RI action that nulls `activity_id`; (3) the
+UPDATE` trigger that refuses any change (the owner included) *(101 let the RI action that nulls `activity_id` through; 102 removed that exception)*; (3) the
 application has no endpoint that updates or deletes an event. Rows leave only with their spool or project.
 
 **Not done, on purpose:** nothing was back-filled from old notes. An override that only ever existed as text in a note
@@ -97,7 +97,7 @@ offline ops (no reason, blank, no permission) leave nothing · 10 other project:
 `projectId`, and an INSERT under another project's scope all give nothing / are refused · 11 QC / viewer / no membership
 refused online and offline, admin allowed · 12 steps without material and spools without list unaffected · 13 issued
 material ⇒ no override, no event · plus append-only (UPDATE refused; DELETE refused for the application role on
-PostgreSQL), reason CHECK, activity deletion detaches the event, history order, rollback of step + `field_op` offline,
+PostgreSQL), reason CHECK, history order, rollback of step + `field_op` offline,
 and (PostgreSQL) five simultaneous copies of one op ⇒ one event.
 
 Guards proved by reverting the code they protect: transaction removed ⇒ test 6 red; permission check removed ⇒ test 11
@@ -120,6 +120,9 @@ a managed/remote PostgreSQL, GitHub Actions (see the PR for its status).
 
 
 ## 8. Known limitations
+
+* **Superseded in part by migration 102 (Phase 2d.1):** the foreign keys, the activity-deletion policy and the trigger exception described above.
+* Re-deriving a register (`lib/db/repos/review.mjs`) deletes and re-creates the run's spools; their steps — and, through the spool key, their override events — go with them. That is the existing behaviour for steps; for events it is an audit-retention gap (see 2d.1 §7).
 
 * Overrides recorded before migration 101 exist only as note text.
 * The event records the reason and what was outstanding, not a quantity-level snapshot of the ledger.
