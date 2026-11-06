@@ -7,7 +7,7 @@ import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 import {
   spoolBoard, spoolStatus, recordSpoolActivity, upsertSupport, markSupport,
-  listSupports, buriedExposure,
+  listSupports, buriedExposure, materialOverrides,
 } from "../../../../lib/db/repos/piping-execution.mjs";
 
 export async function GET(request) {
@@ -21,7 +21,8 @@ export async function GET(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
 
     return await withProject(db, projectId, async () => {
-      if (spoolId) return Response.json({ ...(await spoolStatus(db, { projectId, spoolId })), material: await spoolMaterial(db, { projectId, spoolId }) });
+      if (spoolId) return Response.json({ ...(await spoolStatus(db, { projectId, spoolId })), material: await spoolMaterial(db, { projectId, spoolId }),
+        overrides: await materialOverrides(db, { projectId, spoolId }) });
       const { rows: [p] } = await db.query(
         "SELECT grade_elevation_mm, elevation_datum FROM project WHERE id = $1", [projectId]);
       return Response.json({
@@ -57,7 +58,7 @@ export async function POST(request) {
       }
       if (kind === "activity") {
         return Response.json({ activity: await recordSpoolActivity(db,
-          { ...body, projectId, userId: user.id }) });
+          { ...body, projectId, userId: user.id, membership, source: "web", opId: null }) });
       }
       if (kind === "support") {
         // `kind` routes this request; the support's own type is `supportKind`.
@@ -66,7 +67,7 @@ export async function POST(request) {
       }
       if (kind === "support_mark") {
         return Response.json({ support: await markSupport(db,
-          { ...body, projectId, userId: user.id }) });
+          { ...body, projectId, userId: user.id, membership, source: "web", opId: null }) });
       }
       return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
     });
