@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Migration 102 (Phase 2d.1) against data: a database at 101 with override events, then 102 on top.
+ * Migrations 102 (Phase 2d.1) and 103 (Phase 2d.2) against data: a database at 101 with override events, then 102 on top.
  *
  *   · sound data → 102 applies, nothing is lost, the composite keys and the NOT NULL are in place, and the old exception in the
  *     append-only trigger is gone (an UPDATE that nulls activity_id — what 101 let through for the owner — is now refused);
@@ -16,8 +16,12 @@ import { createClient } from "../../lib/db/client.mjs";
 import { migrate } from "../../lib/db/migrate.mjs";
 
 const ALL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "migrations");
-const staged = await scratchDir("mig102-files-");
-for (const f of (await readdir(ALL)).filter((f) => f.endsWith(".sql")).sort()) if (f < "102") await copyFile(path.join(ALL, f), path.join(staged, f));
+const staged = await scratchDir("mig102-files-");          // up to 101
+const staged102 = await scratchDir("mig102b-files-");       // up to 102
+for (const f of (await readdir(ALL)).filter((f) => f.endsWith(".sql")).sort()) {
+  if (f < "102") await copyFile(path.join(ALL, f), path.join(staged, f));
+  if (f < "103") await copyFile(path.join(ALL, f), path.join(staged102, f));
+}
 const one = async (db, sql, p) => (await db.query(sql, p)).rows[0];
 
 /** A database at 101 with two projects, a spool and a step in each, and one sound override event in project A. */
@@ -50,7 +54,7 @@ test("sound data: 102 applies, the event is kept as it was, the keys and NOT NUL
   const { db, good } = await at101();
   const before = await one(db, "SELECT * FROM material_override WHERE id = $1", [good.id]);
   assert((await constraints(db)).includes("material_override_spool_id_fkey"), "101's single-column key is there before");
-  const ran = await migrate(db);
+  const ran = await migrate(db, { dir: staged102 });
   assert(ran.includes("102_material_override_integrity"), JSON.stringify(ran));
   const after = await one(db, "SELECT * FROM material_override WHERE id = $1", [good.id]);
   equal(after, before, "the event is byte-for-byte what it was");
@@ -68,7 +72,7 @@ test("the old exception is gone: nulling activity_id passed the trigger at 101 (
   equal((await one(old.db, "SELECT activity_id FROM material_override WHERE id = $1", [old.good.id])).activity_id, null, "the weakness, shown");
   await old.db.close();
   const fresh = await at101();
-  await migrate(fresh.db);
+  await migrate(fresh.db, { dir: staged102 });
   const e = await throws(() => fresh.db.query("UPDATE material_override SET activity_id = NULL WHERE id = $1", [fresh.good.id]), "");
   assert(/append-only/.test(e.message), `refused by the trigger, not by something else: ${e.message}`);
   assert((await one(fresh.db, "SELECT activity_id FROM material_override WHERE id = $1", [fresh.good.id])).activity_id, "still there");
@@ -84,7 +88,7 @@ for (const [name, build, needle] of [
     const x = await at101();
     const bad = await build(x);
     const rowsBefore = (await x.db.query("SELECT * FROM material_override ORDER BY id")).rows;
-    const e = await throws(() => migrate(x.db), needle);
+    const e = await throws(() => migrate(x.db, { dir: staged102 }), needle);
     assert(e.message.includes(bad.id), `the message names the event: ${e.message}`);
     equal((await x.db.query("SELECT * FROM material_override ORDER BY id")).rows, rowsBefore, "no event rewritten or removed");
     assert((await constraints(x.db)).includes("material_override_spool_id_fkey"), "the schema is still 101's");
@@ -97,9 +101,52 @@ test("102 stops on an event that lost its activity at 101 (SET NULL), and says w
   const x = await at101();
   const lost = await x.ev(x.w.A.project, x.w.A.spool, x.w.A.activity, "lost");
   await x.db.query("DELETE FROM spool_activity WHERE id = $1", [x.w.A.activity]);   // 101: SET NULL on both events
-  const e = await throws(() => migrate(x.db), "with no activity");
+  const e = await throws(() => migrate(x.db, { dir: staged102 }), "with no activity");
   assert(e.message.includes(lost.id) && e.message.includes(x.good.id), e.message);
   equal((await x.db.query("SELECT count(*)::int AS n FROM material_override")).rows[0].n, 2);
+  await x.db.close();
+});
+
+// ── 103: the snapshot ─────────────────────────────────────────────────────
+
+test("103: existing events are filled in from the live rows, unchanged otherwise; the keys to spool and activity are gone", async () => {
+  const x = await at101();
+  await migrate(x.db, { dir: staged102 });
+  const before = await one(x.db, "SELECT * FROM material_override WHERE id = $1", [x.good.id]);
+  const ran = await migrate(x.db);
+  equal(ran, ["103_material_override_snapshot"]);
+  const after = await one(x.db, "SELECT * FROM material_override WHERE id = $1", [x.good.id]);
+  const { spool_no, run_id, document_id, doc_no, revision, sheet_no, line_no, ...kept } = after;
+  const { spool_no: _a, run_id: _b, document_id: _c, doc_no: _d, revision: _e, sheet_no: _f, line_no: _g, ...was } = before;
+  equal(kept, was, "every column the event had is exactly as it was");
+  equal([spool_no, doc_no, revision, sheet_no, line_no], ["SP-1", "D", "0", "1/1", null]);
+  const live = await one(x.db, "SELECT r.id AS run_id, d.id AS document_id FROM spool s JOIN extraction_run r ON r.id = s.extraction_run_id JOIN document d ON d.id = r.document_id WHERE s.id = $1", [x.w.A.spool]);
+  equal([run_id, document_id], [live.run_id, live.document_id]);
+  const c = await constraints(x.db);
+  for (const k of ["material_override_spool_fkey", "material_override_activity_fkey"]) assert(!c.includes(k), `${k} still there`);
+  assert(c.includes("material_override_project_fkey"), c.join());
+  equal((await x.db.query("SELECT 1 FROM pg_constraint WHERE conname IN ('spool_project_id_id_key','spool_activity_id_project_spool_key')")).rows.length, 0, "the key targets of 102 are dropped with them");
+  // the spool and the step can now go; the event stays
+  await x.db.query("DELETE FROM spool WHERE id = $1", [x.w.A.spool]);
+  equal((await one(x.db, "SELECT count(*)::int AS n FROM material_override WHERE id = $1", [x.good.id])).n, 1);
+  equal(await one(x.db, "SELECT * FROM material_override WHERE id = $1", [x.good.id]), after, "and is byte-for-byte what 103 left");
+  // still append-only, for the owner too
+  const e = await throws(() => x.db.query("UPDATE material_override SET spool_no = 'X' WHERE id = $1", [x.good.id]), "");
+  assert(/append-only/.test(e.message), e.message);
+  await x.db.close();
+});
+
+test("103: the insert-time check replaces the keys — foreign spool, foreign activity and a forged snapshot", async () => {
+  const x = await at101();
+  await migrate(x.db);
+  const ins = (project, spool, activity, extra = "") => one(x.db,
+    `INSERT INTO material_override (project_id, spool_id, activity_id, code, reason, authorized_by, source${extra ? ", spool_no, doc_no" : ""}) VALUES ($1,$2,$3,'fit_up','r2',$4,'web'${extra ? ",'FORGED','FORGED'" : ""}) RETURNING id, spool_no, doc_no`,
+    [project, spool, activity, x.user.id]);
+  await throws(() => ins(x.w.B.project, x.w.A.spool, x.w.B.activity), "is not a spool of project");
+  await throws(() => ins(x.w.A.project, x.w.A.spool2, x.w.A.activity), "is not an activity of spool");
+  await throws(() => ins(x.w.A.project, x.w.A.spool, x.w.B.activity), "is not an activity of spool");
+  const ok = await ins(x.w.A.project, x.w.A.spool, x.w.A.activity, "forged");
+  equal([ok.spool_no, ok.doc_no], ["SP-1", "D"], "the snapshot is the database's");
   await x.db.close();
 });
 

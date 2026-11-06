@@ -122,7 +122,7 @@ a managed/remote PostgreSQL, GitHub Actions (see the PR for its status).
 ## 8. Known limitations
 
 * **Superseded in part by migration 102 (Phase 2d.1):** the foreign keys, the activity-deletion policy and the trigger exception described above.
-* Re-deriving a register (`lib/db/repos/review.mjs`) deletes and re-creates the run's spools; their steps — and, through the spool key, their override events — go with them. That is the existing behaviour for steps; for events it is an audit-retention gap (see 2d.1 §7).
+* Re-deriving a register (`lib/db/repos/review.mjs`) deletes and re-creates the run's spools; their steps — and, through the spool key, their override events — go with them. That is the existing behaviour for steps; for events it is an audit-retention gap (closed by 103 — see `phase-2d2-audit-retention.md`).
 
 * Overrides recorded before migration 101 exist only as note text.
 * The event records the reason and what was outstanding, not a quantity-level snapshot of the ledger.

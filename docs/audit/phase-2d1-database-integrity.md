@@ -2,6 +2,8 @@
 
 Branch `fix/phase-2d-database-integrity`, from `master` at `6f40e56` (Phase 2d merged). Migration **102**.
 
+> **Superseded in part by migration 103 (Phase 2d.2, `phase-2d2-audit-retention.md`):** the two composite foreign keys, the NO ACTION activity policy and the key targets described below were replaced by an insert-time check plus an immutable snapshot, because the cascade from the spool key deleted the audit trail whenever a register was re-derived. What stays: NOT NULL activity, the unconditional no-UPDATE trigger, REVOKE, RLS, and the guarantee that an event can only be written for its own project's spool and an activity of that spool.
+
 ## 1. The gaps (found in the Phase 2d review, confirmed against the schema)
 
 | # | Gap in migration 101 | Evidence |
@@ -87,7 +89,7 @@ Not executed: GitHub Actions on this branch (not pushed at the time of writing),
 
 ## 7. Known limitations and risks
 
-* **Register re-derivation deletes events.** `review.mjs` (edit a register) deletes the run's `spool` rows and re-inserts them with new ids. That already deletes their `spool_activity` rows (existing behaviour); with the spool key `ON DELETE CASCADE` — which the brief asked to keep — it deletes their override events too. This phase does not change it ("do not change existing behaviour"). The way to close it is a separate decision: keep events with their own copy of the spool number and no cascade from the spool, or stop re-deriving spools by delete-and-insert. **Open risk for the owner.**
+* **(Closed by 103.)** **Register re-derivation deletes events.** `review.mjs` (edit a register) deletes the run's `spool` rows and re-inserts them with new ids. That already deletes their `spool_activity` rows (existing behaviour); with the spool key `ON DELETE CASCADE` — which the brief asked to keep — it deletes their override events too. This phase does not change it ("do not change existing behaviour"). The way to close it is a separate decision: keep events with their own copy of the spool number and no cascade from the spool, or stop re-deriving spools by delete-and-insert. **Open risk for the owner.**
 * A project deletion removes its events (cascade), as it removes everything else of the project.
 * The trigger cannot defend against a superuser who disables it; TRUNCATE by the owner is not blocked.
 * Pre-flight text lists the offending event ids but does not propose a repair.

@@ -127,20 +127,19 @@ test("append-only: every UPDATE is refused, whichever column; DELETE and TRUNCAT
   await throws(() => inP(() => db.query("INSERT INTO material_override (project_id, spool_id, activity_id, code, reason, authorized_by, source) VALUES ($1,$2,$3,'fit_up','  ',$4,'web')", [P, s.id, r.id, eng.id])), "material_override_reason_not_blank");
 });
 
-test("activity deletion policy: a step that has override events cannot be deleted on its own; deleting its spool removes both together", async () => {
+test("retention (103): deleting the step, or the spool, leaves the event, readable by its own snapshot", async () => {
   const s = await newSpool();
   const r = await step(s.id, "fit_up", { materialOverride: "r" });
-  await throws(() => inP(() => db.query("DELETE FROM spool_activity WHERE id = $1", [r.id])), "material_override_activity_fkey");
-  const [e] = await events(s.id);
-  equal([e.activity_id, e.code, e.reason], [r.id, "fit_up", "r"], "the event is untouched by the refused delete");
-  equal(await acts(s.id, "fit_up"), 1);
-  // a step with no event deletes as before
-  const plain = await step(s.id, "released");
-  await inP(() => db.query("DELETE FROM spool_activity WHERE id = $1", [plain.id]));
-  // the spool goes: its steps and its events go in the one statement
-  await inP(() => db.query("DELETE FROM spool WHERE id = $1", [s.id]));
+  const [before] = await events(s.id);
+  await inP(() => db.query("DELETE FROM spool_activity WHERE id = $1", [r.id]));
   equal(await acts(s.id, "fit_up"), 0);
-  equal((await events(s.id)).length, 0);
+  equal(await events(s.id), [before], "the step is gone, the event is exactly as it was");
+  const again = await step(s.id, "fit_up", { materialOverride: "second" });   // the step is made again: a new row, a second event
+  equal((await events(s.id)).map((e) => e.reason), ["r", "second"]);
+  await inP(() => db.query("DELETE FROM spool WHERE id = $1", [s.id]));
+  const left = await events(s.id);
+  equal(left.length, 2, "the spool row is gone, the events are not");
+  equal([left[0].spool_no, left[0].doc_no, left[0].spool_id, left[1].activity_id], [before.spool_no, before.doc_no, s.id, again.id]);
 });
 
 /** A second project with a spool that has a step, built directly: the targets of the cross-project attempts. */
@@ -156,7 +155,7 @@ const rawEvent = (scopeProject, { project, spool, activity }) => withProject(db,
   "INSERT INTO material_override (project_id, spool_id, activity_id, code, reason, authorized_by, source) VALUES ($1,$2,$3,'fit_up','direct',$4,'web')",
   [project, spool, activity, eng.id]));
 
-test("composite keys: an event must name its own project's spool and an activity of that spool (direct SQL, no repository)", async () => {
+test("insert-time integrity: an event must name its own project's spool and an activity of that spool (direct SQL, no repository)", async () => {
   const s = await newSpool();
   const other = await newSpool();
   const mine = await step(s.id, "fit_up", { materialOverride: "r" });
@@ -165,16 +164,16 @@ test("composite keys: an event must name its own project's spool and an activity
   await rawEvent(P, { project: P, spool: s.id, activity: mine.id });
   equal((await events(s.id)).map((e) => e.activity_id), [mine.id, mine.id]);
   // project Q's scope naming project P's spool: the spool is not Q's
-  await throws(() => rawEvent(Q, { project: Q, spool: s.id, activity: mine.id }), "material_override_spool_fkey");
+  await throws(() => rawEvent(Q, { project: Q, spool: s.id, activity: mine.id }), "is not a spool of project");
   // project P's scope claiming P but with Q's spool
-  await throws(() => rawEvent(P, { project: P, spool: foreign.spool, activity: foreign.activity }), "material_override_spool_fkey");
+  await throws(() => rawEvent(P, { project: P, spool: foreign.spool, activity: foreign.activity }), "is not a spool of project");
   // Q's own spool but P's activity, and the reverse
-  await throws(() => rawEvent(Q, { project: Q, spool: foreign.spool, activity: mine.id }), "material_override_activity_fkey");
-  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: foreign.activity }), "material_override_activity_fkey");
+  await throws(() => rawEvent(Q, { project: Q, spool: foreign.spool, activity: mine.id }), "is not an activity of spool");
+  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: foreign.activity }), "is not an activity of spool");
   // an activity of another spool of the SAME project
-  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: otherAct.id }), "material_override_activity_fkey");
+  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: otherAct.id }), "is not an activity of spool");
   // an event with no activity
-  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: null }), "null value");
+  await throws(() => rawEvent(P, { project: P, spool: s.id, activity: null }), "");
   equal((await events(s.id)).length, 2, "none of the refused rows was written");
 });
 
@@ -273,7 +272,7 @@ test("10. another project sees none of it, by repository, by direct query, and b
   const forged = await withProject(db, Q, () => px.materialOverrides(db, { projectId: P, spoolId: s.id }));
   equal(forged.length, 0);
   // a row for a spool of P cannot be written under Q's scope
-  await throws(() => withProject(db, Q, () => db.query("INSERT INTO material_override (project_id, spool_id, code, reason, authorized_by, source) VALUES ($1,$2,'fit_up','x',$3,'web')", [P, s.id, eng.id])), "row-level security");
+  await throws(() => withProject(db, Q, () => db.query("INSERT INTO material_override (project_id, spool_id, code, reason, authorized_by, source) VALUES ($1,$2,'fit_up','x',$3,'web')", [P, s.id, eng.id])), "is not a spool of project");
 });
 
 test("the history is listed newest first with the person's name", async () => {
