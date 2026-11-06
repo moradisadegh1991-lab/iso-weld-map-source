@@ -246,8 +246,6 @@ test("B13. material_override on PostgreSQL (Phase 2d.1): composite keys, no UPDA
     const v = await verdicts([ins(scope, project, x.spool, x.activity)]);
     assert(v[0] !== "ok", `${scope === P ? "P" : "Q"} scope accepted a foreign reference`);
   }
-  // a step that has events cannot be deleted alone
-  assert((await verdicts([inP(() => db.query("DELETE FROM spool_activity WHERE id = $1", [a.activity]))]))[0] !== "ok", "step with events was deleted");
   // application role: no UPDATE of any column, no DELETE, no TRUNCATE
   for (const set of ["reason = 'x'", "warnings = '[]'::jsonb", "authorized_at = now()", "activity_id = NULL", "authorized_by = authorized_by"])
     assert((await verdicts([inP(() => db.query(`UPDATE material_override SET ${set} WHERE id = $1`, [good.id]))]))[0] !== "ok", `app_rw updated: ${set}`);
@@ -260,12 +258,24 @@ test("B13. material_override on PostgreSQL (Phase 2d.1): composite keys, no UPDA
   }
   // catalog: the keys are what the migration says; the activity key does NOT set null
   const { rows: fk } = await db.query(`SELECT conname, confdeltype FROM pg_constraint WHERE conrelid = 'material_override'::regclass AND contype = 'f' ORDER BY conname`);
-  equal(fk.map((r) => [r.conname, r.confdeltype]), [["material_override_activity_fkey", "a"], ["material_override_authorized_by_fkey", "a"], ["material_override_spool_fkey", "c"]]);
-  // the event is untouched by all of it, and goes with its spool
+  equal(fk.map((r) => [r.conname, r.confdeltype]), [["material_override_authorized_by_fkey", "a"], ["material_override_project_fkey", "c"]],
+    "no key to the generated rows (103): the project and the author only");
+  // the event is untouched by all of it, and OUTLIVES its spool and step (103): the snapshot is what is left to read
   equal(await num("SELECT count(*) AS n FROM material_override WHERE id = $1 AND reason = 'r' AND activity_id = $2", [good.id, a.activity]), 1);
   await inP(() => db.query("DELETE FROM spool WHERE id = $1", [a.spool]));
-  equal(await num("SELECT count(*) AS n FROM material_override WHERE id = $1", [good.id]), 0);
   equal(await num("SELECT count(*) AS n FROM spool_activity WHERE id = $1", [a.activity]), 0);
+  equal(await num("SELECT count(*) AS n FROM material_override WHERE id = $1 AND spool_no = 'S-b13a' AND doc_no = 'ISO-b13a'", [good.id]), 1);
+  // a concurrent delete of the spool waits for an event being written (the trigger's FOR KEY SHARE), as a foreign key would make it
+  const c = await mk(P, "b13c");
+  let open; const gate = new Promise((r) => { open = r; });
+  const writing = inP(() => db.transaction(async () => { await db.query("INSERT INTO material_override (project_id, spool_id, activity_id, code, reason, authorized_by, source) VALUES ($1,$2,$3,'fit_up','held',$4,'web')", [P, c.spool, c.activity, alice.id]); await gate; }));
+  await new Promise((r) => setTimeout(r, 200));
+  let deletedAt = null;
+  const deleting = inP(() => db.query("DELETE FROM spool WHERE id = $1", [c.spool])).then(() => { deletedAt = Date.now(); });
+  await new Promise((r) => setTimeout(r, 400));
+  assert(deletedAt === null, "the delete went through while the event was being written");
+  open(); await Promise.all([writing, deleting]);
+  equal(await num("SELECT count(*) AS n FROM material_override WHERE spool_id = $1 AND spool_no = 'S-b13c'", [c.spool]), 1, "the event was written and survived the delete that waited for it");
 });
 
 await run();

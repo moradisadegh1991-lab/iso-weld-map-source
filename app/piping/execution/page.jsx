@@ -191,9 +191,10 @@ function MaterialOverrides({ rows }) {
     <div style={{ marginTop: 10 }}>
       <b className="sm">{t("pi.ex.ovr.title")}</b>
       <table className="dtable">
-        <thead><tr><th>{t("pi.ex.ovr.step")}</th><th>{t("pi.ex.ovr.reason")}</th><th>{t("pi.ex.ovr.by")}</th><th>{t("pi.ex.ovr.at")}</th><th>{t("pi.ex.ovr.source")}</th></tr></thead>
+        <thead><tr><th>{t("pi.ex.ovr.rev")}</th><th>{t("pi.ex.ovr.step")}</th><th>{t("pi.ex.ovr.reason")}</th><th>{t("pi.ex.ovr.by")}</th><th>{t("pi.ex.ovr.at")}</th><th>{t("pi.ex.ovr.source")}</th></tr></thead>
         <tbody>{rows.map((o) => (
           <tr key={o.id}>
+            <td className="sm mono">{o.doc_no} · {o.revision}{o.same_spool ? "" : ` · ${t("pi.ex.ovr.earlier")}`}</td>
             <td className="sm">{L(`chain.piping_spool.${o.code}`, o.code)}</td>
             <td className="sm">{o.reason}</td>
             <td className="sm">{o.authorized_by_name || "—"}</td>
