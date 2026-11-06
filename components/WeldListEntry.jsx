@@ -125,7 +125,9 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     ...(Object.keys(keptMarks).length || sheet ? { weldMarkup: { page: sheet?.page ?? initial?.weldMarkup?.page ?? 1, marks: keptMarks } } : {}),
     ...(keptReviewed.length ? { reviewed: keptReviewed } : {}),
     ...(lineData && Object.values(lineData).some((v) => String(v ?? "").trim()) ? { lineData } : {}),
-    ...(bom.length ? { bom } : {}),
+    // three states (lib/db/repos/register-persistence.mjs): rows replace the BOM; [] is the person emptying a BOM the sheet had (the
+    // server refuses while anything holds it); no key leaves the saved BOM as it is
+    ...(bom.length ? { bom } : Array.isArray(initial?.bom) && initial.bom.length ? { bom: [] } : {}),
     ...(cutLengths.length ? { cutLengths } : {}),
     ...(extras.length ? { sheetMarkup: { page: sheet?.page ?? initial?.sheetMarkup?.page ?? 1, items: extras } } : {}) }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
