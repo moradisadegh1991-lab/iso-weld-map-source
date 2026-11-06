@@ -176,10 +176,33 @@ function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve }) {
               </div>
             )}
             {detail?.material && <SpoolMaterial m={detail.material} onReserve={onReserve} />}
+            {detail?.overrides?.length > 0 && <MaterialOverrides rows={detail.overrides} />}
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+/** Who let a step go ahead without all the material issued, why and when — the append-only history (migration 101). */
+function MaterialOverrides({ rows }) {
+  const { t, L, dateTime } = usePrefs();
+  return (
+    <div style={{ marginTop: 10 }}>
+      <b className="sm">{t("pi.ex.ovr.title")}</b>
+      <table className="dtable">
+        <thead><tr><th>{t("pi.ex.ovr.step")}</th><th>{t("pi.ex.ovr.reason")}</th><th>{t("pi.ex.ovr.by")}</th><th>{t("pi.ex.ovr.at")}</th><th>{t("pi.ex.ovr.source")}</th></tr></thead>
+        <tbody>{rows.map((o) => (
+          <tr key={o.id}>
+            <td className="sm">{L(`chain.piping_spool.${o.code}`, o.code)}</td>
+            <td className="sm">{o.reason}</td>
+            <td className="sm">{o.authorized_by_name || "—"}</td>
+            <td className="sm mono">{dateTime(o.authorized_at)}</td>
+            <td className="sm">{t(`pi.ex.ovr.src.${o.source}`)}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
   );
 }
 

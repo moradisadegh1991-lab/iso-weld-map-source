@@ -197,5 +197,35 @@ test("cross-project: another project cannot see, issue from, reserve, receive ag
   equal(await num("SELECT count(*) AS n FROM material_movement WHERE lot_id = $1", [lot.id]), 0);
 });
 
+test("B12. the same offline override sent twice at once: one step, one audit event (Phase 2d)", async () => {
+  const px = await import("../../lib/db/repos/piping-execution.mjs");
+  const fld = await import("../../lib/db/repos/field.mjs");
+  const runs = await import("../../lib/db/repos/runs.mjs");
+  const { DEMO } = await import("../../lib/demo.js");
+  const spool = await inP(async () => {
+    const { rows: [doc] } = await db.query(`INSERT INTO document (project_id, doc_no, revision, file_sha256, storage_uri) VALUES ($1,'ISO-B12','0',$2,'local://b') RETURNING id`, [P, "d".repeat(64)]);
+    const r = await runs.createRun(db, { projectId: P, documentId: doc.id, lineId: null, payload: DEMO });
+    const { rows: [sp] } = await db.query("INSERT INTO spool (project_id, extraction_run_id, spool_no) VALUES ($1,$2,'SP-B12') RETURNING id", [P, r.id]);
+    await db.query("INSERT INTO spool_material (project_id, spool_id, kind, qty, uom, stock_code) VALUES ($1,$2,'pipe',5,'m','PIPE-B12')", [P, sp.id]);
+    await wh.upsertItem(db, { projectId: P, code: "PIPE-B12", description: "x", category: "pipe", uom: "m" });
+    return sp;
+  });
+  const op = { opId: globalThis.crypto.randomUUID(), kind: "spool_step", projectId: P, capturedAt: new Date().toISOString(),
+    payload: { spoolId: spool.id, code: "fit_up", doneOn: "2026-09-10", materialOverride: "yard stock" } };
+  const send = () => fld.applyOps(db, { projectId: P, userId: alice.id, membership: { role: "engineer", areas: [] }, ops: [op] });
+  const out = (await Promise.all(Array.from({ length: 5 }, send))).flat();
+  assert(out.every((r) => r.status === "applied"), JSON.stringify(out.map((r) => r.status)));
+  equal(out.filter((r) => !r.duplicate).length, 1, "exactly one copy did the work");
+  equal(await num("SELECT count(*) AS n FROM material_override WHERE spool_id = $1", [spool.id]), 1);
+  equal(await num("SELECT count(*) AS n FROM spool_activity WHERE spool_id = $1 AND code = 'fit_up'", [spool.id]), 1);
+  // the application role can neither change nor remove an event
+  for (const sql of ["UPDATE material_override SET reason = 'x' WHERE spool_id = $1", "DELETE FROM material_override WHERE spool_id = $1"]) {
+    const v = await verdicts([inP(() => db.query(sql, [spool.id]))]);
+    assert(v[0] !== "ok", sql);
+  }
+  equal(await num("SELECT count(*) AS n FROM material_override WHERE spool_id = $1", [spool.id]), 1);
+  void px;
+});
+
 await run();
 await db.close();

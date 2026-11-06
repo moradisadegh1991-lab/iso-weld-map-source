@@ -35,7 +35,7 @@ await inP(async () => {
   await wh.inspectLot(db, { projectId: P, lotId: lot.id, qtyAccepted: 20, inspectedOn: "2026-09-02" });
   await wh.reviewMtc(db, { projectId: P, lotId: lot.id, mtcStatus: "accepted" });
 });
-const step = (spoolId, code, extra = {}) => inP(() => px.recordSpoolActivity(db, { projectId: P, spoolId, code, doneAt: "2026-09-10", userId: alice.id, ...extra }));
+const step = (spoolId, code, extra = {}) => inP(() => px.recordSpoolActivity(db, { projectId: P, spoolId, code, doneAt: "2026-09-10", userId: alice.id, membership: { role: "engineer", areas: [] }, ...extra }));
 const recorded = (spoolId, code) => inP(async () => Number((await db.query("SELECT count(*) AS n FROM spool_activity WHERE spool_id = $1 AND code = $2", [spoolId, code])).rows[0].n));
 
 test("a step that consumes material is refused while the spool's material is not issued, and says what is missing", async () => {
