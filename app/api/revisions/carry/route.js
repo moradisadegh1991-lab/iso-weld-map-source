@@ -4,10 +4,10 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../../lib/server/session.mjs";
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
-import { carryForward } from "../../../../lib/db/repos/revisions.mjs";
+import { carryForward } from "../../../../lib/db/repos/revision-lifecycle.mjs";
 
 /**
- * Controlled carry-forward from a source revision into the target revision made from it (lib/db/repos/revisions.mjs):
+ * Controlled carry-forward from a source revision into the target revision made from it (lib/db/repos/revision-lifecycle.mjs):
  *   POST { projectId, fromDocumentId, toDocumentId, fromHash, toHash, requestKey, decisions: [{ key, pair?, fields? }] }
  * `fromHash` / `toHash` are the hashes the comparison was made against (409 STALE_SOURCE / STALE_RUN when either changed). The server plans again
  * from the stored state; `decisions` only choose among what that plan allows. One transaction: all of it or none. The same `requestKey` again returns

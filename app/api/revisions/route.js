@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
-import { lineageOf, compareRevisions, createRevision, linkRevision } from "../../../lib/db/repos/revisions.mjs";
+import { lineageOf, compareRevisions, createRevision, linkRevision } from "../../../lib/db/repos/revision-lifecycle.mjs";
 import { getStore } from "../../../lib/storage/index.mjs";
 
 /**
