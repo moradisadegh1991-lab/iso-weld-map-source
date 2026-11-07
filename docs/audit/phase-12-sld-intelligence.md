@@ -724,3 +724,51 @@ Notes: an earlier `db:test` run on `4cfc548` (the same code without the drive sc
 3. The visible figures of the piping hub, activity log, hotspots and overview change **only** where a P&ID/SLD was previously (wrongly) included; for isometric-only projects they are identical.
 4. No real SLD sample exists: nothing here measures recognition, and nothing interprets `items`/`edges`.
 5. Approval signs the draft envelope; it promotes nothing (row counts of tag, asset, cable, IR and other registers are unchanged: test S9).
+
+---
+
+# 18. Phase 12.2.1 — Isometric Document Boundary Hardening
+
+Closes the first risk of §17.6: `bom-allocations`, `iso-equipment` and the mark-identity warning routes were addressed by a document id (or a child id) and would accept an SLD / P&ID document. No migration, no schema change, no change to `lib/engine.js`, extraction, geometry, `lib/pid/*`, SLD extraction or any UI.
+
+## 18.1 Inspection (not assumed from the audit inventory)
+Every `app/api/**/route.js` that takes `documentId`, `accessoryId`, `allocationId`, `warningId` or a mark identity, and every file touching `bom_allocation*`, `iso_equipment*`, `sheet_mark_*`, `iso_bom_row`, was read.
+
+| Route / file | Verdict |
+|---|---|
+| `app/api/bom-allocations` GET, POST | **isometric-only → guarded** |
+| `app/api/iso-equipment` GET, POST | **isometric-only → guarded** |
+| `app/api/mark-warnings` GET, POST | **isometric-only → guarded** |
+| `app/api/validation`, `app/api/overview`, `app/api/runs`, `app/api/runs/[id]` | guarded in 12.2 |
+| `app/api/documents`, `app/api/revisions` (lineage / link / create) | type-agnostic by design (a document, its file and its lineage belong to any discipline) |
+| `app/api/pid`, `app/api/sld` | own discipline, own pass |
+| `registry-check`, `piping/reports`, `changes`, `extract`, `read-local` | doc-number keyed, generic or weld based; touch none of the isometric-only ledgers |
+| `lib/db/repos/line-list.mjs`, `register-persistence.mjs`, `revision-lifecycle.mjs`, `lib/engineering/validation.mjs`, `lib/sheet/weld-list-identity.mjs` | only reached from the guarded flows above (`/api/runs`, guarded routes); listed in the source scan as `reachedOnlyViaGuarded` |
+| `lib/db/repos/spine.mjs` `fileDocument` | generic subsystem filing; writes none of the isometric-only tables |
+
+## 18.2 Routes protected, and how
+All use `lib/db/run-scope.mjs`; the document type is always read from the database inside the project scope, never from the client.
+
+* `GET /api/bom-allocations` (availability, `history=1`) and `POST` (install / return / release) — `assertIsometricDocument` (and in the POST transaction `assertIsometricAllocation`).
+* `GET /api/iso-equipment` (list) and `POST` (accessory status) — `assertIsometricDocument` / `assertIsometricAccessory`.
+* `GET /api/mark-warnings` (list) and `POST` (resolve) — `assertIsometricDocument` / `assertIsometricWarning` inside the transaction.
+* Repo level (the same functions are what any future caller would use): `bom-allocation.mjs` `syncAllocations`, `verifyLedger`, `availability`, `history`, `transition`; `iso-equipment.mjs` `syncEquipment`, `listEquipment`, `setAccessoryStatus`; `mark-identity.mjs` `reconcileSheetMarks`, `registerMarks`, `recordMarkWarnings`, `recordEquipmentWeldWarnings`, `markWarnings`, `resolveMarkWarning`; `validation.mjs` `warningsFor`, `resolveWarning`.
+
+**Child-id ownership checks (new in `run-scope.mjs`):** `assertIsometricAccessory` (accessory → equipment → document), `assertIsometricWarning` (warning → document), `assertIsometricAllocation` (allocation → document). Each resolves the owning document from the database in the project scope and refuses with `409 NOT_AN_ISOMETRIC_DOCUMENT` only when the record EXISTS and its document is not an isometric. A record that does not exist, or belongs to another project, keeps the previous answer (404). An accessory status change checks ownership BEFORE the `UPDATE`.
+
+Errors: SLD / P&ID → `409 NOT_AN_ISOMETRIC_DOCUMENT` (`details.docType`); unknown or cross-project ids → the existing 404 (or the existing empty answer of a GET); authorization, project scope and transaction boundaries are unchanged.
+
+## 18.3 Tests (`db/test/iso-boundary.mjs`, in the `db:test` chain after `run-isolation`)
+18 tests: setup (one project, isometric + isometric + P&ID + SLD documents, each with BOM, ledger line, event, equipment, accessory, warning, identity); A1–A4 isometric operations unchanged (route and repo level); B (SLD, P&ID) every protected route GET + POST → 409, and 16 repo functions inside a transaction → 409, with the byte-identical state of all seven isometric-only tables before and after (no row, no history event); C1 an SLD / P&ID allocation / accessory / warning is refused even under an isometric document id (route and repo), C2 an isometric child under another isometric document id keeps the old 404; D1 unknown ids, D2 cross-project ids, D3 non-member authorization (type never disclosed); E1–E4 source scans (every route taking a document / child id is reviewed and a guarded one imports `run-scope.mjs`; every file touching an isometric-only table is reviewed; every exported repo function taking a document / child id calls a guard).
+
+Guard-reversion proofs (guard removed, test fails, file restored): route child-id guards (allocation, accessory, warning), the repo-level document guards of all four repos, and the route-level calls (E2). Removing only the route-level `assertIsometricDocument(tx…)` of `bom-allocations` POST does NOT change behaviour because the repo functions it calls carry the same guard (defence in depth, by design).
+
+## 18.4 Verification on the final implementation SHA
+See the PR description (filled with the exact results; anything not run is marked NOT RUN there).
+
+## 18.5 Is the §17.6 risk fully closed?
+**Yes for every discovered document-addressed isometric-only route and repo function** (table 18.1). Remaining, deliberately unchanged:
+1. `documents`, `revisions` (lineage / link / create) stay type-agnostic: they register, version and file any discipline's document.
+2. `compareRevisions` / `carryForward` were already isometric-only (12.2).
+3. The scan guarantees every NEW route that takes a document / child id, and every NEW file touching the isometric-only tables, is reviewed; it cannot judge whether a reviewer classified correctly.
+4. An existing legacy production document whose `doc_type` is wrongly `isometric` (the column default) is still treated as an isometric: a read-only check of production data remains recommended.
