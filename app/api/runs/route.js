@@ -10,7 +10,7 @@ import { modelFor } from "../../../lib/register/weld-list.mjs";
 import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
 import { lineForRegister, tieInRefsOf } from "../../../lib/db/repos/spine.mjs";
 import { fillLineList } from "../../../lib/db/repos/line-list.mjs";
-import { persistRegister } from "../../../lib/db/repos/register-persistence.mjs";
+import { persistRegister, prepareSheetPayload, lockDocument, recordMarkWarnings } from "../../../lib/db/repos/register-persistence.mjs";
 
 /**
  * Persist an extraction and the register it produces.
@@ -23,18 +23,18 @@ import { persistRegister } from "../../../lib/db/repos/register-persistence.mjs"
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { projectId, documentId, lineId = null, lineNo, payload, options = {},
+    const { projectId, documentId, lineId = null, lineNo, payload: sentPayload, options = {},
             model: modelName = null, modelVersion = null, passName = null,
             inputTokens = null, outputTokens = null, rawOutputUri = null } = body;
 
-    if (!projectId || !documentId || !payload) {
+    if (!projectId || !documentId || !sentPayload) {
       return Response.json({ error: "projectId, documentId and payload are required" }, { status: 400 });
     }
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.RUN_EXTRACTION);
 
-    const model = modelFor(payload, options);
+    const model = modelFor(sentPayload, options);
     // A typed weld list that is not a register is sent back row by row. It is
     // not a model run that failed — nothing was extracted — so no run is kept.
     if (model.problems) return Response.json({ error: model.error, problems: model.problems }, { status: 400 });
@@ -52,6 +52,18 @@ export async function POST(request) {
         // drawing revision, because that is what the signature was against.
         const signed = await approvedRunFor(tx, { projectId, documentId });
         if (signed) return { signed };
+
+        // One save of a drawing revision at a time (its marks' identities are settled against what was saved last), then the
+        // marks of this revision's last run, so a re-read of the sheet keeps the identity of the marks it reliably finds again
+        // (lib/sheet/mark-identity.mjs). A new revision is a new document: its marks are new marks.
+        await lockDocument(tx, { projectId, documentId });
+        // (the last run that BUILT: a failed extraction has no marks to speak of and must not stand for the identities of valid ones)
+        const { rows: [lastOfRevision] } = await tx.query(
+          `SELECT payload FROM extraction_run WHERE project_id = $1 AND document_id = $2 AND engine_error IS NULL
+            ORDER BY created_at DESC, id DESC LIMIT 1`, [projectId, documentId]);
+        const { payload, report: markReport } = model.error
+          ? { payload: sentPayload, report: null }
+          : await prepareSheetPayload(tx, { projectId, documentId, previousItems: lastOfRevision?.payload?.sheetMarkup?.items || [], payload: sentPayload });
 
         // Look this up BEFORE creating the new run, or the "latest run for this
         // drawing" is the row we are about to insert and nothing is ever carried.
@@ -93,6 +105,7 @@ export async function POST(request) {
 
         // the register and everything that hangs off it — BOM, equipment, allocations — in this transaction
         // (lib/db/repos/register-persistence.mjs); `payload.bom` absent leaves the BOM, [] clears it, rows replace it
+        await recordMarkWarnings(tx, { projectId, documentId, runId: run.id, report: markReport });
         const { saved, dependents } = await persistRegister(tx, {
           projectId, runId: run.id, documentId, lineId: theLine, model, carryFrom, payload, userId: user.id,
         });
@@ -106,7 +119,7 @@ export async function POST(request) {
         const bomRows = dependents.bom.rows;
         const equipment = dependents.equipment;
         const allocation = bomRows || dependents.allocation.reserved || dependents.allocation.adjusted || dependents.allocation.released ? dependents.allocation : null;
-        return { run, register, saved, lineList, bomRows, allocation, equipment };
+        return { run, register, saved, lineList, bomRows, allocation, equipment, markReport };
       });
 
       if (out.signed) {
@@ -127,6 +140,8 @@ export async function POST(request) {
         ...(out.allocation ? { allocation: out.allocation } : {}),
         ...(out.equipment?.equipment || out.equipment?.removed ? { equipment: out.equipment } : {}),
         carriedIdentities: out.saved.carried,
+        ...(out.markReport && (out.markReport.matched.length || out.markReport.created.length || out.markReport.removed.length || out.markReport.ambiguous.length)
+          ? { markIdentity: { kept: out.markReport.kept, matched: out.markReport.matched.length, created: out.markReport.created.length, removed: out.markReport.removed, ambiguous: out.markReport.ambiguous } } : {}),
         totals: model.totals,
         spools: model.spoolIds,
         checks: model.checks,

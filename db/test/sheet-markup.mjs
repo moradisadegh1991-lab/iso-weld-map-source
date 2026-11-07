@@ -437,7 +437,10 @@ test("a copy keeps everything the mark records — components with their snapsho
   equal([c.kind, c.src], ["weld-shop", "hand"]);
   assert(c.x > o.x && c.y > o.y && c.ax > o.ax && c.ay > o.ay, "frame and weld point moved by the same small step");
   equal(Math.round((c.x - c.ax) * 1e4), Math.round((o.x - o.ax) * 1e4), "its leader the same shape");
-  equal(items.find((m) => m.id === "w1"), o, "the original untouched");
+  const orig = items.find((m) => m.id === "w1");
+  const { uid: ou, ...origRest } = orig;
+  equal(origRest, o, "the original untouched (a mark that had no persistent identity is given one)");
+  assert(ou && c.uid && ou !== c.uid, "and the copy is a NEW mark: its own persistent identity");
   const row = duplicateMark(SHEET, "w3");
   equal([isPlaced(row.items.at(-1)), row.items.at(-1).no], [false, "4"], "a row not on the drawing is copied as a row");
   equal(duplicateMark(SHEET, "s1").items.at(-1).no, "SP-2", "numbered the way the sheet numbers spools");
