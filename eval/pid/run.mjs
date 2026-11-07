@@ -24,13 +24,15 @@ const cases = readdirSync(path.join(dir, "cases")).filter((f) => f.endsWith(".js
 const tagOf = (i) => i.tag;
 
 export function predict(c) {
-  const ocr = draftFromOcr({ page: c.pageNumber || 1, w: c.page.width, h: c.page.height, items: c.ocr || [] }, c.bubbles?.length ? c.bubbles : null);
+  const ocr = draftFromOcr({ page: c.pageNumber || 1, w: c.page.width, h: c.page.height, items: c.ocr || [] }, c.bubbles?.length ? c.bubbles : null, { meta: c.drawingNo ? { drawingNo: c.drawingNo } : {} });
   const prop = c.proposal?.items?.length ? sanitizeProposal(c.proposal, { page: c.page }).draft : { items: [], edges: [] };
   const items = [...ocr.items, ...prop.items];
   const names = new Map(items.map((i) => [i.uid, i.tag || i.attrs?.lineNo]));
   const dir = (c.directory || []).map((d) => ({ docNo: d }));
-  const off = resolveOffpage(ocr, { directory: dir }).map((o) => ({ ref: o.ref, status: o.status }));
-  const v = validatePid({ draft: { ...ocr, items }, directory: dir });
+  // peer drafts of the other drawings (case.peers: { docNo: [{ targetSheet, lineRef? }] } = the connectors that drawing's draft holds); a drawing with no entry has NO draft read
+  const peers = Object.fromEntries(Object.entries(c.peers || {}).map(([docNo, conns]) => [docNo, { meta: { drawingNo: docNo }, items: conns.map((x, n) => ({ uid: `${docNo}#${n}`, cls: "connector", attrs: x })) }]));
+  const off = resolveOffpage({ ...ocr, meta: { ...ocr.meta, ...(c.drawingNo ? { drawingNo: c.drawingNo } : {}) } }, { directory: dir, peers }).map((o) => ({ ref: o.ref, status: o.status }));
+  const v = validatePid({ draft: { ...ocr, items }, directory: dir, peers });
   return {
     equipment: items.filter((i) => i.cls === "equipment").map(tagOf).filter(Boolean),
     instruments: items.filter((i) => i.cls === "instrument").map(tagOf).filter(Boolean),

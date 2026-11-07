@@ -116,12 +116,76 @@ test("F2. off-page connectors: resolved only on a UNIQUE known drawing; unknown 
   const directory = [{ docNo: "K110-30-PID-0021-10-15" }, { docNo: "K110-30-PID-0021-10-16" }, { docNo: "K110-30-PID-0021-10-16" }];
   const peerBack = (n) => ({ meta: { drawingNo: "K110-30-PID-0021-10-15" }, items: Array.from({ length: n }, () => ({ uid: newUid(), cls: "connector", attrs: { targetSheet: "K110-30-PID-0021-10-01", lineRef: "MP140001A" } })) });
   const st = (peers) => Object.fromEntries(resolveOffpage(draft, { directory, peers }).map((o) => [o.ref, o.status]));
-  equal(st({}), { "K110-30-PID-0021-10-15": "resolved", "K110-30-PID-0021-10-99": "unresolved", "K110-30-PID-0021-10-16": "ambiguous" }, "10-99 is not 10-15; two drawings with one number are ambiguous");
+  equal(st({}), { "K110-30-PID-0021-10-15": "unconfirmed", "K110-30-PID-0021-10-99": "unresolved", "K110-30-PID-0021-10-16": "ambiguous" }, "10-99 is not 10-15; two drawings with one number are ambiguous; a drawing that merely exists (no peer draft) is UNCONFIRMED, never resolved");
   equal(st({ "K110-30-PID-0021-10-15": peerBack(0) })["K110-30-PID-0021-10-15"], "unconfirmed");
   equal(st({ "K110-30-PID-0021-10-15": peerBack(1) })["K110-30-PID-0021-10-15"], "resolved");
   equal(st({ "K110-30-PID-0021-10-15": peerBack(2) })["K110-30-PID-0021-10-15"], "ambiguous", "two connectors point back and the line does not tell them apart");
   const r = validatePid({ draft, directory });
   assert(codes(r).includes("P_OFFPAGE_UNRESOLVED") && codes(r).includes("P_CONN_AMBIGUOUS"));
+});
+
+// Phase 11.1 — an off-page connection is confirmed ONLY by the target drawing's own draft (docs/audit/phase-11-pid-intelligence.md §16)
+const T = "K110-30-PID-0021-10-15", HERE = "K110-30-PID-0021-10-01";
+const srcConn = (line) => ({ cls: "connector", symbol: "offpage", tag: null, bbox: box(800, 100), evidence: [{ text: T }], attrs: { targetSheet: T, ...(line !== undefined ? { lineRef: line } : {}) } });
+const farConn = (line, back = HERE) => ({ uid: newUid(), cls: "connector", attrs: { targetSheet: back, ...(line !== undefined ? { lineRef: line } : {}) } });
+const peerOf = (...conns) => ({ meta: { drawingNo: T }, items: conns });
+const offOf = (line, peers, directory = [{ docNo: T }]) => {
+  const { draft } = draftOf([srcConn(line)]);
+  return { draft, directory, peers, o: resolveOffpage(draft, { directory, peers })[0], g: buildGraph(draft, { directory, peers }) };
+};
+
+test("F4. off-page 1: the target drawing does not exist in the project → unresolved (and no adjacency)", () => {
+  const r = offOf("MP140001A", {}, [{ docNo: "K110-30-PID-0021-10-77" }]);
+  equal([r.o.status, r.o.toRef ?? null], ["unresolved", null]);
+});
+test("F5. off-page 2: the target document exists but has no parsed draft → UNCONFIRMED, never resolved", () => {
+  for (const line of ["MP140001A", undefined]) { const r = offOf(line, {}); equal(r.o.status, "unconfirmed"); assert(/not been read/.test(r.o.why), r.o.why); }
+});
+test("F6. off-page 3: exactly one reciprocal connector, no lineRef on the source → resolved (the far connector is named)", () => {
+  const far = farConn(); const r = offOf(undefined, { [T]: peerOf(far) });
+  equal([r.o.status, r.o.toRef.uid], ["resolved", far.uid]);
+  const far2 = farConn("MP9"); equal(offOf(undefined, { [T]: peerOf(far2) }).o.status, "resolved", "a source that names no line accepts the one reciprocal connector");
+});
+test("F7. off-page 4: exactly one reciprocal connector with the SAME lineRef (whitespace and case ignored) → resolved", () => {
+  const far = farConn(" mp140001 a "); const r = offOf("MP140001A", { [T]: peerOf(far) });
+  equal([r.o.status, r.o.toRef.uid], ["resolved", far.uid]);
+});
+test("F8. off-page 5: the reciprocal connector carries a DIFFERENT lineRef → unconfirmed (no fallback to the unfiltered connector)", () => {
+  const r = offOf("MP140001A", { [T]: peerOf(farConn("MP140002A")) });
+  equal(r.o.status, "unconfirmed"); assert(/none with the line reference/.test(r.o.why), r.o.why);
+  equal(offOf("MP140001A", { [T]: peerOf(farConn("MP140001")) }).o.status, "unconfirmed", "a prefix is not the same line");
+});
+test("F9. off-page 6: the source names a line but the target connector names none → unconfirmed", () => {
+  equal(offOf("MP140001A", { [T]: peerOf(farConn()) }).o.status, "unconfirmed");
+});
+test("F10. off-page 7: several reciprocal connectors with the matching lineRef → ambiguous, with candidates", () => {
+  const a = farConn("MP140001A"), b = farConn("mp140001a"); const r = offOf("MP140001A", { [T]: peerOf(a, b, farConn("MP140002A")) });
+  equal([r.o.status, r.o.candidates.sort()], ["ambiguous", [a.uid, b.uid].sort()]);
+});
+test("F11. off-page 8: several connectors and no lineRef to tell them apart → ambiguous; none pointing back → unconfirmed", () => {
+  equal(offOf(undefined, { [T]: peerOf(farConn("A"), farConn("B")) }).o.status, "ambiguous");
+  equal(offOf(undefined, { [T]: peerOf(farConn("A", "K110-30-PID-0021-10-99")) }).o.status, "unconfirmed", "a connector to another drawing is not a reciprocal");
+});
+test("F12. off-page 9: only a stated edge makes adjacency — no off-page status (unconfirmed, ambiguous or even resolved: the far end is another drawing's item) adds any", () => {
+  for (const peers of [{}, { [T]: peerOf(farConn()) }, { [T]: peerOf(farConn(), farConn()) }, { [T]: peerOf(farConn("X")) }, { [T]: peerOf(farConn("MP140001A")) }]) {
+    const r = offOf("MP140001A", peers); const c = r.draft.items[0];
+    equal(r.g.adjacency.get(c.uid), [], `adjacency of the connector with status ${r.o.status}`);
+  }
+  // a stated edge still connects
+  const { draft } = draftOf([srcConn(), { id: "p", cls: "equipment", tag: "30-P-1201A", bbox: box(100, 100), evidence: [{ text: "p" }] }], []);
+  const e = { uid: newUid(), type: "process", from: draft.items[1].uid, to: draft.items[0].uid, evidence: [{ text: "line to the connector" }], status: "explicit" };
+  assert(buildGraph({ ...draft, edges: [e] }, {}).adjacency.get(draft.items[0].uid).includes(draft.items[1].uid));
+});
+test("F13. off-page 10: the register and the validation report the SAME status as the graph; an unconfirmed one is a finding, not a connection", () => {
+  const far = farConn("MP140001A");
+  for (const [peers, want] of [[{}, "unconfirmed"], [{ [T]: peerOf(far) }, "resolved"], [{ [T]: peerOf(farConn("Z")) }, "unconfirmed"], [{ [T]: peerOf(far, farConn("MP140001A")) }, "ambiguous"]]) {
+    const r = offOf("MP140001A", peers), regs = registers(r.draft, { directory: r.directory, peers });
+    equal(regs.offpage.map((x) => x.status), [r.g.offpage[0].status], "register = graph");
+    equal(regs.offpage[0].status, want);
+    equal(regs.connectivity.length, 0, "no off-page status is listed as a stated connection");
+    const f = codes(validatePid({ draft: r.draft, directory: r.directory, peers }));
+    equal([f.includes("P_OFFPAGE_UNRESOLVED"), f.includes("P_CONN_AMBIGUOUS")], [want === "unconfirmed", want === "ambiguous"], `findings for ${want}`);
+  }
 });
 
 test("F3. duplicate tags and ambiguous / unresolved edges are findings; equipment with no connection is only judged when connectivity was read", () => {

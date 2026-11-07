@@ -73,7 +73,7 @@
   "offpage": [
    {
     "ref": "K110-30-PID-0021-10-15",
-    "resolution": "resolved"
+    "resolution": "unconfirmed"
    },
    {
     "ref": "K110-30-PID-0021-10-99",
@@ -96,5 +96,6 @@
   "items": [],
   "edges": []
  },
- "pageNumber": 1
+ "pageNumber": 1,
+ "note": "no peer draft is read for any target: an existing drawing is only UNCONFIRMED"
 }
