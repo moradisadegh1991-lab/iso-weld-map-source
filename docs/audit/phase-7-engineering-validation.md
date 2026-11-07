@@ -49,7 +49,7 @@ The engine runs **in the page** (draft, live preview — labelled as such) and *
 
 ### 3.3 Resolution = an action the user performs with the existing forms
 The Center offers *navigation to the place where the user fixes it* (the weld form, the equipment form, the BOM row form, the mark on the drawing). Nothing is repaired automatically. After a save, the Center re-validates; a finding that no longer holds disappears (it is a computed finding), and a warning is closed only through the explicit «حل شد» action, which the server accepts only if:
-* `equipment_weld` warning: the equipment now has a stored weld link, to one of the warning's candidates when it had candidates (the choice was made);
+* `equipment_weld` warning: in the saved revision the equipment no longer names that legacy number (the number is not left unresolved or ambiguous) and it is joined to at least one weld **by uid** — i.e. the person made the choice in the equipment form and saved;
 * identity `ambiguous` warning: nothing hangs on the previous identities any more (no equipment, no installed/reserved allocation, no link) — then the note is recorded as the acknowledgement; if something does hang on them it stays open.
 
 ### 3.4 Unlinked sheet weld marks (Phase 6 deferred)
@@ -60,3 +60,90 @@ Extraction, geometry, uid contracts, migrations 104/105, constraints, revision p
 
 ## 4. Plan
 1. This document. 2. Structured row problems in `weld-list.mjs`. 3. The engine + catalog + tests. 4. Routes. 5. UI (Validation tab → Center, unlinked marks). 6. Tests, browser drive, results.
+
+## 5. Rule catalog (generated from `lib/engineering/validation.mjs` `CATALOG`; 64 codes)
+`blocking` is set on a finding only when the server would **refuse** the save/approval for that very reason (found early). Everything else is advice.
+
+| Code | Category | Severity | Meaning | Fix via |
+|---|---|---|---|---|
+| `ID_NO_UID` | identity | warning | ردیف تایپ‌شده شناسهٔ پایدار ندارد | ویرایش سرجوش |
+| `ID_DUP_UID` | identity | error | یک شناسهٔ پایدار روی بیش از یک نشان/ردیف است | ویرایش سرجوش |
+| `ID_WARNING` | identity | warning | هشدار هویت حل‌نشده (تطبیق نشانه‌ها مبهم بود) | تاریخچهٔ هشدارها |
+| `W_NO_NUMBER` | weld | error | شمارهٔ جوش خالی است | ویرایش سرجوش |
+| `W_DUP_NUMBER` | weld | error | شمارهٔ جوش تکراری است | ویرایش سرجوش |
+| `W_BAD_LOC` | weld | error | محل جوش کارگاه/سایت نیست | ویرایش سرجوش |
+| `W_NO_KIND` | weld | error | نوع جوش خالی است | ویرایش سرجوش |
+| `W_NO_NPS` | weld | error | قطر جوش مشخص نیست | ویرایش سرجوش |
+| `W_SHOP_NO_SPOOL` | weld | error | جوش کارگاهی اسپول ندارد | ویرایش سرجوش |
+| `W_NO_COMPONENT` | weld | info | برای این سرجوش قطعهٔ BOM انتخاب نشده (چیزی رزرو نمی‌کند) | ویرایش سرجوش |
+| `W_ONE_COMPONENT` | weld | info | فقط یک قطعهٔ BOM برای این سرجوش انتخاب شده | ویرایش سرجوش |
+| `W_PT_MISSING` | weld | error | سرجوش PT‌ای را نام برده که در BOM این رویژن نیست | ویرایش سرجوش |
+| `W_PT_CHANGED` | weld | warning | ردیف BOM از وقتی انتخاب شد عوض شده | ویرایش سرجوش |
+| `W_SIZE_MISMATCH` | weld | warning | قطر سرجوش با قطر قطعه نمی‌خواند | ویرایش سرجوش |
+| `W_UNLINKED` | weld | warning | نشان سرجوش روی نقشه به هیچ ردیف لیست جوش وصل نیست | نمایش روی نقشه |
+| `W_DUP_REPRESENTATION` | allocation | info | همین سرجوش هم ردیف لیست است هم نشان روی نقشه؛ یک بار شمرده می‌شود | نمایش روی نقشه |
+| `G_NOT_PLACED` | geometry | info | این سرجوش هنوز روی نقشه جا ندارد | نمایش روی نقشه |
+| `G_MARK_NOT_PLACED` | geometry | info | این نشان هنوز روی نقشه جا ندارد | نمایش روی نقشه |
+| `B_NO_PT` | bom | error | ردیف BOM شمارهٔ PT ندارد | ویرایش ردیف BOM |
+| `B_DUP_PT` | bom | error | شمارهٔ PT در BOM تکراری است | ویرایش ردیف BOM |
+| `B_NO_DESC` | bom | warning | ردیف BOM شرح ندارد | ویرایش ردیف BOM |
+| `B_QTY_UNREAD` | bom | warning | تعداد ردیف BOM خوانده نشده | ویرایش ردیف BOM |
+| `B_QTY_INVALID` | bom | error | تعداد ردیف BOM عدد ≥ ۰ نیست | ویرایش ردیف BOM |
+| `B_BAD_UNIT` | bom | error | واحد ردیف BOM نه عدد است نه متر | ویرایش ردیف BOM |
+| `B_NO_SIZE` | bom | warning | ردیف جوشی‌شدنی BOM قطر (N.S.) ندارد | ویرایش ردیف BOM |
+| `A_OVER_CAPACITY` | allocation | error | سرجوش‌ها بیش از سرهای جوشی‌شدنی این PT از آن خواسته‌اند (پیش‌نمایش صفحه) | ویرایش سرجوش |
+| `A_PREVIEW_DIFF` | allocation | info | پیش‌نمایش صفحه با تخصیص ذخیره‌شدهٔ سرور فرق دارد | ذخیرهٔ رجیستر |
+| `A_SAVED_OVER` | allocation | error | تخصیص ذخیره‌شده از ظرفیت ردیف بیشتر است (سرور) | دفتر تخصیص BOM |
+| `A_INSTALLED_OVER` | allocation | error | مقدار نصب‌شده از ظرفیت ردیف بیشتر است (سرور) | دفتر تخصیص BOM |
+| `A_ROW_HELD` | allocation | info | این ردیف BOM تخصیص فعال دارد | ویرایش ردیف BOM |
+| `A_ROW_GONE` | allocation | error | ردیف BOM حذف شده ولی هنوز در دفتر تخصیص نگه داشته شده | ویرایش ردیف BOM |
+| `A_ROW_SHRUNK` | allocation | error | ظرفیت جدید ردیف BOM از تخصیص ثبت‌شده کمتر است | ویرایش ردیف BOM |
+| `A_INSTALLED_OWNER_GONE` | allocation | error | خط نصب‌شده صاحبی ندارد (سرجوش/تجهیز حذف شده) | دفتر تخصیص BOM |
+| `A_DUP_LINE` | data-integrity | error | خط تخصیص فعال تکراری برای یک صاحب و یک PT | دفتر تخصیص BOM |
+| `E_NO_UID` | equipment | warning | تجهیز شناسهٔ پایدار ندارد | ویرایش تجهیز |
+| `E_DUP_ID` | equipment | error | شناسهٔ تجهیز تکراری است | ویرایش تجهیز |
+| `E_NO_TAG` | equipment | info | تجهیز تگ ندارد | ویرایش تجهیز |
+| `E_NO_TYPE` | equipment | info | نوع تجهیز مشخص نیست | ویرایش تجهیز |
+| `E_NO_PT` | equipment | warning | ردیف BOM تجهیز انتخاب نشده | ویرایش تجهیز |
+| `E_BAD_PT` | equipment | error | ردیف BOM تجهیز در BOM این رویژن نیست | ویرایش تجهیز |
+| `E_NO_WELD` | equipment | warning | تجهیز به هیچ سرجوشی وصل نیست | ویرایش تجهیز |
+| `E_WELD_DANGLING` | equipment | error | تجهیز به سرجوشی وصل است که روی برگ نیست | ویرایش تجهیز |
+| `E_WELD_AMBIGUOUS` | equipment | warning | شمارهٔ قدیمی سرجوش نام چند سرجوش است | ویرایش تجهیز |
+| `E_WELD_UNKNOWN_NO` | equipment | warning | شمارهٔ قدیمی سرجوش روی برگ نیست | ویرایش تجهیز |
+| `E_WELD_DUP_REF` | equipment | info | یک سرجوش چند بار در فهرست اتصال تجهیز آمده | ویرایش تجهیز |
+| `E_NO_ACC` | equipment | info | تجهیز متعلقاتی ندارد | ویرایش تجهیز |
+| `E_ACC_PT` | equipment | warning | متعلق تجهیز ردیفی از BOM نیست | ویرایش تجهیز |
+| `E_ACC_QTY` | equipment | error | تجهیزات و متعلقات بیش از تعداد BOM می‌خواهند | ویرایش تجهیز |
+| `E_STATE_SOURCE` | equipment | error | تجهیز نصب/تست‌شده در دفتر هست ولی نشانش روی برگ نیست | ویرایش تجهیز |
+| `E_STATE_DRIFT` | equipment | info | وضعیت تجهیز در پیش‌نویس با وضعیت ذخیره‌شده فرق دارد | ویرایش تجهیز |
+| `E_LEGACY_WARNING` | equipment | warning | پیوند قدیمی تجهیز به سرجوش حل‌نشده (هشدار ثبت‌شده) | تاریخچهٔ هشدارها |
+| `SP_NO_NUMBER` | spool | error | نشان اسپول شماره ندارد | ویرایش اسپول |
+| `SP_DUP` | spool | error | شمارهٔ اسپول تکراری است | ویرایش اسپول |
+| `SP_WELD_UNKNOWN` | spool | warning | سرجوش اسپولی را نام برده که نشانش روی برگ نیست | ویرایش سرجوش |
+| `SP_SHOP_NONE` | spool | warning | سرجوش کارگاهی اسپول ندارد | ویرایش سرجوش |
+| `SP_EMPTY` | spool | info | اسپول روی برگ هست ولی هیچ سرجوشی در آن نیست | ویرایش اسپول |
+| `SP_EQUIPMENT_UNKNOWN` | spool | warning | تجهیز اسپولی را نام برده که روی برگ نیست | ویرایش تجهیز |
+| `SUP_NO_NUMBER` | support | error | نشان ساپورت شماره ندارد | ویرایش ساپورت |
+| `SUP_DUP` | support | error | شمارهٔ ساپورت تکراری است | ویرایش ساپورت |
+| `SUP_NO_TYPE` | support | warning | نوع ساپورت مشخص نیست | ویرایش ساپورت |
+| `REV_APPROVED` | revision | info | رجیستر این رویژن تأیید شده؛ تغییر با رویژن جدید است | ثبت رویژن جدید |
+| `REV_UNSAVED` | revision | info | این برگ هنوز ذخیره نشده؛ بررسی‌های وابسته به سرور اجرا نشد | ذخیرهٔ رجیستر |
+| `DI_CUT` | data-integrity | warning | جدول برش با برگ ناسازگار است | ویرایش جدول برش |
+| `DI_CUT_BOM` | data-integrity | warning | جدول برش با BOM ناسازگار است | ویرایش ردیف BOM |
+
+Severity may be lowered per finding (e.g. a duplicate printed number on a sheet-only list is a *warning*, on a typed list — which the register refuses — an *error*). Finding ids are deterministic (`code:uid:detail`).
+
+## 6. What was built
+* **Engine** `lib/engineering/validation.mjs` (pure; runs in the page on the draft and on the server on the saved state). Reuses `modelFromWeldList` (now also returns structured `rowProblems`, strings unchanged), `rowIssueCodes` (`lib/register/bom-table.mjs`, `rowIssues` unchanged), `usage/pieceUsage/ledgerDemands/rowCapacity`, `equipmentWelds`, `cutChecks/cutVsBom`, `projectWelds`.
+* **Server** `lib/db/repos/validation.mjs` + `GET /api/validation` (read-only; `VIEW_PROJECT`; fixed queries: document, latest run, equipment, ledger rows+lines, warnings; returns `{revision, findings, summary, saved, payloadHash, generatedAt}` — `saved` lets the page run the same engine on the draft against the server's ledger) and `GET/POST /api/mark-warnings` (`EDIT_EXTRACTION`; `RUN_LOCKED` on an approved revision, `STALE_RUN` against `baseHash`, `WARNING_NOT_RESOLVABLE` until the relationship exists, `ALREADY_RESOLVED`, revision-boundary 404). `markWarnings` now also returns `resolved_by`. **No migration.**
+* **UI** `components/ValidationPanel.jsx` (Reconciliation Center) in the existing Validation tab: summary (total / errors / warnings / info / resolved / blocking), table (severity, category, entity, identifier, description, suggested action, status), search, category / severity / status filters, sort, group by category / entity, refresh, **draft vs saved** source toggle (labelled preview vs server), details pane (explanation, entity, UID, revision, source, BOM/ledger numbers, stored resolution), navigation to the existing weld / equipment / BOM-row forms, the drawing, the ledger tab, cut and save tabs; warning resolution with a mandatory note. Selecting a finding selects its mark (same selection as the drawing and tables); picking a mark highlights its findings. `lib/client/validation-center.mjs` holds the data hook.
+* **Unlinked sheet weld marks** are no longer dropped by the typed workspace: they are kept untouched in `sheetMarkup.items`, drawn (red) on the sheet, listed as `W_UNLINKED` with uid / number / attributes, and never converted into rows, matched by number/position or deleted by a save. A person may still move or delete one on the drawing (their own action).
+* `lib/register/workspace-validation.mjs` (Phase 3 string list) is superseded; kept only for its tests.
+
+## 7. Deliberately not done / risks
+* The model route (`app/piping/page.jsx`, no typed list) has no Validation tab; the Center lives in the typed workspace, where the findings' forms exist.
+* Placement is only flagged when *some* welds are placed (the register does not require placement); a stricter "required placement" rule would be a policy decision for the owner.
+* The identity-ambiguity warning is closed only when nothing hangs on the previous identities; it has no "pick which old mark became which" action (that would be identity guessing).
+* Preview-vs-saved (`A_PREVIEW_DIFF`) is informational: the draft is a preview, the server's ledger is authoritative, and a save aligns them.
+* Findings are computed on request, not stored (no result table, no cache): there is no invalidation problem to get wrong; cost is one read-only request.
+* Disk note for the session: the container's writable allowance was nearly exhausted by earlier test scratch directories; the shared scratch sweep was not performed.
