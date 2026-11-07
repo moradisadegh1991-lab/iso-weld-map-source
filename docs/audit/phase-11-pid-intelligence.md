@@ -63,3 +63,69 @@ None expected: draft/approval/audit/revision binding all fit `extraction_run` + 
 ## 7. Honest limits of this environment (stated before building)
 
 No vision/LLM access and no OCR runtime here, and the source PDF/OCR dumps are not in this checkout. So: the vision pass is specified as a *proposal contract* with a strict sanitizer and tested with fixtures, **not** wired to a model; K110 recognition accuracy is **not measured** in this phase (the evaluation harness and its synthetic difficult-case golden are built; real per-category K110 numbers need the OCR run and a hand-labelled set).
+
+---
+
+# Implementation record (after Step 0)
+
+## 8. Architecture as built
+Pure layer `lib/pid/*` (no Node-only imports in what the browser uses: `vocab.mjs`, `graph.mjs`, `review.mjs`) · persistence `lib/db/repos/pid.mjs`
+(an `extraction_run` with `pass_name='pid'`, one per document revision) · `app/api/pid` + `app/api/pid/review` · UI `app/pid/page.jsx`,
+`components/PidViewer.jsx`, `components/PidPanel.jsx`, `lib/client/pid-center.mjs` · rules in `lib/engineering/validation.mjs` (`validatePid`).
+Nothing in the isometric pipeline (`parseSheet`, the loader, weld/spool/cut code) was changed; the weld review queue now excludes `pass_name='pid'`.
+
+## 9. P&ID data contract (`lib/pid/draft.mjs`)
+`{kind:"pid", schema:1, meta, page:{number,width,height}, items, edges, mappings, source:{kind,reader,hash,generatedAt,problems}}`
+* item `{uid, cls, symbol, tag, printed, bbox(normalized 0..1)|null, center, page, ocrText, confidence, attrs, source, evidence[], review}`
+* edge `{uid, type, from, to|null, ref, evidence[], status, candidates?, review}`
+* `review.status`: extracted → needs_review → corrected → approved; also rejected, unresolved, ambiguous, superseded. `review.original` keeps the
+  extracted value once; `by`/`at`/`reason` are recorded. A reader (OCR or model) can only create `extracted` records — any status it sends is ignored.
+* symbols outside the per-class list are `UNKNOWN`; an equipment's symbol is never taken from its tag letters (a legend hint stays in `attrs.legendType`);
+  an edge without evidence or with an unknown end is rejected and listed.
+
+## 10. Symbol recognition — what it does and does not do
+There is **no vision model and no OCR runtime in this environment**, so no symbol detector was built or measured. The draft accepts (a) the existing
+OCR strings/bubbles (`draftFromOcr`, same clash/shorter-reading rules as the register reader) and (b) a model's *proposal* (`sanitizeProposal`).
+Equipment/instrument/line/valve classes come from the reader; ISA letters give only what ISA says (`instrumentFacts`); nothing is inferred from position.
+
+## 11. Connectivity graph
+Edges exist only when stated with evidence (no proximity edges). `buildGraph` yields valid edges, an invalid list, adjacency, off-page entries.
+Off-page: `resolved` only when exactly one compatible connector on the target drawing points back (a `lineRef` disambiguates); otherwise
+`unconfirmed` / `unresolved` / `ambiguous` with candidates. Asset links are *proposals* (unique / multiple / none by normalized tag); nothing is created.
+
+## 12. Revision comparison
+`comparePid` reports mapped / candidate / ambiguous / added / removed / renumbered / changed / connectivity and off-page differences. Candidates are
+proposals only. `confirmMapping` is explicit, one-to-one, same-class, stored on the **target** draft (`revision_carry_map.cls` cannot hold P&ID classes,
+so no migration), refused on a signed-off target; UIDs are never copied and approved data is never overwritten.
+
+## 13. Evaluation (`npm run eval:pid`, baseline `eval/pid/baseline.json`)
+**Synthetic** golden cases (8; incl. low-resolution, dense/overlapping text, duplicates, similar instrument tags, multipage, off-page + revision cloud,
+valves/crossings). A missing value is never counted correct. This is a regression harness for the deterministic layer, **not a K110 accuracy figure**.
+
+| category | precision | recall |
+|---|---|---|
+| equipment tag | 91.7% | 84.6% |
+| instrument tag | 75.0% | 100% |
+| line number | 100% | 83.3% |
+| valve symbol | 100% | 100% |
+| connectivity (stated edges) | 100% | 75.0% |
+| duplicate detection | 100% | 100% |
+| off-page resolution accuracy | 100% (0 wrongly resolved) | |
+| false-positive rate | 8.3% | |
+
+The weak case is `low-resolution-scan` (equipment 33%/50%): readings with clashing characters are dropped rather than guessed.
+
+## 14. Verification
+* `db/test/pid-intelligence.mjs` — 27 tests (pure + server: ingest idempotency, sanitization, authorization, stale edit 409, sign-off preconditions and lock,
+  revision isolation, review-queue exclusion) — added to the `db:test` chain.
+* Browser drive `tools/drive-pid.mjs` on a **synthetic** sample sheet (labelled as such on the page): 17 checks passed (upload as P&ID, boxes drawn, row↔drawing
+  selection both ways, go-to zoom, correction keeps the original, sign-off refused while undecided (UI and server), rejection with reason, sign-off with who/when,
+  locked afterwards, phone width without horizontal scroll). Screenshots: `docs/audit/phase-11-shots/` (dark, light, phone light/dark).
+* Isometric regression: `tools/drive-equipment-spool.mjs` (Phase 10 drive) — all checks true, no page errors.
+
+## 15. Limitations / risks
+* No real K110 P&ID, OCR runtime or model access here: real-sheet accuracy is **unmeasured**. The synthetic numbers must not be quoted as accuracy.
+* The page renders the stored PDF page client-side (pdf.js) at ≈110 dpi; very large sheets are down-scaled for display only (the PDF stays the source).
+* Instrument bubbles are read only from the OCR reader's `bubbles` input; a plain text "PIC 1101" is not turned into an instrument (never guessed).
+* Revision-comparison mapping UI is minimal (candidate list + confirm); batch mapping is not built.
+* Migration: none. No production migration was run.
