@@ -73,5 +73,5 @@ Phase 7 engine, new codes: `REV_NO_SOURCE`, `REV_BAD_LINEAGE`, `REV_DUP_RELATION
 * Existing `db/test/revisions.mjs` (weld-register diff route) 15/15; `engineering-validation` 34/34; `weld-bom-equipment` 28/28 on both PGlite and PG.
 * `npm run db:test`: whole chain, 123 files reporting, 0 FAIL. `npm run db:test:pg`: 8/8, 15/15, 5/5, 3/3. `npm run eval:check`: GATE PASSED. `npx next build`: compiled.
 * `db/test/migrations.mjs` is a PGlite test (it prints no count under `DATABASE_URL`); it passes 10/10 on PGlite with migration 106 applied.
-* Browser drive `tools/drive-revision-lifecycle.mjs`: 46 checks, all true, no page errors; screenshots in `docs/audit/phase-8-shots/`.
+* Browser drive `tools/drive-revision-lifecycle.mjs`: 41 checks, all true, no page errors; screenshots in `docs/audit/phase-8-shots/`.
 * The Vercel checks of the PR are read from GitHub after the push.
