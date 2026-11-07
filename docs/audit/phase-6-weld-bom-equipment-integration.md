@@ -113,7 +113,7 @@ Guards proved by reverting: projection removed from `syncSheetData` → 11 red; 
 |---|---|
 | `db/test/weld-bom-equipment.mjs` (PGlite) | 28/28 |
 | same + `engineering-crud`, `typed-weld-identity`, `register-persistence`, `mark-identity`, `workspace-foundation`, `bom-allocation`, `iso-equipment`, `bom-allocation-history` on real PostgreSQL 16 | 28/28 · 16/16 · 17/17 · 13/13 · 20/20 · 23/23 · 18/18 · 9/9 · 5/5 |
-| `npm run db:test` (PGlite, whole chain, final code) | see section 8 |
+| `npm run db:test` (PGlite, whole chain, final code) | exit 0 · 120 files · 1522 PASS · 0 FAIL |
 | `npm run eval:check` | GATE PASSED |
 | `npx next build` | succeeded |
 | `tools/drive-weld-bom-equipment.mjs` (real page, saved typed run, fresh database) | 28 checks, 0 failed, 0 page errors |
