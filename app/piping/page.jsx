@@ -103,7 +103,7 @@ export default function Page() {
   const session = useSession();
   // what the saved revision holds against deleting a mark (installed / tested equipment, installed allocation lines, an approved run): advice
   // before the confirm — the server decides on save
-  const protect = useSavedProtection({ session, documentId: openRun?.run?.documentId || null, items: data?.sheetMarkup?.items || [], status: openRun?.run?.status });
+  const { protect, saved: savedState } = useSavedProtection({ session, documentId: openRun?.run?.documentId || null, items: data?.sheetMarkup?.items || [], status: openRun?.run?.status });
   // the sheet of a saved run, fetched from the server for the review beside it
   const [runSheet, setRunSheet] = useState(null);
   useEffect(() => {
@@ -1033,7 +1033,7 @@ export default function Page() {
       {data && !listed && markForm && (
         <MarkForm key={`${markForm.mode}-${markForm.id || "new"}-${markForm.kind}`} mode={markForm.mode}
           mark={markForm.id ? findMark(data.sheetMarkup?.items || [], markForm.id) : { kind: markForm.kind }}
-          items={data.sheetMarkup?.items || []} bom={data.bom || []} lists={valueLists} readOnly={openRun?.run?.status === "approved"} thisDoc={data.meta?.drawingNo} thisSheet={data.meta?.sheet}
+          items={data.sheetMarkup?.items || []} bom={data.bom || []} lists={valueLists} readOnly={openRun?.run?.status === "approved"} thisDoc={data.meta?.drawingNo} thisSheet={data.meta?.sheet} saved={savedState}
           onClose={() => setMarkForm(null)}
           onSave={(d) => {
             const items0 = data.sheetMarkup?.items || [];

@@ -22,8 +22,10 @@ export default function BomTable({ rows, live, locked = false, session = null, d
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState(null);
-  const [ledger, setLedger] = useState({ phase: documentId ? "loading" : "none", map: null, error: "" });
+  const [ledger, setLedger] = useState({ phase: documentId ? "loading" : "none", map: null, lines: [], error: "" });
   const [msg, setMsg] = useState("");
+  const [openPt, setOpenPt] = useState(() => new Set());     // rows whose consumers / history are shown
+  const [hist, setHist] = useState({ phase: "idle", events: [] });   // the revision's allocation events (server, newest first)
 
   // the saved ledger of this revision (read-only; the server decides what a save may change)
   useEffect(() => {
@@ -33,7 +35,7 @@ export default function BomTable({ rows, live, locked = false, session = null, d
     (async () => {
       try {
         const r = await session.call(`/api/bom-allocations?projectId=${session.projectId}&documentId=${documentId}`);
-        if (!gone) setLedger({ phase: "ok", map: ledgerByPt(r), error: "" });
+        if (!gone) setLedger({ phase: "ok", map: ledgerByPt(r), lines: r?.lines || [], error: "" });
       } catch (e) { if (!gone) setLedger({ phase: "error", map: null, error: e?.message || "ledger" }); }
     })();
     return () => { gone = true; };
@@ -42,6 +44,15 @@ export default function BomTable({ rows, live, locked = false, session = null, d
   const all = useMemo(() => decorate(rows, { live, ledger: ledger.map }), [rows, live, ledger.map]);
   const list = useMemo(() => view(all, { query, filter, sort }), [all, query, filter, sort]);
   const issueCount = all.filter((d) => d.issues.length).length;
+  const toggle = async (pt) => {
+    const n = new Set(openPt); if (n.has(pt)) n.delete(pt); else n.add(pt); setOpenPt(n);
+    if (hist.phase === "idle" && documentId && session?.projectId) {
+      setHist({ phase: "loading", events: [] });
+      try { const r = await session.call(`/api/bom-allocations?projectId=${session.projectId}&documentId=${documentId}&history=1`); setHist({ phase: "ok", events: r?.history || [] }); }
+      catch (e) { setHist({ phase: "error", events: [], error: e?.message || "history" }); }
+    }
+  };
+  const KIND_WORD = { weld: "سرجوش", equipment: "تجهیز", accessory: "متعلق تجهیز", spool: "اسپول", cut: "برش" };
   const clickSort = (k) => setSort((s) => (s?.key !== k ? { key: k, dir: "asc" } : s.dir === "asc" ? { key: k, dir: "desc" } : null));
 
   const remove = (d) => {
@@ -90,8 +101,8 @@ export default function BomTable({ rows, live, locked = false, session = null, d
                     ? <button type="button" className="ghost sm" data-bom-sort={k} onClick={() => clickSort(k)}>{label}{sort?.key === k ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}</button>
                     : label}
                 </th>))}
-              <th title="سرهای جوشی‌شدنی این ردیف که سرجوش‌ها نام برده‌اند">مصرف زنده</th>
-              <th title="تخصیص ذخیره‌شده در دفتر این رویژن">رزرو / نصب / مانده</th>
+              <th title="پیش‌نمایش روی صفحه، از سرجوش‌های همین پنجره — نتیجهٔ نهایی نیست">پیش‌نمایش (صفحه)</th>
+              <th title="تخصیص ذخیره‌شده در دفتر سرور این رویژن">سرور: رزرو / نصب / مانده</th>
               <th>بررسی</th><th></th>
             </tr></thead>
             <tbody>
@@ -113,11 +124,30 @@ export default function BomTable({ rows, live, locked = false, session = null, d
                     </td>
                     <td className="sm" data-bom-issues={d.issues.length}>{d.issues.length ? <span title={d.issues.join(" · ")}>⚠ {d.issues.length}</span> : "✓"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
+                      {ledger.phase === "ok" && <button type="button" className="ghost sm" data-bom-detail={b.pt} aria-expanded={openPt.has(String(b.pt))} onClick={() => toggle(String(b.pt))}>مصرف‌کنندگان</button>}
                       <button type="button" className="ghost sm" data-bom-view={b.pt} onClick={() => onView?.(d.index)}>مشاهده</button>
                       {!locked && <button type="button" className="ghost sm" data-bom-edit={b.pt} onClick={() => onEdit?.(d.index)}>ویرایش</button>}
                       {!locked && <button type="button" className="ghost sm" data-bom-delete={b.pt} onClick={() => remove(d)}>حذف</button>}
                     </td>
                   </tr>);
+              }).flatMap((tr, i) => {
+                const pt = String(list[i].row.pt);
+                if (!openPt.has(pt)) return [tr];
+                const lines = (ledger.lines || []).filter((l) => String(l.pt) === pt);
+                const evs = hist.events.filter((e) => String(e.pt) === pt);
+                return [tr, (
+                  <tr key={`${list[i].index}-detail`} data-bom-detail-row={pt}><td colSpan={COLS.length + 4}>
+                    <div className="sm" data-bom-consumers>
+                      <b>مصرف‌کنندگان این ردیف (سرور)</b>
+                      {lines.length === 0 ? <span className="muted"> — هیچ‌کس فعلاً رزرو یا نصب نکرده</span>
+                        : <ul style={{ margin: "4px 0", paddingInlineStart: 18 }}>{lines.map((l) => <li key={l.id} className="mono" dir="ltr">{KIND_WORD[l.ownerKind] || l.ownerKind} {l.ownerNo || "؟"} · {l.qty} {l.unit} · {l.status}</li>)}</ul>}
+                      <b>تاریخچه (فقط‌افزودنی)</b>
+                      {hist.phase === "loading" && <span className="muted"> در حال خواندن…</span>}
+                      {hist.phase === "error" && <span className="err"> خواندن تاریخچه نشد: {hist.error}</span>}
+                      {hist.phase === "ok" && (evs.length === 0 ? <span className="muted"> — رویدادی نیست</span>
+                        : <ul style={{ margin: "4px 0", paddingInlineStart: 18 }} data-bom-history>{evs.slice(0, 20).map((e, j) => <li key={j} className="mono" dir="ltr">{String(e.at).slice(0, 16).replace("T", " ")} · {e.event} · {KIND_WORD[e.ownerKind] || e.ownerKind} {e.ownerNo || ""} · {e.before ?? "—"}→{e.after ?? "—"}{e.reason ? ` · ${e.reason}` : ""}{e.by ? ` · ${e.by}` : ""}</li>)}</ul>)}
+                    </div>
+                  </td></tr>)];
               })}
             </tbody>
           </table>

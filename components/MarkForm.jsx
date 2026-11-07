@@ -4,7 +4,7 @@ import FormDialog from "./ui/FormDialog";
 import BomPick from "./BomPick";
 import Pick from "./ui/Pick";
 import TieInPick, { TieInReferrers } from "./TieInPick";
-import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, weldsOf, accessoriesOf, accessoriesText, bomSnapshot, nextNo, isMark, markRef } from "../lib/sheet/markup.mjs";
+import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, weldsOf, accessoriesOf, accessoriesText, bomSnapshot, nextNo, isMark, markRef, weldRefsOf, equipmentWelds } from "../lib/sheet/markup.mjs";
 
 /**
  * The form of one mark of the sheet — a weld, spool, support or installed
@@ -30,15 +30,24 @@ const LIST_OF = {
   equipment: { type: "equipmentType" },
 };
 const NEW_ID = "__draft__";
+/** The mark's attributes; for an equipment with legacy number-based welds, `weldRefs` filled with the uniquely resolved ones (not a user edit). */
+function legacyResolved(mark, items) {
+  const attrs = { ...(mark?.attrs || {}) };
+  if (KINDS[mark?.kind]?.cls !== "equipment" || weldRefsOf(attrs.weldRefs).length || !weldsOf(attrs.welds).length) return attrs;
+  const ew = equipmentWelds(mark, items);
+  if (ew.joined.length) { attrs.weldRefs = ew.joined.map((j) => j.uid).join(","); attrs.welds = ew.joined.map((j) => j.no).join(", "); }
+  return attrs;
+}
 const rowText = (b) => `PT ${b.pt} — ${String(b.description || b.group || "").slice(0, 46)}${b.diam ? ` (${b.diam})` : ""}`;
 
-export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom = [], lists, onSave, onClose, readOnly = false, thisDoc = "", thisSheet = "" }) {
+export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom = [], lists, onSave, onClose, readOnly = false, thisDoc = "", thisSheet = "", saved = null }) {
   const [mode, setMode] = useState(readOnly ? "view" : mode0);
   const cls = KINDS[mark?.kind]?.cls || "weld";
   const start = useMemo(() => ({
     kind: mark?.kind || "weld-unknown",
     no: mark?.no ?? (mode0 === "create" ? nextNo(items, mark?.kind || "weld-unknown") : ""),
-    attrs: { ...(mark?.attrs || {}) },
+    // an equipment that still names its welds by printed number (legacy) is shown joined to the welds those numbers UNIQUELY name, by identity
+    attrs: legacyResolved(mark, items),
   }), [mark]);  // eslint-disable-line react-hooks/exhaustive-deps
   const [d, setD] = useState(start);
   const [err, setErr] = useState("");
@@ -110,6 +119,19 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
         </div>
         <div className="mk-grid one">{text("note")}</div>
         {mode !== "create" && mark?.no && <TieInReferrers doc={thisDoc} sheet={thisSheet} weld={start.no} />}
+        {mode !== "create" && mark && (() => {
+          const ref = String(markRef(mark)).toLowerCase();
+          const lines = (saved?.lines || []).filter((l) => String(l.ownerRef).toLowerCase() === ref);
+          const eqs = items.filter((x) => KINDS[x.kind]?.cls === "equipment" && equipmentWelds(x, items).joined.some((j) => j.uid.toLowerCase() === ref));
+          return (<>
+            <h4 className="mk-h">تخصیص BOM (ثبت‌شده در سرور)</h4>
+            {lines.length === 0
+              ? <p className="muted sm" data-weld-alloc="none">{saved ? "برای این سرجوش تخصیص ثبت‌شده‌ای نیست (هنوز ذخیره نشده یا قطعه‌ای انتخاب نشده)." : "این برگ هنوز ذخیره نشده؛ تخصیص با ذخیرهٔ رجیستر ثبت می‌شود."}</p>
+              : <ul className="sm" data-weld-alloc="lines">{lines.map((l) => <li key={l.id} className="mono" dir="ltr">PT {l.pt} · {l.qty} {l.unit} · {l.status}</li>)}</ul>}
+            <h4 className="mk-h">تجهیزات متصل</h4>
+            {eqs.length === 0 ? <p className="muted sm" data-weld-equipment="none">تجهیزی به این سرجوش وصل نیست.</p>
+              : <ul className="sm" data-weld-equipment="list">{eqs.map((e) => <li key={markRef(e)}>{e.no || "؟"}{e.attrs?.tag ? ` — ${e.attrs.tag}` : ""}</li>)}</ul>}
+          </>); })()}
       </>)}
 
       {cls === "spool" && <div className="mk-grid">{pick("size")}{pick("material")}{text("lengthMm", { inputMode: "decimal" })}{text("note")}</div>}
@@ -126,13 +148,23 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
           {field("status", <select data-input="status" value={a.status || "planned"} onChange={(e) => setA({ status: e.target.value })}>
             {EQUIPMENT_STATUS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>)}
         </div>
-        <h4 className="mk-h">سرجوش‌های متصل</h4>
+        <h4 className="mk-h">سرجوش‌های متصل (با شناسهٔ پایدار)</h4>
         <div className="mk-checks" role="group" aria-label="سرجوش‌های متصل" data-form-field="welds">
           {welds.length === 0 && <span className="muted sm">سرجوشی روی این برگ نیست.</span>}
-          {welds.map((w) => { const no = String(w.no).trim(), on = weldsOf(a.welds).includes(no); return (
-            <label key={w.id}><input type="checkbox" data-weld-pick={no} checked={on}
-              onChange={(e) => setA({ welds: (e.target.checked ? [...weldsOf(a.welds), no] : weldsOf(a.welds).filter((x) => x !== no)).join(", ") })} /> {no}</label>); })}
+          {welds.map((w) => { const ref = String(markRef(w)), on = weldRefsOf(a.weldRefs).includes(ref.toLowerCase()); return (
+            <label key={ref} title={ref}><input type="checkbox" data-weld-pick={ref} data-weld-no={String(w.no).trim()} checked={on}
+              onChange={(e) => {
+                const refs = e.target.checked ? [...weldRefsOf(a.weldRefs), ref.toLowerCase()] : weldRefsOf(a.weldRefs).filter((x) => x !== ref.toLowerCase());
+                const nos = refs.map((u) => String(welds.find((x) => String(markRef(x)).toLowerCase() === u)?.no ?? "").trim()).filter(Boolean);
+                setA({ weldRefs: refs.join(","), welds: nos.join(", ") });
+              }} /> <span className="mono">{String(w.no).trim() || "؟"}</span> <span className="muted sm mono" dir="ltr">{ref.slice(0, 8)}</span></label>); })}
         </div>
+        {(() => { const ew = equipmentWelds({ attrs: { ...(mark?.attrs || {}) } }, items); const legacyLeft = (mark?.attrs?.weldRefs ? [] : ew.unresolved);
+          const dangling = weldRefsOf(a.weldRefs).filter((u) => !welds.some((w) => String(markRef(w)).toLowerCase() === u));
+          return (<>
+            {legacyLeft.length > 0 && <p className="err sm" data-weld-unresolved>پیوند قدیمی بدون شناسه که حل نشد: {legacyLeft.map((x) => `${x.no} (${x.reason === "ambiguous" ? "نام چند سرجوش است" : "روی برگ نیست"})`).join("، ")} — به هیچ سرجوشی وصل نشد؛ سرجوش درست را بالا انتخاب کنید (با ذخیره این ارجاع‌های حل‌نشده برداشته می‌شوند).</p>}
+            {dangling.length > 0 && <p className="err sm" data-weld-dangling>سرجوشی که قبلاً وصل شده بود روی برگ نیست ({dangling.map((u) => u.slice(0, 8)).join("، ")}) — پیوند را با برداشتن آن بردارید، وگرنه ذخیره رد می‌شود.</p>}
+          </>); })()}
         <h4 className="mk-h">متعلقات (از BOM همین برگ)</h4>
         <ul className="equip-acc" data-form-field="acc">
           {acc.length === 0 && <li className="muted sm" style={{ border: 0 }}>متعلقی ندارد.</li>}
