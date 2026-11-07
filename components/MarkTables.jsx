@@ -1,4 +1,5 @@
 "use client";
+import { useConfirm, askDelete } from "./ui/ConfirmDialog";
 import { useEffect, useRef, useState } from "react";
 import { KINDS, ATTRS, addMark, updateMark, removeMark, unplace, isPlaced, notOnSheet, engineRow, problems, rules, componentChecks, bomSnapshot, dependents, markRef, isMark, findMark } from "../lib/sheet/markup.mjs";
 import { allocationChecks } from "../lib/register/bom-allocation.mjs";
@@ -56,6 +57,7 @@ export default function MarkTables({ protect = null, items = [], onChange, model
   const issues = only === "spool" ? all.filter((x) => /اسپول/.test(x)) : only === "support" ? all.filter((x) => /ساپورت/.test(x)) : all;
   // «edit» from the sheet's menu: this mark's table, its row in view, its first field in focus
   const box = useRef(null);
+  const [ask, dialog] = useConfirm();
   const done = useRef(null);      // the «edit» already acted on: the person may change tab after it
   useEffect(() => {
     if (!focus?.id || done.current === focus.n) return;
@@ -100,6 +102,7 @@ export default function MarkTables({ protect = null, items = [], onChange, model
   const weldsOfSpool = (no) => items.filter((w) => KINDS[w.kind]?.cls === "weld" && String(w.attrs?.spool ?? "").trim() === String(no ?? "").trim() && String(no ?? "").trim()).map((w) => w.no);
   return (
     <div className="mark-tables" data-mark-tables ref={box}>
+      {dialog}
       <div className="row" style={{ gap: 4, flexWrap: "wrap" }} role={shown.length > 1 ? "tablist" : undefined}>
         {shown.length === 1 && <b data-mark-title>{shown[0][1]} ({rows.length})</b>}
         {shown.length > 1 && shown.map(([k, label]) => (
@@ -164,12 +167,10 @@ export default function MarkTables({ protect = null, items = [], onChange, model
                       {placed && <button type="button" className="ghost sm" data-row-unplace={markRef(m)}
                         onClick={(ev) => { ev.stopPropagation(); onChange?.(unplace(items, markRef(m))); }}>برداشتن از نقشه</button>}
                       <button type="button" className="ghost sm" aria-label={`حذف ${m.no}`} data-row-delete={markRef(m)}
-                        onClick={(ev) => {
+                        onClick={async (ev) => {
                           ev.stopPropagation();
-                          const pr = protect?.(markRef(m));
-                          if (pr?.blocked) { window.alert(`${WORD[KINDS[m.kind].cls]} ${m.no || ""} حذف نمی‌شود:\n– ${pr.reasons.join("\n– ")}`); return; }
-                          const deps = [...(pr?.reasons || []), ...dependents(items, markRef(m))];
-                          if (deps.length && !window.confirm(`${WORD[KINDS[m.kind].cls]} ${m.no || ""} حذف شود؟\n\nاین‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند:\n– ${deps.slice(0, 12).join("\n– ")}`)) return;
+                          const yes = await askDelete(ask, { label: WORD[KINDS[m.kind].cls], no: m.no, pr: protect?.(markRef(m)), deps: dependents(items, markRef(m)) });
+                          if (!yes) return;
                           if (isMark(m, attachId)) onAttach?.(null);
                           onChange?.(removeMark(items, markRef(m)));
                         }}>حذف</button>
