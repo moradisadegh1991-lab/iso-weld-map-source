@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import FormDialog from "./ui/FormDialog";
 import BomPick from "./BomPick";
 import Pick from "./ui/Pick";
+import { isUid } from "../lib/sheet/mark-identity.mjs";
 import TieInPick, { TieInReferrers } from "./TieInPick";
 import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, weldsOf, accessoriesOf, accessoriesText, bomSnapshot, nextNo, isMark, markRef, weldRefsOf, equipmentWelds } from "../lib/sheet/markup.mjs";
 
@@ -80,6 +81,21 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
     </label>);
   const text = (k, props = {}) => field(k, <input dir="ltr" value={a[k] ?? ""} placeholder={labels[k]?.[1] || ""} onChange={(e) => setA({ [k]: e.target.value })} data-input={k} {...props} />);
   const pick = (k) => field(k, <Pick data-input={k} list={LIST_OF[cls][k]} lists={lists} value={a[k]} placeholder={labels[k]?.[1] || ""} onChange={(v) => setA({ [k]: v })} />);
+  // a weld's spool is chosen BY IDENTITY (the spool mark's uid); the printed number is only its label (lib/register/cut-identity.mjs)
+  const spoolMarks = items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim() && isUid(m.uid));
+  const spoolByUid = (u) => spoolMarks.find((m) => String(m.uid).toLowerCase() === String(u).toLowerCase());
+  const weldSpoolSel = () => {
+    const cur = isUid(a.spoolUid) ? spoolByUid(a.spoolUid) : spoolMarks.filter((m) => String(m.no).trim() === String(a.spool ?? "").trim());
+    const uidVal = Array.isArray(cur) ? (cur.length === 1 ? cur[0].uid : "") : cur?.uid || "";
+    const stale = (a.spoolUid && !uidVal) || (!a.spoolUid && a.spool && !uidVal);
+    return field("spool", spoolMarks.length
+      ? <select data-input="spool" data-spool-uid={uidVal} dir="ltr" value={uidVal} onChange={(e) => { const m = spoolByUid(e.target.value); setA(m ? { spoolUid: m.uid, spool: String(m.no).trim() } : { spoolUid: "", spool: "" }); }}>
+          <option value="">—</option>
+          {stale && <option value="">{a.spool || a.spoolUid} ({Array.isArray(cur) && cur.length > 1 ? "چند اسپول با این شماره" : "روی برگ نیست"})</option>}
+          {spoolMarks.map((m) => <option key={m.uid} value={m.uid}>{m.no} · {String(m.uid).slice(0, 8)}</option>)}
+        </select>
+      : <input data-input="spool" dir="ltr" value={a.spool ?? ""} placeholder="SP-1" onChange={(e) => setA({ spool: e.target.value, spoolUid: "" })} />);
+  };
   const spoolSel = (k) => field(k, spools.length
     ? <select data-input={k} dir="ltr" value={a[k] ?? ""} onChange={(e) => setA({ [k]: e.target.value })}>
         <option value="">—</option>
@@ -114,7 +130,7 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
         </div>
         <h4 className="mk-h">مشخصات جوش</h4>
         <div className="mk-grid">
-          {pick("type")}{pick("size")}{pick("schedule")}{pick("material")}{spoolSel("spool")}{pick("wps")}
+          {pick("type")}{pick("size")}{pick("schedule")}{pick("material")}{weldSpoolSel()}{pick("wps")}
           {field("ref", <TieInPick data-input="ref" value={a.ref} weldNos={welds.map((w) => String(w.no ?? "").trim()).filter(Boolean)} thisDoc={thisDoc} onChange={(v) => setA({ ref: v })} />)}
         </div>
         <div className="mk-grid one">{text("note")}</div>

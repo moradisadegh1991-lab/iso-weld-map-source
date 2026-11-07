@@ -44,7 +44,7 @@ const NEW_KIND = { weld: "weld-unknown", spool: "spool", support: "support" };
 const WORD = { weld: "سرجوش", spool: "اسپول", support: "ساپورت" };
 
 export default function MarkTables({ protect = null, items = [], onChange, model = null, selectedId = null, onSelect, attachId = null, onAttach,
-  readOnly = false, tabs = ["weld", "spool", "support"], weldList = null, checked = null, bom = [], focus = null, onOpen = null }) {
+  readOnly = false, tabs = ["weld", "spool", "support"], weldList = null, checked = null, bom = [], focus = null, onOpen = null, cuts = [] }) {
   const shown = TABS.filter(([k]) => tabs.includes(k));
   const [tab, setTab] = useState(shown[0]?.[0] || "weld");
   const rows = items.filter((m) => KINDS[m.kind]?.cls === tab);
@@ -169,7 +169,7 @@ export default function MarkTables({ protect = null, items = [], onChange, model
                       <button type="button" className="ghost sm" aria-label={`حذف ${m.no}`} data-row-delete={markRef(m)}
                         onClick={async (ev) => {
                           ev.stopPropagation();
-                          const yes = await askDelete(ask, { label: WORD[KINDS[m.kind].cls], no: m.no, pr: protect?.(markRef(m)), deps: dependents(items, markRef(m)) });
+                          const yes = await askDelete(ask, { label: WORD[KINDS[m.kind].cls], no: m.no, pr: protect?.(markRef(m)), deps: dependents(items, markRef(m), cuts) });
                           if (!yes) return;
                           if (isMark(m, attachId)) onAttach?.(null);
                           onChange?.(removeMark(items, markRef(m)));
