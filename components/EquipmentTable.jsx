@@ -33,6 +33,16 @@ export default function EquipmentTable({ protect = null, items = [], onChange, b
     row.querySelector("[data-row-edit]")?.focus();
   }, [focus?.id, focus?.n, rows.length]);
 
+  // an equipment mark picked on the drawing is brought into view here
+  const followed = useRef(null);
+  useEffect(() => {
+    if (!selectedId || followed.current === selectedId) return;
+    const m = rows.find((r) => isMark(r, selectedId));
+    if (!m) return;
+    followed.current = selectedId;
+    box.current?.querySelector(`[data-equip-row="${CSS.escape(String(markRef(m)))}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [selectedId, rows.length]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="equip-table" data-equip-table ref={box}>
       <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>

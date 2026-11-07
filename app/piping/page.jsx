@@ -24,6 +24,7 @@ import WorkspaceFrame from "../../components/workspace/WorkspaceFrame";
 import Explorer from "../../components/workspace/Explorer";
 import TableKit from "../../components/ui/TableKit";
 import MarkForm from "../../components/MarkForm";
+import { useSavedProtection } from "../../lib/client/saved-protection.mjs";
 import { useValueLists } from "../../components/ui/Pick";
 import CutList from "../../components/CutList";
 import LlmEndpoints from "../../components/LlmEndpoints";
@@ -100,6 +101,9 @@ export default function Page() {
   const [pdfPage, setPdfPage] = useState(null);
   const fileRef = useRef(null);
   const session = useSession();
+  // what the saved revision holds against deleting a mark (installed / tested equipment, installed allocation lines, an approved run): advice
+  // before the confirm — the server decides on save
+  const protect = useSavedProtection({ session, documentId: openRun?.run?.documentId || null, items: data?.sheetMarkup?.items || [], status: openRun?.run?.status });
   // the sheet of a saved run, fetched from the server for the review beside it
   const [runSheet, setRunSheet] = useState(null);
   useEffect(() => {
@@ -771,7 +775,7 @@ export default function Page() {
                 </div>
                 {/* one table: the welds, spools and supports of the sheet, with the engine's Shop/Field, NDT and level beside them */}
                 {SHEET_MARKUP ? (
-                  <MarkTables items={data.sheetMarkup?.items || []} model={model}
+                  <MarkTables protect={protect} items={data.sheetMarkup?.items || []} model={model}
                     onChange={(items) => {
                       const next = { ...data, sheetMarkup: { page: data.sheetMarkup?.page || pdfPage || 1, items: normalizeMarks(items) } };
                       setData(next);
@@ -867,7 +871,7 @@ export default function Page() {
                       {openRun.run.docNo} · REV {openRun.run.revision} · {openRun.run.status}
                     </div>
                     <EditPanel session={session} run={openRun} edited={editing}
-                      onApplied={() => openRunForReview(openRun.run.id)} />
+                      onApplied={() => openRunForReview(openRun.run.id)} onReload={() => openRunForReview(openRun.run.id)} />
                   </>
                 ) : (
                   <>
@@ -936,7 +940,7 @@ export default function Page() {
             </div>
           ) : SHEET_MARKUP ? (
             <div className="canvas" data-sheet-stage style={{ overflow: "auto", padding: 12 }}>
-              <SheetMarkup src={openRun ? runSheet?.src : preview}
+              <SheetMarkup protect={protect} src={openRun ? runSheet?.src : preview}
                 items={data.sheetMarkup?.items || []}
                 selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
                 onEdit={(id, kind) => { setMarkSel(id); setTab("weld"); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); setMarkForm({ mode: "edit", id, kind }); }}

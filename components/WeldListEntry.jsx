@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import BomForm from "./BomForm";
 import BomTable from "./BomTable";
@@ -22,7 +22,7 @@ import MarkTables from "./MarkTables";
 import EquipmentTable from "./EquipmentTable";
 import IsoInfo from "./IsoInfo";
 import { cutVsBom } from "../lib/register/cut-bom.mjs";
-import { protector } from "../lib/register/mark-protection.mjs";
+import { useSavedProtection } from "../lib/client/saved-protection.mjs";
 import { collectFindings } from "../lib/register/workspace-validation.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped, adoptLegacyPlacement, legacyMarks, extraMarks } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks, addMark, updateMark, placeAt, findMark, isPlaced } from "../lib/sheet/markup.mjs";
@@ -86,6 +86,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [file, setFile] = useState(null);
   // the workspace panel's tab: the register once there are marks, else the sheet's identity to settle first
   const [wsTab, setWsTab] = useState(() => (initial?.weldList?.length ? "welds" : "info"));
+  const wsTabRef = useRef(wsTab); wsTabRef.current = wsTab;
   const [paste, setPaste] = useState("");
   const [read, setRead] = useState(null);
   const [approval, setApproval] = useState({ phase: "idle" });
@@ -163,6 +164,12 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const locked = run?.run?.status === "approved";
   const sheetMode = Boolean(sheet);
   const [markSel, setMarkSel] = useState(null);
+  // a mark picked on the drawing or in the explorer: while the panel shows a register table, it shows the table of that mark's class
+  const pickMark = (id) => {
+    setMarkSel(id);
+    const m = findMark(itemsRef.current, id);
+    if (m && ["welds", "spools", "supports", "equip"].includes(wsTabRef.current)) setWsTab(tabOf(m.kind));
+  };
   // «edit» from the sheet's menu: the welds tab, the mark's row in focus
   const [editFocus, setEditFocus] = useState(null);
   // a mark is viewed, edited and added in its form (components/MarkForm.jsx), from the tables and from the sheet's menu alike
@@ -181,23 +188,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [attachId, setAttachId] = useState(null);
   const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras, byUid) : []), [sheetMode, rows, marks, byUid, extras]);
   const itemsRef = useRef(items); itemsRef.current = items;
-  // what the SAVED revision holds against deleting a mark (installed / tested equipment, installed allocation lines) —
-  // advice shown before the confirm; the server still decides on save
-  const savedDocId = run?.run?.documentId || null;
-  const [saved, setSaved] = useState({ equipment: [], lines: [] });
-  useEffect(() => {
-    if (!savedDocId || !session?.projectId) { setSaved({ equipment: [], lines: [] }); return undefined; }
-    let gone = false;
-    (async () => {
-      try {
-        const q = `projectId=${session.projectId}&documentId=${savedDocId}`;
-        const [e, a] = await Promise.all([session.call(`/api/iso-equipment?${q}`), session.call(`/api/bom-allocations?${q}`)]);
-        if (!gone) setSaved({ equipment: e?.equipment || [], lines: a?.lines || [] });
-      } catch { if (!gone) setSaved({ equipment: [], lines: [] }); }
-    })();
-    return () => { gone = true; };
-  }, [savedDocId, session?.projectId, run?.run?.status]);
-  const protect = useMemo(() => protector(items, { ...saved, locked: run?.run?.status === "approved" }), [items, saved, run?.run?.status]);
+  // what the SAVED revision holds against deleting a mark (lib/client/saved-protection.mjs): advice before the confirm; the server decides
+  const protect = useSavedProtection({ session, documentId: run?.run?.documentId || null, items, status: run?.run?.status });
   const validationInput = useMemo(() => ({ items, bom, bomRows, cutRows, cutLengths, registerProblems: model.problems || [] }),
     [items, bom, bomRows, cutRows, cutLengths, model]);
   const validationTotal = useMemo(() => collectFindings(validationInput).total, [validationInput]);
@@ -487,7 +479,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     <>
         <div className="wl-sheet" data-wl-sheet>
           <SheetMarkup protect={protect} src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
-            fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
+            fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={pickMark} attachId={attachId} onAttach={setAttachId}
             onEdit={locked ? null : editMark} onView={(id, k) => openForm("view", id, k)}
             onAdd={locked ? null : (k, p, aspect) => openForm("create", null, k, p, aspect)}
             hidden={hiddenLayers} onToggleLayer={toggleLayer} states={progressStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
@@ -622,7 +614,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           <span className={`chip ${approved ? "cy" : ""}`} data-ws-chip="status">{runWord}</span>
           <span className="muted sm" data-ws-chip="counts">{nos.length} جوش · {reviewedN} بررسی‌شده{problems ? ` · ${problems} ایراد` : ""}</span>
         </>)}
-        explorer={<Explorer meta={meta} sheets={sheets} items={items} selectedId={markSel} onSelect={setMarkSel} checked={locked ? null : { has: (no) => reviewed.has(no) }}
+        explorer={<Explorer meta={meta} sheets={sheets} items={items} selectedId={markSel} onSelect={pickMark} checked={locked ? null : { has: (no) => reviewed.has(no) }}
           layers={{ hidden: hiddenLayers, onToggle: toggleLayer }} />}
         panel={<WorkspaceTabs tabs={tabs} value={wsTab} onChange={setWsTab} />}>
         {sheetBlock()}

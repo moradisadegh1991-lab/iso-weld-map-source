@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo, duplicateMark, removeMark, dependents, markRef, isMark, findMark } from "../lib/sheet/markup.mjs";
+import { markMenu, emptyMenu } from "../lib/sheet/mark-menu.mjs";
+import { KINDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo, duplicateMark, removeMark, dependents, markRef, isMark, findMark } from "../lib/sheet/markup.mjs";
 import Shape, { COLOR, geometryOf } from "./MarkShape";
 
 /**
@@ -195,17 +196,14 @@ export default function SheetMarkup({ protect = null, src, items = [], onChange,
     setSelectedId(id);
     onEdit?.(id, kind);
   }
-  const menuItems = !menu ? [] : menu.id ? [
-    { k: "view", label: "مشاهدهٔ مشخصات", icon: "ⓘ", run: () => view(menu.id) },
-    ...(readOnly ? [] : [
-      { k: "edit", label: "ویرایش مشخصات", icon: "✎", run: () => edit(menu.id) },
-      { k: "duplicate", label: "کپی با همهٔ مشخصات", icon: "⧉", run: () => duplicate(menu.id) },
-      { k: "move", label: "جابه‌جایی روی نقشه", icon: "✥", run: () => { setTool(null); setSelectedId(menu.id); setPointFor(menu.id); } },
-      { k: "delete", label: "حذف…", icon: "✕", danger: true, run: () => remove(menu.id) },
-    ]),
-  ] : [
-    ...KIND_IDS.filter((k) => k !== "weld-unknown").map((k) => ({ k: `add-${k}`, label: `افزودن ${KINDS[k].label} همین‌جا`, kind: k, run: () => addHere(k, menu.p) })),
-  ];
+  // what the menu offers is lib/sheet/mark-menu.mjs; here each item is given what it does
+  const act = {
+    view: (id) => view(id), edit: (id) => edit(id), duplicate: (id) => duplicate(id), delete: (id) => remove(id),
+    move: (id) => { setTool(null); setSelectedId(id); setPointFor(id); },
+  };
+  const menuItems = !menu ? [] : menu.id
+    ? markMenu({ ref: menu.id, readOnly }).map((it) => ({ ...it, run: () => act[it.k](it.target) }))
+    : emptyMenu({ readOnly }).map((it) => ({ ...it, run: () => addHere(it.kind, menu.p) }));
   // the menu stays inside the window, opens toward the space there is, and takes the keys while open
   useEffect(() => {
     if (!menu) return undefined;

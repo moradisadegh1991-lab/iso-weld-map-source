@@ -69,6 +69,18 @@ export default function MarkTables({ protect = null, items = [], onChange, model
     row.scrollIntoView({ block: "nearest" });
     row.querySelector("[data-row-edit]")?.focus();
   }, [focus?.id, focus?.n, tab]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // a mark picked elsewhere (the drawing, the explorer) is shown here: its class's table, its row in view. Acts once per picked mark, so the
+  // person may then look at another table.
+  const followed = useRef(null);
+  useEffect(() => {
+    if (!selectedId || followed.current === selectedId) return;
+    const m = findMark(items, selectedId);
+    if (!m) return;
+    const cls = KINDS[m.kind]?.cls;
+    if (cls && cls !== tab && shown.some(([k]) => k === cls)) { setTab(cls); return; }
+    followed.current = selectedId;
+    box.current?.querySelector(`[data-mark-row="${CSS.escape(String(markRef(m)))}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [selectedId, tab]);  // eslint-disable-line react-hooks/exhaustive-deps
   // a row is added, viewed and edited in its form (components/MarkForm.jsx), which the page holds
   const open = (mode, m) => onOpen?.(mode, m ? markRef(m) : null, m?.kind || NEW_KIND[tab]);
   const add = () => {
