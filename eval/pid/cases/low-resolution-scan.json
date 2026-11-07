@@ -1,0 +1,75 @@
+{
+ "name": "low-resolution-scan",
+ "synthetic": true,
+ "tags": [
+  "low-res"
+ ],
+ "page": {
+  "number": 1,
+  "width": 1000,
+  "height": 800
+ },
+ "ocr": [
+  {
+   "t": "3O-P-1301A",
+   "b": [
+    100,
+    100,
+    170,
+    118
+   ],
+   "c": 0.55
+  },
+  {
+   "t": "30-P-1302",
+   "b": [
+    300,
+    100,
+    370,
+    118
+   ],
+   "c": 0.52
+  },
+  {
+   "t": "30-P-1307",
+   "b": [
+    500,
+    100,
+    570,
+    118
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "4\" MP14O001A-EA01-H",
+   "b": [
+    100,
+    300,
+    170,
+    318
+   ],
+   "c": 0.6
+  }
+ ],
+ "gold": {
+  "equipment": [
+   "30-P-1301A",
+   "30-P-1302",
+   "30-P-1303"
+  ],
+  "instruments": [],
+  "lines": [
+   "MP140001A"
+  ],
+  "valves": [],
+  "edges": [],
+  "offpage": [],
+  "dupGroups": []
+ },
+ "bubbles": [],
+ "proposal": {
+  "items": [],
+  "edges": []
+ },
+ "pageNumber": 1
+}

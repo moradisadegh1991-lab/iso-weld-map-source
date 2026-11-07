@@ -1,0 +1,235 @@
+{
+ "name": "valves-crossing-lines",
+ "synthetic": true,
+ "tags": [
+  "crossings",
+  "dense"
+ ],
+ "page": {
+  "number": 1,
+  "width": 1000,
+  "height": 800
+ },
+ "ocr": [],
+ "gold": {
+  "equipment": [
+   "30-P-1401A",
+   "30-D-1401"
+  ],
+  "instruments": [],
+  "lines": [
+   "MP140011A",
+   "MP140012A"
+  ],
+  "valves": [
+   {
+    "tag": "HV-1401",
+    "symbol": "gate-valve"
+   },
+   {
+    "tag": "NRV-1401",
+    "symbol": "check-valve"
+   },
+   {
+    "tag": "HV-1402",
+    "symbol": "UNKNOWN"
+   }
+  ],
+  "edges": [
+   [
+    "30-P-1401A",
+    "MP140011A",
+    "process"
+   ],
+   [
+    "MP140011A",
+    "HV-1401",
+    "process"
+   ],
+   [
+    "HV-1401",
+    "30-D-1401",
+    "process"
+   ],
+   [
+    "MP140012A",
+    "30-D-1401",
+    "process"
+   ]
+  ],
+  "offpage": [],
+  "dupGroups": []
+ },
+ "bubbles": [],
+ "proposal": {
+  "items": [
+   {
+    "id": "p",
+    "cls": "equipment",
+    "symbol": "pump",
+    "tag": "30-P-1401A",
+    "bbox": [
+     100,
+     100,
+     170,
+     118
+    ],
+    "evidence": [
+     {
+      "text": "30 P 1401 A"
+     }
+    ]
+   },
+   {
+    "id": "d",
+    "cls": "equipment",
+    "symbol": "drum",
+    "tag": "30-D-1401",
+    "bbox": [
+     500,
+     100,
+     570,
+     118
+    ],
+    "evidence": [
+     {
+      "text": "30 D 1401"
+     }
+    ]
+   },
+   {
+    "id": "l1",
+    "cls": "line",
+    "symbol": "process-line",
+    "tag": "MP140011A",
+    "bbox": [
+     300,
+     100,
+     370,
+     118
+    ],
+    "evidence": [
+     {
+      "text": "MP140011A"
+     }
+    ],
+    "attrs": {
+     "lineNo": "MP140011A",
+     "size": 4,
+     "pipingClass": "EA01"
+    }
+   },
+   {
+    "id": "l2",
+    "cls": "line",
+    "symbol": "process-line",
+    "tag": "MP140012A",
+    "bbox": [
+     300,
+     400,
+     370,
+     418
+    ],
+    "evidence": [
+     {
+      "text": "MP140012A"
+     }
+    ],
+    "attrs": {
+     "lineNo": "MP140012A",
+     "size": 4,
+     "pipingClass": "EA01"
+    }
+   },
+   {
+    "id": "v1",
+    "cls": "valve",
+    "symbol": "gate-valve",
+    "tag": "HV-1401",
+    "bbox": [
+     400,
+     100,
+     470,
+     118
+    ],
+    "evidence": [
+     {
+      "text": "HV 1401"
+     }
+    ]
+   },
+   {
+    "id": "v2",
+    "cls": "valve",
+    "symbol": "check-valve",
+    "tag": "NRV-1401",
+    "bbox": [
+     450,
+     100,
+     520,
+     118
+    ],
+    "evidence": [
+     {
+      "text": "NRV 1401"
+     }
+    ]
+   },
+   {
+    "id": "v3",
+    "cls": "valve",
+    "symbol": "mystery-valve",
+    "tag": "HV-1402",
+    "bbox": [
+     420,
+     400,
+     490,
+     418
+    ],
+    "evidence": [
+     {
+      "text": "HV 1402"
+     }
+    ]
+   }
+  ],
+  "edges": [
+   {
+    "type": "process",
+    "from": "p",
+    "to": "l1",
+    "evidence": [
+     {
+      "text": "discharge nozzle to line"
+     }
+    ]
+   },
+   {
+    "type": "process",
+    "from": "l1",
+    "to": "v1",
+    "evidence": [
+     {
+      "text": "valve on line"
+     }
+    ]
+   },
+   {
+    "type": "process",
+    "from": "v1",
+    "to": "d",
+    "evidence": [
+     {
+      "text": "line enters drum"
+     }
+    ]
+   },
+   {
+    "type": "process",
+    "from": "l2",
+    "to": "d"
+   }
+  ]
+ },
+ "pageNumber": 1
+}

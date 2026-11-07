@@ -1,0 +1,89 @@
+{
+ "name": "similar-instrument-tags",
+ "synthetic": true,
+ "tags": [
+  "similar-tags"
+ ],
+ "page": {
+  "number": 1,
+  "width": 1000,
+  "height": 800
+ },
+ "ocr": [],
+ "gold": {
+  "equipment": [],
+  "instruments": [
+   "PT-110101",
+   "PT-110107",
+   "PIT-110101"
+  ],
+  "lines": [],
+  "valves": [],
+  "edges": [],
+  "offpage": [],
+  "dupGroups": []
+ },
+ "bubbles": [
+  {
+   "x": 200,
+   "y": 200,
+   "lines": [
+    [
+     "PT",
+     0.9
+    ],
+    [
+     "110101",
+     0.9
+    ]
+   ]
+  },
+  {
+   "x": 260,
+   "y": 200,
+   "lines": [
+    [
+     "PT",
+     0.9
+    ],
+    [
+     "110107",
+     0.9
+    ]
+   ]
+  },
+  {
+   "x": 320,
+   "y": 200,
+   "lines": [
+    [
+     "PIT",
+     0.9
+    ],
+    [
+     "110101",
+     0.9
+    ]
+   ]
+  },
+  {
+   "x": 380,
+   "y": 200,
+   "lines": [
+    [
+     "PT",
+     0.9
+    ],
+    [
+     "11010",
+     0.9
+    ]
+   ]
+  }
+ ],
+ "proposal": {
+  "items": [],
+  "edges": []
+ },
+ "pageNumber": 1
+}

@@ -1,0 +1,100 @@
+{
+ "name": "offpage-and-revision-cloud",
+ "synthetic": true,
+ "tags": [
+  "offpage",
+  "revision-cloud"
+ ],
+ "page": {
+  "number": 1,
+  "width": 1000,
+  "height": 800
+ },
+ "ocr": [
+  {
+   "t": "K110-30-PID-0021-10-15/1",
+   "b": [
+    800,
+    50,
+    870,
+    68
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "K110-30-PID-0021-10-99/1",
+   "b": [
+    800,
+    150,
+    870,
+    168
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "K110-30-PID-0021-10-16/1",
+   "b": [
+    800,
+    250,
+    870,
+    268
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "REV 2  1 2 3 4",
+   "b": [
+    200,
+    500,
+    270,
+    518
+   ],
+   "c": 0.8
+  },
+  {
+   "t": "30-P-1501",
+   "b": [
+    300,
+    500,
+    370,
+    518
+   ],
+   "c": 0.9
+  }
+ ],
+ "gold": {
+  "equipment": [
+   "30-P-1501"
+  ],
+  "instruments": [],
+  "lines": [],
+  "valves": [],
+  "edges": [],
+  "offpage": [
+   {
+    "ref": "K110-30-PID-0021-10-15",
+    "resolution": "resolved"
+   },
+   {
+    "ref": "K110-30-PID-0021-10-99",
+    "resolution": "unresolved"
+   },
+   {
+    "ref": "K110-30-PID-0021-10-16",
+    "resolution": "ambiguous"
+   }
+  ],
+  "dupGroups": []
+ },
+ "directory": [
+  "K110-30-PID-0021-10-15",
+  "K110-30-PID-0021-10-16",
+  "K110-30-PID-0021-10-16"
+ ],
+ "bubbles": [],
+ "proposal": {
+  "items": [],
+  "edges": []
+ },
+ "pageNumber": 1
+}

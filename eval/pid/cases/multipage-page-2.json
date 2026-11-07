@@ -1,0 +1,53 @@
+{
+ "name": "multipage-page-2",
+ "synthetic": true,
+ "tags": [
+  "multipage"
+ ],
+ "page": {
+  "number": 2,
+  "width": 1000,
+  "height": 800
+ },
+ "ocr": [
+  {
+   "t": "30-P-1701A",
+   "b": [
+    100,
+    100,
+    170,
+    118
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "4\" MP140021A-EA01-H",
+   "b": [
+    100,
+    300,
+    170,
+    318
+   ],
+   "c": 0.9
+  }
+ ],
+ "gold": {
+  "equipment": [
+   "30-P-1701A"
+  ],
+  "instruments": [],
+  "lines": [
+   "MP140021A"
+  ],
+  "valves": [],
+  "edges": [],
+  "offpage": [],
+  "dupGroups": []
+ },
+ "bubbles": [],
+ "proposal": {
+  "items": [],
+  "edges": []
+ },
+ "pageNumber": 2
+}

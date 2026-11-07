@@ -161,3 +161,15 @@
 .mk-checks{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12.5px}
 .mk-checks label{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono,monospace)}
 .mk-form-actions{display:flex;gap:8px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--rule-soft)}
+
+/* the P&ID workspace (components/PidViewer.jsx): the drawing with the recognized items drawn over it */
+.pid-viewer{display:flex;flex-direction:column;height:100%;min-height:320px}
+.pid-tools{display:flex;align-items:center;padding:4px 6px;border-bottom:1px solid var(--rule-soft)}
+.pid-stage{position:relative;flex:1;min-height:260px;overflow:hidden;background:var(--surf);cursor:grab}
+.pid-stage:active{cursor:grabbing}
+.pid-sheet{position:absolute}
+.pid-blank{width:100%;height:100%;background:#fff;opacity:.95;outline:1px solid var(--rule)}
+.pid-box{position:absolute;padding:0;border-style:solid;cursor:pointer}
+.pid-box:hover{background:rgba(224,166,58,.15)!important}
+.pid-box.on{z-index:3}
+.pid-lab{position:absolute;inset-block-end:100%;inset-inline-start:0;white-space:nowrap;color:#fff;padding:0 3px;border-radius:2px;pointer-events:none}

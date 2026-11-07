@@ -74,8 +74,10 @@ export async function POST(request) {
       // unmatched code attaches nothing — the project grade then applies,
       // which is also what the preview used, so the two still agree.
       const unitId = givenUnitId || (await unitByCode(db, { projectId, code: unitCode }))?.id || null;
+      // a drawing is an isometric unless it says it is a P&ID (the only other kind this route files)
+      const docType = body.docType === "pid" ? "pid" : "isometric";
       const { document, created, attached = false } = await registerDocument(db, {
-        projectId, unitId, docNo, revision, revisionDate, sheetNo,
+        projectId, unitId, docNo, docType, revision, revisionDate, sheetNo,
         fileSha256: blob.digest, storageUri: blob.uri,
         contentType, byteSize: blob.size, createdBy: user.id, noFile: !!blob.noFile,
       });
