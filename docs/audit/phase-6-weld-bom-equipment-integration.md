@@ -73,3 +73,65 @@ Branch `feat/weld-bom-equipment-integration`, from `master` at `fb19717` (Phases
 
 ## 5. Migration decision
 None created. Reasons are in §2. If a deployment holds rows that contradict this (an `iso_equipment_weld.weld_ref` that is neither a uid nor a legacy id) they are not rewritten: the ambiguity is reported, never resolved by guessing.
+
+## 6. What was changed
+
+| area | change | files |
+|---|---|---|
+| projection | `projectWelds` / `effectiveItems`: the welds of a payload as ONE list (typed rows are the welds of a typed list; a sheet weld mark with the same uid is the same weld; one that is no row holds nothing and is reported) | `lib/sheet/weld-projection.mjs` (new) |
+| allocation | `syncSheetData` feeds `ledgerDemands` and `syncEquipment` the projection, so a typed weld with `c1`/`c2` reserves its PT **under its uid** (`ownerNo` = label); capacity, trigger, row locks, history, install protection are the existing ones. The result reports `welds: { source, count, unlinked, noIdentity }` | `lib/db/repos/register-persistence.mjs` |
+| corrections | `touchesSheetData` also fires for `weldList[i].c1 / c2 / no / uid`, so a correction of what a typed weld holds re-makes allocations and links in the correction's transaction | same |
+| equipment → weld | new hidden equipment attribute `weldRefs` (uids); `syncEquipment` resolves refs first; a ref to a weld not on the sheet → 409 `EQUIPMENT_WELD_MISSING`; legacy (numbers only): a number links only if it names ONE weld, an ambiguous one links nothing, keeps the links already proven, and is recorded once in `sheet_mark_warning` (`kind='ambiguous'`, `detail.type='equipment_weld'`) | `lib/db/repos/iso-equipment.mjs`, `lib/db/repos/mark-identity.mjs`, `lib/sheet/markup.mjs` (`weldRefsOf`, `equipmentWelds`, `dependents`, `equipmentChecks`) |
+| duplicate | a copy of an equipment keeps its engineering description but none of its relationships (`weldRefs`, `welds`) or state | `lib/sheet/markup.mjs` |
+| equipment form / table | welds chosen **by uid** (number + short uid shown), unresolved legacy numbers and dangling links shown explicitly; the table shows the welds' **current** numbers resolved by uid | `components/MarkForm.jsx`, `components/EquipmentTable.jsx` |
+| weld form | uid, component pickers (existing `BomPick`: description, size, what is left), plus read-only saved allocation lines and the equipment joined | `components/MarkForm.jsx`, `lib/client/saved-protection.mjs` (also returns the saved state) |
+| delete preview | a weld an equipment still names is **blocked**, with the way out (remove it in the equipment form) | `lib/register/mark-protection.mjs` |
+| BOM tab | consumers per PT (welds / equipment / accessories with their lines) and the revision's append-only history, both from `GET /api/bom-allocations`; columns renamed «پیش‌نمایش (صفحه)» vs «سرور»; **fixes a Phase 3 defect**: the saved-ledger column read only the non-weld owners, so a PT whose ends were reserved by welds showed 0 | `components/BomTable.jsx`, `lib/register/bom-table.mjs` |
+
+No migration; no new route (the existing `POST /api/runs`, `POST /api/runs/[id]/edits`, `GET/POST /api/bom-allocations`, `GET /api/iso-equipment` carry everything); no change to extraction, geometry, authorization, revision locks, the BOM three-state rule, migrations 104/105 or the identity contract.
+
+### 6.1 Data flow and identity
+```
+weldList[i].uid ───────────────┐  (typed weld = register row; Phase 4 settles/registers the uid)
+                               ├─ projectWelds ─► effective welds (each once, owner = uid, label = printed no)
+sheetMarkup.items weld mark ───┘   (same uid → same weld; no uid match → holds nothing, reported)
+effective welds + sheet's equipment ─► ledgerDemands ─► syncAllocations ─► bom_allocation.owner_ref = uid   (trigger-bounded, append-only events)
+                                  └──► syncEquipment ─► iso_equipment_weld.weld_ref = uid, weld_no = label    (weldRefs; legacy numbers only when unique)
+```
+The printed number never decides ownership; `_id` never leaves the page; coordinates never decide anything.
+
+### 6.2 Behaviour changes to know about
+* Saving a typed list whose welds name BOM components now **reserves them**, so a save can be refused with the existing 409 `BOM_ALLOCATION` when a PT has fewer welded ends than the welds ask. Before this phase the page showed a reservation the server never made.
+* Deleting a weld an equipment still names is refused on save (409 `EQUIPMENT_WELD_MISSING`) instead of silently dropping the link.
+* A correction of a typed weld's components/number/presence follows the existing `RUN_NOT_CURRENT` rule (it must be on the revision's current run).
+
+## 7. Tests
+
+Guards proved by reverting: projection removed from `syncSheetData` → 11 red; the missing-weld refusal removed → 1; legacy matching made last-wins → 1; unlinked sheet marks not reported → 1.
+
+| run | result |
+|---|---|
+| `db/test/weld-bom-equipment.mjs` (PGlite) | 28/28 |
+| same + `engineering-crud`, `typed-weld-identity`, `register-persistence`, `mark-identity`, `workspace-foundation`, `bom-allocation`, `iso-equipment`, `bom-allocation-history` on real PostgreSQL 16 | 28/28 · 16/16 · 17/17 · 13/13 · 20/20 · 23/23 · 18/18 · 9/9 · 5/5 |
+| `npm run db:test` (PGlite, whole chain, final code) | see section 8 |
+| `npm run eval:check` | GATE PASSED |
+| `npx next build` | succeeded |
+| `tools/drive-weld-bom-equipment.mjs` (real page, saved typed run, fresh database) | 28 checks, 0 failed, 0 page errors |
+
+Requirement → test. *Identity*: same weld one uid (t1–t3, drive) · duplicate numbers distinct (t4, drive form refusal) · renumber/move (t9, t18, drive) · duplicate new uid and no inheritance (drive, `engineering-crud`) · delete never transfers (Phase 4/5 suites) · legacy (t5, t21) · revisions (t16, drive). *BOM*: typed weld reserves (t8, drive) · same weld in two places not twice (t2, t3) · capacity (t11) · missing PT (t12) · pipe length (t5, t15) · reserved updated safely with events (t9, t10) · installed protected (t13, drive) · history append-only (t8, t10, t13) · concurrent saves (t14, on PostgreSQL too). *Equipment*: link by uid (t17, drive) · renumber (t18, drive) · duplicate numbers (t7, t20) · ambiguous legacy not guessed (t7, t21, drive) · deleted weld protected (t19) · installed equipment protected (t22) · reopen preserves (t17, drive).
+
+Browser checks (all 28): weld's components chosen in its form (description, size and remaining capacity shown) → save → the server holds **one** line under the weld's uid → reopen: same uid, BOM tab shows the server's numbers and the weld once as consumer → equipment linked by uid (stored by uid) → renumber: link and ledger line intact, table shows the new number → move: both intact → duplicate: new uid, no saved allocation, joined to no equipment → duplicated number refused by the form → ambiguous legacy equipment: nothing linked, the form says which number is ambiguous → weld's line installed through the ledger, then deleting the weld is blocked naming the installed line and the way out → another revision refuses the weld's uid, makes new identities → light theme, 390 px, no horizontal scroll.
+
+Screenshots: `docs/audit/phase-6-shots/` (weld form with components, equipment form by uid, BOM consumers and history in dark and light, duplicate with no inheritance, duplicate number refused, ambiguous legacy, blocked deletion of an installed allocation, equipment table, narrow).
+
+**Not executed:** the full `db:test:pg` chain (only the nine files above); a browser drive of the revision boundary through the UI (it is exercised through the same routes the page calls, in the drive and in `t16`); a browser drive of two typed welds with one printed number (the typed form refuses it; the duplicate-number server paths are in the route tests); no DOM test runner exists.
+
+## 8. Remaining risks and deferred
+* The ambiguity record for a legacy equipment is stored (`sheet_mark_warning`) and shown in the equipment form; the existing warning-resolution workflow (`resolveMarkWarning`) has no screen of its own — resolving means choosing the weld in the equipment form and saving.
+* Sheet weld marks that are not any typed row hold nothing; the projection reports them (`welds.unlinked`) but no screen lists them yet.
+* A typed list saved before this phase has no allocation rows; they appear at the next save (which may then be refused by capacity).
+* `weldRefs` is a hidden attribute of the equipment mark; unknown attribute cleaning keeps it by design (`ATTR_SNAPSHOTS`).
+* Not done on purpose: typed welds are still not inserted into `sheetMarkup.items`; weld **deletion by an authorised workflow** beyond "unlink first" (a supervisor override) — not invented.
+
+## 9. Migration decision (final)
+None. `iso_equipment_weld.weld_ref`, `bom_allocation.owner_ref` are text columns already holding uids; `sheet_mark_identity.cls` allows `weld`; `sheet_mark_warning.kind` allows `'ambiguous'` with a typed jsonb detail. No constraint, index or foreign key changed; no historical allocation event touched; nothing deployed.
