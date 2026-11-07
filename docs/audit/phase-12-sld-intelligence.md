@@ -30,7 +30,7 @@ Conventions: **[verified]** = read in the repository at that SHA; **[proposal]**
 | Equipment import | `lib/db/repos/equipment.mjs`, `lib/equipment/parse.mjs` | creates tags with `discipline: 'equipment'`; classification by description (`kind`), ambiguous → left for an engineer. No code creates `electrical`-discipline tags from a list or a drawing. |
 | Documents / revisions | `db/migrations/001_core.sql` (`document`), `035_current_revision.sql`, `106_revision_lineage.sql`; `lib/db/repos/documents.mjs`, `revision-lifecycle.mjs`, `revisions.mjs` | `document(doc_no, doc_type text DEFAULT 'isometric', revision, sheet_no, file_sha256, storage_uri, superseded_by, parent_document_id…)`, `UNIQUE(project_id, doc_no, revision, sheet_no)`. **`doc_type` is free text**; `app/api/documents/route.js` whitelists only `pid`/`isometric` (everything else becomes `isometric`). |
 | MDR / issue lifecycle | `db/migrations/026_document_control.sql`, `lib/documents/control.mjs`, `lib/db/repos/doc-control.mjs` | `mdr` (register, has `discipline`, `doc_type`), `mdr_revision` (purpose `IFR/IFA/IFC/AB/VOID`), transmittals and return codes 1–4. |
-| Document intake | `db/migrations/063_doc_intake.sql`, `lib/intake/*`, `lib/db/repos/intake.mjs` | reads received documents (pdf-text / xlsx) into proposals; item `kind` is CHECK-limited to `drawing, equipment, line, instrument, subsystem, system` — **no `cable` or `sld` kind**. Only approved revisions (code 1/2) are read. |
+| Document intake | `db/migrations/063_doc_intake.sql`, `lib/intake/*`, `lib/db/repos/intake.mjs` | reads received documents (pdf-text / xlsx) into proposals; item `kind` was CHECK-limited to `drawing, equipment, line, instrument, subsystem, system` in 063 and widened by 066 — **no `sld` kind** (correction in §15.8: migration 066 added `cable` and `structure`). Only approved revisions (code 1/2) are read. |
 | Extraction run | `001_core.sql` (`extraction_run`, `run_status` = extracted/approved/superseded/failed), `005_review.sql` (`extraction_edit`), `lib/db/repos/runs.mjs` | `pass_name text` (free), `payload jsonb`, `approved_by/at/sha256`, `document_id NOT NULL`. |
 | Stable identity of drawing entities | `lib/sheet/mark-identity.mjs`, `105_stable_mark_identity.sql` | uid helpers (`isUid`, `newUid`); the DB identity table `sheet_mark_identity` covers isometric marks only. |
 | Validation engine | `lib/engineering/validation.mjs`, `lib/db/repos/validation.mjs`, `components/ValidationPanel.jsx` | `CATALOG`, `make()`, `summarize`; categories … `data-integrity`, `pid`; `validatePid` (Phase 11). No electrical rule. |
@@ -357,3 +357,201 @@ Each phase: own branch, own draft PR, all five CI checks, no merge without the o
 
 ## 14. Factual correction to the master plan
 `docs/digital-epc/00-master-plan-alignment.md`, open item 9 reads "خواندن P&ID و SLD … هنوز" as one open item. The audit established that the **P&ID half exists since Phase 11** (draft/review/graph/validation/comparison layer, PR #85; recognition accuracy on real sheets still unmeasured) while the **SLD half is unbuilt** (§1.4). The item was split accordingly (that file only; no other doc changed).
+
+
+---
+
+# 15. Phase 12.1 — Architecture Closure
+
+Documentation, source inspection and decisions only. Base: `master` @ `f0e239b9e6b1c80548259304e74cb7deb7e07b04` (audit PR #87 merged). Nothing implemented; no production code, migration or test changed.
+PR #86 (Phase 11.1) is reviewed separately in §15.7 and is **not** a dependency.
+Evidence labels: **[inspected]** source read at the base SHA; **[ran]** executed here against the base SHA; **[probe]** an executed scratch probe on a throwaway DB (not committed); **[not verified]**.
+
+## 15.1 Complete `extraction_run` consumer inventory
+
+Searched the whole repository (`app lib` code, `db/migrations`, `tools`) for `extraction_run`, `extraction_edit`, `pass_name`, `reporting.current_run` and the run-addressed routes. Facts that govern everything below **[inspected]**:
+* `extraction_run.pass_name` is free text; **isometric runs carry `pass_name` NULL**: the only writer, `lib/db/repos/runs.mjs createRun`, takes `passName` from the request body of `app/api/runs/route.js`, and the isometric page (`app/piping/page.jsx`) never sends one. P&ID drafts use `'pid'` (`lib/db/repos/pid.mjs`).
+* `reporting.current_run` (`035_current_revision.sql`) is `DISTINCT ON (project_id, document_id)` over **every** run with `engine_error IS NULL` of a document with `superseded_by IS NULL` — it has **no pass or document-type filter**. Every consumer that reads it without joining `weld`/`spool` sees P&ID (and would see SLD) runs.
+* DB triggers on `extraction_run` (`005_review.sql`): `lock_on_approval` stamps `locked_at`; `refuse_locked_edit` rejects any change of `payload`/`validation_checks` of a locked run. They are pass-agnostic — a strong reason to reuse the table for SLD drafts.
+* `intake_run`/`intake_item.run_id` (`063_doc_intake.sql`) belong to **document intake**, a different table; not `extraction_run`.
+
+Legend — **Filter**: is `pass_name` (or doc type) filtered? **SLD risk**: S = safe (reaches only weld/spool rows keyed by `extraction_run_id`, which an SLD run never has); L = **a run of another pass can enter an isometric workflow or figure**.
+
+| # | File · function | Query / method | Pass types accepted | Filter | SLD risk · required isolation |
+|---|---|---|---|---|---|
+| 1 | `lib/db/repos/review.mjs` `reviewQueue` | `extraction_run r JOIN document d … status='extracted' AND COALESCE(pass_name,'') <> 'pid'` | all but `pid` | deny-list `pid` only | **L** — add `sld` (or doc-type allow-list) |
+| 2 | `review.mjs` `applyCorrection` (via `app/api/runs/[id]/edits`) | `SELECT * FROM extraction_run WHERE id=$1`, applies isometric path edits + `touchesSheetData` | any run id | none | **L** — a run id of another pass can be sent through the isometric correction path; reject non-isometric runs |
+| 3 | `review.mjs` `hotspots` | `SELECT path,before_value,after_value FROM extraction_edit WHERE project_id=$1` | every edit of every pass | none | **L** — **[probe]** one P&ID correction already raises `totalEdits` to 1 |
+| 4 | `review.mjs` `approvedRunFor` | by `document_id`, `status='approved'` | any | document-scoped | S (document-scoped; an SLD document is never an isometric one) |
+| 5 | `lib/db/repos/runs.mjs` `createRun`, `saveRegister` | INSERT run; INSERT spool/weld for the run | any `passName` from the body | none | **L (write side)** — `/api/runs` accepts any `passName` and any `documentId`; reserve `pid`/`sld`, require an isometric document |
+| 6 | `runs.mjs` `approveRun` | digest of payload + welds of the run, UPDATE status | any | none | S — deliberately shared (the P&ID repo reuses it); empty weld set for SLD |
+| 7 | `runs.mjs` `latestRunForDrawing` | `extraction_run JOIN document WHERE doc_no AND sheet_no` | any | none | **L (low)** — keyed by `doc_no`+`sheet_no`, type-agnostic; harmless while document numbers are unique across types, but not enforced (§15.2) |
+| 8 | `runs.mjs` `latestRunForDocument` (used by `validation.mjs validationFor`) | latest run of a document | any | none | **L** — `/api/validation?documentId=` of a P&ID/SLD document would run the **isometric** `validate()` on a foreign payload; guard by document type |
+| 9 | `app/api/runs/route.js` POST | lock document, `SELECT payload … document_id`, carry identities from the last run | any document | none | **L** — must refuse a non-isometric `documentId` |
+| 10 | `app/api/runs/[id]/route.js` GET; `…/approve`, `…/diff`, `…/edits`, `…/ndt-sample` | run by id JOIN document | any run id | none | **L** — id-addressed isometric endpoints do not check the pass; a P&ID/SLD run id works on them |
+| 11 | `lib/db/repos/revision-lifecycle.mjs` `lineageOf`, `carryForward`, `createRevision` | runs of the revision chain; carry of weld/spool/support/equipment identity | any | none (**`doc_type` appears only in `createRevision`'s `registerDocument` call**) | `lineageOf`/`createRevision` are type-agnostic — good for SLD reuse; **`carryForward` is isometric-only and unguarded → L** |
+| 12 | `lib/db/repos/revisions.mjs` `loadRun`, `compareRuns`, `compareWithPrevious` | run by id + weld table; previous by `doc_no`/`sheet_no` | any | none | **L (low)** — id-addressed; guard like #10 |
+| 13 | `lib/db/repos/log.mjs` DERIVED (piping) | `extraction_run r JOIN document d WHERE approved_by IS NOT NULL` → label `'رجیستر جوش ' || doc_no` | any approved run | none | **L** — **[probe]** an approved P&ID draft appears in the activity log **as a weld register** |
+| 14 | `lib/db/repos/line-list.mjs` | latest run per document of a `doc_no`+`sheet` (revision list) | any | none | S (by drawing number; type-agnostic by design) |
+| 15 | `lib/db/repos/piping-hub.mjs` `pipingHub` | `count(*) … FROM reporting.current_run c JOIN extraction_run r` → `drawings`, `drawingsApproved` | any | none | **L** — **[probe]** a project with only an approved P&ID shows `drawings: 1, drawingsApproved: 1` |
+| 16 | `lib/db/repos/piping-reports.mjs` (register query at :30–36 and weld/spool reports :48, :92, :141, :155) | `current_run JOIN extraction_run JOIN document` (list), `current_run JOIN weld/spool` | any | none | weld/spool queries S; **the drawing-list query at :30–36 is L [inspected]**; the `weld-log` report did **not** list the P&ID drawing in the probe, so the :30–36 query's exposure is *not confirmed* — treat as unverified |
+| 17 | `lib/db/repos/joint.mjs` (:56–65, :167–169, :334–342) | welds JOIN run; edits of runs of welds; **every other current run's `payload`** scanned by `refsOfPayload` | any | none | weld queries S; :337 reads the full payload of every current run (incl. P&ID/SLD) — functionally tolerant (`refsOfPayload` reads `weldList`/`sheetMarkup`, absent → nothing) but loads large JSON needlessly **L (performance)** |
+| 18 | `lib/db/repos/assumptions.mjs` `register-missing` (:176–186) | documents with a run but no `current_run` row | any | none | S (a P&ID/SLD run never sets `engine_error`) |
+| 19 | `app/api/overview/route.js` (:55–60) | `COUNT(DISTINCT d.id)`, `COUNT(DISTINCT r.document_id) FILTER (status='approved')` over `document LEFT JOIN extraction_run` | any | none | **L (semantic)** — **[probe]** the P&ID document counts as an approved document; decide whether "documents approved" should be type-aware |
+| 20 | `lib/db/repos/register-persistence.mjs` (:127) | approved run of the **same document** blocks BOM edits | any | document-scoped | S |
+| 21 | `field.mjs` (:55), `workfront.mjs` (:94), `coating.mjs` (:317), `piping-execution.mjs` (:124, :310), `app/api/warehouse/route.js` (:27), `lib/contracts/metrics.mjs` (:36) | `spool JOIN reporting.current_run` / `spool JOIN extraction_run` | any | none | S — keyed through `spool.extraction_run_id` |
+| 22 | `bom-allocation.mjs`, `iso-equipment.mjs`, `mark-identity.mjs` (`run_id` columns) | store the creating run id with isometric marks | isometric writers only | n/a | S |
+| 23 | Reporting views `006/011/012/031/035` (`fact_weld`, `fact_spool`, …) | join `weld`/`spool` to `current_run` | any | none | S |
+| 24 | `lib/db/repos/pid.mjs` (all) | every query filters `pass_name = 'pid'` | `pid` | allow-list | n/a (reference pattern) |
+| 25 | `lib/pid/draft.mjs` | mentions `extraction_run` in comments only | — | — | n/a |
+
+**[probe]** (throwaway PGlite DB on the base SHA; script not committed): one P&ID document, ingested, one correction, set `approved` →
+`hotspots.totalEdits = 1`; `reporting.current_run` = 1 row; `pipingHub.totals.drawings = 1`, `drawingsApproved = 1`; the activity log contains the P&ID as a weld-register approval; `overview` counts 1 approved document; the weld-log report and the review queue did **not** contain it.
+**Honest consequence:** Phase 11 isolated the P&ID from the review queue only. Items 3, 13, 15 and 19 are **existing leaks of P&ID drafts into piping figures, already on master**, not a future SLD problem. They affect no weld data but they show a "drawing" and an "approved register" that are not isometrics. This is recorded as a defect of Phase 11 (its audit did not inventory the other readers) and is to be fixed by the same guard Phase 12.2 introduces (or a separate Phase 11.2 fix, owner's choice).
+
+### Is a shared allow-list necessary? — **Yes, a shared predicate; no schema change.**
+* The existing approach (a per-pass deny-list in one query) already failed: it protects one of ≥ 5 readers.
+* A `pass_name IS NULL` allow-list would match today's isometric data exactly **[inspected]** but is fragile (the API lets a client set any `passName`, and a future isometric pass may be named). The authoritative discriminator is the **document type** set at registration.
+* **Selected:** one shared helper (`lib/db/run-scope.mjs` [proposal]) that exports `ISOMETRIC_DOC = "d.doc_type = 'isometric'"` for queries that already join `document`, and `NOT_PID_SLD_PASS` for queries on `extraction_run` alone; applied to rows 1–3, 5, 7–13, 15, 16(list), 19; plus route guards (rows 2, 9, 10) returning 409 `NOT_AN_ISOMETRIC_RUN`; plus reserved pass names (`pid`, `sld`) refused by `POST /api/runs`.
+* **Backward-compatibility argument (to be proven by test, not assumed):** every existing document is `isometric` or `pid` (the column default is `'isometric'`; `registerDocument` defaults to it; the only other INSERT is `tools/seed-demo.mjs`, which omits `doc_type` → default). So for a database with no `pid`/`sld` documents each guarded query returns the identical rows. Required test: a **differential test** — seed an isometric-only project, record each guarded function's output before and after the change (byte-identical), then add a `pid` and an `sld` document with approved runs and assert the outputs are **still** identical.
+* Alternatives rejected: (a) per-consumer deny-lists (the failure above); (b) a new `reporting.isometric_run` view or an `extraction_run.kind` column (needs a migration; not required); (c) a separate SLD draft table (loses the pass-agnostic lock/approval triggers, `extraction_edit` audit and `approveRun`).
+* **Unresolved risk:** the guarded set was derived by reading; a consumer added later that reads `current_run` raw re-opens the leak. Mitigation: a test that greps repository sources for `reporting.current_run`/`FROM extraction_run` outside an allow-listed file list and fails on a new, unreviewed use.
+
+## 15.2 Document intake and MDR
+
+**Two registers exist and must not be conflated [inspected]:** `document` (uploaded sheet revisions; `001_core.sql`; `UNIQUE(project_id, doc_no, revision, sheet_no)`; `doc_type` free text default `'isometric'`) and `mdr_document`/`mdr_revision` (the master document register; `026_document_control.sql`; `UNIQUE(project_id, doc_no)`, `doc_type text`, `discipline text`, purposes IFR/IFA/IFC/AB/VOID). They are linked **only by document number**: `registerBoard` (`lib/db/repos/doc-control.mjs`) matches `upper(document.doc_no)` to `mdr_document.doc_no` (the MDR upsert upper-cases; the upload route does not).
+
+Findings:
+1. `app/api/documents/route.js:78`: `const docType = body.docType === "pid" ? "pid" : "isometric";` — **any other value silently becomes `isometric`** (violates the requirement that unsupported types never silently become isometric).
+2. `registerDocument` (`lib/db/repos/documents.mjs`) looks up an existing row by `(project, doc_no, revision, sheet_no)` **without the type**: registering the same number/revision/sheet with a different `docType` and the same hash returns the existing row unchanged; with a different hash it raises `REVISION_CONTENT_CONFLICT` — neither reports a *type* conflict.
+3. `supersedePrevious`/`currentRevision` select by `(doc_no, sheet_no)` — type-agnostic. Safe only if one document number never spans two types.
+4. `createRevision` (`revision-lifecycle.mjs:83`) carries `src.doc_type` — the lineage tool is already type-preserving. `lineageOf` is type-agnostic.
+5. MDR/`registerBoard`, `usedRevisionCheck`, `incoming.mjs`, `app/documents/page.jsx` never read `document.doc_type`; the MDR `doc_type` is a human label ("P&ID، ISO، DS…" hint). **An SLD sheet therefore appears correctly in the MDR and transmittal workflows as soon as its `mdr_document` exists — no code change in document control.**
+6. `tools/seed-demo.mjs` and `lib/scenario/dm-pump.mjs` register MDR entries with free doc types; none uses `sld`.
+
+**Exact changes required for `docType='sld'` [proposal]:**
+* A closed set `DOC_TYPES = ["isometric","pid","sld"]` (`lib/documents/types.mjs`). `POST /api/documents`: absent/`null`/`""` → `isometric` (unchanged); a value (case-normalised) in the set → itself; **anything else → 400 `INVALID_DOC_TYPE`** with the allowed list. (Compatibility: the only client that sends `docType` is the P&ID path; the isometric page sends none — **[inspected]** by search of `app components lib tools`.)
+* `registerDocument`: if a row for `(doc_no, sheet_no)` already exists with a different `doc_type` (any revision) → 409 `DOC_TYPE_CONFLICT` (a drawing number keeps one type across its revisions); existing behaviour otherwise unchanged.
+* No separate SLD table; `extraction_run` references `document_id`; `parent_document_id` lineage and `superseded_by` are reused. Recommended (non-blocking) convention: MDR `doc_type='SLD'`, `discipline='electrical'`.
+* Optional, later: a non-blocking finding when the uploaded type contradicts a recognised MDR label.
+
+**Test cases required (existing types and SLD):** (1) no `docType` → `isometric`; (2) `isometric`/`pid`/`sld` accepted and stored; (3) `'ISO'`, `'sld '`(trailing space is trimmed → accepted), `'SLD'` (case-normalised → `sld`), `'unknown'` → 400, nothing registered; (4) same `doc_no`/rev/sheet registered as `pid` then `sld` → 409 `DOC_TYPE_CONFLICT`; (5) revision B of an `sld` document via `createRevision` keeps `sld` and `parent_document_id`; (6) an `sld` document with an `mdr_document` appears in `registerBoard` with the correct current/construction revision, in a transmittal, and is **absent** from the isometric review queue, weld register and piping counts; (7) the `pid` path (`db/test/pid-intelligence.mjs` S1–S8) unchanged; (8) isometric upload/supersede flows (`db/test/api.mjs`, `doc-control.mjs`) unchanged; (9) uploading an isometric payload to an `sld` document id via `/api/runs` → 409.
+
+## 15.3 Custom Fields capability
+
+Inspected: `lib/db/repos/custom-fields.mjs`, `app/api/custom-fields/route.js`, `components/ui/customColumns.jsx`, `components/ui/TableKit.jsx`, `db/migrations/085_tables_custom_columns.sql`, `db/test/custom-fields.mjs` (**[ran]** 5/5).
+* Model: `custom_field(id, project_id, form_key, label, data_type ∈ text|number|date|bool|list, options, seq)`; `custom_value(field_id, row_key, value text, updated_by, updated_at)`, **PK `(field_id, row_key)`**; RLS by project. A *column a project adds to a platform table*; the value is keyed by the table's **display row key** (a string ≤ 200), **not a foreign key to `tag`/`cable`**.
+* No units (a `number` is a bare number, normalised to ≤ 10 decimals); no per-value source document/revision; **no history** — `saveValue` overwrites (`ON CONFLICT … DO UPDATE`, only `updated_by`/`updated_at` kept) and a blank deletes the row; `removeField` cascades all values; **no approval state**; the type of a field can change when existing values still parse; **writes need only `VIEW_PROJECT`** (`POST` asserts `ACTIONS.VIEW_PROJECT`) — any member can edit.
+* Verdict per requested attribute: voltage + unit, rated current, kVA, frequency, short-circuit rating, transformer impedance, vector group, manufacturer/model, source document/revision, historical changes — **Custom Fields can hold the *text or number* of each as optional project metadata for display in a table; it cannot be the home of authoritative electrical specifications**: no units, no source/revision, no history, no approval, no referential link to the tag, and write access for every member. A vector group or manufacturer as a `text` column is acceptable *as a note*; anything an engineering rule or CMMS export would rely on is not.
+* Classification: **optional project metadata** = custom columns (labels, notes, client-specific fields). **Authoritative engineering specification** = typed, unit-normalised, sourced, versioned, approved data (§15.4).
+
+## 15.4 Electrical rating ownership — decision
+
+Facts **[inspected]**: `asset_master` has nameplate columns and design conditions (`design_pressure_barg`, `design_temp_min/max_c`, `design_datasheet_rev_id → mdr_revision`) but **no electrical rating**. `setAssetMaster` (`lib/db/repos/handover.mjs`) **refuses any tag whose discipline is not `equipment`** ("شناسنامهٔ نگهداری برای تگ تجهیز") and is a **whole-row upsert** (an omitted column is written as NULL), with an append-only `asset_master_revision` snapshot per save; `reporting.dim_asset_master` filters `discipline='equipment'`; the CMMS export reads `asset_master`. The design-condition rule `designConditionProblems` is the precedent: *a value is rejected unless it names the datasheet revision it came from*. No code creates `electrical`-discipline tags; motors arrive through the equipment import as `equipment`. The project voltage spec is a single `project.lv_system_voltage_v` (a plant with 690/400/230 V levels cannot be expressed there; `cable.system_voltage_v` is per cable).
+
+| Criterion | A. SLD draft only | B. Extend `asset_master` (typed, versioned) | C. Separate Electrical Nameplate Register linked to Tag / Asset Master |
+|---|---|---|---|
+| Data integrity | draft payload `jsonb`; typed by contract only | typed columns, but a **wide sparse row** (transformer vs breaker vs motor attributes) for every equipment tag; whole-row replace can null unrelated columns | typed per-attribute rows, closed attribute vocabulary per class |
+| Unit normalisation | by the SLD contract (`Fact.unit`); no cross-sheet query | one canonical unit per column; printed text lost unless extra columns | canonical unit per attribute + printed text kept |
+| Revision history | immutable approved drafts (DB lock) = history per sheet revision; no per-tag "current value" | `asset_master_revision` snapshots (whole-row) | append-only per attribute (precedent: `asset_master_revision`, `project_assumption_revision`) |
+| Approval / audit | draft sign-off (who/when/hash) | `updated_by` only; no approval step | status + approver + time per value, source = `mdr_revision` and/or SLD item uid |
+| Reporting / CMMS reuse | none | direct (same table) | a join added to `handoverBoard`/export; `dim_asset_*` view |
+| Migration cost | **none** | additive columns **+ relaxing the equipment-only guard + partial-update semantics** (touching a working CMMS path) | additive tables (small), no change to existing ones |
+| Compatibility with Asset Master | n/a | **highest risk** (guard, whole-row null-overwrite, CMMS/export columns, view filter) | none (links by `tag_id`; asset_master untouched) |
+| Contradiction check SLD↔register | SLD↔cable only | possible | possible (SLD↔datasheet-sourced value) |
+
+**Decision (selected): staged — A now, C when promotion is wanted; B rejected.**
+* **12.2–12.4:** A. Ratings live only in the (approved, immutable) SLD draft as `Fact`s; no schema; validation compares the SLD with whatever registers hold (cable, asset design data where present). This is the only option meeting "no migration unless a concrete requirement cannot be met" today.
+* **When authoritative per-tag electrical specs are required (owner decision, Phase 12.5):** option **C** as an additive, append-only **attribute-fact register keyed to `tag`** (`tag_id`, attribute key from a closed per-class vocabulary, canonical numeric value + canonical unit + printed text, source = `mdr_revision_id` and optionally SLD run/item uid, status, approver/time, supersession), reusing the design-condition rule ("no value without its source revision"). It does not touch `asset_master`; the CMMS export may *read* it.
+* Why not B: the equipment-only guard and the whole-row null-overwrite make extending `asset_master` the highest-regression option for a path already in production use (CMMS handover), and a 10-column sparse extension for every equipment tag is poor modelling.
+* Why not Custom Fields: §15.3.
+* **Unresolved:** which discipline the project gives transformers/switchboards (`equipment` vs `electrical`) — C must accept both; the voltage-level model (multiple levels) is outside `project.lv_system_voltage_v` and needs its own decision; unit canonicalisation list (V, A, kVA, Hz, kA, %) to be fixed by an electrical engineer, not by this audit.
+
+## 15.5 Cable endpoint identity — decision
+
+Facts **[inspected]**: `cable(cable_no UNIQUE per project, from_ref text, to_ref text, to_tag_id → tag)`. `importCableSchedule` sets `to_tag_id` **automatically** from `matchTag(to) || matchTag(from)` — a unique exact whole-token match; two tags in one field → null (no attach). `correctCable` can set/clear `to_tag_id` by hand (and then sets `subsystem_id` from the tag). `to_tag_id` **drives readiness**: `deriveTagElectrical` answers a tag's `electrical` step from the cables feeding it. `from_ref`/`to_ref` are otherwise display-only (`field.mjs`, `eps-scope.mjs`, `fact_cable`, the board). Document intake can propose cable `from/to/spec/length` from a cable list (`lib/intake/extract.mjs`, 066) and applies them only on a person's decision, a conflict needing a reason.
+
+| | A. Keep text; resolve both ends by proposals | B. Add `from_tag_id` | C. Reusable endpoint relationship model |
+|---|---|---|---|
+| Switchgear/MCC/DB/transformer/motor/load ends | by unique tag match, else unresolved | only if a tag exists; NULL conflates "unresolved", "ambiguous" and "no tag exists" | each end is a row: resolved tag, or a status (`resolved`/`ambiguous`/`unresolved`) + candidates |
+| Ambiguity / unresolved | held in the SLD draft / proposal, never in the register | **cannot be represented** | represented |
+| Provenance (who/what/when decided) | in the draft's review trail | none | per end |
+| RLS / project isolation | no new table | column on an RLS table | new RLS table |
+| SLD↔cable reconciliation | compare SLD edge endpoints to `matchTag(from/to)` text | compare to two tag ids | compare to endpoints |
+| Legacy text / cable ids | untouched | untouched | untouched (additive) |
+| Migration | **none** | additive column (+ backfill by unique match: a *decision about uncertain tags if automatic*) | additive table |
+| Risk to existing behaviour | none | `to_tag_id` semantics must not change; asymmetric with `to_tag_id` | must not disturb `to_tag_id`-driven readiness |
+
+**Decision (selected): A now; C (not B) if the owner later wants the register itself to carry resolved ends.**
+* **A (Phase 12.2–12.4):** no migration. The SLD draft stores, per cable reference, `cableNo`, `refs.cableId` (set only by a person or by exact unique `cable_no` match) and, for each *end*, a **link proposal** against project tags (unique / multiple / none) — computed, never persisted outside the draft. Reconciliation `S_CABLE_FROM_MISMATCH` compares the SLD's from/to equipment with the register's `from_ref`/`to_ref` text via the same exact-token rule, and reports **uncertain** when a text does not resolve to exactly one tag. **A cable is never attached to an uncertain tag**; the existing automatic `to_tag_id` rule of the *import* (unique exact match) is unchanged and is not extended to SLD.
+* B is rejected: one new nullable column cannot say *why* it is NULL, so it cannot satisfy "unresolved and ambiguous endpoints" and invites a bulk backfill that is exactly an automatic attachment.
+* C, if wanted, is additive and independent: `cable_end(cable_id, end ∈ from|to, tag_id NULL, status, candidates, source (sld item uid / manual / import), decided_by/at)` with RLS like `cable`; it **never replaces** `to_tag_id`/`from_ref`/`to_ref`, which stay the legacy truth until each end is explicitly confirmed. Not built here.
+* **Unresolved:** whether `from` should ever feed readiness (today only `to_tag_id` does); whether bare tokens such as `MCC`/`SWGR` (seen in fixtures: `MCC-12`, `SWGR`) are board tags or free text — the exact-token rule treats `MCC` (no number) as no match, which is the safe outcome.
+
+## 15.6 Operational facts used above (tests inspected and actual results)
+Run in a worktree of the base SHA (`node --import ./tools/register.mjs db/test/<name>.mjs`), **[ran]**:
+`custom-fields` 5/5 · `electrical` 21/21 · `doc-control` 9/9 · `asset` 6/6 · `area-coverage` 5/5 · `equipment` 25/25 · `engineering-validation` 34/34.
+Inspected, **not** re-run here: `db/test/pid-intelligence.mjs` (27 tests at the base), `db/test/api.mjs`. The full `npm run db:test` / `db:test:pg` were **not** run for this documentation-only change (CI runs them). The `[probe]` of §15.1 is the only ad-hoc execution.
+
+## 15.7 SLD connectivity and revision boundaries (not a copy of the P&ID rules)
+
+**Reviewed:** the Phase 11 P&ID graph (`lib/pid/graph.mjs`) and PR #86 (Phase 11.1; verified locally — `db:test`, `db:test:pg`, browser drives — and awaiting CI and the owner's merge decision). #86 fixes two process-drawing defects: a directory match is not proof, and a line reference must match. Those corrections are *necessary but not sufficient* for an electrical network, because a piping connector joins two ends of **one fluid line** (a 1:1, undirected continuation with a unique line number), whereas an SLD connector may continue a **bus**, a **feeder**, or a **group of outgoings**, carries **direction** (supply/load), a **voltage level**, and joins elements whose connectivity depends on **switching state**. The SLD rules are therefore their own:
+
+1. **Connector kinds** (`kind` attribute, closed set): `bus-continuation`, `feeder`, `incomer`, `outgoing-group`, `interlock/signal`. Reciprocity is judged *per kind*.
+2. **Reciprocal reference:** the target sheet must hold exactly one connector that (a) names this sheet, (b) has the **same kind**, (c) the same normalised circuit/bus/feeder label (whitespace and case only), (d) the **opposite direction** where a direction is printed, and (e) the **same voltage level** where both print one. Missing/different on any printed field ⇒ not a match (never a fallback to "the other one"). Unprinted fields are *unknown*, not wildcards: an unprinted label makes the pair `unconfirmed`, not `resolved`.
+3. **Duplicate connector labels are normal on an SLD** (the same continuation label "TO SWBD-2" repeated for several feeders; bus labels "A"/"B"). Duplicate labels therefore never imply identity: duplicates ⇒ `ambiguous` unless a second printed discriminator (way number, feeder tag, cable number) selects exactly one. Duplicate *equipment tags* remain an error (`S_TAG_DUP`).
+4. **Statuses:** `resolved` (target's own draft available, exactly one compatible reciprocal), `unconfirmed` (target exists but not read, or no compatible reciprocal), `unresolved` (no such sheet), `ambiguous` (several). A resolved link does not add adjacency inside a draft; cross-sheet traversal is a query over *resolved* links only; an unconfirmed relationship is **never traversed** by any derived view (downstream loads, bus membership, feeder destination) and is shown distinctly.
+5. **Voltage-level transitions:** a power edge may join two different voltage levels only through a transformer (or a declared converter/UPS class). A bus carries one voltage; an edge between buses printing different voltages with no transformer between them is `S_VOLTAGE_TRANSITION` (error — only when **both** voltages are printed); a connector pair whose printed voltages differ is `unconfirmed` plus an error finding. A missing voltage is *missing information*, never assumed from the neighbour.
+6. **Switching state:** topology and energisation are different. A breaker/isolator/coupler drawn open (or marked normally-open) separates bus sections **topologically as "device in path"**, not as absent; the graph stores `via` devices and `state` as printed; no analysis may treat an unknown state as closed. Two bus sections are never merged by name.
+7. **Multiple candidate destinations** of a feeder (two possible loads/buses within tolerance, a crossing with no junction dot): `ambiguous` with the candidate list; never the nearest. A feeder with none: `missing`.
+8. **Revisions:** UIDs are born per draft and never copied; a revision comparison proposes mappings and a person confirms them one-to-one within the same class (stored on the target draft). Extra SLD rules: bus **sections** map to sections (a section renamed is `renumbered`, a section split/merged is `ambiguous`, never auto-mapped); a **device state change** (open↔closed, normally-open↔closed) and a **feeder moving to another bus section** are *high-impact changes* flagged for review; an approved draft is never changed; a changed tag is `renumbered` only through an explicit mapping.
+9. **Unconfirmed relationships stay unconfirmed across revisions** — a confirmation made against revision A of the far sheet does not carry to revision B automatically.
+
+## 15.8 Corrections to the Step-0 text found during this closure
+* §1.2/§2: document intake **does** have `cable` and `structure` kinds (migration 066) and reads datasheet design conditions; Step 0 said the kind list had no `cable`. Corrected above; the conclusion (no `sld` kind, nothing reads an SLD) stands.
+* §2 item 6 said the per-consumer audit was unverified; it is now done (§15.1) and shows the isolation gap is **wider than the review queue and already affects P&ID drafts**.
+* §1.2 said asset master has no electrical ratings (true) — it did not say that `setAssetMaster` **refuses non-equipment tags** and overwrites the whole row; both matter for §15.4.
+
+## 15.9 Required architecture decisions (summary)
+| # | Decision | Alternatives | Selected | Reason | Unresolved risk |
+|---|---|---|---|---|---|
+| 1 | Extraction pass isolation | per-pass deny-lists · `pass_name IS NULL` allow-list · separate table/column/view (migration) | **Shared predicate on document type** + route guards + reserved pass names; `pass_name='sld'` | doc type is authoritative and set once; today's isometric data is byte-identical under it (differential test); no schema change | a future raw reader of `current_run` re-opens the gap (mitigated by a source-scan test); existing P&ID leaks (rows 3, 13, 15, 19) need the same fix |
+| 2 | Document type & MDR | free text as today · type table (migration) | **Closed set `isometric|pid|sld`**, 400 on unknown, 409 on type conflict, no SLD table; MDR unchanged | meets "never silently isometric", reuses document identity/lineage/MDR (type-agnostic) | MDR `doc_type` label vs machine type are not linked; clients sending other strings will now get 400 (none found) |
+| 3 | Electrical spec ownership | A draft-only · B extend `asset_master` · C separate register · Custom Fields | **A now; C when promotion is wanted; B and Custom Fields rejected** | no migration needed today; B collides with the equipment-only guard and whole-row overwrite; Custom Fields lacks units/source/history/approval | tag discipline for electrical equipment; multi-voltage model; unit list — owner/engineer decisions |
+| 4 | Cable endpoint identity | A text + proposals · B `from_tag_id` · C endpoint table | **A now; C (not B) later if the register must carry ends** | B cannot represent ambiguity/unresolved; C is additive and keeps legacy text/`to_tag_id` | whether `from` should drive readiness |
+| 5 | SLD draft persistence | `extraction_run` · new draft table | **`extraction_run`, `pass_name='sld'`, own modules/repo/routes** | pass-agnostic lock/approval triggers, `extraction_edit` audit, `approveRun`, document binding | payload size loaded by `joint.mjs:337` (performance) |
+| 6 | Revision & approval boundaries | approval writes registers · approval is a reading only | **Approval = reading signed; promotion to registers is a separate, explicit, audited action** | keeps extracted ≠ authoritative; mirrors intake's applied/conflict-with-reason | promotion UI/scope deferred |
+| 7 | Multi-sheet connectivity | reuse P&ID semantics · SLD-specific | **SLD-specific (§15.7)** | power networks differ (direction, voltage, state, duplicate labels, bus continuation) | rule set unvalidated on real sheets (no samples) |
+
+## 15.10 Exact files Phase 12.2 must change
+**New:** `lib/documents/types.mjs`; `lib/db/run-scope.mjs`; `lib/sld/{vocab,draft,graph,review,registers,compare}.mjs`; `lib/db/repos/sld.mjs`; `app/api/sld/route.js`, `app/api/sld/review/route.js`; `db/test/sld-intelligence.mjs`, `db/test/run-isolation.mjs` (differential + source-scan); `package.json` (`db:test` chain).
+**Changed (guards, behaviour-preserving for isometric data):** `app/api/documents/route.js`; `lib/db/repos/documents.mjs`; `lib/db/repos/review.mjs` (queue, hotspots, `applyCorrection`); `lib/db/repos/runs.mjs` (reserved `passName`, `latestRunForDrawing`); `app/api/runs/route.js`, `app/api/runs/[id]/route.js`, `…/approve`, `…/diff`, `…/edits`, `…/ndt-sample`; `lib/db/repos/validation.mjs`; `lib/db/repos/log.mjs`; `lib/db/repos/piping-hub.mjs`; `lib/db/repos/piping-reports.mjs` (drawing-list query); `app/api/overview/route.js` (owner decision on semantics); `lib/db/repos/revision-lifecycle.mjs` (`carryForward` guard); `lib/db/repos/revisions.mjs`; `lib/platform/areas.mjs` (+ `/api/sld`), `lib/platform/tile-apis.mjs` (generated), `db/test/area-coverage.mjs`.
+**Must NOT change:** `lib/engine.js`; isometric extraction (`app/api/extract`, `lib/sheet/*`, `parseSheet`); `lib/pid/*` (P&ID behaviour); `lib/electrical/cable.mjs` and cable import/IR behaviour; `db/migrations/*`.
+
+## 15.11 Migration decision
+**None for Phase 12.2.** The isolation, document-type and draft-persistence requirements are met by code and existing columns (`document.doc_type`, `extraction_run.pass_name`, `payload jsonb`, `parent_document_id`). Two later requirements may need an additive migration **only on the owner's decision**: the electrical attribute-fact register (§15.4 C) and the cable-end table (§15.5 C); each is independent, additive, RLS-protected, and run on production only by the owner.
+
+## 15.12 Regression risks
+1. Guards change shared queries: a mistake alters isometric figures → differential test (before/after byte-identical on isometric-only data; unchanged after adding `pid`/`sld` documents).
+2. `INVALID_DOC_TYPE` could reject an unknown client → only the P&ID path sends `docType` today; log-and-monitor before enforcing is an alternative if the owner prefers.
+3. `DOC_TYPE_CONFLICT` could block an existing mixed-type document number → a pre-check query over production data (read-only) before enabling.
+4. Fixing the P&ID leaks changes visible numbers (piping hub drawing count, activity log, hotspots, overview) — intended, but must be communicated.
+5. SLD payload size in `joint.mjs:337` (loads every current run payload) → bound or filter by type.
+6. `extraction_edit` is shared: hotspots/analytics must filter by run pass.
+
+## 15.13 Test requirements (Phase 12.2)
+Differential isolation test (§15.1); document-type matrix (§15.2); run-id route guards (409 `NOT_AN_ISOMETRIC_RUN` on `/api/runs/[id]/*` for `pid`/`sld` runs); reserved `passName`; `validation` guard; source-scan test for unreviewed `current_run`/`extraction_run` readers; plus the pure/server SLD suite of §10.3. Existing suites that must stay green unchanged: `electrical`, `doc-control`, `asset`, `api`, `pid-intelligence`, `engineering-validation`, `area-coverage`, `custom-fields`, the isometric review/queue tests, `db:test:pg`, `eval:check`. Every guard proven by reverting the code it protects.
+
+## 15.14 Phase 12.2 acceptance criteria
+1. `docType` is a closed set; unknown → 400 `INVALID_DOC_TYPE`; `sld` accepted; type conflicts → 409; `pid` and `isometric` behave exactly as before (existing tests unchanged).
+2. No isometric consumer of §15.1 (rows marked L) returns or counts a `pid` or `sld` run, document or edit; isometric-only data yields identical output before/after (differential test); id-addressed isometric routes refuse non-isometric runs.
+3. SLD drafts persist as `extraction_run` (`pass_name='sld'`) with idempotent ingest, stale-edit 409, locked after sign-off; SLD runs are absent from the isometric review queue, piping hub, reports, activity log, hotspots and overview figures.
+4. An SLD sheet is filed through the existing document/MDR workflow (MDR entry, issue, transmittal, lineage via `createRevision`), with no SLD document table.
+5. The contract of §5 (Facts: printed/extracted/calculated/unknown; UIDs; evidence; review statuses) is enforced by the sanitizer; a reader can only create `extracted` records.
+6. The connectivity rules of §15.7 are implemented and tested (reciprocity by kind/label/direction/voltage, duplicate labels, unconfirmed never traversed, voltage-transition, switching state, multiple candidates, revision mapping boundaries).
+7. No `tag`, `asset_master`, `cable`, `cable_activity`, `ir_test`, `subsystem` row is created or modified by any SLD action (row-count test before/after).
+8. `lib/engine.js`, isometric extraction, P&ID behaviour, cable import/IR behaviour unchanged; no migration.
+9. Final-SHA verification: `db:test`, `db:test:pg`, `eval:check`, `next build`, SLD + P&ID + isometric browser drives; **no accuracy claim** without real labeled SLD sheets (§10).
+
+## 15.15 Master-plan correction
+None required beyond Phase 12 Step 0's item-9 split. (The master plan does not describe the extraction-pass isolation or document-type handling audited here.)
