@@ -1,7 +1,9 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import BomForm from "./BomForm";
+import BomTable from "./BomTable";
+import ValidationPanel from "./ValidationPanel";
 import CutForm from "./CutForm";
 import { cutChecks } from "../lib/register/cut-model.mjs";
 import TableKit from "./ui/TableKit";
@@ -20,8 +22,10 @@ import MarkTables from "./MarkTables";
 import EquipmentTable from "./EquipmentTable";
 import IsoInfo from "./IsoInfo";
 import { cutVsBom } from "../lib/register/cut-bom.mjs";
+import { protector } from "../lib/register/mark-protection.mjs";
+import { collectFindings } from "../lib/register/workspace-validation.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
-import { normalize as normalizeMarks, addMark, updateMark, placeAt } from "../lib/sheet/markup.mjs";
+import { normalize as normalizeMarks, addMark, updateMark, placeAt, findMark } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
@@ -159,7 +163,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [form, setForm] = useState(null);   // { mode, id, kind, point, aspect }
   const tabOf = (k) => (k === "equipment" ? "equip" : k === "spool" ? "spools" : k === "support" ? "supports" : "welds");
   const openForm = (mode, id, kind, point = null, aspect = Math.SQRT2) => {
-    const k = kind || itemsRef.current.find((m) => m.id === id)?.kind;
+    const k = kind || findMark(itemsRef.current, id)?.kind;
     if (id) { setMarkSel(id); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }
     setWsTab(tabOf(k));
     setForm({ mode: locked ? "view" : mode, id, kind: k, point, aspect });
@@ -171,6 +175,26 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [attachId, setAttachId] = useState(null);
   const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras) : []), [sheetMode, rows, marks, extras]);
   const itemsRef = useRef(items); itemsRef.current = items;
+  // what the SAVED revision holds against deleting a mark (installed / tested equipment, installed allocation lines) —
+  // advice shown before the confirm; the server still decides on save
+  const savedDocId = run?.run?.documentId || null;
+  const [saved, setSaved] = useState({ equipment: [], lines: [] });
+  useEffect(() => {
+    if (!savedDocId || !session?.projectId) { setSaved({ equipment: [], lines: [] }); return undefined; }
+    let gone = false;
+    (async () => {
+      try {
+        const q = `projectId=${session.projectId}&documentId=${savedDocId}`;
+        const [e, a] = await Promise.all([session.call(`/api/iso-equipment?${q}`), session.call(`/api/bom-allocations?${q}`)]);
+        if (!gone) setSaved({ equipment: e?.equipment || [], lines: a?.lines || [] });
+      } catch { if (!gone) setSaved({ equipment: [], lines: [] }); }
+    })();
+    return () => { gone = true; };
+  }, [savedDocId, session?.projectId, run?.run?.status]);
+  const protect = useMemo(() => protector(items, { ...saved, locked: run?.run?.status === "approved" }), [items, saved, run?.run?.status]);
+  const validationInput = useMemo(() => ({ items, bom, bomRows, cutRows, cutLengths, registerProblems: model.problems || [] }),
+    [items, bom, bomRows, cutRows, cutLengths, model]);
+  const validationTotal = useMemo(() => collectFindings(validationInput).total, [validationInput]);
   // who uses what of this sheet's BOM: the welds' ends against each row's (lib/register/bom-allocation.mjs)
   const alloc = useMemo(() => usage(items, bom), [items, bom]);
   // a saved sheet: each weld painted by where its joint stands on site
@@ -291,32 +315,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   );
   const bomBlock = (
     <>
-      {bom.length > 0 && (
-        <details className="intake-more" data-bom={bom.length}>
-          <summary>BOM همین برگ — {bom.length} ردیف، خوانده‌شده با OCR؛ با نقشه بررسی و اصلاح کنید (همین جدول با رجیستر ذخیره می‌شود)</summary>
-          <div style={{ overflowX: "auto" }}>
-            <TableKit name="iso-bom"><table className="dtable">
-              <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th><th>واحد</th><th title="سرهای جوشی‌شدنی این ردیف که سرجوش‌ها نام برده‌اند">سر جوش: رزرو/ظرفیت</th><th></th></tr></thead>
-              <tbody>{bomRows.map((b, i) => (
-                <tr key={i} data-bom-row={b.pt}>
-                  <td className="mono b" dir="ltr" data-bom-cell="pt">{b.pt ?? "—"}</td>
-                  <td className="sm" data-bom-cell="group">{b.group || "—"}</td>
-                  <td className="sm" dir="ltr" data-bom-cell="description">{b.description || "—"}</td>
-                  <td className="mono" data-bom-cell="diam">{b.diam || "؟"}</td>
-                  <td className="mono sm" dir="ltr" data-bom-cell="stockCode">{b.stockCode || "—"}</td>
-                  <td className="mono" dir="ltr" data-bom-cell="qty">{b.qty === "" || b.qty == null ? "؟" : b.qty}</td>
-                  <td className="sm" data-bom-cell="qtyUnit">{b.qtyUnit === "pcs" ? "عدد" : b.qtyUnit === "m" ? "m" : "؟"}</td>
-                  <td className="mono sm" data-bom-alloc={b.pt} dir="ltr">{(() => { const u = alloc.get(String(b.pt)); if (!u) return "—"; if (u.cap.mode === "length") return "طولی"; if (u.cap.mode === "none") return u.used ? `${u.used}/۰` : "—"; return u.cap.capacity == null ? (u.used ? `${u.used}/؟` : "؟") : `${u.used}/${u.cap.capacity}`; })()}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <button type="button" className="ghost sm" data-bom-view={b.pt} onClick={() => setBomForm({ mode: "view", i })}>مشاهده</button>
-                    {!locked && <button type="button" className="ghost sm" data-bom-edit={b.pt} onClick={() => setBomForm({ mode: "edit", i })}>ویرایش</button>}
-                    {!locked && <button type="button" className="ghost sm" onClick={() => setBomRows(bomRows.filter((_, j) => j !== i))}>حذف</button>}
-                  </td>
-                </tr>))}</tbody>
-            </table></TableKit>
-          </div>
-          {!locked && <button type="button" className="ghost sm" data-bom-add onClick={() => setBomForm({ mode: "create", i: -1 })}>+ ردیف BOM (ردیفی که خوانده نشده)</button>}
-        </details>)}
+      <BomTable rows={bomRows} live={alloc} locked={locked} session={session} documentId={run?.run?.documentId || null}
+        savedHadRows={Array.isArray(initial?.bom) && initial.bom.length > 0}
+        onView={(i) => setBomForm({ mode: "view", i })} onEdit={(i) => setBomForm({ mode: "edit", i })}
+        onAdd={() => setBomForm({ mode: "create", i: -1 })} onDelete={(i) => setBomRows(bomRows.filter((_, j) => j !== i))} />
       {bomForm && (
         <BomForm key={`${bomForm.mode}-${bomForm.i}`} mode={bomForm.mode} lists={lists} readOnly={locked} rows={bomRows}
           row={bomForm.i >= 0 ? bomRows[bomForm.i] : { pt: nextBomPt() }}
@@ -477,7 +479,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const sheetBlock = () => (
     <>
         <div className="wl-sheet" data-wl-sheet>
-          <SheetMarkup src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
+          <SheetMarkup protect={protect} src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
             fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
             onEdit={locked ? null : editMark} onView={(id, k) => openForm("view", id, k)}
             onAdd={locked ? null : (k, p, aspect) => openForm("create", null, k, p, aspect)}
@@ -494,7 +496,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const registerTable = (tabs = ["weld"]) => (
     <>
         <div className="wl-table">
-          <MarkTables tabs={tabs} items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
+          <MarkTables protect={protect} tabs={tabs} items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
             selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} bom={bom} focus={editFocus}
             onOpen={(mode, id, k) => openForm(mode, id, k)}
             checked={locked ? null : { has: (no) => reviewed.has(no), onTick: tick }} />
@@ -580,12 +582,14 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     { k: "supports", label: "ساپورت‌ها", hint: "ساپورت‌های نقشه", badge: items.filter((m) => m.kind === "support").length || "",
       node: (<>{registerTable(["support"])}</>) },
     { k: "equip", label: "تجهیزات", hint: "تجهیزات نصب، سرجوش‌های متصل و متعلقات", badge: items.filter((m) => m.kind === "equipment").length || "",
-      node: (<EquipmentTable items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
+      node: (<EquipmentTable protect={protect} items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
         attachId={attachId} onAttach={setAttachId} focus={editFocus} onOpen={(mode, id, k) => openForm(mode, id, k)} />) },
     { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
-      node: (<>{bomBlock}{bomWeldsBlock}{bom.length === 0 && <p className="muted sm">BOM خوانده نشد.</p>}</>) },
+      node: (<>{bomBlock}{bomWeldsBlock}</>) },
     { k: "cut", label: "برش", hint: "جدول برش لوله و مقایسه با BOM", badge: cutLengths.length || "", tone: cutBom.problems.length || cutProblems.length ? "bad" : undefined,
       node: (<>{cutBlock}{cutLengths.length === 0 && <p className="muted sm">جدول برش روی این برگ خوانده نشد.</p>}</>) },
+    { k: "validation", label: "اعتبارسنجی", hint: "همهٔ ایرادهای بررسی‌های موجود یک‌جا", tone: validationTotal ? "bad" : undefined, badge: validationTotal || "",
+      node: (<ValidationPanel input={validationInput} onSelect={(ref) => { setMarkSel(ref); }} />) },
     ...(styleTab ? [{ k: "style", label: "الگوی نقشه", hint: "الگوی این سبک نقشه: خانهٔ هر مقدار روی نقشه", node: styleTab }] : []),
     { k: "import", label: "ورود", hint: "خواندن از Excel / CSV یا چسباندن", node: (<>{importBlock}</>) },
     { k: "save", label: "ثبت", hint: "ذخیره و تأیید", tone: problems ? "bad" : undefined, badge: problems || "",
@@ -618,7 +622,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       </WorkspaceFrame>
       {form && (
         <MarkForm key={`${form.mode}-${form.id || "new"}-${form.kind}`} mode={form.mode}
-          mark={form.id ? items.find((m) => m.id === form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo} thisSheet={meta.sheet}
+          mark={form.id ? findMark(items, form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo} thisSheet={meta.sheet}
           onClose={() => setForm(null)}
           onSave={(d) => {
             if (form.id) onItems(updateMark(items, form.id, { kind: d.kind, no: d.no, attrs: d.attrs }));

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { KINDS, EQUIPMENT_STATUS, removeMark, unplace, isPlaced, equipmentChecks, dependents, weldsOf, accessoriesOf } from "../lib/sheet/markup.mjs";
+import { KINDS, EQUIPMENT_STATUS, removeMark, unplace, isPlaced, equipmentChecks, dependents, weldsOf, accessoriesOf, markRef, isMark } from "../lib/sheet/markup.mjs";
 import TableKit from "./ui/TableKit";
 
 /**
@@ -17,7 +17,7 @@ import TableKit from "./ui/TableKit";
  *   onOpen(mode, id, kind)   open the form: "view" | "edit" | "create"
  *   focus             { id, n } — a row to bring into view
  */
-export default function EquipmentTable({ items = [], onChange, bom = [], selectedId = null, onSelect, attachId = null, onAttach, readOnly = false, focus = null, onOpen = null }) {
+export default function EquipmentTable({ protect = null, items = [], onChange, bom = [], selectedId = null, onSelect, attachId = null, onAttach, readOnly = false, focus = null, onOpen = null }) {
   const rows = items.filter((m) => KINDS[m.kind]?.cls === "equipment");
   const issues = equipmentChecks(items, bom);
   const status = Object.fromEntries(EQUIPMENT_STATUS);
@@ -40,7 +40,7 @@ export default function EquipmentTable({ items = [], onChange, bom = [], selecte
         <span className="grow" />
         {!readOnly && onOpen && <button type="button" className="ghost sm" data-equip-add onClick={() => onOpen("create", null, "equipment")}>+ تجهیز</button>}
       </div>
-      {attachId && rows.some((r) => r.id === attachId) && <p className="note sm" data-attach-hint>روی نقشه، همان‌جا که تجهیز روی لوله است کلیک کنید. <button type="button" className="ghost sm" onClick={() => onAttach?.(null)}>انصراف</button></p>}
+      {attachId && rows.some((r) => isMark(r, attachId)) && <p className="note sm" data-attach-hint>روی نقشه، همان‌جا که تجهیز روی لوله است کلیک کنید. <button type="button" className="ghost sm" onClick={() => onAttach?.(null)}>انصراف</button></p>}
       <div style={{ overflowX: "auto" }}>
         <TableKit name="equipment-marks">
           <table className="dtable" data-equip-marks>
@@ -49,7 +49,7 @@ export default function EquipmentTable({ items = [], onChange, bom = [], selecte
               {rows.map((m) => {
                 const a = m.attrs || {}, placed = isPlaced(m), acc = accessoriesOf(a.acc);
                 return (
-                  <tr key={m.id} data-equip-row={m.id} data-placed={placed ? "yes" : "no"} className={m.id === selectedId ? "sel" : undefined} onClick={() => onSelect?.(m.id)}>
+                  <tr key={m.id} data-equip-row={markRef(m)} data-placed={placed ? "yes" : "no"} className={isMark(m, selectedId) ? "sel" : undefined} aria-selected={isMark(m, selectedId) || undefined} onClick={() => onSelect?.(markRef(m))}>
                     <td className="mono b" dir="ltr" data-cell="no">{m.no || "—"}</td>
                     <td className="sm" data-cell="type">{a.type || "—"}</td>
                     <td className="mono sm" dir="ltr" data-cell="tag">{a.tag || "—"}</td>
@@ -59,18 +59,20 @@ export default function EquipmentTable({ items = [], onChange, bom = [], selecte
                     <td className="mono sm" dir="ltr" data-cell="acc">{acc.length ? acc.map((x) => `PT ${x.pt}×${x.qty}`).join("، ") : "—"}</td>
                     <td className="sm" data-cell="status">{status[a.status] || status.planned}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      {onOpen && <button type="button" className="ghost sm" data-row-view={m.id} onClick={(e) => { e.stopPropagation(); onSelect?.(m.id); onOpen("view", m.id, m.kind); }}>مشاهده</button>}
-                      {onOpen && !readOnly && <button type="button" className="ghost sm" data-row-edit={m.id} onClick={(e) => { e.stopPropagation(); onSelect?.(m.id); onOpen("edit", m.id, m.kind); }}>ویرایش</button>}
+                      {onOpen && <button type="button" className="ghost sm" data-row-view={markRef(m)} onClick={(e) => { e.stopPropagation(); onSelect?.(markRef(m)); onOpen("view", markRef(m), m.kind); }}>مشاهده</button>}
+                      {onOpen && !readOnly && <button type="button" className="ghost sm" data-row-edit={markRef(m)} onClick={(e) => { e.stopPropagation(); onSelect?.(markRef(m)); onOpen("edit", markRef(m), m.kind); }}>ویرایش</button>}
                       {!readOnly && (<>
-                        <button type="button" className={attachId === m.id ? "on sm" : "ghost sm"} data-row-attach={m.id}
-                          onClick={(e) => { e.stopPropagation(); onSelect?.(m.id); onAttach?.(attachId === m.id ? null : m.id); }}>{placed ? "جابه‌جایی روی نقشه" : "اتصال به نقشه"}</button>
-                        {placed && <button type="button" className="ghost sm" onClick={(e) => { e.stopPropagation(); onChange?.(unplace(items, m.id)); }}>برداشتن از نقشه</button>}
+                        <button type="button" className={isMark(m, attachId) ? "on sm" : "ghost sm"} data-row-attach={markRef(m)}
+                          onClick={(e) => { e.stopPropagation(); onSelect?.(markRef(m)); onAttach?.(isMark(m, attachId) ? null : markRef(m)); }}>{placed ? "جابه‌جایی روی نقشه" : "اتصال به نقشه"}</button>
+                        {placed && <button type="button" className="ghost sm" onClick={(e) => { e.stopPropagation(); onChange?.(unplace(items, markRef(m))); }}>برداشتن از نقشه</button>}
                         <button type="button" className="ghost sm" data-row-delete={m.id} aria-label={`حذف ${m.no}`} onClick={(e) => {
                           e.stopPropagation();
-                          const deps = dependents(items, m.id);
+                          const pr = protect?.(markRef(m));
+                          if (pr?.blocked) { window.alert(`تجهیز ${m.no || ""} حذف نمی‌شود:\n– ${pr.reasons.join("\n– ")}`); return; }
+                          const deps = [...(pr?.reasons || []), ...dependents(items, markRef(m))];
                           if (!window.confirm(`تجهیز ${m.no || ""} حذف شود؟${deps.length ? `\n\n– ${deps.join("\n– ")}` : ""}`)) return;
-                          if (attachId === m.id) onAttach?.(null);
-                          onChange?.(removeMark(items, m.id));
+                          if (isMark(m, attachId)) onAttach?.(null);
+                          onChange?.(removeMark(items, markRef(m)));
                         }}>حذف</button>
                       </>)}
                       {readOnly && <span className="muted sm">{placed ? "روی نقشه" : "وصل نیست"}</span>}
