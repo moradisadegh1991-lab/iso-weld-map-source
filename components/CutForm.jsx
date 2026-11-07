@@ -24,6 +24,7 @@ export default function CutForm({ mode: mode0 = "view", cut = {}, cuts = [], ite
   const [start] = useState(() => ({ piece: "", lengthMm: "", ns: "", from: "", to: "", spool: "", angle: "", note: "", material: "", schedule: "", ...cut }));
   const [d, setD] = useState(start);
   const [err, setErr] = useState("");
+  const [auto, setAuto] = useState(false);     // the spool was filled in from the end welds (not chosen by the person): it may be recomputed
   const dirty = JSON.stringify(d) !== JSON.stringify(start);
   const set = (patch) => { setErr(""); setD((x) => ({ ...x, ...patch })); };
   const ix = indexItems(items);
@@ -61,12 +62,15 @@ export default function CutForm({ mode: mode0 = "view", cut = {}, cuts = [], ite
           <select data-input={lab} data-ref-uid={uidVal} dir="ltr" value={uidVal}
             onChange={(e) => {
               const m = list.find((x) => x.uid === e.target.value);
+              if (kind === "spool") setAuto(false);
               const next = { [key]: m ? m.uid : "", [lab]: m ? String(m.no).trim() : "" };
               const merged = { ...d, ...next };
-              // the two end welds' spool, by IDENTITY: one spool → preselect it; two different ones, an unknown or an ambiguous one → leave it to the person
-              const es = kind === "weld" && !d.spoolUid ? endSpoolMarks(merged, items) : [];
-              const sp = es.length === 1 && isUid(es[0].uid) ? spools.find((s) => s.uid.toLowerCase() === es[0].uid.toLowerCase()) : null;
-              set({ ...next, ...(sp ? { spoolUid: sp.uid, spool: String(sp.no).trim() } : {}) });
+              // the two end welds' spool, by IDENTITY: one spool → preselect it; two different ones, an unknown or an ambiguous one → do not guess.
+              // A spool the PERSON chose is never touched; one this form filled in is recomputed (and withdrawn when the ends disagree).
+              const es = kind === "weld" && (!d.spoolUid || auto) ? endSpoolMarks(merged, items) : null;
+              const sp = es && es.length === 1 && isUid(es[0].uid) ? spools.find((s) => s.uid.toLowerCase() === es[0].uid.toLowerCase()) : null;
+              if (es) setAuto(Boolean(sp));
+              set({ ...next, ...(sp ? { spoolUid: sp.uid, spool: String(sp.no).trim() } : es && auto ? { spoolUid: "", spool: "" } : {}) });
             }}>
             <option value="">—</option>
             {list.map((m) => <option key={m.uid} value={m.uid}>{tag(m)}</option>)}
