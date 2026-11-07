@@ -1,0 +1,75 @@
+{
+ "name": "clean-sheet",
+ "synthetic": true,
+ "tags": [
+  "baseline"
+ ],
+ "page": {
+  "number": 1,
+  "width": 1000,
+  "height": 800
+ },
+ "ocr": [
+  {
+   "t": "30-P-1201A",
+   "b": [
+    100,
+    100,
+    170,
+    118
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "30-E-1129",
+   "b": [
+    300,
+    100,
+    370,
+    118
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "4\" MP140001A-EA01-H",
+   "b": [
+    100,
+    300,
+    170,
+    318
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "6\" MP140002A-EA01-H",
+   "b": [
+    100,
+    350,
+    170,
+    368
+   ],
+   "c": 0.9
+  }
+ ],
+ "gold": {
+  "equipment": [
+   "30-P-1201A",
+   "30-E-1129"
+  ],
+  "instruments": [],
+  "lines": [
+   "MP140001A",
+   "MP140002A"
+  ],
+  "valves": [],
+  "edges": [],
+  "offpage": [],
+  "dupGroups": []
+ },
+ "bubbles": [],
+ "proposal": {
+  "items": [],
+  "edges": []
+ },
+ "pageNumber": 1
+}

@@ -4,12 +4,13 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
-import { ingestDraft, getDraft, compareDrafts } from "../../../lib/db/repos/pid.mjs";
+import { ingestDraft, getDraft, compareDrafts, listPidDocuments } from "../../../lib/db/repos/pid.mjs";
 import { draftFromOcr, sanitizeProposal } from "../../../lib/pid/draft.mjs";
 import { registers } from "../../../lib/pid/registers.mjs";
 
 /**
  * P&ID drafts (lib/db/repos/pid.mjs).
+ *   GET  ?projectId                              the project's P&ID drawings and the state of their drafts
  *   GET  ?projectId&documentId                  the current draft of a drawing revision: draft, validation (the Validation Center's engine), registers
  *                                               (views), asset-link proposals, review summary
  *   GET  ?projectId&documentId&compareTo=<doc>  comparison of two revisions of one sheet (by explicit mappings; candidates are only proposals)
@@ -22,10 +23,12 @@ export async function GET(request) {
   try {
     const url = new URL(request.url);
     const projectId = url.searchParams.get("projectId"), documentId = url.searchParams.get("documentId"), compareTo = url.searchParams.get("compareTo");
-    if (!projectId || !documentId) return Response.json({ error: "projectId and documentId are required" }, { status: 400 });
+    if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });
     const { db, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.VIEW_PROJECT);
+    // without a document: the project's P&ID drawings and the state of their drafts
+    if (!documentId) return await withProject(db, projectId, async () => Response.json({ documents: await listPidDocuments(db, { projectId }) }));
     return await withProject(db, projectId, async () => {
       if (compareTo) return Response.json(await compareDrafts(db, { projectId, fromDocumentId: documentId, toDocumentId: compareTo }));
       const r = await getDraft(db, { projectId, documentId });

@@ -1,0 +1,81 @@
+{
+ "equipmentTag": {
+  "gold": 13,
+  "predicted": 12,
+  "tp": 11,
+  "fp": 1,
+  "fn": 2,
+  "precision": 0.9166666666666666,
+  "recall": 0.8461538461538461,
+  "f1": 0.88,
+  "falsePositiveRate": 0.08333333333333333
+ },
+ "instrumentTag": {
+  "gold": 3,
+  "predicted": 4,
+  "tp": 3,
+  "fp": 1,
+  "fn": 0,
+  "precision": 0.75,
+  "recall": 1,
+  "f1": 0.8571428571428571,
+  "falsePositiveRate": 0.25
+ },
+ "lineNumber": {
+  "gold": 6,
+  "predicted": 5,
+  "tp": 5,
+  "fp": 0,
+  "fn": 1,
+  "precision": 1,
+  "recall": 0.8333333333333334,
+  "f1": 0.9090909090909091,
+  "falsePositiveRate": 0
+ },
+ "valveSymbol": {
+  "gold": 3,
+  "predicted": 3,
+  "tp": 3,
+  "fp": 0,
+  "fn": 0,
+  "precision": 1,
+  "recall": 1,
+  "f1": 1,
+  "falsePositiveRate": 0
+ },
+ "connectivity": {
+  "gold": 4,
+  "predicted": 3,
+  "tp": 3,
+  "fp": 0,
+  "fn": 1,
+  "precision": 1,
+  "recall": 0.75,
+  "f1": 0.8571428571428571,
+  "falsePositiveRate": 0
+ },
+ "duplicateDetection": {
+  "gold": 1,
+  "predicted": 1,
+  "tp": 1,
+  "fp": 0,
+  "fn": 0,
+  "precision": 1,
+  "recall": 1,
+  "f1": 1,
+  "falsePositiveRate": 0
+ },
+ "offpageResolution": {
+  "gold": 3,
+  "correct": 3,
+  "wrongResolved": 0,
+  "missed": 0,
+  "accuracy": 1,
+  "falseResolutionRate": 0
+ },
+ "falsePositiveRate": {
+  "predicted": 24,
+  "fp": 2,
+  "rate": 0.08333333333333333
+ }
+}

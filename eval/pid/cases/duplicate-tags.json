@@ -1,0 +1,64 @@
+{
+ "name": "duplicate-tags",
+ "synthetic": true,
+ "tags": [
+  "duplicates"
+ ],
+ "page": {
+  "number": 1,
+  "width": 1000,
+  "height": 800
+ },
+ "ocr": [
+  {
+   "t": "30-P-1601A",
+   "b": [
+    100,
+    100,
+    170,
+    118
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "30-P-1601A",
+   "b": [
+    500,
+    300,
+    570,
+    318
+   ],
+   "c": 0.9
+  },
+  {
+   "t": "30-E-1601",
+   "b": [
+    300,
+    100,
+    370,
+    118
+   ],
+   "c": 0.9
+  }
+ ],
+ "gold": {
+  "equipment": [
+   "30-P-1601A",
+   "30-E-1601"
+  ],
+  "instruments": [],
+  "lines": [],
+  "valves": [],
+  "edges": [],
+  "offpage": [],
+  "dupGroups": [
+   "30-P-1601A"
+  ]
+ },
+ "bubbles": [],
+ "proposal": {
+  "items": [],
+  "edges": []
+ },
+ "pageNumber": 1
+}

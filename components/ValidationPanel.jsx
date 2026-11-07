@@ -9,10 +9,10 @@ import { ACTIONS, CATEGORIES } from "../lib/engineering/validation.mjs";
  *
  * Two sources, always labelled: the page's DRAFT (a live preview, recomputed as you edit) and the SAVED revision (the server's, authoritative).
  */
-const CAT = { identity: "هویت", geometry: "هندسه", weld: "سرجوش", bom: "BOM", allocation: "تخصیص", equipment: "تجهیز", spool: "اسپول", support: "ساپورت", revision: "رویژن", "data-integrity": "یکپارچگی داده" };
+const CAT = { pid: "P&ID", identity: "هویت", geometry: "هندسه", weld: "سرجوش", bom: "BOM", allocation: "تخصیص", equipment: "تجهیز", spool: "اسپول", support: "ساپورت", revision: "رویژن", "data-integrity": "یکپارچگی داده" };
 const SEV = { error: "ایراد", warning: "هشدار", info: "اطلاع" };
 const RANK = { error: 0, warning: 1, info: 2 };
-const ENTITY = { weld: "سرجوش", "sheet-weld-mark": "نشان روی نقشه", equipment: "تجهیز", spool: "اسپول", support: "ساپورت", "bom-row": "ردیف BOM", allocation: "تخصیص", revision: "رویژن", mark: "نشان", cut: "برش" };
+const ENTITY = { line: "خط", instrument: "ابزار", valve: "شیر", inline: "قطعهٔ خط", connector: "اتصال بین‌برگی", edge: "اتصال", weld: "سرجوش", "sheet-weld-mark": "نشان روی نقشه", equipment: "تجهیز", spool: "اسپول", support: "ساپورت", "bom-row": "ردیف BOM", allocation: "تخصیص", revision: "رویژن", mark: "نشان", cut: "برش" };
 const short = (u) => (u ? String(u).slice(0, 8) : "—");
 
 export default function ValidationPanel({ draft, saved, source, onSource, onRefresh, loading, error, selectedUid, onSelect, onOpen, onResolve, locked, resolveBusy }) {
