@@ -1,8 +1,7 @@
 # Phase 12 — SLD Intelligence & Electrical Engineering: architecture audit (Step 0)
 
 Audit and design only. Nothing in this document is implemented; no production code, schema or test was changed.
-Audited against `master` @ `fe7bd98ae31e1cc7cb33367d3bcbe871ce85f565` (Phase 11, PR #85). PR #86 (Phase 11.1, off-page integrity) is **not** merged and is
-not depended on; where Phase 12 relies on a P&ID rule that #86 changes, this document says so (§7.4).
+Audited against `master` @ `fe7bd98ae31e1cc7cb33367d3bcbe871ce85f565` (Phase 11, PR #85). PR #86 (Phase 11.1, off-page integrity) was **not merged when Step 0 was written**; it has since been **merged** (squash, 2026-11-07T17:22:19Z, master `ec56976848032cfd5cd1404b18b25ee5a3c89e5d`, see §16.1). Step-0 statements about the P&ID rules describe `fe7bd98` and are kept as historical; where Phase 12 relies on a P&ID rule that #86 changed, §7.4 and §16.1 say so.
 
 Conventions: **[verified]** = read in the repository at that SHA; **[proposal]** = design, not present; **[unverified]** = not checked, stated so it is not mistaken for a finding.
 
@@ -243,7 +242,7 @@ No rule infers an engineering value (no default voltage, no "typical" rating, no
    * target exists but its draft has not been read → **`unconfirmed`** (a directory match proves nothing);
    * target draft read: the far sheet must hold **exactly one** compatible reciprocal connector (points back at this sheet; same `circuitRef` when this one names one — normalized by whitespace/case only; a missing or different `circuitRef` is **not** a match); one → `resolved`, several → `ambiguous` (candidates listed), none → `unconfirmed`.
 3. A `resolved` off-page link joins two *drafts*, so it adds **no adjacency inside a draft**; cross-sheet traversal is a query over resolved links (explicit, reviewable), and an unconfirmed link is never traversed.
-4. **Dependency on Phase 11.1 (PR #86):** the rules above are exactly the corrected P&ID rules of PR #86 (directory ≠ proof; line reference must match; unconfirmed adds no adjacency). At `fe7bd98` the P&ID `resolveOffpage` still marks a connector `resolved` when the target merely exists in the directory, and falls back to unfiltered connectors when no line matches. **Phase 12 must not copy that code**; it must implement the corrected semantics from its own tests (or reuse the code only after #86 merges). Consequently this audit's SLD design does not depend on #86's code.
+4. **Dependency on Phase 11.1 (PR #86):** the rules above are exactly the corrected P&ID rules of PR #86 (directory ≠ proof; line reference must match; unconfirmed adds no adjacency). At `fe7bd98` the P&ID `resolveOffpage` still marks a connector `resolved` when the target merely exists in the directory, and falls back to unfiltered connectors when no line matches. **Phase 12 must not copy that code**; it must implement the corrected semantics from its own tests (or reuse the code only after #86 merges — **#86 is now merged**, but electrical semantics still require their own validation, §16.4). Consequently this audit's SLD design does not depend on #86's code.
 5. In production no peer drafts are loaded by the P&ID repo today (`getDraft` passes the directory only); the SLD repo must load peer drafts of the project's other SLD sheets explicitly, **approved ones first**, and mark the status basis ("peer draft approved/unapproved") so a link confirmed against an unapproved peer is visibly weaker.
 6. False connectivity is prevented structurally: edges need evidence; geometric edges need port coincidence; crossings without a junction are `ambiguous`; reciprocal + circuit match for off-page; busbars are *sections* so a coupler's normally-open state is explicit and a section is never merged with another by name.
 
@@ -320,16 +319,18 @@ No migration was created or run in this audit; any later one is additive-only an
 | R3 | False connectivity (line crossings, proximity, shared bus name) | evidence-only edges; port-coincidence geometry; crossings ambiguous; explicit sections; off-page reciprocal + circuit match |
 | R4 | Rating misattribution (a number printed near two symbols) | association needs leader/box; else candidate `ambiguous`; never default |
 | R5 | Protection data: reading/inferring settings is unsafe | store only printed function numbers and a **settings document reference**; never a setting value; no setting is calculated |
-| R6 | Divergence from the P&ID off-page rules (PR #86 pending) | SLD implements the corrected semantics from tests; do not copy `fe7bd98` P&ID logic |
+| R6 | Divergence from the P&ID off-page rules (PR #86 — merged since; see §16.1) | SLD implements the corrected semantics from tests; do not copy `fe7bd98` P&ID logic |
 | R7 | "MCC" ambiguity (Motor Control Centre vs Mechanical Completion Certificate) | never key on the string; classes come from symbols/legend, tags from the register |
 | R8 | Scope creep into load-flow/short-circuit/coordination studies | out of scope: no electrical calculation beyond lossless parsing and the listed checks |
 | R9 | Rating home undecided (§11.1) | decision for the owner before promotion work |
 | R10 | Disk/test infra (db:test leaks large temp DBs under /tmp when interrupted) | unrelated to design; noted from this session's experience |
 
 ### 12.2 Dependencies
-Real SLD samples + labels (blocking for any accuracy claim); owner decisions on §11.1/§11.2; PR #86 merged (or SLD implements its semantics independently); an OCR runtime and/or model access in the delivery environment for pass B/C (vector/text-layer extraction does not need them).
+Real SLD samples + labels (blocking for any accuracy claim); owner decisions on §11.1/§11.2; PR #86 (now merged) or SLD implementing its own semantics; an OCR runtime and/or model access in the delivery environment for pass B/C (vector/text-layer extraction does not need them).
 
 ### 12.3 Phases
+> **Superseded by §16.2/§16.3:** the phase split below mixed intake, extraction and topology; use the roadmap of §16.2.
+
 * **12.0** (this audit).
 * **12.1 Contract & engine (pure):** `lib/sld/{vocab,draft,graph,review,registers,compare}.mjs`, validation `S_*`; synthetic regression fixtures (labeled); no DB.
 * **12.2 Persistence & API:** `lib/db/repos/sld.mjs`, `app/api/sld/*`, `doc_type='sld'` whitelist, review-queue allow-list, areas/tile map; server tests incl. isolation and "no register writes".
@@ -342,6 +343,8 @@ Each phase: own branch, own draft PR, all five CI checks, no merge without the o
 ---
 
 ## 13. Explicit acceptance criteria for Phase 12 (implementation)
+> **Superseded by §16.5–§16.7:** these criteria described the whole of SLD intelligence; they are now split per phase (12.2 intake/persistence, 12.3 extraction, 12.4 topology).
+
 1. An SLD sheet is filed as a `document` (`doc_type='sld'`) through document control; revisions use the existing lineage; no second document registry.
 2. SLD drafts live in `extraction_run` (`pass_name='sld'`) with idempotent ingest, stale-edit 409, RUN_LOCKED after sign-off; the isometric weld review queue and the P&ID workspace are unchanged and do not list SLD runs (tests prove both).
 3. Every item has a stable UID, normalized bbox, page, confidence, evidence and review status; every electrical attribute is a Fact with `basis` ∈ printed/extracted/calculated/unknown; an absent value is `unknown`, never defaulted.
@@ -364,7 +367,7 @@ Each phase: own branch, own draft PR, all five CI checks, no merge without the o
 # 15. Phase 12.1 — Architecture Closure
 
 Documentation, source inspection and decisions only. Base: `master` @ `f0e239b9e6b1c80548259304e74cb7deb7e07b04` (audit PR #87 merged). Nothing implemented; no production code, migration or test changed.
-PR #86 (Phase 11.1) is reviewed separately in §15.7 and is **not** a dependency.
+PR #86 (Phase 11.1) is reviewed separately in §15.7 and is **not** a dependency (it has since been merged, §16.1).
 Evidence labels: **[inspected]** source read at the base SHA; **[ran]** executed here against the base SHA; **[probe]** an executed scratch probe on a throwaway DB (not committed); **[not verified]**.
 
 ## 15.1 Complete `extraction_run` consumer inventory
@@ -495,7 +498,7 @@ Inspected, **not** re-run here: `db/test/pid-intelligence.mjs` (27 tests at the 
 
 ## 15.7 SLD connectivity and revision boundaries (not a copy of the P&ID rules)
 
-**Reviewed:** the Phase 11 P&ID graph (`lib/pid/graph.mjs`) and PR #86 (Phase 11.1; verified locally — `db:test`, `db:test:pg`, browser drives — and awaiting CI and the owner's merge decision). #86 fixes two process-drawing defects: a directory match is not proof, and a line reference must match. Those corrections are *necessary but not sufficient* for an electrical network, because a piping connector joins two ends of **one fluid line** (a 1:1, undirected continuation with a unique line number), whereas an SLD connector may continue a **bus**, a **feeder**, or a **group of outgoings**, carries **direction** (supply/load), a **voltage level**, and joins elements whose connectivity depends on **switching state**. The SLD rules are therefore their own:
+**Reviewed:** the Phase 11 P&ID graph (`lib/pid/graph.mjs`) and PR #86 (Phase 11.1; **merged** 2026-11-07T17:22:19Z as `ec56976848032cfd5cd1404b18b25ee5a3c89e5d`; before merging it passed the 5 CI checks on head `71592ca` and local `db:test`, `db:test:pg` and browser drives, §16.1). #86 fixes two process-drawing defects: a directory match is not proof, and a line reference must match. Those corrections are *necessary but not sufficient* for an electrical network, because a piping connector joins two ends of **one fluid line** (a 1:1, undirected continuation with a unique line number), whereas an SLD connector may continue a **bus**, a **feeder**, or a **group of outgoings**, carries **direction** (supply/load), a **voltage level**, and joins elements whose connectivity depends on **switching state**. The SLD rules are therefore their own:
 
 1. **Connector kinds** (`kind` attribute, closed set): `bus-continuation`, `feeder`, `incomer`, `outgoing-group`, `interlock/signal`. Reciprocity is judged *per kind*.
 2. **Reciprocal reference:** the target sheet must hold exactly one connector that (a) names this sheet, (b) has the **same kind**, (c) the same normalised circuit/bus/feeder label (whitespace and case only), (d) the **opposite direction** where a direction is printed, and (e) the **same voltage level** where both print one. Missing/different on any printed field ⇒ not a match (never a fallback to "the other one"). Unprinted fields are *unknown*, not wildcards: an unprinted label makes the pair `unconfirmed`, not `resolved`.
@@ -524,6 +527,8 @@ Inspected, **not** re-run here: `db/test/pid-intelligence.mjs` (27 tests at the 
 | 7 | Multi-sheet connectivity | reuse P&ID semantics · SLD-specific | **SLD-specific (§15.7)** | power networks differ (direction, voltage, state, duplicate labels, bus continuation) | rule set unvalidated on real sheets (no samples) |
 
 ## 15.10 Exact files Phase 12.2 must change
+> **Corrected by §16.3:** the list below included the extraction engine and the topology graph, which belong to 12.3/12.4. §16.3 is the authoritative Phase 12.2 file list.
+
 **New:** `lib/documents/types.mjs`; `lib/db/run-scope.mjs`; `lib/sld/{vocab,draft,graph,review,registers,compare}.mjs`; `lib/db/repos/sld.mjs`; `app/api/sld/route.js`, `app/api/sld/review/route.js`; `db/test/sld-intelligence.mjs`, `db/test/run-isolation.mjs` (differential + source-scan); `package.json` (`db:test` chain).
 **Changed (guards, behaviour-preserving for isometric data):** `app/api/documents/route.js`; `lib/db/repos/documents.mjs`; `lib/db/repos/review.mjs` (queue, hotspots, `applyCorrection`); `lib/db/repos/runs.mjs` (reserved `passName`, `latestRunForDrawing`); `app/api/runs/route.js`, `app/api/runs/[id]/route.js`, `…/approve`, `…/diff`, `…/edits`, `…/ndt-sample`; `lib/db/repos/validation.mjs`; `lib/db/repos/log.mjs`; `lib/db/repos/piping-hub.mjs`; `lib/db/repos/piping-reports.mjs` (drawing-list query); `app/api/overview/route.js` (owner decision on semantics); `lib/db/repos/revision-lifecycle.mjs` (`carryForward` guard); `lib/db/repos/revisions.mjs`; `lib/platform/areas.mjs` (+ `/api/sld`), `lib/platform/tile-apis.mjs` (generated), `db/test/area-coverage.mjs`.
 **Must NOT change:** `lib/engine.js`; isometric extraction (`app/api/extract`, `lib/sheet/*`, `parseSheet`); `lib/pid/*` (P&ID behaviour); `lib/electrical/cable.mjs` and cable import/IR behaviour; `db/migrations/*`.
@@ -540,9 +545,13 @@ Inspected, **not** re-run here: `db/test/pid-intelligence.mjs` (27 tests at the 
 6. `extraction_edit` is shared: hotspots/analytics must filter by run pass.
 
 ## 15.13 Test requirements (Phase 12.2)
+> **Corrected by §16.6:** the SLD pure/server suite of §10.3 is split between 12.3 and 12.4; §16.6 is authoritative for 12.2.
+
 Differential isolation test (§15.1); document-type matrix (§15.2); run-id route guards (409 `NOT_AN_ISOMETRIC_RUN` on `/api/runs/[id]/*` for `pid`/`sld` runs); reserved `passName`; `validation` guard; source-scan test for unreviewed `current_run`/`extraction_run` readers; plus the pure/server SLD suite of §10.3. Existing suites that must stay green unchanged: `electrical`, `doc-control`, `asset`, `api`, `pid-intelligence`, `engineering-validation`, `area-coverage`, `custom-fields`, the isometric review/queue tests, `db:test:pg`, `eval:check`. Every guard proven by reverting the code it protects.
 
 ## 15.14 Phase 12.2 acceptance criteria
+> **Corrected by §16.5:** items 5–6 below required the contract sanitizer and the connectivity rules; they belong to 12.3/12.4. §16.5 is authoritative.
+
 1. `docType` is a closed set; unknown → 400 `INVALID_DOC_TYPE`; `sld` accepted; type conflicts → 409; `pid` and `isometric` behave exactly as before (existing tests unchanged).
 2. No isometric consumer of §15.1 (rows marked L) returns or counts a `pid` or `sld` run, document or edit; isometric-only data yields identical output before/after (differential test); id-addressed isometric routes refuse non-isometric runs.
 3. SLD drafts persist as `extraction_run` (`pass_name='sld'`) with idempotent ingest, stale-edit 409, locked after sign-off; SLD runs are absent from the isometric review queue, piping hub, reports, activity log, hotspots and overview figures.
@@ -555,3 +564,97 @@ Differential isolation test (§15.1); document-type matrix (§15.2); run-id rout
 
 ## 15.15 Master-plan correction
 None required beyond Phase 12 Step 0's item-9 split. (The master plan does not describe the extraction-pass isolation or document-type handling audited here.)
+
+
+---
+
+# 16. Phase 12.1 — Closure review and scope correction
+
+Documentation and audit correction only (no production code, migration, API, UI or SLD functionality). This section **supersedes** §12.3, §13, §15.10, §15.13 and §15.14 where they differ (each carries a pointer). The findings of §15 (the 25-consumer inventory, the decisions of §15.9) are preserved unchanged.
+
+## 16.1 Synchronisation and the merged state of PR #86
+* This branch was synchronised by **merging** `origin/master` (no rewrite of its history; no conflicts). Master observed: `ec56976848032cfd5cd1404b18b25ee5a3c89e5d`.
+* **PR #86 (Phase 11.1, P&ID off-page connectivity integrity) is merged**: squash-merged 2026-11-07T17:22:19Z as `ec56976848032cfd5cd1404b18b25ee5a3c89e5d` (PR head `71592ca49d4918033e14aa4fdf35f8d84bce5e39`, base `fe7bd98`). Its implementation was not touched by this branch (the merge brought it in verbatim: `lib/pid/graph.mjs`, `components/PidPanel.jsx`, `db/test/pid-intelligence.mjs`, `eval/pid/*`, `tools/drive-pid.mjs`, `docs/audit/phase-11-pid-intelligence.md`).
+* Consequence for Phase 12: the corrected P&ID off-page rules now exist on master; the SLD design still **does not reuse** them (§16.4).
+* The §15.1 inventory and probe describe the base `f0e239b`. #86 changed `lib/pid/graph.mjs`, the P&ID panel, the P&ID eval and the P&ID test/drive only; it did not touch any consumer of §15.1, so the inventory conclusions are unchanged. **[inspected: the diff of #86 lists 9 files, none of them a §15.1 consumer]** — the isolation leaks (rows 3, 13, 15, 19) therefore still exist on master `ec56976`.
+
+## 16.2 Phase roadmap (nothing below is implemented unless stated)
+| Phase | Title | Status |
+|---|---|---|
+| 12.0 | Step 0 architecture audit (PR #87) | **merged** (docs) |
+| 12.1 | Architecture closure (this PR #88) | draft, docs only |
+| 12.2 | SLD document intake and isolated draft persistence | not started |
+| 12.3 | SLD extraction engine | not started |
+| 12.4 | Electrical topology and connectivity | not started |
+| 12.5 | Electrical register and cable reconciliation | not started |
+| 12.6 | Validation, revision comparison and SLD workspace | not started |
+Each phase: own branch, own draft PR, the five CI checks, no merge without the owner's «مرج کن». No accuracy claim in any phase until a labeled real SLD dataset exists (§10).
+
+## 16.3 Corrected Phase 12.2 — SLD Document Intake & Draft Persistence
+**Scope only:** (a) the closed document-type set `isometric | pid | sld`; unknown → `400 INVALID_DOC_TYPE`; same document number/sheet under another type → `409 DOC_TYPE_CONFLICT`; (b) SLD documents registered through the **existing** document/MDR workflow (no SLD document table); (c) SLD drafts persisted in the **existing** `extraction_run` with `pass_name='sld'` as an **opaque, minimally-enveloped** payload (below); (d) isolation of SLD runs from every isometric workflow through the shared run-scope predicate; (e) isometric run-id routes protected against non-isometric runs; (f) stale-edit protection and approval locking; (g) preserved revision lineage (`parent_document_id`, `createRevision`, `supersedePrevious`); (h) no migration unless one is demonstrated unavoidable.
+**Minimal envelope (the only contract 12.2 validates):** `{ kind:"sld", schema:1, meta:{drawingNo?,revision?,sheet?}, page?:{number,width,height}, items:[], edges:[], source:{kind,reader,hash,generatedAt} }` — `items`/`edges` are arrays carried **verbatim** (not interpreted), size-bounded; the `source.hash` gives idempotent ingest. 12.2 defines **no** symbol classes, Facts, graph or validation rules.
+**Explicitly not in 12.2:** symbol recognition, equipment classification, `Fact`/class vocabulary enforcement, electrical graph, voltage-transition analysis, cross-sheet topology, feeder-to-load traversal, cable reconciliation, workspace UI, validation findings, revision comparison.
+**Files (authoritative list):**
+* New: `lib/documents/types.mjs`; `lib/db/run-scope.mjs`; `lib/sld/envelope.mjs` (envelope check only); `lib/db/repos/sld.mjs` (ingest idempotent, get, edit with `baseHash` → 409 `STALE_RUN`, approve → lock, list by document); `app/api/sld/route.js` (GET/POST ingest) and `app/api/sld/review/route.js` (edit/approve; **no** per-item review semantics); `db/test/sld-intake.mjs`, `db/test/run-isolation.mjs`; `package.json` (`db:test` chain).
+* Changed (guards, behaviour-preserving for isometric data): `app/api/documents/route.js`; `lib/db/repos/documents.mjs`; `lib/db/repos/review.mjs` (queue, hotspots, `applyCorrection`); `lib/db/repos/runs.mjs` (reserved `passName`, `latestRunForDrawing`); `app/api/runs/route.js`, `app/api/runs/[id]/route.js`, `…/approve`, `…/diff`, `…/edits`, `…/ndt-sample`; `lib/db/repos/validation.mjs`; `lib/db/repos/log.mjs`; `lib/db/repos/piping-hub.mjs`; `lib/db/repos/piping-reports.mjs` (drawing-list query); `app/api/overview/route.js` (owner decision on semantics); `lib/db/repos/revision-lifecycle.mjs` (`carryForward` guard); `lib/db/repos/revisions.mjs`; `lib/platform/areas.mjs`; `lib/platform/tile-apis.mjs` (generated); `db/test/area-coverage.mjs`.
+* Must not change: `lib/engine.js`; isometric extraction (`app/api/extract`, `lib/sheet/*`, `parseSheet`); `lib/pid/*`; `lib/electrical/cable.mjs`, cable import and IR behaviour; `db/migrations/*`; `lib/db/repos/handover.mjs` / `asset_master`.
+
+## 16.4 Phase 12.3 — SLD Extraction Engine (future; not 12.2)
+PDF page processing; text and tag extraction; electrical symbol detection; equipment classification; cable and feeder **reference** extraction; bounding boxes and source evidence; confidence and review states; human correction workflow; the SLD class vocabulary and `Fact` contract of §5; a **synthetic** evaluation framework (a regression harness, labelled synthetic in its names, output and PR). **No accuracy claim without a labeled real SLD dataset** (§10.2). Readers only create `extracted` records.
+**Boundary:** 12.3 records *what the drawing shows* (items, attributes, evidence, stated references). It does **not** build or traverse the power network.
+
+## 16.5 Phase 12.4 — Electrical Topology and Connectivity (future; not 12.2/12.3)
+Source-to-load electrical graph; transformer and voltage-level transitions; busbar sections and bus continuation; incomer and outgoing feeders; breaker/isolator states; cross-sheet reciprocal references; ambiguous and unconfirmed connections; revision-aware topology comparison; electrical validation rules.
+**The P&ID graph semantics are not reused.** #86 is merged and its rules (a directory match is not proof; the line reference must match; unconfirmed adds no adjacency) are *necessary but not sufficient* (§15.7: direction, voltage level, switching state, duplicate connector labels, bus continuation). Any rule borrowed from `lib/pid/graph.mjs` must be re-derived from the electrical domain and validated by an electrical engineer on real sheets before it is relied on; until then 12.4 stays at "unconfirmed".
+
+Later phases: **12.5** electrical register (attribute-fact register keyed to `tag`, §15.4 C, only on the owner's decision) and cable reconciliation (SLD ↔ `cable_no`, endpoint proposals, §15.5); **12.6** the Validation Center rules, SLD revision comparison and the `/sld` workspace.
+
+## 16.6 Corrected Phase 12.2 acceptance criteria
+Phase 12.2 must prove that SLD documents and drafts **enter the platform safely and change nothing for existing workflows**:
+1. `docType` is the closed set; unknown → `400 INVALID_DOC_TYPE` (nothing registered); absent → `isometric` as today; same number/sheet under another type → `409 DOC_TYPE_CONFLICT`; `pid` and `isometric` unchanged (existing tests unchanged).
+2. An SLD sheet is a `document` (`doc_type='sld'`) filed through the existing document/MDR workflow (MDR entry, issue, transmittal, revision lineage via `createRevision`, `supersedePrevious`); no SLD document table.
+3. SLD drafts are `extraction_run` rows with `pass_name='sld'`; ingest is idempotent by `source.hash`; a stale edit (`baseHash`) → 409; after approval the run is locked (DB trigger + application) and a different reading is refused (`RUN_LOCKED`); approval records approver, time and hash and **promotes nothing**.
+4. **Isolation:** every row marked L in §15.1 is guarded; the **differential test** (§16.7) passes; id-addressed isometric routes reject non-isometric runs; no isometric screen, report, log, counter or analytic returns or counts a `pid` or `sld` run, document or edit.
+5. No `tag`, `asset_master`, `cable`, `cable_activity`, `ir_test` or `subsystem` row is created or modified by any 12.2 path (row-count test before/after).
+6. `lib/engine.js`, isometric extraction, P&ID behaviour and the cable import/IR workflow are unchanged; no migration; no UI.
+7. Final-SHA verification: `db:test`, `db:test:pg`, `eval:check`, `next build`, P&ID and isometric browser regressions — reported only for the exact SHA that completed them.
+**Not criteria of 12.2:** electrical symbol extraction, electrical graph, voltage-transition analysis, cross-sheet electrical topology, feeder-to-load traversal.
+
+## 16.7 Test requirements (Phase 12.2)
+**Differential isolation test (`db/test/run-isolation.mjs`), mandatory:**
+1. Build an **isometric-only** project (documents, runs, welds/spools, edits, approval) and capture the output of every guarded function/route — `reviewQueue`, `hotspots`, `pipingHub`, `pipingReport` (all kinds), activity log (`sectionLog`), overview counters, `validationFor`, revision/lineage/compare routes, id-addressed run routes, `reporting.current_run` rows — serialised canonically.
+2. Apply the shared scope guard (the change under test).
+3. Re-capture: the outputs are **byte-identical**.
+4. Add a `pid` document and an `sld` document, each with extracted and approved runs and extraction edits.
+5. Re-capture: the isometric outputs are **still byte-identical** (piping outputs unchanged).
+6. Call every isometric id-addressed route (`/api/runs/[id]` and `approve`, `diff`, `edits`, `ndt-sample`; `compareRuns`; `carryForward`; `applyCorrection`; `validationFor`; `/api/runs` POST with a non-isometric `documentId`/reserved `passName`) with the `pid`/`sld` run or document id: each is rejected (`409 NOT_AN_ISOMETRIC_RUN` or the route's equivalent), nothing written.
+**Source-scan test (mandatory):** fails when a source file outside a reviewed allow-list reads `reporting.current_run` or `FROM extraction_run` / `JOIN extraction_run` (and `extraction_edit` aggregates) — so a future unreviewed reader cannot reopen the leak.
+**Document-type matrix:** §15.2 cases (1)–(9). **SLD persistence:** idempotent ingest, stale 409, lock after approval (the DB trigger is hit directly too), authorization (viewer refused, other project sees nothing), concurrency of two ingests, envelope size/shape refusal. **Guard proofs:** every guard demonstrated by reverting it and watching a test fail. **Existing suites that must stay green unchanged:** `pid-intelligence`, `electrical`, `doc-control`, `asset`, `api`, `engineering-validation`, `area-coverage`, `custom-fields`, the isometric review/queue tests, `db:test:pg`, `eval:check`.
+
+## 16.8 Decisions that stay explicit (unchanged by this correction)
+* Electrical ratings stay **in the SLD draft** initially; `asset_master` is **not** extended in 12.2; Custom Fields are **not** authoritative engineering specifications.
+* Cable endpoint identity stays **text plus link proposals**; an uncertain cable endpoint is **never** attached to a tag automatically; `to_tag_id` semantics are unchanged; cable import and IR workflows are not modified.
+* No separate SLD draft table and no separate SLD document table; no migration in 12.2.
+* Approval of an SLD draft is **not** promotion to any authoritative register.
+
+## 16.9 Verification statements — what was and was not executed
+| Category | What | Result |
+|---|---|---|
+| **Executed on the audit base SHA `f0e239b`** (worktree, `node --import ./tools/register.mjs db/test/<name>.mjs`) | `custom-fields`, `electrical`, `doc-control`, `asset`, `area-coverage`, `equipment`, `engineering-validation` | 5/5 · 21/21 · 9/9 · 6/6 · 5/5 · 25/25 · 34/34 |
+| **Scratch database probe** (throwaway PGlite on `f0e239b`, script not committed) | a P&ID document ingested, corrected, set `approved` | `hotspots.totalEdits = 1`; `current_run` 1 row; `pipingHub.drawings = 1`, `drawingsApproved = 1`; activity log shows it as a weld-register approval; overview counts 1 approved document; weld-log report and review queue did not list it |
+| **Inspected, not executed** | `db/test/pid-intelligence.mjs` at the base (27 tests), `db/test/api.mjs`, every SQL of §15.1, the diff of #86 | no result claimed |
+| **Not executed for this PR** | full `npm run db:test`, `db:test:pg`, `eval:check`, `next build`, browser drives (documentation-only change; CI runs the first four) | none claimed |
+| **CI on this PR's head** | recorded in the PR (see below) | see below |
+| **Vercel** | "Vercel Preview Comments" is a deployment/preview check. **It is not evidence that any database or unit test passed**; only the `data-layer` (`db:test`), `pg-scope` (`db:test:pg`), `eval` and `build` jobs of the workflow are. |
+| **Master `ec56976`** | the workflow run for the merge commit is a separate run from #86's PR run; at the time of writing (17:2x UTC) its `build`, `pg-scope` and `eval` jobs had completed successfully and `data-layer` was still running. **No claim is made that master `ec56976` has passed `db:test`** until that exact run completes. |
+(The Phase 11.1 results quoted in `docs/audit/phase-11-pid-intelligence.md` §16 are of head `71592ca`, run locally and by the PR's CI — not of the merge commit.)
+
+## 16.10 Remaining risks and unverified items
+1. The isolation guards touch shared isometric queries: a mistake alters isometric figures — hence the differential test and the source-scan test.
+2. The §15.1 inventory is by reading; row 16 (the `piping-reports.mjs:30–36` drawing list) exposure is **unverified** (the weld-log report did not list the P&ID in the probe).
+3. `INVALID_DOC_TYPE` could reject an unknown client — only the P&ID path sends `docType` today (inspected in `app components lib`; `tools/drive-pid.mjs` sends `pid`); a production data check (read-only) before enforcing is recommended.
+4. `DOC_TYPE_CONFLICT` could block an existing mixed-type document number — read-only pre-check on production data needed.
+5. Existing P&ID leaks (activity log label, hub counts, hotspots, overview) are on master now; 12.2's guards will change those visible numbers (intended) — to be communicated.
+6. `lib/db/repos/joint.mjs:337` loads every current run's payload; large SLD payloads would add cost — bound or filter by type.
+7. Open owner decisions: tag discipline of electrical equipment; multi-voltage model; unit canonical list; whether `from` should ever drive readiness; the `overview` approved-document semantics.
+8. No labeled real SLD dataset: recognition accuracy is unmeasurable (§10).
