@@ -147,3 +147,11 @@ Severity may be lowered per finding (e.g. a duplicate printed number on a sheet-
 * Preview-vs-saved (`A_PREVIEW_DIFF`) is informational: the draft is a preview, the server's ledger is authoritative, and a save aligns them.
 * Findings are computed on request, not stored (no result table, no cache): there is no invalidation problem to get wrong; cost is one read-only request.
 * Disk note for the session: the container's writable allowance was nearly exhausted by earlier test scratch directories; the shared scratch sweep was not performed.
+
+## 8. Results (this branch)
+* `db/test/engineering-validation.mjs`: 34/34 (24 engine, 10 route-level) on PGlite and on real PostgreSQL. Guards proven by reverting: approved-revision lock (S10 fails), stale `baseHash` (S5, S6 fail), relationship check (S4, S6 fail).
+* `npm run db:test`: the whole chain passes; its one failure on the first run (`area-coverage`: `/api/mark-warnings` unclassified) was fixed in `lib/platform/areas.mjs` and the rest of the chain was then run from that file on (area-coverage 5/5 and the 15 files after it all pass).
+* `npm run db:test:pg`: 8/8, 15/15, 5/5, 3/3. pg-suite: engineering-validation 34/34, weld-bom-equipment 28/28, engineering-crud 16/16, typed-weld-identity 17/17, mark-identity 20/20, workspace-foundation 23/23.
+* `npm run eval:check`: GATE PASSED. `npx next build`: compiled.
+* Browser drive `tools/drive-engineering-validation.mjs`: 26/26 checks, no page errors; screenshots in `docs/audit/phase-7-shots/` (dark, light, phone).
+* Vercel (Phase 6 pending checks): commit e405a16 — 4/4 Vercel statuses success; check runs build/eval/pg-scope/data-layer success; master push workflow run 42360231844 completed success.
