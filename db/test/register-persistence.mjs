@@ -40,8 +40,10 @@ const BOM = [
   { pt: 3, group: "FITTINGS", description: "ELBOW 90 LR BW A234-WPB", diam: "4", qty: 3, qtyUnit: "pcs" },
   { pt: 7, group: "MISC", description: "STUD BOLT SET", diam: "4", qty: 4, qtyUnit: "pcs" },
 ];
-const W = (id, no, c1, c2) => ({ id, kind: "weld-shop", no, attrs: { ...(c1 ? { c1 } : {}), ...(c2 ? { c2 } : {}) } });
-const EQ = (id, no, attrs = {}) => ({ id, kind: "equipment", no, attrs: { tag: `T-${no}`, type: "valve", status: "planned", ...attrs } });
+// marks carry a persistent identity (uid, lib/sheet/mark-identity.mjs); `id` is the legacy list handle. Same id → same uid in these fixtures.
+const UID = (id) => `00000000-0000-4000-8000-${Buffer.from(String(id)).toString("hex").padStart(12, "0").slice(-12)}`;
+const W = (id, no, c1, c2) => ({ id, uid: UID(id), kind: "weld-shop", no, attrs: { ...(c1 ? { c1 } : {}), ...(c2 ? { c2 } : {}) } });
+const EQ = (id, no, attrs = {}) => ({ id, uid: UID(id), kind: "equipment", no, attrs: { tag: `T-${no}`, type: "valve", status: "planned", ...attrs } });
 const payloadOf = (extra = {}) => { const p = JSON.parse(JSON.stringify(DEMO)); delete p.bom; return { ...p, ...extra }; };
 
 let seq = 0;
@@ -74,8 +76,8 @@ test("1. an initial run with a non-empty BOM and marks saves the register, the B
   equal(r.status, 201, JSON.stringify(r.body).slice(0, 200));
   runA = r.body.run.id;
   equal((await bomOf(docA)).map((b) => b.pt), [1, 2, 3, 7]);
-  equal((await equipment(docA)).map((e) => e.mark_id), ["e1"]);
-  equal((await allocs(docA)).map((a) => [a.pt, a.owner_ref, Number(a.qty)]), [[2, "w1", 1], [2, "w2", 1], [3, "w2", 1], [7, "e1", 1]]);
+  equal((await equipment(docA)).map((e) => e.mark_id), [UID("e1")], "equipment is kept by the mark's persistent identity");
+  equal((await allocs(docA)).map((a) => [a.pt, a.owner_ref, Number(a.qty)]), [[2, UID("w1"), 1], [2, UID("w2"), 1], [3, UID("w2"), 1], [7, UID("e1"), 1]]);
   equal(r.body.bomRows, 4);
   assert(r.body.allocation && r.body.allocation.reserved === 4);
 });
@@ -130,7 +132,7 @@ test("5. a correction that changes the BOM re-makes the BOM and the allocations 
   equal(r.body.sheetData.bom.mode, "replace");
   equal(Number((await bomOf(docA)).find((b) => b.pt === 3).qty), 5, "the saved BOM follows the correction");
   const mine = await allocs(docA, "reserved");
-  equal(mine.filter((a) => a.pt === 3).map((a) => [a.owner_ref, Number(a.qty)]), [["w2", 1], ["w3", 2]]);
+  equal(mine.filter((a) => a.pt === 3).map((a) => [a.owner_ref, Number(a.qty)]), [[UID("w2"), 1], [UID("w3"), 2]]);
 });
 
 test("6. allocation capacity is enforced on a correction: more than the BOM row has is refused and undone", async () => {
@@ -157,13 +159,13 @@ test("8. an installed line is never released by a correction", async () => {
 });
 
 test("9. installed or tested equipment, and its accessories, are not dropped by a correction", async () => {
-  await inP(async () => { await db.query("UPDATE iso_equipment SET status = 'tested' WHERE document_id = $1 AND mark_id = 'e1'", [docA]); });
+  await inP(async () => { await db.query("UPDATE iso_equipment SET status = 'tested' WHERE document_id = $1 AND mark_id = $2", [docA, UID("e1")]); });
   const noMark = payloadOf({ bom: BOM, sheetMarkup: { items: [W("w1", "1", "2"), W("w2", "2", "2", "3"), W("w3", "3", "3", "3")] } });
   noMark.bom[2].qty = 5;
   const r = await correct(runA, noMark);
   equal(r.status, 409);
   assert(/tested|ثبت است/.test(r.body.error), r.body.error);
-  equal((await equipment(docA)).map((e) => [e.mark_id, e.status]), [["e1", "tested"]]);
+  equal((await equipment(docA)).map((e) => [e.mark_id, e.status]), [[UID("e1"), "tested"]]);
 });
 
 test("a BOM change on a revision with an approved run is refused: a signed BOM changes by a new revision", async () => {
@@ -214,7 +216,7 @@ test("12. a new revision of the drawing has its own BOM and ledger; the old revi
   const r = await save(docB, payloadOf({ bom: BOM.map((b) => (b.pt === 2 ? { ...b, qty: 3 } : b)), sheetMarkup: { items: [W("w9", "9", "2")] } }));
   equal(r.status, 201);
   equal(Number((await bomOf(docB)).find((b) => b.pt === 2).qty), 3);
-  equal((await allocs(docB)).map((a) => a.owner_ref), ["w9"]);
+  equal((await allocs(docB)).map((a) => a.owner_ref), [UID("w9")]);
   equal(Number((await bomOf(docA)).find((b) => b.pt === 2).qty), 2, "revision 0 keeps its own BOM");
   assert((await allocs(docA)).length >= 4, "and its own ledger");
 });

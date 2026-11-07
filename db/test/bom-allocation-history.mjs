@@ -42,7 +42,8 @@ test("104 over data: existing events are filled in from their allocation, nothin
   await migrate(db, { dir: upTo103 });
   const w = await world(db);
   const before = (await db.query("SELECT * FROM bom_allocation_event ORDER BY project_id, at, id")).rows;
-  equal(await migrate(db), ["104_bom_allocation_event_snapshot"]);
+  const ran = await migrate(db);
+  assert(ran.includes("104_bom_allocation_event_snapshot"), JSON.stringify(ran));   // later migrations may follow it
   const after = (await db.query("SELECT * FROM bom_allocation_event ORDER BY project_id, at, id")).rows;
   equal(after.length, before.length);
   for (let i = 0; i < after.length; i++) {
