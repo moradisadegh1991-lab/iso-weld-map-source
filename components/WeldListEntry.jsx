@@ -620,7 +620,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       default: return undefined;
     }
   };
-  const selectedUid = useMemo(() => { const m = markSel ? findMark(drawItems, markSel) : null; return m ? (isUid(m.uid) ? m.uid : m.id) : null; }, [markSel, drawItems]);
+  const selectedUid = (() => { const m = markSel ? findMark(drawItems, markSel) : null; return m ? (isUid(m.uid) ? m.uid : m.id) : null; })();   // (not a hook: this runs after the sheet-less early return)
   const tabs = [
     { k: "info", label: "مشخصات", hint: "شمارهٔ نقشه، رویژن، خط و مشخصات خط", node: (<><IsoInfo meta={meta} lineData={lineData} onMeta={setMeta} onLineData={setLineData} lists={lists} locked={locked} run={run} />{registryBlock}</>) },
     { k: "welds", label: "سرجوش‌ها", hint: "رجیستر جوش‌ها و نشان‌های روی نقشه", badge: nos.length ? `${reviewedN}/${nos.length}` : "",

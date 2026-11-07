@@ -1083,7 +1083,8 @@ tr.p6-editing{outline:1.5px solid #1d6fd8;outline-offset:-1px}
 .vc-filters input,.vc-filters select{min-width:0;max-width:100%}
 .vc-filters input[type=search]{flex:1 1 180px}
 .vc-scroll{overflow:auto;max-height:46vh;border:1px solid var(--rule);border-radius:6px}
-.vc-table{width:100%;border-collapse:collapse;font-size:12px}
+.vc-table{width:100%;min-width:560px;border-collapse:collapse;font-size:12px}
+.vc-table td:nth-child(5){min-width:220px}
 .vc-table th{position:sticky;top:0;background:var(--th-bg);text-align:start;padding:6px 8px;font-weight:600;white-space:nowrap;border-bottom:1px solid var(--rule)}
 .vc-table td{padding:6px 8px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
 .vc-table tr[data-finding]{cursor:pointer} .vc-table tr[data-finding]:hover{background:var(--hover)}
