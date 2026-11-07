@@ -1,7 +1,7 @@
 "use client";
 import { useConfirm, askDelete } from "./ui/ConfirmDialog";
 import { useEffect, useRef } from "react";
-import { KINDS, EQUIPMENT_STATUS, removeMark, unplace, isPlaced, equipmentChecks, dependents, weldsOf, accessoriesOf, markRef, isMark } from "../lib/sheet/markup.mjs";
+import { KINDS, EQUIPMENT_STATUS, removeMark, unplace, isPlaced, equipmentChecks, dependents, weldsOf, equipmentWelds, accessoriesOf, markRef, isMark } from "../lib/sheet/markup.mjs";
 import TableKit from "./ui/TableKit";
 
 /**
@@ -68,7 +68,10 @@ export default function EquipmentTable({ protect = null, items = [], onChange, b
                     <td className="mono sm" dir="ltr" data-cell="tag">{a.tag || "—"}</td>
                     <td className="mono sm" dir="ltr" data-cell="c1">{bomText(a.c1)}</td>
                     <td className="mono sm" dir="ltr" data-cell="spool">{a.spool || "—"}</td>
-                    <td className="mono sm" dir="ltr" data-cell="welds">{weldsOf(a.welds).join("، ") || "—"}</td>
+                    <td className="mono sm" dir="ltr" data-cell="welds">{(() => { const ew = equipmentWelds(m, items);
+                      return (<>{ew.joined.map((j) => j.no || "؟").join("، ") || (ew.unresolved.length || ew.dangling.length ? "" : "—")}
+                        {ew.unresolved.length > 0 && <span className="warnish" data-weld-unresolved title="شمارهٔ قدیمی که سرجوش مشخصی را نام نمی‌برد؛ در فرم تجهیز حل کنید"> ⚠ {ew.unresolved.map((x) => x.no).join("، ")}؟</span>}
+                        {ew.dangling.length > 0 && <span className="warnish" data-weld-dangling title="سرجوش وصل‌شده روی برگ نیست"> ⚠ حذف‌شده</span>}</>); })()}</td>
                     <td className="mono sm" dir="ltr" data-cell="acc">{acc.length ? acc.map((x) => `PT ${x.pt}×${x.qty}`).join("، ") : "—"}</td>
                     <td className="sm" data-cell="status">{status[a.status] || status.planned}</td>
                     <td style={{ whiteSpace: "nowrap" }}>

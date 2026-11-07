@@ -18,12 +18,22 @@ const FILTER_LABEL = { all: "همه", issues: "با ایراد", reserved: "رز
 const COLS = [["pt", "PT"], ["group", "گروه"], ["description", "شرح"], ["diam", "N.S."], ["stockCode", "کد کالا"], ["qty", "تعداد"], ["qtyUnit", "واحد"]];
 const SORTABLE = new Set(["pt", "group", "description", "diam", "qty"]);
 
+/** The server's numbers for one row: reserved / installed / left, the welds' ends and the pieces (equipment, accessories) together, each as the server states it. */
+const ledgerText = (s) => {
+  const n = (v) => (v == null ? "؟" : v);
+  const ends = s.weldEnds != null || s.weldReserved || s.weldInstalled ? `سر: ${s.weldReserved ?? 0}/${s.weldInstalled ?? 0}/${n(s.weldLeft)}` : "";
+  const pieces = (s.reserved || s.installed || s.weldEnds == null) ? `عدد: ${s.reserved ?? 0}/${s.installed ?? 0}/${n(s.left)}` : "";
+  return [ends, pieces].filter(Boolean).join(" · ") || "—";
+};
+
 export default function BomTable({ rows, live, locked = false, session = null, documentId = null, savedHadRows = false, onView, onEdit, onAdd, onDelete }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState(null);
-  const [ledger, setLedger] = useState({ phase: documentId ? "loading" : "none", map: null, error: "" });
+  const [ledger, setLedger] = useState({ phase: documentId ? "loading" : "none", map: null, lines: [], error: "" });
   const [msg, setMsg] = useState("");
+  const [openPt, setOpenPt] = useState(() => new Set());     // rows whose consumers / history are shown
+  const [hist, setHist] = useState({ phase: "idle", events: [] });   // the revision's allocation events (server, newest first)
 
   // the saved ledger of this revision (read-only; the server decides what a save may change)
   useEffect(() => {
@@ -33,7 +43,7 @@ export default function BomTable({ rows, live, locked = false, session = null, d
     (async () => {
       try {
         const r = await session.call(`/api/bom-allocations?projectId=${session.projectId}&documentId=${documentId}`);
-        if (!gone) setLedger({ phase: "ok", map: ledgerByPt(r), error: "" });
+        if (!gone) setLedger({ phase: "ok", map: ledgerByPt(r), lines: r?.lines || [], error: "" });
       } catch (e) { if (!gone) setLedger({ phase: "error", map: null, error: e?.message || "ledger" }); }
     })();
     return () => { gone = true; };
@@ -42,6 +52,15 @@ export default function BomTable({ rows, live, locked = false, session = null, d
   const all = useMemo(() => decorate(rows, { live, ledger: ledger.map }), [rows, live, ledger.map]);
   const list = useMemo(() => view(all, { query, filter, sort }), [all, query, filter, sort]);
   const issueCount = all.filter((d) => d.issues.length).length;
+  const toggle = async (pt) => {
+    const n = new Set(openPt); if (n.has(pt)) n.delete(pt); else n.add(pt); setOpenPt(n);
+    if (hist.phase === "idle" && documentId && session?.projectId) {
+      setHist({ phase: "loading", events: [] });
+      try { const r = await session.call(`/api/bom-allocations?projectId=${session.projectId}&documentId=${documentId}&history=1`); setHist({ phase: "ok", events: r?.history || [] }); }
+      catch (e) { setHist({ phase: "error", events: [], error: e?.message || "history" }); }
+    }
+  };
+  const KIND_WORD = { weld: "سرجوش", equipment: "تجهیز", accessory: "متعلق تجهیز", spool: "اسپول", cut: "برش" };
   const clickSort = (k) => setSort((s) => (s?.key !== k ? { key: k, dir: "asc" } : s.dir === "asc" ? { key: k, dir: "desc" } : null));
 
   const remove = (d) => {
@@ -90,8 +109,8 @@ export default function BomTable({ rows, live, locked = false, session = null, d
                     ? <button type="button" className="ghost sm" data-bom-sort={k} onClick={() => clickSort(k)}>{label}{sort?.key === k ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}</button>
                     : label}
                 </th>))}
-              <th title="سرهای جوشی‌شدنی این ردیف که سرجوش‌ها نام برده‌اند">مصرف زنده</th>
-              <th title="تخصیص ذخیره‌شده در دفتر این رویژن">رزرو / نصب / مانده</th>
+              <th title="پیش‌نمایش روی صفحه، از سرجوش‌های همین پنجره — نتیجهٔ نهایی نیست">پیش‌نمایش (صفحه)</th>
+              <th title="تخصیص ذخیره‌شده در دفتر سرور این رویژن">سرور: رزرو / نصب / مانده</th>
               <th>بررسی</th><th></th>
             </tr></thead>
             <tbody>
@@ -109,15 +128,34 @@ export default function BomTable({ rows, live, locked = false, session = null, d
                     <td className="sm" data-bom-cell="qtyUnit">{b.qtyUnit === "pcs" ? "عدد" : b.qtyUnit === "m" ? "m" : "؟"}</td>
                     <td className="mono sm" dir="ltr" data-bom-alloc={b.pt}>{usedCell(d)}</td>
                     <td className="mono sm" dir="ltr" data-bom-ledger={b.pt}>
-                      {s ? `${s.reserved ?? 0} / ${s.installed ?? 0} / ${s.left == null ? "؟" : s.left}` : ledger.phase === "ok" ? "—" : ""}
+                      {s ? ledgerText(s) : ledger.phase === "ok" ? "—" : ""}
                     </td>
                     <td className="sm" data-bom-issues={d.issues.length}>{d.issues.length ? <span title={d.issues.join(" · ")}>⚠ {d.issues.length}</span> : "✓"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
+                      {ledger.phase === "ok" && <button type="button" className="ghost sm" data-bom-detail={b.pt} aria-expanded={openPt.has(String(b.pt))} onClick={() => toggle(String(b.pt))}>مصرف‌کنندگان</button>}
                       <button type="button" className="ghost sm" data-bom-view={b.pt} onClick={() => onView?.(d.index)}>مشاهده</button>
                       {!locked && <button type="button" className="ghost sm" data-bom-edit={b.pt} onClick={() => onEdit?.(d.index)}>ویرایش</button>}
                       {!locked && <button type="button" className="ghost sm" data-bom-delete={b.pt} onClick={() => remove(d)}>حذف</button>}
                     </td>
                   </tr>);
+              }).flatMap((tr, i) => {
+                const pt = String(list[i].row.pt);
+                if (!openPt.has(pt)) return [tr];
+                const lines = (ledger.lines || []).filter((l) => String(l.pt) === pt);
+                const evs = hist.events.filter((e) => String(e.pt) === pt);
+                return [tr, (
+                  <tr key={`${list[i].index}-detail`} data-bom-detail-row={pt}><td colSpan={COLS.length + 4}>
+                    <div className="sm" data-bom-consumers>
+                      <b>مصرف‌کنندگان این ردیف (سرور)</b>
+                      {lines.length === 0 ? <span className="muted"> — هیچ‌کس فعلاً رزرو یا نصب نکرده</span>
+                        : <ul style={{ margin: "4px 0", paddingInlineStart: 18 }}>{lines.map((l) => <li key={l.id} className="mono" dir="ltr">{KIND_WORD[l.ownerKind] || l.ownerKind} {l.ownerNo || "؟"} · {l.qty} {l.unit} · {l.status}</li>)}</ul>}
+                      <b>تاریخچه (فقط‌افزودنی)</b>
+                      {hist.phase === "loading" && <span className="muted"> در حال خواندن…</span>}
+                      {hist.phase === "error" && <span className="err"> خواندن تاریخچه نشد: {hist.error}</span>}
+                      {hist.phase === "ok" && (evs.length === 0 ? <span className="muted"> — رویدادی نیست</span>
+                        : <ul style={{ margin: "4px 0", paddingInlineStart: 18 }} data-bom-history>{evs.slice(0, 20).map((e, j) => <li key={j} className="mono" dir="ltr">{String(e.at).slice(0, 16).replace("T", " ")} · {e.event} · {KIND_WORD[e.ownerKind] || e.ownerKind} {e.ownerNo || ""} · {e.before ?? "—"}→{e.after ?? "—"}{e.reason ? ` · ${e.reason}` : ""}{e.by ? ` · ${e.by}` : ""}</li>)}</ul>)}
+                    </div>
+                  </td></tr>)];
               })}
             </tbody>
           </table>

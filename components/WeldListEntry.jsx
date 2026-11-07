@@ -189,7 +189,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras, byUid) : []), [sheetMode, rows, marks, byUid, extras]);
   const itemsRef = useRef(items); itemsRef.current = items;
   // what the SAVED revision holds against deleting a mark (lib/client/saved-protection.mjs): advice before the confirm; the server decides
-  const protect = useSavedProtection({ session, documentId: run?.run?.documentId || null, items, status: run?.run?.status });
+  const { protect, saved } = useSavedProtection({ session, documentId: run?.run?.documentId || null, items, status: run?.run?.status });
   const validationInput = useMemo(() => ({ items, bom, bomRows, cutRows, cutLengths, registerProblems: model.problems || [] }),
     [items, bom, bomRows, cutRows, cutLengths, model]);
   const validationTotal = useMemo(() => collectFindings(validationInput).total, [validationInput]);
@@ -621,7 +621,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       </WorkspaceFrame>
       {form && (
         <MarkForm key={`${form.mode}-${form.id || "new"}-${form.kind}`} mode={form.mode}
-          mark={form.id ? findMark(items, form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo} thisSheet={meta.sheet}
+          mark={form.id ? findMark(items, form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo} thisSheet={meta.sheet} saved={saved}
           onClose={() => setForm(null)}
           onSave={(d) => {
             if (form.id) onItems(updateMark(items, form.id, { kind: d.kind, no: d.no, attrs: d.attrs }));
