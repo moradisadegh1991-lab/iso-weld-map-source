@@ -406,9 +406,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   };
   const cutKey = (c, i) => (isUid(c.uid) ? c.uid : `i${i}`);
   const selMarkU = (() => { const m = markSel ? findMark(drawItems, markSel) : null; return m && isUid(m.uid) ? m.uid.toLowerCase() : null; })();
-  const rank = { error: 3, warning: 2, info: 1 };
-  const worst = (c) => cutIssueList.filter((x) => (c.uid && x.uid === c.uid) || (!c.uid && x.piece === String(c.piece ?? "").trim()))
-    .reduce((w, x) => (rank[x.level] > rank[w] ? x.level : w), "none");
+  const rank = { none: 0, info: 1, warning: 2, error: 3 };
   const cutView = useMemo(() => {
     const q = cutQ.trim().toLowerCase();
     const list = cutRows.map((c, i) => ({ c, i, flag: (() => { const f = cutIssueList.filter((x) => (c.uid && x.uid === c.uid) || (!c.uid && x.piece === String(c.piece ?? "").trim())); return f.reduce((w, x) => (rank[x.level] > rank[w] ? x.level : w), "none"); })() }))
