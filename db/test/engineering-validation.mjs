@@ -4,7 +4,7 @@
  * Every category and the rules the phase names: findings carry a persistent uid (never only the printed number), computed from the
  * existing rules, nothing repaired; stored warnings are the only resolvable ones.
  */
-import { test, run, assert, equal } from "./harness.mjs";
+import { test, run, assert, equal, scratchDir } from "./harness.mjs";
 import { newUid } from "../../lib/sheet/mark-identity.mjs";
 import { validate, summarize, CATALOG, CATEGORIES, SEVERITIES } from "../../lib/engineering/validation.mjs";
 
@@ -210,6 +210,192 @@ test("the engine never mutates its input and is deterministic", () => {
   const a = V(payload), b = V(payload);
   equal(JSON.stringify(payload), before); equal(a, b);
   assert(new Set(a.findings.map((f) => f.id)).size === a.findings.length, "finding ids are unique");
+});
+
+
+// ── the server (route level): read-only validation of the saved state, and warning resolution ───────────
+
+import { isUid } from "../../lib/sheet/mark-identity.mjs";
+process.env.AUTH_MODE = "dev";
+process.env.PGLITE_DIR = await scratchDir("pvv-db-");
+process.env.STORAGE_ROOT = await scratchDir("pvv-store-");
+const projectsRoute = await import("../../app/api/projects/route.js");
+const documentsRoute = await import("../../app/api/documents/route.js");
+const runsRoute = await import("../../app/api/runs/route.js");
+const runRoute = await import("../../app/api/runs/[id]/route.js");
+const editsRoute = await import("../../app/api/runs/[id]/edits/route.js");
+const approveRoute = await import("../../app/api/runs/[id]/approve/route.js");
+const allocRoute = await import("../../app/api/bom-allocations/route.js");
+const validationRoute = await import("../../app/api/validation/route.js");
+const warningsRoute = await import("../../app/api/mark-warnings/route.js");
+const { getDb } = await import("../../lib/server/db.mjs");
+const { withProject } = await import("../../lib/db/scope.mjs");
+const { DEMO } = await import("../../lib/demo.js");
+const { addMember, ensureUser } = await import("../../lib/db/repos/projects.mjs");
+
+const req = (url, { method = "GET", as = "kc|alice", body } = {}) =>
+  new Request(url, { method, headers: { authorization: `Bearer ${as}`, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+const json = async (res) => ({ status: res.status, body: await res.json() });
+const ctx = (id) => ({ params: Promise.resolve({ id }) });
+const db = await getDb();
+const projectId = (await json(await projectsRoute.POST(req("http://x/api/projects", { method: "POST", body: { code: "PVV", name: "V" } })))).body.project.id;
+const q = (sql, p = []) => withProject(db, projectId, async () => (await db.query(sql, p)).rows);
+let seq = 0;
+const newDoc = async (docNo) => (await json(await documentsRoute.POST(req("http://x/api/documents", { method: "POST", body: { projectId, docNo, revision: "0", fileBase64: Buffer.from(`scan ${docNo} ${++seq}`).toString("base64") } })))).body.document.id;
+const post = async (documentId, payload) => json(await runsRoute.POST(req("http://x/api/runs", { method: "POST", body: { projectId, documentId, lineNo: "PVV-L1", payload } })));
+const getRun = async (id) => json(await runRoute.GET(req(`http://x/api/runs/${id}?projectId=${projectId}`), ctx(id)));
+const validation = async (documentId, as, pid = projectId) => json(await validationRoute.GET(req(`http://x/api/validation?projectId=${pid}&documentId=${documentId}`, { as })));
+const warningList = async (documentId) => json(await warningsRoute.GET(req(`http://x/api/mark-warnings?projectId=${projectId}&documentId=${documentId}`)));
+const resolveW = async (documentId, warningId, extra = {}, as = "kc|alice") => json(await warningsRoute.POST(req("http://x/api/mark-warnings", { method: "POST", as, body: { projectId, documentId, warningId, resolution: "پیوند در فرم تجهیز انتخاب شد", ...extra } })));
+const correct = async (id, edited, baseHash) => json(await editsRoute.POST(req(`http://x/api/runs/${id}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", ...(baseHash ? { baseHash } : {}) } }), ctx(id)));
+const events = (d) => q("SELECT count(*)::int AS n FROM bom_allocation_event WHERE document_id = $1", [d]);
+
+const typed = (rows, items = [], extra = {}) => ({ meta: { drawingNo: "PVV-1", sheet: "1/1", lineNo: "PVV-L1", nps: 4 }, weldList: rows, bom: BOM, sheetMarkup: { page: 1, items }, ...extra });
+const EQU = newUid();
+const eqMark = (attrs, uid = EQU) => ({ id: "e1", uid, kind: "equipment", no: "V-1", x: 0.5, y: 0.5, attrs: { tag: "T-1", type: "valve", c1: "7", ...attrs } });
+const W5a = newUid(), W5b = newUid();
+const base = () => { const p = JSON.parse(JSON.stringify(DEMO)); delete p.bom; return { ...p, bom: BOM }; };
+const sheetOnly = (items) => ({ ...base(), sheetMarkup: { page: 1, items } });
+const weldMark = (id, uid, kind, no, attrs = {}) => ({ id, uid, kind, no, x: 0.2, y: 0.2, src: "hand", attrs });
+// a legacy equipment naming «5»: first it names one weld (provable, linked); then the sheet gets a second «5» and the number is ambiguous — recorded as a warning, nothing re-linked
+async function saveAmbiguous(doc, ids = { a: W5a, b: W5b, e: EQU }) {
+  const one = [weldMark("w1", ids.a, "weld-shop", "5", { c1: "2" }), eqMark({ welds: "5" }, ids.e)];
+  const r1 = await post(doc, sheetOnly(one));
+  if (r1.status !== 201) return r1;
+  return post(doc, sheetOnly([one[0], weldMark("w2", ids.b, "weld-field", "5"), one[1]]));
+}
+
+let docA, runA, warn;
+
+test("S1. the server validates the SAVED revision: findings carry the weld's uid; an ambiguous legacy equipment number is a finding and a stored warning", async () => {
+  docA = await newDoc("PVV-A");
+  const r = await saveAmbiguous(docA);
+  equal(r.status, 201, JSON.stringify(r.body).slice(0, 300)); runA = r.body.run.id;
+  const v = await validation(docA);
+  equal(v.status, 200, JSON.stringify(v.body).slice(0, 300));
+  assert(v.body.findings.every((f) => /^saved:/.test(f.source)), "all from the saved state");
+  const cs = v.body.findings.map((f) => f.code);
+  assert(cs.includes("E_WELD_AMBIGUOUS") && cs.includes("E_LEGACY_WARNING"), cs.join());
+  equal(v.body.revision.docNo, "PVV-A"); assert(v.body.payloadHash && v.body.summary.total === v.body.findings.length);
+  const e = v.body.findings.find((f) => f.code === "E_WELD_AMBIGUOUS");
+  assert(isUid(e.entityUid) || e.entityUid, "the equipment is named by its uid");
+  const dup = v.body.findings.filter((f) => f.code === "W_DUP_NUMBER");
+  equal(dup.length, 2, "both welds that print «5» are named, each by its own uid");
+  equal(new Set(dup.map((f) => f.entityUid)).size, 2); assert(dup.every((f) => [W5a, W5b].includes(f.entityUid)));
+  const lw = v.body.findings.find((f) => f.code === "E_LEGACY_WARNING");
+  equal([lw.resolved, lw.detail.weldNo], [false, "5"]);
+  warn = lw.detail.warningId; assert(warn);
+});
+
+test("S2. asking is read-only: the ledger, its history and the warnings are exactly as before", async () => {
+  const before = [await events(docA), (await q("SELECT count(*)::int AS n FROM sheet_mark_warning"))[0]];
+  await validation(docA); await validation(docA);
+  equal([await events(docA), (await q("SELECT count(*)::int AS n FROM sheet_mark_warning"))[0]], before);
+});
+
+test("S3. permission and boundary: a non-member and a stranger project see nothing; a viewer reads but cannot resolve; another revision is not found", async () => {
+  const stranger = await json(await projectsRoute.POST(req("http://x/api/projects", { method: "POST", as: "kc|zed", body: { code: "ZZZ", name: "Z" } })));
+  equal((await validation(docA, "kc|zed")).status, 404, "a non-member of the project");
+  equal((await validation(docA, "kc|alice", stranger.body.project.id)).status, 404, "this revision through another project");
+  const mallory = await ensureUser(db, { subject: "kc|viewer1" });
+  await addMember(db, { projectId, userId: mallory.id, role: "viewer" });
+  equal((await validation(docA, "kc|viewer1")).status, 200, "a viewer may read");
+  const r = await resolveW(docA, warn, {}, "kc|viewer1");
+  equal(r.status, 403); equal(r.body.code, "FORBIDDEN");
+  equal((await validation("00000000-0000-4000-8000-000000000000")).status, 404, "unknown revision");
+  equal((await validationRoute.GET(req(`http://x/api/validation?projectId=${projectId}`))).status, 400);
+  const other = await newDoc("PVV-OTHER"); await post(other, typed([{ ...R("1"), uid: newUid() }]));
+  equal((await resolveW(other, warn)).status, 404, "a warning of another revision is not resolvable through this one");
+});
+
+test("S4. a warning cannot be closed while the relationship is not there; nothing changes", async () => {
+  const r = await resolveW(docA, warn);
+  equal(r.status, 409, JSON.stringify(r.body)); equal(r.body.code, "WARNING_NOT_RESOLVABLE");
+  equal((await warningList(docA)).body.warnings.filter((w) => !w.resolved_at).length >= 1, true);
+  const noNote = await resolveW(docA, warn, { resolution: "  " });
+  assert([400, 409].includes(noNote.status));
+});
+
+test("S5. stale: a resolve made against an old copy of the register is refused", async () => {
+  const g = await getRun(runA);
+  const edited = JSON.parse(JSON.stringify(g.body.payload));
+  edited.sheetMarkup.items.find((m) => m.kind === "equipment").attrs.weldRefs = W5a;
+  edited.sheetMarkup.items.find((m) => m.kind === "equipment").attrs.welds = "";
+  const oldHash = (await validation(docA)).body.payloadHash;
+  const c = await correct(runA, edited, g.body.run.payloadHash);
+  equal(c.status, 200, JSON.stringify(c.body).slice(0, 300));
+  const r = await resolveW(docA, warn, { baseHash: oldHash });
+  equal(r.status, 409); equal(r.body.code, "STALE_RUN");
+});
+
+test("S6. after the person links the equipment to ONE weld by uid, the finding is gone on refresh, the warning can be resolved, and its history stays", async () => {
+  const v = await validation(docA);
+  assert(!v.body.findings.some((f) => f.code === "E_WELD_AMBIGUOUS"), "the ambiguity is gone from the computed findings");
+  const r = await resolveW(docA, warn, { baseHash: v.body.payloadHash });
+  equal(r.status, 200, JSON.stringify(r.body));
+  const again = await validation(docA);
+  const lw = again.body.findings.find((f) => f.code === "E_LEGACY_WARNING");
+  assert(lw && lw.resolved === true && /پیوند/.test(lw.detail.resolution), "kept, marked resolved, with the note");
+  assert(again.body.summary.resolved >= 1);
+  const list = (await warningList(docA)).body.warnings.find((w) => w.id === warn);
+  assert(list.resolved_at && list.resolution && list.resolved_by, "who, when and why are stored");
+  equal((await resolveW(docA, warn)).status, 409, "and it is not resolved twice");
+  const link = await q("SELECT weld_ref FROM iso_equipment_weld w JOIN iso_equipment e ON e.id = w.equipment_id WHERE e.document_id = $1", [docA]);
+  equal(link.map((l) => l.weld_ref), [W5a], "resolving changed no link");
+});
+
+test("S7. correcting a BOM reference and refreshing: the missing-PT finding goes away; a held allocation is reported, never released", async () => {
+  const doc = await newDoc("PVV-B"), u = newUid();
+  const r = await post(doc, typed([{ ...R("1", { c1: "2", c2: "99" }), uid: u }]));
+  equal(r.status, 201, JSON.stringify(r.body).slice(0, 300));
+  let v = await validation(doc);
+  const miss = v.body.findings.filter((f) => f.code === "W_PT_MISSING");
+  equal(miss.length, 1); equal([miss[0].entityUid, miss[0].detail.pt], [u, "99"]);
+  assert(v.body.findings.some((f) => f.code === "A_ROW_HELD"), "PT 2 is held by this weld");
+  const evBefore = (await events(doc))[0].n;
+  const g = await getRun(r.body.run.id);
+  const edited = JSON.parse(JSON.stringify(g.body.payload)); edited.weldList[0].c2 = "2";
+  equal((await correct(r.body.run.id, edited, g.body.run.payloadHash)).status, 200);
+  v = await validation(doc);
+  assert(!v.body.findings.some((f) => f.code === "W_PT_MISSING"), "gone after the correction and a refresh");
+  assert((await events(doc))[0].n >= evBefore, "history only grows");
+});
+
+test("S8. an installed allocation: reported as held, the weld that owns it cannot vanish silently; validation never releases it", async () => {
+  const doc = await newDoc("PVV-C"), u = newUid();
+  const r = await post(doc, typed([{ ...R("1", { c1: "2" }), uid: u }]));
+  equal(r.status, 201);
+  const line = (await q("SELECT id FROM bom_allocation WHERE document_id = $1 AND status = 'reserved'", [doc]))[0];
+  equal((await json(await allocRoute.POST(req("http://x/api/bom-allocations", { method: "POST", body: { projectId, documentId: doc, allocationId: line.id, action: "install", reason: "site" } })))).status, 200);
+  const v = await validation(doc);
+  const held = v.body.findings.find((f) => f.code === "A_ROW_HELD" && f.detail.pt === 2);
+  equal(held.detail.installed, 1);
+  assert((await q("SELECT 1 FROM bom_allocation WHERE document_id = $1 AND status = 'installed'", [doc])).length === 1);
+  await validation(doc);
+  assert((await q("SELECT 1 FROM bom_allocation WHERE document_id = $1 AND status = 'installed'", [doc])).length === 1, "still installed after validating");
+});
+
+test("S9. an unlinked sheet weld mark is reported with its uid and attributes and is NOT matched to a typed row by number", async () => {
+  const doc = await newDoc("PVV-D"), u = newUid(), orphan = newUid();
+  const r = await post(doc, typed([{ ...R("1", { c1: "2" }), uid: u }], [{ id: "m1", uid: orphan, kind: "weld-shop", no: "1", x: 0.3, y: 0.3, attrs: { c1: "2" } }]));
+  equal(r.status, 201, JSON.stringify(r.body).slice(0, 300));
+  const v = await validation(doc);
+  const f = v.body.findings.filter((x) => x.code === "W_UNLINKED");
+  equal(f.length, 1); equal([f[0].entityUid, f[0].entityNumber], [orphan, "1"]);
+  equal((await q("SELECT owner_ref FROM bom_allocation WHERE document_id = $1 AND status = 'reserved'", [doc])).map((l) => l.owner_ref), [u], "the unlinked mark holds nothing");
+});
+
+test("S10. an approved revision: findings say so and a warning cannot be resolved on it (new revision is the way)", async () => {
+  const doc = await newDoc("PVV-E");
+  const r = await saveAmbiguous(doc, { a: newUid(), b: newUid(), e: newUid() });
+  equal(r.status, 201);
+  const w = (await validation(doc)).body.findings.find((f) => f.code === "E_LEGACY_WARNING").detail.warningId;
+  const id = r.body.run.id;
+  equal((await json(await approveRoute.POST(req(`http://x/api/runs/${id}/approve`, { method: "POST", body: { projectId } }), ctx(id)))).status, 200);
+  const v = await validation(doc);
+  assert(v.body.findings.some((f) => f.code === "REV_APPROVED"));
+  const res = await resolveW(doc, w);
+  equal(res.status, 409); equal(res.body.code, "RUN_LOCKED");
 });
 
 await run();
