@@ -14,6 +14,7 @@ import { projectWelds, effectiveItems } from "../../lib/sheet/weld-projection.mj
 import { ledgerDemands } from "../../lib/register/bom-allocation.mjs";
 import { equipmentWelds, duplicateMark, normalize, weldRefsOf, dependents, equipmentChecks } from "../../lib/sheet/markup.mjs";
 import { touchesSheetData } from "../../lib/db/repos/register-persistence.mjs";
+import { ledgerByPt, decorate, view, deleteCheck } from "../../lib/register/bom-table.mjs";
 
 const R = (no, extra = {}) => ({ no, spool: "SP-1", loc: "Shop", kind: "BW", nps: "4", ...extra });
 const BOMP = [{ pt: 2, group: "FLANGES", description: "FLANGE WELD NECK RF 300# A105 BW", diam: "4", qty: 2, qtyUnit: "pcs" },
@@ -109,6 +110,15 @@ test("a correction touching a typed weld's components, number or presence re-mak
   assert(touchesSheetData([{ path: "weldList[1].uid" }]));
   assert(!touchesSheetData([{ path: "weldList[1].wps" }]), "an unrelated attribute does not");
   assert(touchesSheetData([{ path: "bom[0].qty" }]));
+});
+
+test("the BOM table counts the welds\' reserved and installed ends from the server (they are reported apart from other owners)", () => {
+  const ledger = ledgerByPt({ rows: [{ pt: 2, weldEnds: 4, weldReserved: 2, weldInstalled: 1, weldLeft: 1, reserved: 0, installed: 0, left: 4 }, { pt: 7, reserved: 1, installed: 0, left: 3 }] });
+  equal([ledger.get("2").reservedAll, ledger.get("2").installedAll, ledger.get("7").reservedAll], [2, 1, 1]);
+  const all = decorate([{ pt: 2, description: "FLANGE", qty: 4 }, { pt: 7, description: "STUD", qty: 4 }, { pt: 9, description: "X", qty: 1 }], { ledger });
+  equal(view(all, { filter: "reserved" }).map((d) => d.row.pt), [2, 7]);
+  equal(view(all, { filter: "installed" }).map((d) => d.row.pt), [2]);
+  equal(deleteCheck(all[0]).ok, false, "installed ends on the row: it cannot be deleted from the draft");
 });
 
 // ── the server ───────────────────────────────────────────────────────────

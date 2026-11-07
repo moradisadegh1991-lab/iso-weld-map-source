@@ -18,6 +18,14 @@ const FILTER_LABEL = { all: "همه", issues: "با ایراد", reserved: "رز
 const COLS = [["pt", "PT"], ["group", "گروه"], ["description", "شرح"], ["diam", "N.S."], ["stockCode", "کد کالا"], ["qty", "تعداد"], ["qtyUnit", "واحد"]];
 const SORTABLE = new Set(["pt", "group", "description", "diam", "qty"]);
 
+/** The server's numbers for one row: reserved / installed / left, the welds' ends and the pieces (equipment, accessories) together, each as the server states it. */
+const ledgerText = (s) => {
+  const n = (v) => (v == null ? "؟" : v);
+  const ends = s.weldEnds != null || s.weldReserved || s.weldInstalled ? `سر: ${s.weldReserved ?? 0}/${s.weldInstalled ?? 0}/${n(s.weldLeft)}` : "";
+  const pieces = (s.reserved || s.installed || s.weldEnds == null) ? `عدد: ${s.reserved ?? 0}/${s.installed ?? 0}/${n(s.left)}` : "";
+  return [ends, pieces].filter(Boolean).join(" · ") || "—";
+};
+
 export default function BomTable({ rows, live, locked = false, session = null, documentId = null, savedHadRows = false, onView, onEdit, onAdd, onDelete }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -120,7 +128,7 @@ export default function BomTable({ rows, live, locked = false, session = null, d
                     <td className="sm" data-bom-cell="qtyUnit">{b.qtyUnit === "pcs" ? "عدد" : b.qtyUnit === "m" ? "m" : "؟"}</td>
                     <td className="mono sm" dir="ltr" data-bom-alloc={b.pt}>{usedCell(d)}</td>
                     <td className="mono sm" dir="ltr" data-bom-ledger={b.pt}>
-                      {s ? `${s.reserved ?? 0} / ${s.installed ?? 0} / ${s.left == null ? "؟" : s.left}` : ledger.phase === "ok" ? "—" : ""}
+                      {s ? ledgerText(s) : ledger.phase === "ok" ? "—" : ""}
                     </td>
                     <td className="sm" data-bom-issues={d.issues.length}>{d.issues.length ? <span title={d.issues.join(" · ")}>⚠ {d.issues.length}</span> : "✓"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
