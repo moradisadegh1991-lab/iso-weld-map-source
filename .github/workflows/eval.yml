@@ -45,9 +45,9 @@ jobs:
 
       - run: npm ci
 
-      # The document intake reads scanned PDFs with Tesseract; its tests run it.
+      # The document intake reads scanned PDFs with Tesseract; its tests run it. The SLD extraction tests also read scans with OpenCV (python3-opencv).
       - name: OCR engine
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr poppler-utils
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr poppler-utils python3-opencv python3-numpy
 
       # Runs against real PostgreSQL via PGlite, in-process: no service
       # container, no credentials, and the same migrations production applies.
