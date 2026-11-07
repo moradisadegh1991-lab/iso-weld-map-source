@@ -1,0 +1,36 @@
+{
+  "synthetic": true,
+  "note": "synthetic VECTOR cases only; not a real-drawing accuracy",
+  "categories": {
+    "symbolDetection": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
+    },
+    "symbolClassification": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
+    },
+    "textExtraction": {
+      "precision": 1,
+      "recall": 0.989247311827957,
+      "f1": 0.9945945945945946
+    },
+    "tagExtraction": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
+    },
+    "symbolToTagAssociation": {
+      "precision": 0.96875,
+      "recall": 1,
+      "f1": 0.9841269841269841
+    },
+    "ratingExtraction": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
+    }
+  }
+}

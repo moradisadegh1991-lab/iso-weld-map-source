@@ -11,6 +11,7 @@
     "eval:styles": "node --import ./tools/register.mjs eval/style-report.mjs",
     "eval:bom-welds": "node --import ./tools/register.mjs eval/bom-welds-report.mjs",
     "eval:pid": "node --import ./tools/register.mjs eval/pid/run.mjs",
+    "eval:sld": "node --import ./tools/register.mjs eval/sld/run.mjs",
     "eval:check": "node --import ./tools/register.mjs eval/run.mjs --check",
     "eval:update": "node --import ./tools/register.mjs eval/run.mjs --update-baseline",
     "db:migrate": "node db/migrate-cli.mjs",
