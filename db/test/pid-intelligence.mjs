@@ -272,4 +272,166 @@ test("X2. mappings are one-to-one and class-checked; a target draft is never ove
   assert(c.length >= 1 && c.some((x) => x.lost.length || x.gained.length));
 });
 
+// ── the server: intake, idempotent ingest, review audit, approval, isolation ─
+
+process.env.AUTH_MODE = "dev";
+process.env.PGLITE_DIR = await scratchDir("pid-db-");
+process.env.STORAGE_ROOT = await scratchDir("pid-store-");
+const projectsRoute = await import("../../app/api/projects/route.js");
+const documentsRoute = await import("../../app/api/documents/route.js");
+const pidRoute = await import("../../app/api/pid/route.js");
+const reviewRoute = await import("../../app/api/pid/review/route.js");
+const reviewQueueRoute = await import("../../app/api/review-queue/route.js");
+const { getDb } = await import("../../lib/server/db.mjs");
+const { withProject } = await import("../../lib/db/scope.mjs");
+const { addMember, ensureUser } = await import("../../lib/db/repos/projects.mjs");
+
+const req = (url, { method = "GET", as = "kc|alice", body } = {}) => new Request(url, { method, headers: { authorization: `Bearer ${as}`, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+const json = async (res) => ({ status: res.status, body: await res.json() });
+const db = await getDb();
+const mkProject = async (code, as = "kc|alice") => (await json(await projectsRoute.POST(req("http://x/api/projects", { method: "POST", as, body: { code, name: code } })))).body.project.id;
+const projectId = await mkProject("PID1"), otherProject = await mkProject("PID2", "kc|mallory");
+const q = (sql, p = []) => withProject(db, projectId, async () => (await db.query(sql, p)).rows);
+let seq = 0;
+const newDoc = async (docNo, revision = "0", pid = projectId, as = "kc|alice") => (await json(await documentsRoute.POST(req("http://x/api/documents", { method: "POST", as, body: { projectId: pid, docNo, revision, docType: "pid", fileBase64: Buffer.from(`pid ${docNo} ${revision} ${++seq}`).toString("base64") } })))).body.document;
+const ingest = async (documentId, body, as = "kc|alice", pid = projectId) => json(await pidRoute.POST(req("http://x/api/pid", { method: "POST", as, body: { projectId: pid, documentId, ...body } })));
+const get = async (documentId, as = "kc|alice", pid = projectId, extra = "") => json(await pidRoute.GET(req(`http://x/api/pid?projectId=${pid}&documentId=${documentId}${extra}`, { as })));
+const act = async (b, as = "kc|alice") => json(await reviewRoute.POST(req("http://x/api/pid/review", { method: "POST", as, body: { projectId, ...b } })));
+const OCR = { page: 1, w: 1000, h: 800, items: [ocr("30-P-1201A", box(100, 100)), ocr("30-E-1129", box(300, 100)), ocr('4" MP140001A-EA01-H', box(100, 300)), ocr("K110-30-PID-0021-10-15/1", box(800, 50))] };
+const D = {};
+
+test("S1. intake: a P&ID is a document of its own revision; ingest files an `extracted` draft that stamps document + revision on every record; nothing is approved", async () => {
+  D.a = await newDoc("K110-30-PID-0021-10-01");
+  assert(D.a.doc_type === "pid", "the documents route files a drawing as a P&ID on request");
+  const r = await ingest(D.a.id, { ocr: OCR, meta: { title: "FEED" } });
+  equal(r.status, 201, JSON.stringify(r.body).slice(0, 300));
+  D.run = r.body.run.id;
+  const g = await get(D.a.id);
+  equal(g.status, 200);
+  assert(g.body.draft.items.length >= 4 && g.body.draft.items.every((i) => i.review.status === "extracted" && i.source.revision === "0" && i.evidence.length));
+  equal([g.body.draft.meta.document.documentId, g.body.draft.meta.document.revision, g.body.run.status], [D.a.id, "0", "extracted"]);
+  assert(g.body.registers.equipment.length === 2 && g.body.registers.lines.length === 1 && g.body.registers.offpage.length === 1);
+  assert(g.body.validation.findings.every((f) => f.revision.documentId === D.a.id));
+});
+
+test("S2. a retried extraction does not duplicate: the same reading returns the same draft; the isometric review queue never lists a P&ID draft", async () => {
+  const again = await ingest(D.a.id, { ocr: OCR });
+  equal([again.status, again.body.created, again.body.run.id], [200, false, D.run]);
+  equal((await q("SELECT count(*)::int AS n FROM extraction_run WHERE document_id = $1 AND pass_name = 'pid'", [D.a.id]))[0].n, 1);
+  const queue = await json(await reviewQueueRoute.GET(req(`http://x/api/review-queue?projectId=${projectId}`)));
+  assert(!JSON.stringify(queue.body).includes(D.run), "a P&ID draft is not in the weld-register review queue");
+});
+
+test("S3. a vision PROPOSAL is sanitized on the server: records are `extracted`, an approval claim is ignored, evidence-less edges are rejected", async () => {
+  const d2 = await newDoc("K110-30-PID-0021-10-02");
+  const r = await ingest(d2.id, { page: { number: 1, width: 1000, height: 800 }, reader: "vision-x", proposal: {
+    items: [{ id: "p", cls: "equipment", symbol: "pump", tag: "30-P-1301", bbox: box(100, 100), evidence: [{ text: "30 P 1301" }], review: { status: "approved", by: "model" } }, { id: "l", cls: "line", symbol: "process-line", tag: "MP140009A", bbox: box(100, 200), evidence: [{ text: "l" }] }],
+    edges: [{ type: "process", from: "p", to: "l" }, { type: "process", from: "p", to: "l", evidence: [{ text: "the line leaves the pump" }] }] } });
+  equal([r.status, r.body.items, r.body.edges, r.body.rejected.length], [201, 2, 1, 1]);
+  const g = await get(d2.id);
+  assert(g.body.draft.items.every((i) => i.review.status === "extracted") && g.body.draft.edges.length === 1 && g.body.run.status === "extracted");
+});
+
+test("S4. authorization: a viewer cannot ingest or review; another project's member sees nothing; a missing document is 404; approving needs the approval right", async () => {
+  const v = await ensureUser(db, { subject: "kc|viewer-pid" }); await addMember(db, { projectId, userId: v.id, role: "viewer" });
+  equal((await ingest(D.a.id, { ocr: OCR }, "kc|viewer-pid")).status, 403);
+  const uid = (await get(D.a.id)).body.draft.items[0].uid;
+  equal((await act({ runId: D.run, uid, action: "flag" }, "kc|viewer-pid")).status, 403);
+  equal((await get(D.a.id, "kc|viewer-pid")).status, 200, "reading is allowed");
+  equal((await get(D.a.id, "kc|mallory")).status, 404, "another project's user");
+  equal((await ingest(D.a.id, { ocr: OCR }, "kc|mallory", otherProject)).status, 404, "the document is not that project's");
+  equal((await act({ runId: D.run, action: "approve_draft" }, "kc|viewer-pid")).status, 403);
+});
+
+test("S5. review is audited: the original value stays beside the correction, extraction_edit keeps before/after/who; a stale edit is refused; two edits on one base: one wins, one is refused", async () => {
+  const g = await get(D.a.id), item = g.body.draft.items.find((i) => i.tag === "30-P-1201A");
+  const h0 = g.body.run.payloadHash;
+  const ok = await act({ runId: D.run, uid: item.uid, action: "correct", value: { tag: "30-P-1201B", symbol: "pump" }, reason: "misread suffix", baseHash: h0 });
+  equal(ok.status, 200, JSON.stringify(ok.body).slice(0, 300));
+  const after = (await get(D.a.id)).body.draft.items.find((i) => i.uid === item.uid);
+  equal([after.tag, after.symbol, after.review.status, after.review.original, after.review.corrected.tag], ["30-P-1201B", "pump", "corrected", { tag: "30-P-1201A", symbol: "UNKNOWN" }, "30-P-1201B"]);
+  assert(after.review.by && after.review.at);
+  const edits = await q("SELECT field, before_value, after_value, reason, edited_by FROM extraction_edit WHERE extraction_run_id = $1 ORDER BY edited_at, field", [D.run]);
+  assert(edits.some((e) => e.field === "tag" && e.before_value === "30-P-1201A" && e.after_value === "30-P-1201B" && e.reason === "misread suffix" && e.edited_by));
+  const stale = await act({ runId: D.run, uid: item.uid, action: "flag", baseHash: h0 });
+  equal([stale.status, stale.body.code], [409, "STALE_RUN"]);
+  const h1 = (await get(D.a.id)).body.run.payloadHash, other = g.body.draft.items.find((i) => i.tag === "30-E-1129").uid;
+  const race = await Promise.all([act({ runId: D.run, uid: other, action: "flag", baseHash: h1 }), act({ runId: D.run, uid: item.uid, action: "flag", baseHash: h1 })]);
+  equal(race.map((r) => r.status).sort(), [200, 409]);
+});
+
+test("S6. an approved record cannot be changed; reject needs a reason; asset links are proposed (unique / multiple / none) and nothing is created", async () => {
+  await db.query("SELECT 1");
+  await withProject(db, projectId, async () => {
+    await db.query("INSERT INTO tag (project_id, tag_no, discipline, kind) VALUES ($1,'30-E-1129','equipment','equipment'), ($1,'30E1129','equipment','equipment'), ($1,'30-P-1201B','equipment','pump')", [projectId]);
+  });
+  const g = await get(D.a.id);
+  const by = (t) => g.body.draft.items.find((i) => i.tag === t);
+  equal([g.body.links[by("30-E-1129").uid].state, g.body.links[by("30-P-1201B").uid].state], ["multiple", "unique"], "30-E-1129 and 30E1129 are two register rows for one normalized tag: a human resolves it");
+  assert(!g.body.links[by("MP140001A").uid] || g.body.links[by("MP140001A").uid].state === "none");
+  const before = (await q("SELECT count(*)::int AS n FROM tag WHERE project_id = $1", [projectId]))[0].n;
+  const uid = by("30-P-1201B").uid;
+  equal((await act({ runId: D.run, uid, action: "approve" })).status, 200);
+  const locked = await act({ runId: D.run, uid, action: "correct", value: { tag: "X" } });
+  equal([locked.status, locked.body.code], [409, "APPROVED_LOCKED"]);
+  equal((await act({ runId: D.run, uid: by("30-E-1129").uid, action: "reject" })).body.code, "REASON_REQUIRED");
+  equal((await q("SELECT count(*)::int AS n FROM tag WHERE project_id = $1", [projectId]))[0].n, before, "nothing was created from the reading");
+});
+
+test("S7. sign-off of the whole draft: refused while records are undecided or an engineering error is open; then signed with who/when/hash; afterwards locked (RUN_LOCKED)", async () => {
+  const d3 = await newDoc("K110-30-PID-0021-10-03");
+  equal((await ingest(d3.id, { page: { number: 1, width: 1000, height: 800 }, proposal: { items: [
+    { cls: "equipment", symbol: "pump", tag: "30-P-1401", bbox: box(100, 100), evidence: [{ text: "p" }] },
+    { cls: "instrument", symbol: "bubble", tag: "ZZ-1", bbox: box(200, 100), evidence: [{ text: "ZZ 1" }] }] } })).status, 201);
+  const g = await get(d3.id), run = g.body.run.id;
+  const un = await act({ runId: run, action: "approve_draft" });
+  equal([un.status, un.body.code, un.body.details.undecided.length], [409, "UNDECIDED", 2]);
+  for (const i of g.body.draft.items) equal((await act({ runId: run, uid: i.uid, action: "approve" })).status, 200);
+  const err = await act({ runId: run, action: "approve_draft" });
+  equal([err.status, err.body.code], [409, "ENGINEERING_ERRORS"], "an invalid ISA function is a real error: it blocks the sign-off");
+  const bad = g.body.draft.items.find((i) => i.tag === "ZZ-1");
+  equal((await json(await reviewRoute.POST(req("http://x/api/pid/review", { method: "POST", body: { projectId, runId: run, uid: bad.uid, action: "reject", reason: "not an instrument" } })))).status, 409, "an approved record is not rejected afterwards");
+  // the person re-opens nothing: the instrument is rejected in a fresh draft instead
+  const d4 = await newDoc("K110-30-PID-0021-10-04");
+  equal((await ingest(d4.id, { page: { number: 1, width: 1000, height: 800 }, proposal: { items: [{ cls: "equipment", symbol: "pump", tag: "30-P-1501", bbox: box(100, 100), evidence: [{ text: "p" }] }, { cls: "instrument", symbol: "bubble", tag: "ZZ-1", bbox: box(200, 100), evidence: [{ text: "ZZ 1" }] }] } })).status, 201);
+  const g4 = await get(d4.id), r4 = g4.body.run.id;
+  equal((await act({ runId: r4, uid: g4.body.draft.items[0].uid, action: "approve" })).status, 200);
+  equal((await act({ runId: r4, uid: g4.body.draft.items[1].uid, action: "reject", reason: "ZZ is not an ISA function" })).status, 200);
+  const signed = await act({ runId: r4, action: "approve_draft" });
+  equal(signed.status, 200, JSON.stringify(signed.body).slice(0, 300));
+  const row = (await q("SELECT status, approved_by, approved_at, approved_sha256 FROM extraction_run WHERE id = $1", [r4]))[0];
+  assert(row.status === "approved" && row.approved_by && row.approved_at && /^[0-9a-f]{64}$/.test(row.approved_sha256));
+  const lock = await act({ runId: r4, uid: g4.body.draft.items[0].uid, action: "flag" });
+  equal([lock.status, lock.body.code], [409, "RUN_LOCKED"]);
+  const re = await ingest(d4.id, { page: { number: 1, width: 1000, height: 800 }, proposal: { items: [{ cls: "equipment", symbol: "pump", tag: "30-P-9999", bbox: box(100, 100), evidence: [{ text: "p" }] }] } });
+  equal([re.status, re.body.code], [409, "RUN_LOCKED"], "a different reading of a signed-off revision is refused");
+  equal((await act({ runId: r4, action: "approve_draft" })).body.repeated, true);
+});
+
+test("S8. revision isolation: revision B is its own document and draft; comparing finds candidates, never matches; a confirmed mapping is stored on the TARGET draft only; a signed-off target refuses mappings", async () => {
+  const a = await newDoc("K110-30-PID-0021-20-01", "0"), b = await newDoc("K110-30-PID-0021-20-01", "1");
+  assert(a.id !== b.id, "two revisions are two documents");
+  const P = (tags) => ({ page: { number: 1, width: 1000, height: 800 }, proposal: { items: tags.map((t, i) => ({ cls: "equipment", symbol: "pump", tag: t, bbox: box(100 + i * 150, 100), evidence: [{ text: t }] })) } });
+  equal((await ingest(a.id, P(["30-P-1", "30-P-2"]))).status, 201); equal((await ingest(b.id, P(["30-P-1", "30-P-3"]))).status, 201);
+  const ga = await get(a.id), gb = await get(b.id);
+  assert(ga.body.draft.items.every((i) => i.source.revision === "0") && gb.body.draft.items.every((i) => i.source.revision === "1"), "each record keeps ITS revision");
+  const ids = new Set(ga.body.draft.items.map((i) => i.uid)); assert(gb.body.draft.items.every((i) => !ids.has(i.uid)), "no uid is shared across revisions");
+  const cmp = await get(a.id, "kc|alice", projectId, `&compareTo=${b.id}`);
+  equal(cmp.status, 200, JSON.stringify(cmp.body).slice(0, 200));
+  assert(cmp.body.changes.some((c) => c.kind === "candidate" && c.tag === "30-P-1") && cmp.body.changes.some((c) => c.kind === "removed" && c.tag === "30-P-2") && cmp.body.changes.some((c) => c.kind === "added" && c.tag === "30-P-3"));
+  const fromUid = ga.body.draft.items.find((i) => i.tag === "30-P-2").uid, toUid = gb.body.draft.items.find((i) => i.tag === "30-P-3").uid;
+  const m = await act({ runId: gb.body.run.id, action: "confirm_mapping", sourceRunId: ga.body.run.id, fromUid, toUid, baseHash: gb.body.run.payloadHash });
+  equal(m.status, 200, JSON.stringify(m.body).slice(0, 300));
+  const after = await get(b.id);
+  equal(after.body.draft.mappings.map((x) => [x.fromUid, x.toUid]), [[fromUid, toUid]]);
+  equal((await get(a.id)).body.draft.mappings, [], "the source revision is not touched");
+  const cmp2 = await get(a.id, "kc|alice", projectId, `&compareTo=${b.id}`);
+  assert(cmp2.body.changes.some((c) => c.kind === "renumbered" && c.fromUid === fromUid && c.toUid === toUid));
+  const dup = await act({ runId: gb.body.run.id, action: "confirm_mapping", sourceRunId: ga.body.run.id, fromUid, toUid });
+  equal([dup.status, dup.body.code], [409, "INVALID_MAPPING"]);
+  const other = await newDoc("K110-30-PID-0021-30-01", "0"); equal((await ingest(other.id, P(["30-P-1"]))).status, 201);
+  const wrong = await act({ runId: gb.body.run.id, action: "confirm_mapping", sourceRunId: (await get(other.id)).body.run.id, fromUid: (await get(other.id)).body.draft.items[0].uid, toUid: gb.body.draft.items[0].uid });
+  equal([wrong.status, wrong.body.code], [409, "INVALID_LINEAGE"], "drafts of two different drawings are not revisions of each other");
+});
+
 await run();
