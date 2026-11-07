@@ -209,7 +209,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   // what the SAVED revision holds against deleting a mark (lib/client/saved-protection.mjs): advice before the confirm; the server decides
   const { protect, saved } = useSavedProtection({ session, documentId: run?.run?.documentId || null, items, status: run?.run?.status });
   const revisionInfo = useMemo(() => ({ docNo: meta.drawingNo || null, rev: meta.rev ?? null, sheet: meta.sheet || null }), [meta.drawingNo, meta.rev, meta.sheet]);
-  const vc = useValidationCenter({ session, documentId: run?.run?.documentId || null, runId: run?.run?.id || null, status: run?.run?.status, payload: data, revision: revisionInfo });
+  const vc = useValidationCenter({ session, documentId: run?.run?.documentId || null, runId: run?.run?.id || null, status: run?.run?.status, payload: data, revision: revisionInfo, previous: initial });
   const [vcSource, setVcSource] = useState("draft");
   const rc = useRevisionCenter({ session, documentId: run?.run?.documentId || null });
   const validationTotal = vc.draft.summary.errors + vc.draft.summary.warnings;
@@ -392,6 +392,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     let rowsChanged = false;
     const nextRows = rows.map((r) => { const no = lcu(r.spoolUid) && spoolNo.get(lcu(r.spoolUid)); if (no && String(r.spool ?? "").trim() !== no) { rowsChanged = true; return { ...r, spool: no }; } return r; });
     if (rowsChanged) setRows(nextRows);
+    // an equipment's spool label follows its spool's number the same way (the relationship is the uid)
+    let exChanged = false;
+    const nextExtras = extras.map((m) => { if (KINDS[m.kind]?.cls !== "equipment") return m; const no = lcu(m.attrs?.spoolUid) && spoolNo.get(lcu(m.attrs.spoolUid)); if (no && String(m.attrs?.spool ?? "").trim() !== no) { exChanged = true; return { ...m, attrs: { ...m.attrs, spool: no } }; } return m; });
+    if (exChanged) setExtras(nextExtras);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, extras, cutRows]);
   const SZ = (n) => (n == null ? "؟" : `${n}"`);
@@ -399,6 +403,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const markOfUid = (u) => (isUid(u) ? drawItems.find((m) => isUid(m.uid) && m.uid.toLowerCase() === u.toLowerCase()) || null : null);
   const goUid = ({ kind, uid }) => {
     if (kind === "cut") { setSelCut(uid); setWsTab("cut"); return; }
+    if (kind === "equipment") { const m = markOfUid(uid); if (m) { setMarkSel(m.id); setWsTab("equip"); } return; }
     const m = markOfUid(uid);
     if (!m) return;
     setMarkSel(m.id);
@@ -723,7 +728,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     { k: "supports", label: "ساپورت‌ها", hint: "ساپورت‌های نقشه", badge: items.filter((m) => m.kind === "support").length || "",
       node: (<>{registerTable(["support"])}</>) },
     { k: "equip", label: "تجهیزات", hint: "تجهیزات نصب، سرجوش‌های متصل و متعلقات", badge: items.filter((m) => m.kind === "equipment").length || "",
-      node: (<EquipmentTable protect={protect} items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
+      node: (<EquipmentTable protect={protect} onGo={goUid} items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
         attachId={attachId} onAttach={setAttachId} focus={editFocus} onOpen={(mode, id, k) => openForm(mode, id, k)} />) },
     { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
       node: (<>{bomBlock}{bomWeldsBlock}</>) },

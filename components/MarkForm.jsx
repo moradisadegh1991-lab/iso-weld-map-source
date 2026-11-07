@@ -4,6 +4,7 @@ import FormDialog from "./ui/FormDialog";
 import BomPick from "./BomPick";
 import Pick from "./ui/Pick";
 import { isUid } from "../lib/sheet/mark-identity.mjs";
+import { indexItems, resolveRef } from "../lib/register/cut-identity.mjs";
 import TieInPick, { TieInReferrers } from "./TieInPick";
 import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, weldsOf, accessoriesOf, accessoriesText, bomSnapshot, nextNo, isMark, markRef, weldRefsOf, equipmentWelds } from "../lib/sheet/markup.mjs";
 
@@ -61,7 +62,6 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
     const me = { id, kind: d.kind, no: d.no, attrs: d.attrs };
     return items.some((m) => isMark(m, id)) ? items.map((m) => (isMark(m, id) ? { ...m, ...me } : m)) : [...items, me];
   }, [items, d, id]);
-  const spools = [...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))];
   const welds = items.filter((m) => KINDS[m.kind]?.cls === "weld" && !isMark(m, id));
   const bomRows = (bom || []).filter((b) => b && b.pt != null && String(b.pt).trim());
   const labels = Object.fromEntries((ATTRS[cls] || []).map(([k, l, ph]) => [k, [l, ph]]));
@@ -81,28 +81,24 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
     </label>);
   const text = (k, props = {}) => field(k, <input dir="ltr" value={a[k] ?? ""} placeholder={labels[k]?.[1] || ""} onChange={(e) => setA({ [k]: e.target.value })} data-input={k} {...props} />);
   const pick = (k) => field(k, <Pick data-input={k} list={LIST_OF[cls][k]} lists={lists} value={a[k]} placeholder={labels[k]?.[1] || ""} onChange={(v) => setA({ [k]: v })} />);
-  // a weld's spool is chosen BY IDENTITY (the spool mark's uid); the printed number is only its label (lib/register/cut-identity.mjs)
+  // a weld's or an equipment's spool is chosen BY IDENTITY (the spool mark's uid); the printed number is only its label (lib/register/cut-identity.mjs).
+  // Legacy (a printed number that names exactly one spool), ambiguous, unresolved and dangling references are SAID, never silently replaced.
   const spoolMarks = items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim() && isUid(m.uid));
   const spoolByUid = (u) => spoolMarks.find((m) => String(m.uid).toLowerCase() === String(u).toLowerCase());
   const weldSpoolSel = () => {
-    const cur = isUid(a.spoolUid) ? spoolByUid(a.spoolUid) : spoolMarks.filter((m) => String(m.no).trim() === String(a.spool ?? "").trim());
-    const uidVal = Array.isArray(cur) ? (cur.length === 1 ? cur[0].uid : "") : cur?.uid || "";
-    const stale = (a.spoolUid && !uidVal) || (!a.spoolUid && a.spool && !uidVal);
+    const r = resolveRef(indexItems(items).spools, { uid: a.spoolUid, label: a.spool });
+    const uidVal = r.mark && isUid(r.mark.uid) ? r.mark.uid : "";
+    const note = { dangling: `اسپول (${a.spool || String(a.spoolUid).slice(0, 8)}) در این رویژن نیست — جایگزین نمی‌شود`, ambiguous: `«${a.spool}» چند اسپول است — یکی را انتخاب کنید`,
+      unresolved: a.spool ? `«${a.spool}» روی این برگ نیست` : "", legacy: "ارجاع قدیمی (شمارهٔ چاپی)؛ با ذخیره به شناسه تبدیل می‌شود" }[r.state] || "";
     return field("spool", spoolMarks.length
-      ? <select data-input="spool" data-spool-uid={uidVal} dir="ltr" value={uidVal} onChange={(e) => { const m = spoolByUid(e.target.value); setA(m ? { spoolUid: m.uid, spool: String(m.no).trim() } : { spoolUid: "", spool: "" }); }}>
-          <option value="">—</option>
-          {stale && <option value="">{a.spool || a.spoolUid} ({Array.isArray(cur) && cur.length > 1 ? "چند اسپول با این شماره" : "روی برگ نیست"})</option>}
+      ? (<><select data-input="spool" data-spool-uid={uidVal} data-ref-state={r.state} dir="ltr" value={uidVal} onChange={(e) => { const m = spoolByUid(e.target.value); setA(m ? { spoolUid: m.uid, spool: String(m.no).trim() } : { spoolUid: "", spool: "" }); }}>
+          <option value="">— (بدون اسپول)</option>
           {spoolMarks.map((m) => <option key={m.uid} value={m.uid}>{m.no} · {String(m.uid).slice(0, 8)}</option>)}
         </select>
+        {note && <span className="sm warnish" data-ref-note>{note}</span>}
+        {r.mark && isUid(r.mark.uid) && <span className="muted sm mono" dir="ltr" data-ref-identity>uid {r.mark.uid}</span>}</>)
       : <input data-input="spool" dir="ltr" value={a.spool ?? ""} placeholder="SP-1" onChange={(e) => setA({ spool: e.target.value, spoolUid: "" })} />);
   };
-  const spoolSel = (k) => field(k, spools.length
-    ? <select data-input={k} dir="ltr" value={a[k] ?? ""} onChange={(e) => setA({ [k]: e.target.value })}>
-        <option value="">—</option>
-        {a[k] && !spools.includes(String(a[k])) && <option value={a[k]}>{a[k]} (روی برگ نیست)</option>}
-        {spools.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
-    : <input data-input={k} dir="ltr" value={a[k] ?? ""} placeholder="SP-1" onChange={(e) => setA({ [k]: e.target.value })} />);
 
   const title = mode === "create" ? `افزودن ${KINDS[d.kind]?.label || ""}` : `${KINDS[d.kind]?.label || ""} ${d.no || ""}`;
   return (
@@ -160,7 +156,7 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
             <option value="">—</option>
             {a.c1 && !bomRows.some((b) => String(b.pt) === String(a.c1)) && <option value={a.c1}>PT {a.c1} (در BOM نیست)</option>}
             {bomRows.map((b) => <option key={b.pt} value={String(b.pt)}>{rowText(b)}</option>)}</select>)}
-          {spoolSel("spool")}
+          {weldSpoolSel()}
           {field("status", <select data-input="status" value={a.status || "planned"} onChange={(e) => setA({ status: e.target.value })}>
             {EQUIPMENT_STATUS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>)}
         </div>

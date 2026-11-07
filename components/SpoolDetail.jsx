@@ -3,6 +3,8 @@ import { useMemo } from "react";
 import TableKit from "./ui/TableKit";
 import { isUid } from "../lib/sheet/mark-identity.mjs";
 import { spoolView } from "../lib/register/cut-identity.mjs";
+import { effectiveItems } from "../lib/sheet/weld-projection.mjs";
+import { equipmentWelds, EQUIPMENT_STATUS } from "../lib/sheet/markup.mjs";
 import { cutBomReport } from "../lib/register/cut-bom.mjs";
 
 /**
@@ -16,13 +18,15 @@ import { cutBomReport } from "../lib/register/cut-bom.mjs";
  *   findings  the Validation Center's draft findings
  *   onSelect(uid), onGo({ kind, uid })  navigate to a spool / weld / cut piece
  */
+const EQ_STATUS = Object.fromEntries(EQUIPMENT_STATUS);
 export default function SpoolDetail({ spools = [], selectedUid, payload, findings = [], onSelect, onGo }) {
   const sp = spools.find((m) => isUid(m.uid) && m.uid === selectedUid) || spools.find((m) => isUid(m.uid)) || null;
   const v = useMemo(() => (sp ? spoolView(payload, sp.uid) : null), [payload, sp]);
+  const payloadItems = useMemo(() => effectiveItems(payload).items, [payload]);
   const bom = useMemo(() => (v ? cutBomReport(v.cuts, payload.bom || []) : null), [v, payload.bom]);
   if (!spools.length) return <p className="muted sm" data-spool-detail="none">اسپولی روی برگ نیست.</p>;
   if (!sp || !v) return <p className="muted sm" data-spool-detail="none">اسپول‌های این برگ شناسهٔ پایدار ندارند؛ ابتدا ذخیره کنید.</p>;
-  const mine = new Set([sp.uid, ...v.welds.map((w) => w.uid), ...v.cuts.map((c) => c.uid)].filter(Boolean).map((u) => String(u).toLowerCase()));
+  const mine = new Set([sp.uid, ...v.welds.map((w) => w.uid), ...v.cuts.map((c) => c.uid), ...v.equipment.map((e) => e.uid)].filter(Boolean).map((u) => String(u).toLowerCase()));
   const own = findings.filter((f) => (f.entityUid && mine.has(String(f.entityUid).toLowerCase())) || String(f.detail?.spoolUid || "").toLowerCase() === sp.uid.toLowerCase());
   const len = (n) => `${Math.round(n * 1000) / 1000}`;
   return (
@@ -37,13 +41,25 @@ export default function SpoolDetail({ spools = [], selectedUid, payload, finding
       <p className="mono sm muted" dir="ltr" data-spool-uid style={{ margin: "4px 0" }}>{String(sp.no).trim()} · uid {sp.uid}</p>
       <p className="sm" data-spool-counts>
         سرجوش‌ها: <b>{v.welds.length}</b> (کارگاهی <b data-count="shop">{v.shop}</b> · سایت <b data-count="field">{v.field}</b>
-        {v.welds.length - v.shop - v.field > 0 ? ` · نامعلوم ${v.welds.length - v.shop - v.field}` : ""}) · قطعه‌های برش: <b data-count="cuts">{v.cuts.length}</b> · جمع طول برش: <b data-count="total" className="mono">{len(v.totalMm)} mm</b>
+        {v.welds.length - v.shop - v.field > 0 ? ` · نامعلوم ${v.welds.length - v.shop - v.field}` : ""}) · تجهیزات: <b data-count="equipment">{v.equipment.length}</b> · قطعه‌های برش: <b data-count="cuts">{v.cuts.length}</b> · جمع طول برش: <b data-count="total" className="mono">{len(v.totalMm)} mm</b>
       </p>
       {v.welds.length > 0 && (
         <ul className="sm" data-spool-welds style={{ margin: "4px 0", paddingInlineStart: 18 }}>
           {v.welds.map((w) => <li key={w.uid || w.id}>{w.no || "؟"} <span className="muted mono" dir="ltr">{String(w.uid || "").slice(0, 8)}</span>{" "}
             <button type="button" className="ghost sm" data-spool-weld-go={w.uid} onClick={() => onGo?.({ kind: "weld", uid: w.uid })}>نمایش</button></li>)}
         </ul>)}
+      {v.equipment.length > 0 && (
+        <div data-spool-equipment-list>
+          <b className="sm">تجهیزات این اسپول ({v.equipment.length})</b>
+          <ul className="sm" style={{ margin: "4px 0", paddingInlineStart: 18 }}>
+            {v.equipment.map((e) => {
+              const joined = equipmentWelds(e, payloadItems).joined;
+              return (<li key={e.uid || e.id} data-spool-equipment={e.uid}>{e.no || "؟"}{e.attrs?.tag ? ` — ${e.attrs.tag}` : ""} · {e.attrs?.type || "—"} · {EQ_STATUS[e.attrs?.status] || EQ_STATUS.planned}
+                {joined.length > 0 && <> · سرجوش: {joined.map((j) => (<button key={j.uid} type="button" className="ghost sm" data-spool-equipment-weld={j.uid} onClick={() => onGo?.({ kind: "weld", uid: j.uid })}>{j.no || "؟"}</button>))}</>}
+                {" "}<button type="button" className="ghost sm" data-spool-equipment-go={e.uid} onClick={() => onGo?.({ kind: "equipment", uid: e.uid })}>نمایش</button></li>);
+            })}
+          </ul>
+        </div>)}
       {v.cuts.length > 0 && (
         <TableKit name="iso-spool-cuts"><table className="dtable" data-spool-cuts>
           <thead><tr><th>قطعه</th><th>طول (mm)</th><th>N.S.</th><th>جنس</th><th>Sch</th><th>ابتدا</th><th>انتها</th><th></th></tr></thead>
