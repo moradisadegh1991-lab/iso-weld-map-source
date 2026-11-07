@@ -113,10 +113,10 @@ test("E7. Validation Center: E_SPOOL_DANGLING / E_SPOOL_AMBIGUOUS / SP_EQUIPMENT
   assert(!codes(validate({ payload: full(), previous: full(), source: "draft" })).includes("SP_DELETE_DEPENDENCY"), "nothing removed, nothing said");
 });
 
-test("E8. deletion preview (markup.dependents) lists welds, equipment (installed said) and cut pieces by uid and says the server refuses", () => {
+test("E8. deletion preview (markup.dependents) lists welds, equipment (installed said) and cut pieces by uid", () => {
   const items = [spool(s1, "SP-1"), weld(w1, "W-1", "SP-1", s1), equip(e1, "V-1", { spoolUid: s1, status: "installed" })];
   const lines = dependents(items, "sSP-1", [{ piece: 3, spoolUid: s1 }]);
-  assert(lines.some((l) => /تجهیز V-1.*نصب/.test(l)) && lines.some((l) => /سرجوش W-1/.test(l)) && lines.some((l) => /قطعهٔ برش <3>/.test(l)) && lines.some((l) => /سرور/.test(l)));
+  assert(lines.some((l) => /تجهیز V-1.*نصب/.test(l)) && lines.some((l) => /سرجوش W-1/.test(l)) && lines.some((l) => /قطعهٔ برش <3>/.test(l)));
 });
 
 // ── revisions (pure) ────────────────────────────────────────────────────

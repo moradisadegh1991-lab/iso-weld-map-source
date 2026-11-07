@@ -25,6 +25,8 @@ export async function askDelete(ask, { label, no, pr, deps = [] }) {
   const name = `${label} ${no || ""}`.trim();
   if (pr?.blocked) { await ask({ title: `${name} حذف نمی‌شود`, lines: pr.reasons, blocked: true }); return false; }
   const lines = [...(pr?.reasons || []), ...deps];
+  // a spool that is still named is refused by the SERVER on save (409 SPOOL_IN_USE): this list is advice, not the rule
+  if (deps.length && /اسپول/.test(label)) lines.push("سرور تا جابه‌جایی یا برداشتن این ارتباط‌ها ذخیرهٔ حذف را رد می‌کند و چیزی را خودکار جدا نمی‌کند");
   return ask({ title: `${name} حذف شود؟`, lines: lines.length ? ["این‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند (نیمه‌کاره حذف نمی‌شود):", ...lines.slice(0, 12), ...(lines.length > 12 ? ["…"] : [])] : ["فقط همین نشان حذف می‌شود؛ چیز دیگری به آن وابسته نیست."] });
 }
 
