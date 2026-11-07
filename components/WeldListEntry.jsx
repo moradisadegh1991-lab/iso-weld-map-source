@@ -23,7 +23,9 @@ import EquipmentTable from "./EquipmentTable";
 import IsoInfo from "./IsoInfo";
 import { cutVsBom } from "../lib/register/cut-bom.mjs";
 import { useSavedProtection } from "../lib/client/saved-protection.mjs";
-import { collectFindings } from "../lib/register/workspace-validation.mjs";
+import { useValidationCenter } from "../lib/client/validation-center.mjs";
+import { isUid } from "../lib/sheet/mark-identity.mjs";
+import { KINDS } from "../lib/sheet/markup.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped, adoptLegacyPlacement, legacyMarks, extraMarks } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks, addMark, updateMark, placeAt, findMark, isPlaced } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
@@ -120,6 +122,12 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [cutForm, setCutForm] = useState(null);  // { mode, i }
   // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
   const [extras, setExtras] = useState(() => extraMarks(normalizeMarks(initial?.sheetMarkup?.items)));
+  // Sheet weld marks that are NOT any typed row (their uid is no row's): kept exactly as saved, shown on the drawing and in the Validation tab,
+  // never turned into rows, never matched to a row by number or position, never deleted by a save (docs/audit/phase-7 §3)
+  const [orphans, setOrphans] = useState(() => {
+    const rowUids = new Set((initial?.weldList || []).map((r) => (isUid(r?.uid) ? r.uid.toLowerCase() : null)).filter(Boolean));
+    return normalizeMarks(initial?.sheetMarkup?.items).filter((m) => KINDS[m.kind]?.cls === "weld" && !(isUid(m.uid) && rowUids.has(m.uid.toLowerCase())));
+  });
 
   const typed = rows.filter(rowTyped).map(registerRow);
   // A list read from the drawing's printed markers keeps what the model read
@@ -140,9 +148,9 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     // server refuses while anything holds it); no key leaves the saved BOM as it is
     ...(bom.length ? { bom } : Array.isArray(initial?.bom) && initial.bom.length ? { bom: [] } : {}),
     ...(cutLengths.length ? { cutLengths } : {}),
-    ...(extras.length ? { sheetMarkup: { page: sheet?.page ?? initial?.sheetMarkup?.page ?? 1, items: extras } } : {}) }),
+    ...(extras.length || orphans.length ? { sheetMarkup: { page: sheet?.page ?? initial?.sheetMarkup?.page ?? 1, items: [...extras, ...orphans] } } : {}) }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [meta, typed, initial, JSON.stringify(keptMarks), JSON.stringify(keptByUid), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras), JSON.stringify(lineData), JSON.stringify(bom)]);
+  [meta, typed, initial, JSON.stringify(keptMarks), JSON.stringify(keptByUid), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras), JSON.stringify(orphans), JSON.stringify(lineData), JSON.stringify(bom)]);
   const model = useMemo(() => (typed.length ? modelFromWeldList(data) : { error: "هنوز جوشی وارد نشده است." }), [data, typed.length]);
 
   const setCell = (i, k, v) => {
@@ -165,8 +173,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const sheetMode = Boolean(sheet);
   const [markSel, setMarkSel] = useState(null);
   // a mark picked on the drawing or in the explorer: while the panel shows a register table, it shows the table of that mark's class
+  const orphanIds = useMemo(() => new Set(orphans.map((m) => m.id)), [orphans]);
   const pickMark = (id) => {
     setMarkSel(id);
+    if (orphanIds.has(id)) { setWsTab("validation"); return; }
     const m = findMark(itemsRef.current, id);
     if (m && ["welds", "spools", "supports", "equip"].includes(wsTabRef.current)) setWsTab(tabOf(m.kind));
   };
@@ -176,6 +186,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [form, setForm] = useState(null);   // { mode, id, kind, point, aspect }
   const tabOf = (k) => (k === "equipment" ? "equip" : k === "spool" ? "spools" : k === "support" ? "supports" : "welds");
   const openForm = (mode, id, kind, point = null, aspect = Math.SQRT2) => {
+    if (id && orphanIds.has(id)) { setMarkSel(id); setWsTab("validation"); return; }   // not a row: it has no form, only a finding
     const k = kind || findMark(itemsRef.current, id)?.kind;
     if (id) { setMarkSel(id); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }
     setWsTab(tabOf(k));
@@ -190,9 +201,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const itemsRef = useRef(items); itemsRef.current = items;
   // what the SAVED revision holds against deleting a mark (lib/client/saved-protection.mjs): advice before the confirm; the server decides
   const { protect, saved } = useSavedProtection({ session, documentId: run?.run?.documentId || null, items, status: run?.run?.status });
-  const validationInput = useMemo(() => ({ items, bom, bomRows, cutRows, cutLengths, registerProblems: model.problems || [] }),
-    [items, bom, bomRows, cutRows, cutLengths, model]);
-  const validationTotal = useMemo(() => collectFindings(validationInput).total, [validationInput]);
+  const revisionInfo = useMemo(() => ({ docNo: meta.drawingNo || null, rev: meta.rev ?? null, sheet: meta.sheet || null }), [meta.drawingNo, meta.rev, meta.sheet]);
+  const vc = useValidationCenter({ session, documentId: run?.run?.documentId || null, runId: run?.run?.id || null, status: run?.run?.status, payload: data, revision: revisionInfo });
+  const [vcSource, setVcSource] = useState("draft");
+  const validationTotal = vc.draft.summary.errors + vc.draft.summary.warnings;
   // who uses what of this sheet's BOM: the welds' ends against each row's (lib/register/bom-allocation.mjs)
   const alloc = useMemo(() => usage(items, bom), [items, bom]);
   // a saved sheet: each weld painted by where its joint stands on site
@@ -200,6 +212,16 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     const st = progress[m.no] || "open";
     return [m.id, { state: st, color: STATE_COLORS[st] }];
   })) : null;
+  const drawStates = useMemo(() => (orphans.length ? { ...(progressStates || {}), ...Object.fromEntries(orphans.map((m) => [m.id, { state: "unlinked", color: "#E2574C" }])) } : progressStates),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [orphans, progress, items]);
+  // what the drawing shows: the register's marks and the unlinked sheet weld marks (drawn apart, in their own colour)
+  const drawItems = useMemo(() => [...items, ...orphans], [items, orphans]);
+  function onDrawItems(next) {
+    // the drawing may move or delete an unlinked mark (a person's own action); it can never make one a row
+    setOrphans(next.filter((m) => orphanIds.has(m.id)));
+    onItems(next.filter((m) => !orphanIds.has(m.id)));
+  }
   function onItems(next) {
     const got = weldRowsFromItems(next, rows);
     // a weld renumbered is not checked any more under its new number
@@ -478,11 +500,11 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const sheetBlock = () => (
     <>
         <div className="wl-sheet" data-wl-sheet>
-          <SheetMarkup protect={protect} src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
+          <SheetMarkup protect={protect} src={sheet.src} items={drawItems} onChange={locked ? undefined : onDrawItems} readOnly={locked} height={640}
             fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={pickMark} attachId={attachId} onAttach={setAttachId}
             onEdit={locked ? null : editMark} onView={(id, k) => openForm("view", id, k)}
             onAdd={locked ? null : (k, p, aspect) => openForm("create", null, k, p, aspect)}
-            hidden={hiddenLayers} onToggleLayer={toggleLayer} states={progressStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
+            hidden={hiddenLayers} onToggleLayer={toggleLayer} states={drawStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
           <p className="note mono sm" data-wl-review-count>
             {nos.length - unchecked.length} از {nos.length} جوش با نقشه بررسی شد · {items.filter((m) => m.kind.startsWith("weld") && isPlaced(m)).length} روی نقشه جا دارد
             {nos.length > 0 && !locked && <> · <button type="button" className="ghost sm" onClick={() => setReviewed(new Set(nos))}>همه بررسی شد</button></>}
@@ -572,6 +594,33 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const problems = model.problems?.length || 0;
   const reviewedN = nos.length - unchecked.length;
   const runWord = !run ? "ذخیره‌نشده" : approved ? "تأییدشده" : "در بازبینی";
+  // a finding's way to the place where it is fixed: always an existing form, table or the drawing; nothing is edited from the list
+  const openFinding = (f) => {
+    const uid = f.entityUid, mark = uid ? findMark(items, uid) : null;
+    const pt = f.detail?.pt != null ? Number(f.detail.pt) : null;
+    switch (f.suggestedAction) {
+      case "weld-form": case "equipment-form": case "spool-form": case "support-form":
+        if (mark) return openForm(locked ? "view" : "edit", mark.id, mark.kind);
+        if (f.code === "W_PT_MISSING" || f.code.startsWith("W_")) { setWsTab("welds"); return; }
+        return setWsTab(f.suggestedAction === "equipment-form" ? "equip" : f.suggestedAction === "spool-form" ? "spools" : f.suggestedAction === "support-form" ? "supports" : "welds");
+      case "bom-form": {
+        setWsTab("bom");
+        const i = pt != null ? bomRows.findIndex((b) => Number(b.pt) === pt) : Number.isInteger(f.detail?.index) ? f.detail.index : -1;
+        if (i >= 0) setBomForm({ mode: locked ? "view" : "edit", i });
+        return;
+      }
+      case "ledger": return setWsTab("bom");
+      case "cut-form": return setWsTab("cut");
+      case "save": return setWsTab("save");
+      case "drawing": {
+        const target = (uid && (findMark(drawItems, uid) || drawItems.find((m) => m.uid === uid))) || null;
+        if (target) setMarkSel(target.id);
+        return;
+      }
+      default: return undefined;
+    }
+  };
+  const selectedUid = (() => { const m = markSel ? findMark(drawItems, markSel) : null; return m ? (isUid(m.uid) ? m.uid : m.id) : null; })();   // (not a hook: this runs after the sheet-less early return)
   const tabs = [
     { k: "info", label: "مشخصات", hint: "شمارهٔ نقشه، رویژن، خط و مشخصات خط", node: (<><IsoInfo meta={meta} lineData={lineData} onMeta={setMeta} onLineData={setLineData} lists={lists} locked={locked} run={run} />{registryBlock}</>) },
     { k: "welds", label: "سرجوش‌ها", hint: "رجیستر جوش‌ها و نشان‌های روی نقشه", badge: nos.length ? `${reviewedN}/${nos.length}` : "",
@@ -587,8 +636,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       node: (<>{bomBlock}{bomWeldsBlock}</>) },
     { k: "cut", label: "برش", hint: "جدول برش لوله و مقایسه با BOM", badge: cutLengths.length || "", tone: cutBom.problems.length || cutProblems.length ? "bad" : undefined,
       node: (<>{cutBlock}{cutLengths.length === 0 && <p className="muted sm">جدول برش روی این برگ خوانده نشد.</p>}</>) },
-    { k: "validation", label: "اعتبارسنجی", hint: "همهٔ ایرادهای بررسی‌های موجود یک‌جا", tone: validationTotal ? "bad" : undefined, badge: validationTotal || "",
-      node: (<ValidationPanel input={validationInput} onSelect={(ref) => { setMarkSel(ref); }} />) },
+    { k: "validation", label: "اعتبارسنجی", hint: "مرکز تطبیق: همهٔ ایرادهای مهندسی یک‌جا", tone: vc.draft.summary.errors ? "bad" : undefined, badge: validationTotal || "",
+      node: (<ValidationPanel draft={vc.draft} saved={vc.server} source={vcSource} onSource={setVcSource} onRefresh={vc.refresh} loading={vc.loading} error={vc.error}
+        selectedUid={selectedUid} onSelect={(uid) => { const m = findMark(drawItems, uid); if (m) setMarkSel(m.id); }} onOpen={openFinding}
+        onResolve={vc.resolve} resolveBusy={vc.resolveBusy} locked={locked} />) },
     ...(styleTab ? [{ k: "style", label: "الگوی نقشه", hint: "الگوی این سبک نقشه: خانهٔ هر مقدار روی نقشه", node: styleTab }] : []),
     { k: "import", label: "ورود", hint: "خواندن از Excel / CSV یا چسباندن", node: (<>{importBlock}</>) },
     { k: "save", label: "ثبت", hint: "ذخیره و تأیید", tone: problems ? "bad" : undefined, badge: problems || "",
