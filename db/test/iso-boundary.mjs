@@ -267,7 +267,7 @@ const REVIEWED_ROUTES = {
   guarded: ["app/api/bom-allocations/route.js", "app/api/iso-equipment/route.js", "app/api/mark-warnings/route.js", "app/api/overview/route.js", "app/api/runs/route.js",
     "app/api/runs/[id]/route.js", "app/api/validation/route.js"],
   // address documents by id but are type-agnostic BY DESIGN (a document / revision / file is any discipline's) or have their own discipline pass
-  typeAgnostic: ["app/api/documents/route.js", "app/api/revisions/route.js", "app/api/pid/route.js", "app/api/sld/route.js"],
+  typeAgnostic: ["app/api/documents/route.js", "app/api/revisions/route.js", "app/api/pid/route.js", "app/api/sld/route.js", "app/api/sld/extract/route.js"],
 };
 const READS_ISO_TABLES = /\b(bom_allocation|iso_equipment|sheet_mark_(identity|warning)|iso_bom_row)\b/;
 const ISO_REPOS = {

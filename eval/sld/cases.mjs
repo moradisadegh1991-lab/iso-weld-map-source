@@ -48,7 +48,7 @@ function between() {
   const d = new Drawing(600, 300);
   d.motor(100, 120);                                                        // two motors, one tag printed midway: ambiguous, never attached to both
   d.motor(180, 120);
-  d.tag(118, 150, "M-410", null, 8);
+  d.tag(129, 150, "M-410", null, 8);
   return d;
 }
 

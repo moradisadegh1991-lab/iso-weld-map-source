@@ -13,6 +13,7 @@ import { createLlmRouter } from "../../../../lib/llm/index.mjs";
 import { resolveEndpoints } from "../../../../lib/db/repos/llm-endpoints.mjs";
 import { parseLoose, cleanJsonText } from "../../../../lib/llm/parse.mjs";
 import { recordUsage, monthTokens, monthlyLimit } from "../../../../lib/llm/accounting.mjs";
+import { createLimiter } from "../../../../lib/sld/extract/limiter.mjs";
 import { readerMissing, readerMissingText } from "../../../../lib/server/reader-deps.mjs";
 
 /**
@@ -24,8 +25,7 @@ import { readerMissing, readerMissingText } from "../../../../lib/server/reader-
  * Errors carry a code: FILE_TOO_LARGE 413, UNSUPPORTED_FILE 415, TOO_MANY_PAGES 413, PDF_ENCRYPTED/PDF_UNREADABLE 422, PAGE_TOO_COMPLEX 413, EXTRACTION_TIMEOUT 504,
  * TOOL_MISSING 501 (names the package), EXTRACTION_BUSY 429 (retry), NO_FILE 404. A failed reading writes nothing; repeating the request is safe.
  */
-let active = 0;
-const MAX_ACTIVE = Number(process.env.SLD_EXTRACT_CONCURRENCY) > 0 ? Number(process.env.SLD_EXTRACT_CONCURRENCY) : 2;
+const limiter = createLimiter(Number(process.env.SLD_EXTRACT_CONCURRENCY) > 0 ? Number(process.env.SLD_EXTRACT_CONCURRENCY) : 2);
 const out = (e) => {
   const status = e?.status || 500;
   if (status >= 500 && !e?.code) { console.error("sld extract:", e); return Response.json({ error: "internal error", code: "INTERNAL" }, { status: 500 }); }
@@ -33,7 +33,7 @@ const out = (e) => {
 };
 
 export async function POST(request) {
-  let held = false;
+  let release = null;
   try {
     const raw = await request.text();
     if (raw.length > 100_000) return Response.json({ error: "the request body is too large", code: "PAYLOAD_TOO_LARGE" }, { status: 413 });
@@ -50,8 +50,8 @@ export async function POST(request) {
     if (!doc.storageUri || /^(pending|none):\/\//.test(doc.storageUri)) return Response.json({ error: "this document has no stored file", code: "NO_FILE" }, { status: 404 });
     const bytes = Buffer.from(await (await getStore()).get(doc.storageUri));
 
-    if (active >= MAX_ACTIVE) return Response.json({ error: "the server is reading other diagrams; try again shortly", code: "EXTRACTION_BUSY" }, { status: 429, headers: { "Retry-After": "20" } });
-    active++; held = true;
+    release = limiter.acquire();
+    if (!release) return Response.json({ error: "the server is reading other diagrams; try again shortly", code: "EXTRACTION_BUSY" }, { status: 429, headers: { "Retry-After": "20" } });
     let result;
     try { result = await extractSld(bytes, b.options && typeof b.options === "object" ? b.options : {}); }
     catch (e) {
@@ -93,5 +93,5 @@ export async function POST(request) {
       protectHumanDecisions: true, acknowledgeHumanDecisions: b.acknowledgeHumanDecisions === true }));
     return Response.json({ ...r, stats: draft.meta.stats, warnings }, { status: r.created ? 201 : 200 });
   } catch (e) { return out(e); }
-  finally { if (held) active--; }
+  finally { if (release) release(); }
 }
