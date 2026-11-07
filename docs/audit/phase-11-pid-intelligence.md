@@ -129,3 +129,16 @@ The weak case is `low-resolution-scan` (equipment 33%/50%): readings with clashi
 * Instrument bubbles are read only from the OCR reader's `bubbles` input; a plain text "PIC 1101" is not turned into an instrument (never guessed).
 * Revision-comparison mapping UI is minimal (candidate list + confirm); batch mapping is not built.
 * Migration: none. No production migration was run.
+
+## 16. Phase 11.1 correction — off-page connectivity integrity
+**Defect found in Phase 11 (`fe7bd98`):** `resolveOffpage` returned `resolved` for any connector whose target drawing merely existed in the project directory
+(production passes no peer drafts), and, when the source named a line, fell back to *unfiltered* reciprocal connectors if none matched the line.
+**Corrected rules (`lib/pid/graph.mjs`):**
+* a drawing in the directory is not proof: with no peer draft → `unconfirmed`; target absent → `unresolved` (unchanged);
+* `resolved` needs exactly one compatible reciprocal connector in the target's own draft; when the source has a `lineRef`, the far connector must carry the same one
+  (whitespace and case ignored, nothing else); a missing or different line reference → `unconfirmed`; several matches → `ambiguous`;
+* off-page results add **no** graph adjacency (the far end is another drawing's item); the register and validation use the graph's status; the panel counts confirmed and unconfirmed/unresolved/ambiguous separately.
+**Tests (`db/test/pid-intelligence.mjs`, now 37):** the 10 required cases (F4–F13); guard proofs by reverting the code — directory-match-as-resolved (F2/F5/F13 fail), lineRef fallback (F8/F9/F13 fail), off-page adjacency (F12 fails; a resolved case had to be added to catch it).
+**Eval:** the previous gold labelled a bare directory match "resolved" (wrong under the corrected semantics); corrected, plus a case with peer drafts (`offpage-with-peer-drafts`); baseline rewritten; off-page pooled 6/6, 0 wrongly resolved — synthetic, not accuracy on real sheets.
+**Results on the final code:** `next build`, `eval:check` (GATE PASSED), `eval:pid --check` passed; `npm run db:test` — 125 suites, 0 FAIL; `db:test:pg` on local PostgreSQL 16 — 8/8, 15/15, 5/5, 3/3; `tools/drive-pid.mjs` — all checks true incl. the unconfirmed off-page row, register status and finding; Phase 10 isometric drive — 26 true, 0 false, no page errors.
+**Remaining risk:** production still loads no peer drafts, so every off-page connector shows `unconfirmed` until peer drafts are supplied (not part of this fix).
