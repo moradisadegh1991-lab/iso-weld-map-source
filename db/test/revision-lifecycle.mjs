@@ -363,6 +363,9 @@ test("S14. the comparison is read-only: asking changes nothing; permission and o
   assert((await compare(A.doc, other)).status === 409, "two different drawings cannot be compared");
   const notLinked = await carry({ fromDocumentId: other, toDocumentId: B.doc, fromHash: "x", toHash: "y", requestKey: "not-linked-0001", decisions: [] });
   assert(notLinked.status === 409);
+  const c2 = (await q("SELECT id FROM document WHERE doc_no = 'REV-X' AND revision = '2'"))[0].id;
+  const skip = await carry({ fromDocumentId: A.doc, toDocumentId: c2, fromHash: "x", toHash: "y", requestKey: "skip-a-level-01", decisions: [] });
+  equal(skip.status, 409); equal(skip.body.code, "INVALID_LINEAGE", "carry goes from a revision to the one made from it, not across the chain");
 });
 
 await run();
