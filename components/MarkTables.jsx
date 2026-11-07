@@ -43,6 +43,7 @@ const TABS = [["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["s
 const NEW_KIND = { weld: "weld-unknown", spool: "spool", support: "support" };
 const WORD = { weld: "سرجوش", spool: "اسپول", support: "ساپورت" };
 
+const isUidLike = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v ?? ""));
 export default function MarkTables({ protect = null, items = [], onChange, model = null, selectedId = null, onSelect, attachId = null, onAttach,
   readOnly = false, tabs = ["weld", "spool", "support"], weldList = null, checked = null, bom = [], focus = null, onOpen = null, cuts = [] }) {
   const shown = TABS.filter(([k]) => tabs.includes(k));
@@ -99,7 +100,11 @@ export default function MarkTables({ protect = null, items = [], onChange, model
   const KIND_TEXT = { "weld-shop": "کارگاه", "weld-field": "سایت", "weld-unknown": "نامعلوم" };
   const colSpan = ATTRS[tab].length + 3 + (tab === "weld" ? 1 : 0) + (tab === "spool" ? 1 : 0) + (withEngine ? 2 : 0) + (ticks ? 1 : 0);
   // a spool's welds: the weld marks that name it (read-only, from the sheet)
-  const weldsOfSpool = (no) => items.filter((w) => KINDS[w.kind]?.cls === "weld" && String(w.attrs?.spool ?? "").trim() === String(no ?? "").trim() && String(no ?? "").trim()).map((w) => w.no);
+  // by IDENTITY (attrs.spoolUid); a weld with no spool uid is counted by its printed number only when exactly one spool carries that number
+  const spoolNoCount = items.filter((x) => x.kind === "spool").reduce((c, x) => c.set(String(x.no ?? "").trim(), (c.get(String(x.no ?? "").trim()) || 0) + 1), new Map());
+  const weldsOfSpool = (no, uid) => items.filter((w) => KINDS[w.kind]?.cls === "weld" && (isUidLike(w.attrs?.spoolUid) ? isUidLike(uid) && String(w.attrs.spoolUid).toLowerCase() === String(uid).toLowerCase()
+    : String(w.attrs?.spool ?? "").trim() === String(no ?? "").trim() && String(no ?? "").trim() && spoolNoCount.get(String(no).trim()) === 1)).map((w) => w.no);
+  const equipOfSpool = (uid) => items.filter((x) => KINDS[x.kind]?.cls === "equipment" && isUidLike(uid) && String(x.attrs?.spoolUid ?? "").toLowerCase() === String(uid).toLowerCase());
   return (
     <div className="mark-tables" data-mark-tables ref={box}>
       {dialog}
@@ -151,7 +156,7 @@ export default function MarkTables({ protect = null, items = [], onChange, model
                       {k === "c1" || k === "c2" ? (m.attrs?.[k] ? bomText(m.attrs[k]) : "—") : (m.attrs?.[k] || "—")}
                       {k === "ref" && tieStatus[m.attrs?.ref] && tieStatus[m.attrs.ref].status !== "ok" && <span className="warnish" data-tie-status={tieStatus[m.attrs.ref].status} title={TIE_TEXT[tieStatus[m.attrs.ref].status]}> ⚠</span>}
                     </td>))}
-                  {tab === "spool" && (() => { const ws = weldsOfSpool(m.no); return <td className="mono sm" data-spool-welds={ws.length}>{ws.length ? `${ws.length}: ${ws.slice(0, 8).join("، ")}${ws.length > 8 ? "…" : ""}` : "—"}</td>; })()}
+                  {tab === "spool" && (() => { const ws = weldsOfSpool(m.no, m.uid), eq = equipOfSpool(m.uid); return <td className="mono sm" data-spool-welds={ws.length} data-spool-equipment={eq.length}>{ws.length ? `${ws.length}: ${ws.slice(0, 8).join("، ")}${ws.length > 8 ? "…" : ""}` : "—"}{eq.length > 0 && <span className="muted"> · تجهیز: {eq.map((x) => x.no || "؟").join("، ")}</span>}</td>; })()}
                   {withEngine && <>
                     <td className="mono sm" data-engine="ndt">{e?.ndt ?? "—"}</td>
                     <td className="mono sm" data-engine="el">{e?.el != null ? Math.round(e.el).toLocaleString("en-US") : "—"}</td>

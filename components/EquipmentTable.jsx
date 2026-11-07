@@ -18,7 +18,7 @@ import TableKit from "./ui/TableKit";
  *   onOpen(mode, id, kind)   open the form: "view" | "edit" | "create"
  *   focus             { id, n } — a row to bring into view
  */
-export default function EquipmentTable({ protect = null, items = [], onChange, bom = [], selectedId = null, onSelect, attachId = null, onAttach, readOnly = false, focus = null, onOpen = null }) {
+export default function EquipmentTable({ protect = null, items = [], onChange, bom = [], selectedId = null, onSelect, attachId = null, onAttach, readOnly = false, focus = null, onOpen = null, onGo = null }) {
   const rows = items.filter((m) => KINDS[m.kind]?.cls === "equipment");
   const issues = equipmentChecks(items, bom);
   const status = Object.fromEntries(EQUIPMENT_STATUS);
@@ -67,7 +67,9 @@ export default function EquipmentTable({ protect = null, items = [], onChange, b
                     <td className="sm" data-cell="type">{a.type || "—"}</td>
                     <td className="mono sm" dir="ltr" data-cell="tag">{a.tag || "—"}</td>
                     <td className="mono sm" dir="ltr" data-cell="c1">{bomText(a.c1)}</td>
-                    <td className="mono sm" dir="ltr" data-cell="spool">{a.spool || "—"}</td>
+                    <td className="mono sm" dir="ltr" data-cell="spool" data-spool-uid={a.spoolUid || ""}>{a.spool || "—"}{a.spoolUid && <span className="muted"> · {String(a.spoolUid).slice(0, 8)}</span>}
+                      {a.spoolUid && onGo && items.some((x) => x.kind === "spool" && String(x.uid).toLowerCase() === String(a.spoolUid).toLowerCase()) && <button type="button" className="ghost sm" data-equip-go-spool={markRef(m)} onClick={(e) => { e.stopPropagation(); onGo({ kind: "spool", uid: a.spoolUid }); }}>اسپول</button>}
+                      {a.spoolUid && !items.some((x) => x.kind === "spool" && String(x.uid).toLowerCase() === String(a.spoolUid).toLowerCase()) && <span className="warnish" data-spool-dangling title="اسپول در این رویژن نیست"> ⚠</span>}</td>
                     <td className="mono sm" dir="ltr" data-cell="welds">{(() => { const ew = equipmentWelds(m, items);
                       return (<>{ew.joined.map((j) => j.no || "؟").join("، ") || (ew.unresolved.length || ew.dangling.length ? "" : "—")}
                         {ew.unresolved.length > 0 && <span className="warnish" data-weld-unresolved title="شمارهٔ قدیمی که سرجوش مشخصی را نام نمی‌برد؛ در فرم تجهیز حل کنید"> ⚠ {ew.unresolved.map((x) => x.no).join("، ")}؟</span>}
