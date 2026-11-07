@@ -6,6 +6,7 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { availability, history, transition } from "../../../lib/db/repos/bom-allocation.mjs";
 import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
+import { assertIsometricDocument, assertIsometricAllocation } from "../../../lib/db/run-scope.mjs";
 
 /**
  * Who uses what of a drawing revision's BOM (lib/db/repos/bom-allocation.mjs):
@@ -30,9 +31,12 @@ export async function GET(request) {
     const projectId = url.searchParams.get("projectId"), documentId = url.searchParams.get("documentId");
     if (!projectId || !documentId) return Response.json({ error: "projectId and documentId are required" }, { status: 400 });
     const { db } = await scope(request, projectId, ACTIONS.VIEW_PROJECT);
-    return await withProject(db, projectId, async () => Response.json({
-      ...(await availability(db, { projectId, documentId })),
-      ...(url.searchParams.get("history") ? { history: await history(db, { projectId, documentId }) } : {}) }));
+    return await withProject(db, projectId, async () => {
+      await assertIsometricDocument(db, { projectId, documentId, allowMissing: true });     // a P&ID / SLD document has no BOM ledger (409 NOT_AN_ISOMETRIC_DOCUMENT)
+      return Response.json({
+        ...(await availability(db, { projectId, documentId })),
+        ...(url.searchParams.get("history") ? { history: await history(db, { projectId, documentId }) } : {}) });
+    });
   } catch (e) { return errorResponse(e); }
 }
 
@@ -42,6 +46,8 @@ export async function POST(request) {
     if (!body.projectId || !body.documentId || !body.allocationId) return Response.json({ error: "projectId, documentId and allocationId are required" }, { status: 400 });
     const { db, user } = await scope(request, body.projectId, ACTIONS.EDIT_EXTRACTION);
     return await withProject(db, body.projectId, async () => db.transaction(async (tx) => {
+      await assertIsometricDocument(tx, { projectId: body.projectId, documentId: body.documentId, allowMissing: true });
+      await assertIsometricAllocation(tx, { projectId: body.projectId, allocationId: body.allocationId });     // the allocation's own drawing, from the database
       if (body.action === "release" && await approvedRunFor(tx, { projectId: body.projectId, documentId: body.documentId })) {
         return Response.json({ error: "رجیستر این رویژن تأیید شده؛ رزرو آن آزاد نمی‌شود. رویژن جدید ثبت کنید." }, { status: 409 });
       }
