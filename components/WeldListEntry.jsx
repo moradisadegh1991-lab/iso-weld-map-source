@@ -2,6 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import BomForm from "./BomForm";
+import BomTable from "./BomTable";
 import CutForm from "./CutForm";
 import { cutChecks } from "../lib/register/cut-model.mjs";
 import TableKit from "./ui/TableKit";
@@ -21,7 +22,7 @@ import EquipmentTable from "./EquipmentTable";
 import IsoInfo from "./IsoInfo";
 import { cutVsBom } from "../lib/register/cut-bom.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
-import { normalize as normalizeMarks, addMark, updateMark, placeAt } from "../lib/sheet/markup.mjs";
+import { normalize as normalizeMarks, addMark, updateMark, placeAt, findMark } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
@@ -159,7 +160,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [form, setForm] = useState(null);   // { mode, id, kind, point, aspect }
   const tabOf = (k) => (k === "equipment" ? "equip" : k === "spool" ? "spools" : k === "support" ? "supports" : "welds");
   const openForm = (mode, id, kind, point = null, aspect = Math.SQRT2) => {
-    const k = kind || itemsRef.current.find((m) => m.id === id)?.kind;
+    const k = kind || findMark(itemsRef.current, id)?.kind;
     if (id) { setMarkSel(id); setEditFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }
     setWsTab(tabOf(k));
     setForm({ mode: locked ? "view" : mode, id, kind: k, point, aspect });
@@ -291,32 +292,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   );
   const bomBlock = (
     <>
-      {bom.length > 0 && (
-        <details className="intake-more" data-bom={bom.length}>
-          <summary>BOM همین برگ — {bom.length} ردیف، خوانده‌شده با OCR؛ با نقشه بررسی و اصلاح کنید (همین جدول با رجیستر ذخیره می‌شود)</summary>
-          <div style={{ overflowX: "auto" }}>
-            <TableKit name="iso-bom"><table className="dtable">
-              <thead><tr><th>PT</th><th>گروه</th><th>شرح</th><th>N.S.</th><th>کد کالا</th><th>تعداد</th><th>واحد</th><th title="سرهای جوشی‌شدنی این ردیف که سرجوش‌ها نام برده‌اند">سر جوش: رزرو/ظرفیت</th><th></th></tr></thead>
-              <tbody>{bomRows.map((b, i) => (
-                <tr key={i} data-bom-row={b.pt}>
-                  <td className="mono b" dir="ltr" data-bom-cell="pt">{b.pt ?? "—"}</td>
-                  <td className="sm" data-bom-cell="group">{b.group || "—"}</td>
-                  <td className="sm" dir="ltr" data-bom-cell="description">{b.description || "—"}</td>
-                  <td className="mono" data-bom-cell="diam">{b.diam || "؟"}</td>
-                  <td className="mono sm" dir="ltr" data-bom-cell="stockCode">{b.stockCode || "—"}</td>
-                  <td className="mono" dir="ltr" data-bom-cell="qty">{b.qty === "" || b.qty == null ? "؟" : b.qty}</td>
-                  <td className="sm" data-bom-cell="qtyUnit">{b.qtyUnit === "pcs" ? "عدد" : b.qtyUnit === "m" ? "m" : "؟"}</td>
-                  <td className="mono sm" data-bom-alloc={b.pt} dir="ltr">{(() => { const u = alloc.get(String(b.pt)); if (!u) return "—"; if (u.cap.mode === "length") return "طولی"; if (u.cap.mode === "none") return u.used ? `${u.used}/۰` : "—"; return u.cap.capacity == null ? (u.used ? `${u.used}/؟` : "؟") : `${u.used}/${u.cap.capacity}`; })()}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <button type="button" className="ghost sm" data-bom-view={b.pt} onClick={() => setBomForm({ mode: "view", i })}>مشاهده</button>
-                    {!locked && <button type="button" className="ghost sm" data-bom-edit={b.pt} onClick={() => setBomForm({ mode: "edit", i })}>ویرایش</button>}
-                    {!locked && <button type="button" className="ghost sm" onClick={() => setBomRows(bomRows.filter((_, j) => j !== i))}>حذف</button>}
-                  </td>
-                </tr>))}</tbody>
-            </table></TableKit>
-          </div>
-          {!locked && <button type="button" className="ghost sm" data-bom-add onClick={() => setBomForm({ mode: "create", i: -1 })}>+ ردیف BOM (ردیفی که خوانده نشده)</button>}
-        </details>)}
+      <BomTable rows={bomRows} live={alloc} locked={locked} session={session} documentId={run?.run?.documentId || null}
+        savedHadRows={Array.isArray(initial?.bom) && initial.bom.length > 0}
+        onView={(i) => setBomForm({ mode: "view", i })} onEdit={(i) => setBomForm({ mode: "edit", i })}
+        onAdd={() => setBomForm({ mode: "create", i: -1 })} onDelete={(i) => setBomRows(bomRows.filter((_, j) => j !== i))} />
       {bomForm && (
         <BomForm key={`${bomForm.mode}-${bomForm.i}`} mode={bomForm.mode} lists={lists} readOnly={locked} rows={bomRows}
           row={bomForm.i >= 0 ? bomRows[bomForm.i] : { pt: nextBomPt() }}
@@ -583,7 +562,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       node: (<EquipmentTable items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
         attachId={attachId} onAttach={setAttachId} focus={editFocus} onOpen={(mode, id, k) => openForm(mode, id, k)} />) },
     { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
-      node: (<>{bomBlock}{bomWeldsBlock}{bom.length === 0 && <p className="muted sm">BOM خوانده نشد.</p>}</>) },
+      node: (<>{bomBlock}{bomWeldsBlock}</>) },
     { k: "cut", label: "برش", hint: "جدول برش لوله و مقایسه با BOM", badge: cutLengths.length || "", tone: cutBom.problems.length || cutProblems.length ? "bad" : undefined,
       node: (<>{cutBlock}{cutLengths.length === 0 && <p className="muted sm">جدول برش روی این برگ خوانده نشد.</p>}</>) },
     ...(styleTab ? [{ k: "style", label: "الگوی نقشه", hint: "الگوی این سبک نقشه: خانهٔ هر مقدار روی نقشه", node: styleTab }] : []),
@@ -618,7 +597,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       </WorkspaceFrame>
       {form && (
         <MarkForm key={`${form.mode}-${form.id || "new"}-${form.kind}`} mode={form.mode}
-          mark={form.id ? items.find((m) => m.id === form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo} thisSheet={meta.sheet}
+          mark={form.id ? findMark(items, form.id) : { kind: form.kind }} items={items} bom={bom} lists={lists} readOnly={locked} thisDoc={meta.drawingNo} thisSheet={meta.sheet}
           onClose={() => setForm(null)}
           onSave={(d) => {
             if (form.id) onItems(updateMark(items, form.id, { kind: d.kind, no: d.no, attrs: d.attrs }));

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo, duplicateMark, removeMark, dependents } from "../lib/sheet/markup.mjs";
+import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo, duplicateMark, removeMark, dependents, markRef, isMark, findMark } from "../lib/sheet/markup.mjs";
 import Shape, { COLOR, geometryOf } from "./MarkShape";
 
 /**
@@ -121,7 +121,7 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
     // a new mark by the tool: its weld point is the click, with its leader and frame, like any other
     if (tool) {
       const next = addMark(items, { kind: tool });
-      const id = next[next.length - 1].id;
+      const id = markRef(next[next.length - 1]);
       commit(placeAt(next, id, p, aspect));
       setSelectedId(id);
       setTool(null);
@@ -132,11 +132,11 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   function down(e, m, part = "frame") {
     e.stopPropagation();
     pickedHere.current = true;
-    setSelectedId(m.id);
+    setSelectedId(markRef(m));
     // a right (or middle) button picks the mark only: its menu opens, nothing is dragged
     if (readOnly || (e.pointerType === "mouse" && e.button !== 0)) return;
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* a synthetic pointer: the drag still follows the sheet */ }
-    setDrag({ id: m.id, part, moved: false });
+    setDrag({ id: markRef(m), part, moved: false });
   }
   function move(e) {
     if (pan.current) {
@@ -166,29 +166,29 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
     setMenu({ x: e.clientX, y: e.clientY, id, p: id ? null : at(e) });
   }
   const closeMenu = () => setMenu(null);
-  const view = (id) => { setSelectedId(id); onView?.(id, items.find((m) => m.id === id)?.kind); };
-  const edit = (id) => { setSelectedId(id); onEdit?.(id, items.find((m) => m.id === id)?.kind); };
+  const view = (id) => { setSelectedId(id); onView?.(id, findMark(items, id)?.kind); };
+  const edit = (id) => { setSelectedId(id); onEdit?.(id, findMark(items, id)?.kind); };
   function duplicate(id) {
-    const { items: next, id: nid } = duplicateMark(items, id, aspect);
+    const { items: next, key: nid } = duplicateMark(items, id, aspect);   // the copy has its own persistent identity
     if (!nid) return;
     commit(next);
     setSelectedId(nid);
   }
   function remove(id) {
-    const m = items.find((x) => x.id === id);
+    const m = findMark(items, id);
     if (!m) return;
     const deps = dependents(items, id);
     const ask = `${KINDS[m.kind].label} ${m.no || ""} حذف شود؟` +
       (deps.length ? `\n\nاین‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند (بعد از حذف در قاعده‌ها دیده می‌شوند):\n– ${deps.slice(0, 12).join("\n– ")}${deps.length > 12 ? "\n…" : ""}` : "");
     if (!window.confirm(ask)) return;
-    if (pointFor === id) setPointFor(null);
-    if (selectedId === id) setSelectedId(null);
+    if (isMark(m, pointFor)) setPointFor(null);
+    if (isMark(m, selectedId)) setSelectedId(null);
     commit(removeMark(items, id));
   }
   function addHere(kind, p) {
     if (onAdd) { onAdd(kind, p, aspect); return; }
     const next = addMark(items, { kind });
-    const id = next[next.length - 1].id;
+    const id = markRef(next[next.length - 1]);
     commit(placeAt(next, id, p, aspect));
     setSelectedId(id);
     onEdit?.(id, kind);
@@ -246,7 +246,8 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   useEffect(() => {
     if (pickedHere.current) { pickedHere.current = false; return; }
     if (!selectedId || !box.current) return;
-    const el = box.current.querySelector(`[data-mark-id="${CSS.escape(String(selectedId))}"]`);
+    const picked = findMark(items, selectedId);
+    const el = picked && box.current.querySelector(`[data-mark-id="${CSS.escape(String(markRef(picked)))}"]`);
     if (!el) return;
     const b = box.current.getBoundingClientRect(), r = el.getBoundingClientRect(), pad = 40;
     if (r.left < b.left + pad || r.right > b.right - pad) box.current.scrollLeft += (r.left + r.width / 2) - (b.left + b.width / 2);
@@ -279,17 +280,17 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   // Arrow keys move through the marks in the order they are listed (the table's), Home and End to the first and last;
   // Enter or Space picks the one in focus. Only the picked mark (or the first) is a tab stop, so Tab crosses the sheet once.
   function markKey(e, m) {
-    const ids = shown.map((x) => x.id);
-    const i = ids.indexOf(m.id);
+    const ids = shown.map(markRef);
+    const i = ids.indexOf(markRef(m));
     const to = e.key === "ArrowRight" || e.key === "ArrowDown" ? ids[Math.min(ids.length - 1, i + 1)]
       : e.key === "ArrowLeft" || e.key === "ArrowUp" ? ids[Math.max(0, i - 1)]
       : e.key === "Home" ? ids[0] : e.key === "End" ? ids[ids.length - 1] : null;
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(m.id); return; }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(markRef(m)); return; }
     if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
       e.preventDefault();
       const r = e.currentTarget.getBoundingClientRect();
-      setSelectedId(m.id);
-      setMenu({ x: r.left + r.width / 2, y: r.bottom, id: m.id, p: null });
+      setSelectedId(markRef(m));
+      setMenu({ x: r.left + r.width / 2, y: r.bottom, id: markRef(m), p: null });
       return;
     }
     if (to == null) return;
@@ -316,6 +317,20 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
     setBusy("");
   }
 
+  // a view setting only (never written to the marks, whose positions stay 0..1 fractions of the sheet):
+  // fit = the whole sheet inside the frame; reset = 100% (the frame's width) from the top-left corner
+  function fitView() {
+    const el = box.current, im = sheet.current?.querySelector("img");
+    const ratio = im?.naturalWidth && im?.naturalHeight ? im.naturalWidth / im.naturalHeight : Math.SQRT2;
+    const z = el ? Math.min(1, Math.max(0.5, (el.clientHeight * ratio) / Math.max(1, el.clientWidth))) : 1;
+    setZoom(z);
+    if (el) { el.scrollLeft = 0; el.scrollTop = 0; }
+  }
+  function resetView() {
+    setZoom(1);
+    if (box.current) { box.current.scrollLeft = 0; box.current.scrollTop = 0; }
+  }
+
   const count = (cls) => items.filter((m) => KINDS[m.kind].cls === cls).length;
   return (
     <div className="sheet-markup" data-sheet-markup>
@@ -323,7 +338,8 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
         <button type="button" className="ghost sm" onClick={() => setZoom((z) => Math.max(0.5, z / 1.25))} aria-label="zoom out">−</button>
         <span className="mono sm" data-zoom>{Math.round(zoom * 100)}%</span>
         <button type="button" className="ghost sm" onClick={() => setZoom((z) => Math.min(6, z * 1.25))} aria-label="zoom in">+</button>
-        <button type="button" className="ghost sm" onClick={() => setZoom(1)}>⤢</button>
+        <button type="button" className="ghost sm" data-fit title="کل برگه در قاب" aria-label="fit to view" onClick={fitView}>⤢ جا شدن</button>
+        <button type="button" className="ghost sm" data-reset-view title="۱۰۰٪ و بازگشت به گوشهٔ برگه" aria-label="reset view" onClick={resetView}>↺ بازنشانی نما</button>
         {legend.map(([c, label]) => <span key={label} className="sm"><i className="dot" style={{ background: c }} /> {label}</span>)}
         <span className="grow" />
         {onSeedEngine && !readOnly && (
@@ -366,18 +382,18 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
           <svg viewBox={`0 0 1000 ${1000 / aspect}`} data-leaders hidden={hidden.has("leader")}
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
             {shown.filter((m) => m.ax != null && m.ay != null).map((m) => {
-              const f = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
-              const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
+              const f = isMark(m, drag?.id) && drag.p && drag.part !== "anchor" ? drag.p : m;
+              const a = isMark(m, drag?.id) && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
               const k = 1000 / aspect;
               // as thin as the drawing's own leaders, and no blob at the weld point to cover the drawing
               return <line key={m.id} data-leader={m.id} data-ax={a.ax} data-ay={a.ay} data-fx={f.x} data-fy={f.y}
                 x1={a.ax * 1000} y1={a.ay * k} x2={f.x * 1000} y2={f.y * k}
-                stroke={m.id === selectedId ? "#b8860b" : "#111"} strokeWidth={SHEET_SIZE.leader * 1000 * (m.id === selectedId ? 2 : 1)} />;
+                stroke={isMark(m, selectedId) ? "#b8860b" : "#111"} strokeWidth={SHEET_SIZE.leader * 1000 * (isMark(m, selectedId) ? 2 : 1)} />;
             })}
           </svg>
           {shown.filter((m) => m.ax != null && m.ay != null).map((m) => {
-            const a = drag?.id === m.id && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
-            const on = m.id === selectedId;
+            const a = isMark(m, drag?.id) && drag.p && drag.part === "anchor" ? { ax: drag.p.x, ay: drag.p.y } : m;
+            const on = isMark(m, selectedId);
             return (
               <div key={`a${m.id}`} data-anchor-id={m.id} title={on && !readOnly ? "محل سرجوش روی لوله — بکشید تا جابه‌جا شود" : undefined}
                 onPointerDown={on && !readOnly ? (e) => down(e, m, "anchor") : undefined}
@@ -387,27 +403,27 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
                   pointerEvents: on && !readOnly ? "auto" : "none" }} />);
           })}
           {shown.map((m, mi) => {
-            const p = drag?.id === m.id && drag.p && drag.part !== "anchor" ? drag.p : m;
-            const stop = selectedId != null && shown.some((x) => x.id === selectedId) ? m.id === selectedId : mi === 0;
+            const p = isMark(m, drag?.id) && drag.p && drag.part !== "anchor" ? drag.p : m;
+            const stop = selectedId != null && shown.some((x) => isMark(x, selectedId)) ? isMark(m, selectedId) : mi === 0;
             return (
-              <div key={m.id} data-mark-id={m.id} role="button" aria-pressed={m.id === selectedId} tabIndex={stop ? 0 : -1}
-                aria-label={`${KINDS[m.kind].label} ${m.no}`} onKeyDown={(e) => markKey(e, m)} data-picked={m.id === selectedId ? "true" : "false"} data-state={states?.[m.id]?.state} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
+              <div key={m.id} data-mark-id={markRef(m)} data-mark-uid={m.uid || undefined} role="button" aria-pressed={isMark(m, selectedId)} tabIndex={stop ? 0 : -1}
+                aria-label={`${KINDS[m.kind].label} ${m.no}`} onKeyDown={(e) => markKey(e, m)} data-picked={isMark(m, selectedId) ? "true" : "false"} data-state={states?.[m.id]?.state} data-kind={m.kind} data-shape={KINDS[m.kind].shape} data-no={m.no} data-src={m.src}
                 title={`${KINDS[m.kind].label} ${m.no}${m.src === "model" ? " (پیشنهاد مدل)" : ""}`}
                 onPointerDown={(e) => down(e, m)}
                 style={{ position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)",
                   width: `${geometryOf(m.kind).box * 100}%`, aspectRatio: `${geometryOf(m.kind).vb[0]} / ${geometryOf(m.kind).vb[1]}`,
                   cursor: readOnly ? "default" : "grab", touchAction: "none" }}>
-                <Shape kind={m.kind} no={KINDS[m.kind].cls === "weld" ? plainNo(m.no) : m.no} on={m.id === selectedId} tint={states?.[m.id]?.color || null} fluid />
+                <Shape kind={m.kind} no={KINDS[m.kind].cls === "weld" ? plainNo(m.no) : m.no} on={isMark(m, selectedId)} tint={states?.[m.id]?.color || null} fluid />
               </div>);
           })}
         </div>
       </div>
       {menu && menuItems.length > 0 && (
         <div ref={menuRef} className="sheet-menu" role="menu" data-sheet-menu={menu.id ? "mark" : "sheet"}
-          aria-label={menu.id ? `${KINDS[items.find((m) => m.id === menu.id)?.kind]?.label || ""} ${items.find((m) => m.id === menu.id)?.no || ""}` : "افزودن روی نقشه"}
+          aria-label={menu.id ? `${KINDS[findMark(items, menu.id)?.kind]?.label || ""} ${findMark(items, menu.id)?.no || ""}` : "افزودن روی نقشه"}
           style={{ position: "fixed", left: menu.x, top: menu.y, visibility: "hidden", zIndex: 1000 }}
           onContextMenu={(e) => e.preventDefault()}>
-          {menu.id && (() => { const m = items.find((x) => x.id === menu.id); return m ? <div className="sheet-menu-h" aria-hidden><Shape kind={m.kind} no="" size={0.45} /> {KINDS[m.kind].label} <b className="mono">{m.no}</b></div> : null; })()}
+          {menu.id && (() => { const m = findMark(items, menu.id); return m ? <div className="sheet-menu-h" aria-hidden><Shape kind={m.kind} no="" size={0.45} /> {KINDS[m.kind].label} <b className="mono">{m.no}</b></div> : null; })()}
           {!menu.id && <div className="sheet-menu-h" aria-hidden>افزودن روی نقشه</div>}
           {menuItems.map((it) => (
             <button key={it.k} type="button" role="menuitem" data-menu-item={it.k} className={it.danger ? "danger" : undefined}

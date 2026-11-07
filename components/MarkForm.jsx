@@ -4,7 +4,7 @@ import FormDialog from "./ui/FormDialog";
 import BomPick from "./BomPick";
 import Pick from "./ui/Pick";
 import TieInPick, { TieInReferrers } from "./TieInPick";
-import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, weldsOf, accessoriesOf, accessoriesText, bomSnapshot, nextNo } from "../lib/sheet/markup.mjs";
+import { KINDS, ATTRS, EQUIPMENT_STATUS, isPlaced, weldsOf, accessoriesOf, accessoriesText, bomSnapshot, nextNo, isMark, markRef } from "../lib/sheet/markup.mjs";
 
 /**
  * The form of one mark of the sheet — a weld, spool, support or installed
@@ -46,13 +46,13 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
   const a = d.attrs;
   const setA = (patch) => setD((x) => ({ ...x, attrs: { ...x.attrs, ...patch } }));
   // the sheet as it would be with this draft in it: what is left of each BOM row is counted with it
-  const id = mark?.id || NEW_ID;
+  const id = mark ? (markRef(mark) || NEW_ID) : NEW_ID;
   const withDraft = useMemo(() => {
     const me = { id, kind: d.kind, no: d.no, attrs: d.attrs };
-    return items.some((m) => m.id === id) ? items.map((m) => (m.id === id ? { ...m, ...me } : m)) : [...items, me];
+    return items.some((m) => isMark(m, id)) ? items.map((m) => (isMark(m, id) ? { ...m, ...me } : m)) : [...items, me];
   }, [items, d, id]);
   const spools = [...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))];
-  const welds = items.filter((m) => KINDS[m.kind]?.cls === "weld" && m.id !== id);
+  const welds = items.filter((m) => KINDS[m.kind]?.cls === "weld" && !isMark(m, id));
   const bomRows = (bom || []).filter((b) => b && b.pt != null && String(b.pt).trim());
   const labels = Object.fromEntries((ATTRS[cls] || []).map(([k, l, ph]) => [k, [l, ph]]));
   const acc = accessoriesOf(a.acc);
@@ -60,7 +60,7 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
   const save = () => {
     const no = String(d.no ?? "").trim();
     if (!no) { setErr("شماره لازم است."); return; }
-    const dup = items.find((m) => m.id !== mark?.id && KINDS[m.kind]?.cls === cls && String(m.no ?? "").trim() === no);
+    const dup = items.find((m) => !(mark && isMark(m, mark.uid || mark.id)) && KINDS[m.kind]?.cls === cls && String(m.no ?? "").trim() === no);
     if (dup) { setErr(`${KINDS[mark?.kind || d.kind].label} «${no}» روی این برگ هست.`); return; }
     onSave?.({ kind: d.kind, no, attrs: d.attrs });
   };

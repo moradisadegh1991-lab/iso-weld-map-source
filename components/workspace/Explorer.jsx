@@ -14,6 +14,8 @@
  *   checked    { has(no) } — a weld ticked as checked against the drawing, when the review tracks it
  *   layers     { hidden: Set, onToggle(k) } — which marks the sheet draws (a view setting only): its toggles live here
  */
+import { markRef, isMark } from "../../lib/sheet/markup.mjs";
+
 const LAYERS = [["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["support", "ساپورت‌ها"], ["equipment", "تجهیزات"], ["leader", "خط‌های راهنما"]];
 const GROUPS = [
   ["weld", "سرجوش‌ها", (k) => String(k).startsWith("weld")],
@@ -70,8 +72,8 @@ export default function Explorer({ meta = {}, sheets = null, items = [], selecte
                   const ok = g === "weld" && checked?.has?.(no);
                   return (
                     <li key={m.id}>
-                      <button type="button" className={m.id === selectedId ? "on" : ""} aria-pressed={m.id === selectedId} data-ex-mark={m.id}
-                        title={placed(m) ? "روی نقشه جا دارد" : "هنوز روی نقشه جا ندارد"} onClick={() => onSelect?.(m.id)}>
+                      <button type="button" className={isMark(m, selectedId) ? "on" : ""} aria-pressed={isMark(m, selectedId)} data-ex-mark={markRef(m)}
+                        title={placed(m) ? "روی نقشه جا دارد" : "هنوز روی نقشه جا ندارد"} onClick={() => onSelect?.(markRef(m))}>
                         <span className="mk" aria-hidden="true">{KIND_MARK[m.kind] || "•"}</span>
                         <span className="mono">{no || "؟"}</span>
                         <span className={`st ${placed(m) ? "" : "off"}`} aria-label={placed(m) ? "روی نقشه" : "روی نقشه نیست"}>{placed(m) ? "" : "بدون جا"}</span>

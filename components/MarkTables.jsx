@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { KINDS, ATTRS, addMark, updateMark, removeMark, unplace, isPlaced, notOnSheet, engineRow, problems, rules, componentChecks, bomSnapshot, dependents } from "../lib/sheet/markup.mjs";
+import { KINDS, ATTRS, addMark, updateMark, removeMark, unplace, isPlaced, notOnSheet, engineRow, problems, rules, componentChecks, bomSnapshot, dependents, markRef, isMark, findMark } from "../lib/sheet/markup.mjs";
 import { allocationChecks } from "../lib/register/bom-allocation.mjs";
 import MarkShape from "./MarkShape";
 import TableKit from "./ui/TableKit";
@@ -59,25 +59,25 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
   const done = useRef(null);      // the «edit» already acted on: the person may change tab after it
   useEffect(() => {
     if (!focus?.id || done.current === focus.n) return;
-    const m = items.find((x) => x.id === focus.id);
+    const m = findMark(items, focus.id);
     if (!m) return;
     const cls = KINDS[m.kind]?.cls;
     if (cls && cls !== tab && shown.some(([k]) => k === cls)) { setTab(cls); return; }   // its row is focused once this tab renders
     done.current = focus.n;
-    const row = box.current?.querySelector(`[data-mark-row="${CSS.escape(String(focus.id))}"]`);
+    const row = box.current?.querySelector(`[data-mark-row="${CSS.escape(String(m ? markRef(m) : focus.id))}"]`);
     if (!row) return;
     row.scrollIntoView({ block: "nearest" });
     row.querySelector("[data-row-edit]")?.focus();
   }, [focus?.id, focus?.n, tab]);  // eslint-disable-line react-hooks/exhaustive-deps
   // a row is added, viewed and edited in its form (components/MarkForm.jsx), which the page holds
-  const open = (mode, m) => onOpen?.(mode, m?.id || null, m?.kind || NEW_KIND[tab]);
+  const open = (mode, m) => onOpen?.(mode, m ? markRef(m) : null, m?.kind || NEW_KIND[tab]);
   const add = () => {
     if (onOpen) { open("create", null); return; }
     const next = addMark(items, { kind: NEW_KIND[tab] });
     onChange?.(next);
     const row = next[next.length - 1];
-    onSelect?.(row.id);
-    onAttach?.(row.id);   // the sheet waits for its weld point at once
+    onSelect?.(markRef(row));
+    onAttach?.(markRef(row));   // the sheet waits for its weld point at once
   };
   const withEngine = tab === "weld" && model && !model.error;
   const ticks = tab === "weld" && checked;
@@ -107,7 +107,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
           {loose.length} ردیف به نقشه وصل نیست: {loose.slice(0, 8).map((m) => `${WORD[KINDS[m.kind].cls]} ${m.no || "بدون شماره"}`).join("، ")}
           {loose.length > 8 ? "، …" : ""} — روی «اتصال به نقشه» در انتهای ردیف بزنید و محلش را روی نقشه کلیک کنید.
         </p>)}
-      {attachId && mine.has(KINDS[items.find((m) => m.id === attachId)?.kind]?.cls) && <p className="note sm" data-attach-hint>روی نقشه، همان‌جا که سرجوش (یا اسپول/ساپورت) روی لوله است کلیک کنید. <button type="button" className="ghost sm" onClick={() => onAttach?.(null)}>انصراف</button></p>}
+      {attachId && mine.has(KINDS[findMark(items, attachId)?.kind]?.cls) && <p className="note sm" data-attach-hint>روی نقشه، همان‌جا که سرجوش (یا اسپول/ساپورت) روی لوله است کلیک کنید. <button type="button" className="ghost sm" onClick={() => onAttach?.(null)}>انصراف</button></p>}
 
       <div style={{ overflowX: "auto" }}>
         <TableKit key={tab} name={`marks-${tab}`}><table className="dtable" data-mark-table={tab}>
@@ -125,7 +125,7 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
               const e = tab === "weld" ? engineRow(model, m.no) : null;
               const placed = isPlaced(m);
               return (
-                <tr key={m.id} data-mark-row={m.id} data-placed={placed ? "yes" : "no"} className={m.id === selectedId ? "sel" : undefined} onClick={() => onSelect?.(m.id)}>
+                <tr key={m.id} data-mark-row={markRef(m)} data-placed={placed ? "yes" : "no"} className={isMark(m, selectedId) ? "sel" : undefined} aria-selected={isMark(m, selectedId) || undefined} onClick={() => onSelect?.(markRef(m))}>
                   {ticks && <td><input type="checkbox" aria-label={`جوش ${m.no} با نقشه بررسی شد`} disabled={!m.no} data-wl-check={m.no}
                     checked={Boolean(m.no) && checked.has(m.no)} onClick={(ev) => ev.stopPropagation()} onChange={(ev) => checked.onTick(m.no, ev.target.checked)} /></td>}
                   <td className="mono b" data-cell="no" dir="ltr">{m.no || "—"}</td>
@@ -142,22 +142,22 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
                     <td className="mono sm" data-engine="el">{e?.el != null ? Math.round(e.el).toLocaleString("en-US") : "—"}</td>
                   </>}
                   <td style={{ whiteSpace: "nowrap" }}>
-                    {onOpen && <button type="button" className="ghost sm" data-row-view={m.id} onClick={(ev) => { ev.stopPropagation(); onSelect?.(m.id); open("view", m); }}>مشاهده</button>}
-                    {onOpen && !readOnly && <button type="button" className="ghost sm" data-row-edit={m.id} onClick={(ev) => { ev.stopPropagation(); onSelect?.(m.id); open("edit", m); }}>ویرایش</button>}
+                    {onOpen && <button type="button" className="ghost sm" data-row-view={markRef(m)} onClick={(ev) => { ev.stopPropagation(); onSelect?.(markRef(m)); open("view", m); }}>مشاهده</button>}
+                    {onOpen && !readOnly && <button type="button" className="ghost sm" data-row-edit={markRef(m)} onClick={(ev) => { ev.stopPropagation(); onSelect?.(markRef(m)); open("edit", m); }}>ویرایش</button>}
                     {!readOnly && (<>
-                      <button type="button" className={attachId === m.id ? "on sm" : "ghost sm"} data-row-attach={m.id}
-                        onClick={(ev) => { ev.stopPropagation(); onSelect?.(m.id); onAttach?.(attachId === m.id ? null : m.id); }}>
+                      <button type="button" className={isMark(m, attachId) ? "on sm" : "ghost sm"} data-row-attach={markRef(m)}
+                        onClick={(ev) => { ev.stopPropagation(); onSelect?.(markRef(m)); onAttach?.(isMark(m, attachId) ? null : markRef(m)); }}>
                         {placed ? "جابه‌جایی روی نقشه" : "اتصال به نقشه"}
                       </button>
-                      {placed && <button type="button" className="ghost sm" data-row-unplace={m.id}
-                        onClick={(ev) => { ev.stopPropagation(); onChange?.(unplace(items, m.id)); }}>برداشتن از نقشه</button>}
-                      <button type="button" className="ghost sm" aria-label={`حذف ${m.no}`} data-row-delete={m.id}
+                      {placed && <button type="button" className="ghost sm" data-row-unplace={markRef(m)}
+                        onClick={(ev) => { ev.stopPropagation(); onChange?.(unplace(items, markRef(m))); }}>برداشتن از نقشه</button>}
+                      <button type="button" className="ghost sm" aria-label={`حذف ${m.no}`} data-row-delete={markRef(m)}
                         onClick={(ev) => {
                           ev.stopPropagation();
-                          const deps = dependents(items, m.id);
+                          const deps = dependents(items, markRef(m));
                           if (deps.length && !window.confirm(`${WORD[KINDS[m.kind].cls]} ${m.no || ""} حذف شود؟\n\nاین‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند:\n– ${deps.slice(0, 12).join("\n– ")}`)) return;
-                          if (attachId === m.id) onAttach?.(null);
-                          onChange?.(removeMark(items, m.id));
+                          if (isMark(m, attachId)) onAttach?.(null);
+                          onChange?.(removeMark(items, markRef(m)));
                         }}>حذف</button>
                     </>)}
                     {readOnly && <span className="muted sm">{placed ? "روی نقشه" : "وصل نیست"}</span>}

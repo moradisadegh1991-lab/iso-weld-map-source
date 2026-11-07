@@ -9,7 +9,7 @@ import { TYPE_FA } from "../../lib/standards";
 import { sanitize, score, acceptRepair } from "../../lib/extraction/sanitize.mjs";
 import { mergePasses } from "../../lib/extraction/merge.mjs";
 import { compareReads } from "../../lib/extraction/second-read.mjs";
-import { seedFromPass, fromReaderTags, fromEngine, normalize as normalizeMarks, addMark, updateMark, placeAt } from "../../lib/sheet/markup.mjs";
+import { seedFromPass, fromReaderTags, fromEngine, normalize as normalizeMarks, addMark, updateMark, placeAt, findMark } from "../../lib/sheet/markup.mjs";
 import { suggestFromDots } from "../../lib/sheet/weld-dots.mjs";
 import SheetMarkup from "../../components/SheetMarkup";
 import MarkTables from "../../components/MarkTables";
@@ -1028,7 +1028,7 @@ export default function Page() {
       )}
       {data && !listed && markForm && (
         <MarkForm key={`${markForm.mode}-${markForm.id || "new"}-${markForm.kind}`} mode={markForm.mode}
-          mark={markForm.id ? (data.sheetMarkup?.items || []).find((m) => m.id === markForm.id) : { kind: markForm.kind }}
+          mark={markForm.id ? findMark(data.sheetMarkup?.items || [], markForm.id) : { kind: markForm.kind }}
           items={data.sheetMarkup?.items || []} bom={data.bom || []} lists={valueLists} readOnly={openRun?.run?.status === "approved"} thisDoc={data.meta?.drawingNo} thisSheet={data.meta?.sheet}
           onClose={() => setMarkForm(null)}
           onSave={(d) => {
