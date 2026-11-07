@@ -4,7 +4,7 @@ import FormDialog from "./ui/FormDialog";
 import Pick from "./ui/Pick";
 import { isUid } from "../lib/sheet/mark-identity.mjs";
 import { indexItems, resolveRef, editCut } from "../lib/register/cut-identity.mjs";
-import { endSpools } from "../lib/register/cut-model.mjs";
+import { endSpoolMarks } from "../lib/register/cut-model.mjs";
 
 /**
  * One piece of the sheet's cut table (CUT PIPE LENGTH) in a form — view, edit or add; the table only shows. Nothing reaches the sheet
@@ -63,8 +63,9 @@ export default function CutForm({ mode: mode0 = "view", cut = {}, cuts = [], ite
               const m = list.find((x) => x.uid === e.target.value);
               const next = { [key]: m ? m.uid : "", [lab]: m ? String(m.no).trim() : "" };
               const merged = { ...d, ...next };
-              const es = kind === "weld" && !d.spoolUid ? endSpools(merged, items) : [];
-              const sp = es.length === 1 ? spools.find((s) => String(s.no).trim() === es[0]) : null;
+              // the two end welds' spool, by IDENTITY: one spool → preselect it; two different ones, an unknown or an ambiguous one → leave it to the person
+              const es = kind === "weld" && !d.spoolUid ? endSpoolMarks(merged, items) : [];
+              const sp = es.length === 1 && isUid(es[0].uid) ? spools.find((s) => s.uid.toLowerCase() === es[0].uid.toLowerCase()) : null;
               set({ ...next, ...(sp ? { spoolUid: sp.uid, spool: String(sp.no).trim() } : {}) });
             }}>
             <option value="">—</option>

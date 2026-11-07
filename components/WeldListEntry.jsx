@@ -209,7 +209,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   // what the SAVED revision holds against deleting a mark (lib/client/saved-protection.mjs): advice before the confirm; the server decides
   const { protect, saved } = useSavedProtection({ session, documentId: run?.run?.documentId || null, items, status: run?.run?.status });
   const revisionInfo = useMemo(() => ({ docNo: meta.drawingNo || null, rev: meta.rev ?? null, sheet: meta.sheet || null }), [meta.drawingNo, meta.rev, meta.sheet]);
-  const vc = useValidationCenter({ session, documentId: run?.run?.documentId || null, runId: run?.run?.id || null, status: run?.run?.status, payload: data, revision: revisionInfo });
+  const vc = useValidationCenter({ session, documentId: run?.run?.documentId || null, runId: run?.run?.id || null, status: run?.run?.status, payload: data, revision: revisionInfo, previous: initial });
   const [vcSource, setVcSource] = useState("draft");
   const rc = useRevisionCenter({ session, documentId: run?.run?.documentId || null });
   const validationTotal = vc.draft.summary.errors + vc.draft.summary.warnings;
