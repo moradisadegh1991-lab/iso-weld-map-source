@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
+import { isIsometricDoc } from "../../../lib/db/run-scope.mjs";
 
 /**
  * The numbers on the launchpad.
@@ -56,7 +57,7 @@ export async function GET(request) {
                 COUNT(DISTINCT r.document_id) FILTER (WHERE r.status = 'approved')::int AS approved
            FROM document d
            LEFT JOIN extraction_run r ON r.document_id = d.id
-          WHERE d.project_id = $1`);
+          WHERE d.project_id = $1 AND ${isIsometricDoc("d")}`);      // this dashboard card is the weld registers: P&ID / SLD drafts are not counted
 
       return Response.json({
         subsystems, contractors, tags,

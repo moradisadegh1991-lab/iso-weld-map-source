@@ -5,6 +5,7 @@ import { authenticate, errorResponse } from "../../../../../lib/server/session.m
 import { withProject } from "../../../../../lib/db/scope.mjs";
 import { approveRun } from "../../../../../lib/db/repos/runs.mjs";
 import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
+import { assertIsometricRun } from "../../../../../lib/db/run-scope.mjs";
 
 /**
  * Sign off a weld register.
@@ -27,6 +28,7 @@ export async function POST(request, ctx) {
     assertCan(membership, ACTIONS.APPROVE_REGISTER);
 
     return await withProject(db, projectId, async () => {
+      await assertIsometricRun(db, { projectId, runId: params.id });     // a P&ID / SLD draft is signed through its own route (409 NOT_AN_ISOMETRIC_RUN here)
       const run = await approveRun(db, { projectId, runId: params.id, userId: user.id });
       return Response.json({ run });
     });
