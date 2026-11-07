@@ -114,7 +114,7 @@ test("103: existing events are filled in from the live rows, unchanged otherwise
   await migrate(x.db, { dir: staged102 });
   const before = await one(x.db, "SELECT * FROM material_override WHERE id = $1", [x.good.id]);
   const ran = await migrate(x.db);
-  equal(ran, ["103_material_override_snapshot"]);
+  assert(ran.includes("103_material_override_snapshot"), JSON.stringify(ran));   // later migrations may follow it
   const after = await one(x.db, "SELECT * FROM material_override WHERE id = $1", [x.good.id]);
   const { spool_no, run_id, document_id, doc_no, revision, sheet_no, line_no, ...kept } = after;
   const { spool_no: _a, run_id: _b, document_id: _c, doc_no: _d, revision: _e, sheet_no: _f, line_no: _g, ...was } = before;

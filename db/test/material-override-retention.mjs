@@ -122,7 +122,9 @@ test("a spool of the same number on ANOTHER drawing does not see the event", asy
 test("7. a failed re-derivation rolls back whole: spools, steps and history as they were", async () => {
   const before = { spools: await spoolsOf(run1.runId), events: await events() };
   const r = await inP(async () => (await db.query("SELECT id FROM spool_activity WHERE project_id = $1 LIMIT 1", [P])).rows.length);
-  await throws(() => correct(run1.runId, 99, failOn(/INSERT INTO weld /)), "injected failure");
+  // a geometry edit (run1 is no longer its revision's current run, so sheet data may not be changed through it — Phase 1)
+  const geometry = payloadWithQty(30); geometry.nodes[2].N += 100;
+  await throws(() => inP(() => review.applyCorrection(failOn(/INSERT INTO weld /), { projectId: P, runId: run1.runId, payload: geometry, userId: eng.id })), "injected failure");
   equal(await spoolsOf(run1.runId), before.spools, "the spool rows are the ones that were there");
   equal(await events(), before.events, "the history is untouched");
   void r;

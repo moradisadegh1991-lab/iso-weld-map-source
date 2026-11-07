@@ -3,16 +3,14 @@ export const dynamic = "force-dynamic";
 
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
-import { createRun, saveRegister, getRegister, latestRunForDocument, latestRunForDrawing }
+import { createRun, getRegister, latestRunForDocument, latestRunForDrawing }
   from "../../../lib/db/repos/runs.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { modelFor } from "../../../lib/register/weld-list.mjs";
 import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
 import { lineForRegister, tieInRefsOf } from "../../../lib/db/repos/spine.mjs";
-import { fillLineList, saveIsoBom } from "../../../lib/db/repos/line-list.mjs";
-import { syncAllocations } from "../../../lib/db/repos/bom-allocation.mjs";
-import { syncEquipment } from "../../../lib/db/repos/iso-equipment.mjs";
-import { ledgerDemands } from "../../../lib/register/bom-allocation.mjs";
+import { fillLineList } from "../../../lib/db/repos/line-list.mjs";
+import { persistRegister } from "../../../lib/db/repos/register-persistence.mjs";
 
 /**
  * Persist an extraction and the register it produces.
@@ -93,8 +91,10 @@ export async function POST(request) {
           ? await getRegister(tx, { projectId, runId: previous.id })
           : null;
 
-        const saved = await saveRegister(tx, {
-          projectId, runId: run.id, documentId, lineId: theLine, model, carryFrom,
+        // the register and everything that hangs off it — BOM, equipment, allocations — in this transaction
+        // (lib/db/repos/register-persistence.mjs); `payload.bom` absent leaves the BOM, [] clears it, rows replace it
+        const { saved, dependents } = await persistRegister(tx, {
+          projectId, runId: run.id, documentId, lineId: theLine, model, carryFrom, payload, userId: user.id,
         });
         const register = await getRegister(tx, { projectId, runId: run.id });
         // the line list the sheet prints fills the line's empty values — only on a line named by its own
@@ -103,18 +103,9 @@ export async function POST(request) {
         const named = payload?.meta?.lineNo || (lineNo && lineNo !== docNo ? lineNo : null);
         const lineList = theLine && named && payload?.lineData
           ? await fillLineList(tx, { projectId, lineId: theLine, lineData: payload.lineData }) : null;
-        // the sheet's BOM as the person checked it, for this revision of the sheet
-        const bomRows = Array.isArray(payload?.bom) && payload.bom.length
-          ? await saveIsoBom(tx, { projectId, documentId, runId: run.id, lineId: theLine, bom: payload.bom, createdBy: user.id }) : 0;
-        // who uses what of that BOM: the welds' reservations made to match the sheet's marks, all in
-        // this transaction (a refusal — more taken than the BOM has, an installed line — undoes the save)
-        const equipment = bomRows || payload?.sheetMarkup?.items?.length
-          ? await syncEquipment(tx, { projectId, documentId, runId: run.id, userId: user.id, items: payload?.sheetMarkup?.items || [], bom: payload?.bom || [] })
-          : null;
-        const allocation = bomRows
-          ? await syncAllocations(tx, { projectId, documentId, runId: run.id, userId: user.id,
-              demands: ledgerDemands(payload?.sheetMarkup?.items || [], payload.bom) })
-          : null;
+        const bomRows = dependents.bom.rows;
+        const equipment = dependents.equipment;
+        const allocation = bomRows || dependents.allocation.reserved || dependents.allocation.adjusted || dependents.allocation.released ? dependents.allocation : null;
         return { run, register, saved, lineList, bomRows, allocation, equipment };
       });
 
