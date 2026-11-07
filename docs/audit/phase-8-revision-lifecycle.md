@@ -30,3 +30,40 @@ Base: `master` d9a052d. Everything below was read in the code before any change.
 * **Carry rules** (details in §6 of the final doc): only descriptive fields into **empty** fields of the target; never status / installed / tested / allocations / history; PT only if valid in the target BOM; equipment weld links only through explicit mappings; anything else listed, not moved.
 * **Validation**: new `REV_*` codes in the Phase 7 catalog fed by `saved.lineage`; no second engine.
 * **API**: `GET/POST /api/revisions`, `GET /api/revisions/compare`, `POST /api/revisions/carry`. **UI**: a «نسخه‌ها» tab of the existing workspace (timeline, compare, carry-forward).
+
+## 4. Revision lineage (as built)
+* `document.parent_document_id` (write-once; DB trigger: same project, same `doc_no` and sheet, not itself; `UNIQUE` per parent → a line, not a tree) + `document.change_note`. `superseded_by` and registration are unchanged. Created by `POST /api/revisions {action:"create"}` (a new `document` row for the same sheet, linked to its source; registering the same revision again is idempotent; a revision that exists under another source is refused) or `{action:"link"}` for an already-registered revision (cycle / foreign sheet / second child / re-link refused). The file of the new revision is attached by the normal upload (same drawing no. and revision attaches to the `none://` row — existing behaviour).
+* `GET /api/revisions?projectId&documentId` returns the chain oldest → newest with status (`approved` / `extracted` / `no-run`), approval, creator, source, change note, carry operations; revisions with no source are reported as unlinked, never guessed into the chain.
+* The status vocabulary is the existing `run_status`; no new status or column duplicates it.
+
+## 5. Comparison rules (`lib/revision/revision-diff.mjs`, pure)
+* Identity: explicit stored mapping only. Same unique printed number on both sides = `candidate` (proposal, needs confirmation); several = `ambiguous`; geometry never matches. A target uid can never equal a source uid (105), so unmapped = unlinked.
+* Compared: metadata (`meta`, `lineData`), welds (location, joint type, NPS, spool, schedule, material, WPS, tie-in, components), spool / support / equipment attributes (equipment: tag, type, BOM PT, accessories, weld references, status shown only), BOM per PT (description, quantity, unit, size, material, group), mark position as a separate **geometry** category, number changes as **identity**, and the **allocation impact** per PT (what the source ledger held — reported as history that stays with the source).
+* The existing weld-register diff (`GET /api/runs/[id]/diff`) is unchanged and complementary (built-spool impact).
+
+## 6. Carry-forward rules (`carryForward`, `POST /api/revisions/carry`)
+1. Only on an explicit request; the server plans again from stored state and the request only chooses among what the plan allows (unknown change → 409 `UNKNOWN_CHANGE`).
+2. Source is never written. The target must be the revision made from the source (`INVALID_LINEAGE`), unapproved (`RUN_LOCKED`), and both runs must be the ones compared (`STALE_SOURCE`, `STALE_RUN`).
+3. Only descriptive fields (`CARRY_FIELDS`), only into **empty** target fields; a differing target value is never overwritten. **Never carried:** status (installed/tested/planned…), allocations and their events, approvals, history, geometry, numbers, location/kind/size of a weld.
+4. PT references only if the PT exists in the target BOM; a PT whose row changed needs the person's explicit field choice (`needs_decision`); accessories split into the valid subset and the blocked rest.
+5. An equipment's weld links move only as the **mapped target uid** of an explicitly mapped weld.
+6. A candidate/ambiguous pair becomes a mapping only by the person's validated choice (must be the offered candidate; a uid maps once).
+7. Applied through the existing `applyCorrection` in the same transaction (permissions-of-state, edit log, BOM/equipment/allocation re-sync with the target's OWN demand), then `revision_carry_op` + `revision_carry_map` rows. Same `requestKey` → the recorded result, nothing new. Any failure rolls the whole operation back.
+
+## 7. API / database changes
+* `GET/POST /api/revisions`, `POST /api/revisions/carry` (piping area; `VIEW_PROJECT` / `UPLOAD_DOCUMENT` / `EDIT_EXTRACTION`). `GET /api/validation` now also reports lineage findings. No change to `/api/runs`, `/api/documents`, approvals.
+* **Migration 106** (additive, not run anywhere but the test databases): `document.parent_document_id`, `document.change_note`, trigger `document_parent_check`, partial unique index, tables `revision_carry_op` and `revision_carry_map` (RLS by project, append-only triggers, no UPDATE/DELETE grant). **It must be run on the server** before this version is deployed.
+
+## 8. Validation integration
+Phase 7 engine, new codes: `REV_NO_SOURCE`, `REV_BAD_LINEAGE`, `REV_DUP_RELATION`, `REV_UNRESOLVED_MAP`, `REV_AMBIGUOUS_MAP`, `REV_BAD_PT_MAP`, `REV_HIST_DEMAND`, `REV_STALE_SOURCE`, `REV_INCOMPLETE_CARRY` (existing: `E_WELD_DANGLING`, `REV_APPROVED`, `A_*`). Input: `saved.lineage` from `lineageFacts` (fixed queries).
+
+## 9. UI
+«نسخه‌ها» tab of the typed workspace (`components/RevisionPanel.jsx`, state in `lib/client/revision-center.mjs`, held by the workspace so tab switches keep selection/filters/decisions): timeline (revision, status, dates, creator, approval, source, change note), create revision, source selector, comparison table with kind/category/search filters, detail (previous/new values, old/new UID, dependencies, reason, carry state), candidate confirmation, ambiguous resolution (no pre-selection), per-field carry checkboxes with reasons for blocked fields, hold/exclude, final summary dialog, link to the validation tab. Selecting a change selects its mark on the drawing and vice versa. After a carry the saved target is reopened (`key` includes the run's payload hash).
+
+## 10. Deferred / risks
+* The Revisions tab exists in the typed workspace with a sheet (like the Validation tab); the model route has none.
+* A revision created in the UI has no register until its data is saved (a new list with the same drawing no. and revision, or upload); the tab says so.
+* Equipment/weld **identity across revisions** is explicit and manual — by design; large re-issues need many confirmations (no bulk "confirm all unique numbers" on purpose).
+* Carry-forward only fills empty fields; overwriting a differing value is intentionally not offered.
+* Existing legacy `weld.weld_uid` carry (by number/geometry in `saveRegister`) is untouched and still heuristic; it is a different identity from the payload uid.
+* Disk of the build container was nearly full during the work; scratch directories were cleaned selectively.
