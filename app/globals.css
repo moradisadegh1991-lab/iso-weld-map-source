@@ -1101,3 +1101,13 @@ tr.p6-editing{outline:1.5px solid #1d6fd8;outline-offset:-1px}
 .vc-resolve{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
 .vc-resolve p{flex-basis:100%;margin:0} .vc-resolve input{flex:1 1 200px;min-width:0}
 @media (max-width:560px){.vc-table{font-size:11px}.vc-scroll{max-height:40vh}.vc-dl{grid-template-columns:1fr}}
+
+/* ── Revisions tab (components/RevisionPanel.jsx) ───────────────────────── */
+.rv{display:flex;flex-direction:column;gap:10px}
+.rv-chain{list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:8px;border-inline-start:2px solid var(--rule)}
+.rv-chain li{padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--panel);margin-inline-start:8px}
+.rv-chain li.on{border-color:var(--cy)}
+.rv-new input{min-width:0;flex:1 1 160px}
+.rv-apply,.rv-carry,.rv-amb{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--rule);border-radius:6px;background:var(--panel)}
+.rv-field,.rv-confirm{display:block}
+.rv-head .on,.rv-chain .on.ghost{outline:1px solid var(--cy)}

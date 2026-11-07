@@ -4,6 +4,8 @@ import TemplateButton from "./ui/TemplateButton";
 import BomForm from "./BomForm";
 import BomTable from "./BomTable";
 import ValidationPanel from "./ValidationPanel";
+import RevisionPanel from "./RevisionPanel";
+import { useRevisionCenter } from "../lib/client/revision-center.mjs";
 import CutForm from "./CutForm";
 import { cutChecks } from "../lib/register/cut-model.mjs";
 import TableKit from "./ui/TableKit";
@@ -204,6 +206,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const revisionInfo = useMemo(() => ({ docNo: meta.drawingNo || null, rev: meta.rev ?? null, sheet: meta.sheet || null }), [meta.drawingNo, meta.rev, meta.sheet]);
   const vc = useValidationCenter({ session, documentId: run?.run?.documentId || null, runId: run?.run?.id || null, status: run?.run?.status, payload: data, revision: revisionInfo });
   const [vcSource, setVcSource] = useState("draft");
+  const rc = useRevisionCenter({ session, documentId: run?.run?.documentId || null });
   const validationTotal = vc.draft.summary.errors + vc.draft.summary.warnings;
   // who uses what of this sheet's BOM: the welds' ends against each row's (lib/register/bom-allocation.mjs)
   const alloc = useMemo(() => usage(items, bom), [items, bom]);
@@ -612,6 +615,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       case "ledger": return setWsTab("bom");
       case "cut-form": return setWsTab("cut");
       case "save": return setWsTab("save");
+      case "revisions": return setWsTab("revisions");
       case "drawing": {
         const target = (uid && (findMark(drawItems, uid) || drawItems.find((m) => m.uid === uid))) || null;
         if (target) setMarkSel(target.id);
@@ -640,6 +644,9 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       node: (<ValidationPanel draft={vc.draft} saved={vc.server} source={vcSource} onSource={setVcSource} onRefresh={vc.refresh} loading={vc.loading} error={vc.error}
         selectedUid={selectedUid} onSelect={(uid) => { const m = findMark(drawItems, uid); if (m) setMarkSel(m.id); }} onOpen={openFinding}
         onResolve={vc.resolve} resolveBusy={vc.resolveBusy} locked={locked} />) },
+    ...(run?.run?.documentId ? [{ k: "revisions", label: "نسخه‌ها", hint: "رویژن‌های این برگ: زمان‌بندی، مقایسه و انتقال کنترل‌شده", badge: rc.compare?.summary?.requiresReview || "",
+      node: (<RevisionPanel rc={rc} session={session} current={run.run.documentId} locked={locked} selectedUid={selectedUid} onSelect={(uid) => { const m = findMark(drawItems, uid); if (m) setMarkSel(m.id); }}
+        onOpenRun={(id) => id && onSaved?.(id)} onValidate={() => { setVcSource("saved"); setWsTab("validation"); }} />) }] : []),
     ...(styleTab ? [{ k: "style", label: "الگوی نقشه", hint: "الگوی این سبک نقشه: خانهٔ هر مقدار روی نقشه", node: styleTab }] : []),
     { k: "import", label: "ورود", hint: "خواندن از Excel / CSV یا چسباندن", node: (<>{importBlock}</>) },
     { k: "save", label: "ثبت", hint: "ذخیره و تأیید", tone: problems ? "bad" : undefined, badge: problems || "",

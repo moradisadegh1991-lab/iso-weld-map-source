@@ -723,7 +723,7 @@ export default function Page() {
         // one column: the weld list (and the drawing beside its rows) takes the page's width
         <section className="stage listed">
           <div className="pane">
-            <WeldListEntry key={openRun?.run?.id || "new"} session={session} initial={data} run={openRun}
+            <WeldListEntry key={`${openRun?.run?.id || "new"}:${openRun?.run?.payloadHash || ""}`} session={session} initial={data} run={openRun}
               sheet={openRun ? runSheet : preview ? { src: preview, page: pdfPage || 1, file: sourceFile } : null}
               progress={openRun ? progress : null}
               // the sheets of the open PDF, to move between them from the workspace's explorer (a saved run opened from the queue has no PDF here)
