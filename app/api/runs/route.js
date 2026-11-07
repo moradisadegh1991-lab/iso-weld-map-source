@@ -63,7 +63,7 @@ export async function POST(request) {
             ORDER BY created_at DESC, id DESC LIMIT 1`, [projectId, documentId]);
         const { payload, report: markReport } = model.error
           ? { payload: sentPayload, report: null }
-          : await prepareSheetPayload(tx, { projectId, documentId, previousItems: lastOfRevision?.payload?.sheetMarkup?.items || [], payload: sentPayload });
+          : await prepareSheetPayload(tx, { projectId, documentId, previousItems: lastOfRevision?.payload?.sheetMarkup?.items || [], previousRows: lastOfRevision?.payload?.weldList || [], payload: sentPayload });
 
         // Look this up BEFORE creating the new run, or the "latest run for this
         // drawing" is the row we are about to insert and nothing is ever carried.
