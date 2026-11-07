@@ -11,6 +11,7 @@ import { cutIssues, cutChecks } from "../../lib/register/cut-model.mjs";
 import { cutBomReport, cutVsBom } from "../../lib/register/cut-bom.mjs";
 import { duplicateMark } from "../../lib/sheet/markup.mjs";
 import { validate } from "../../lib/engineering/validation.mjs";
+import { diffRevisions, applyCarry, CARRY_FIELDS } from "../../lib/revision/revision-diff.mjs";
 
 const [w1, w2, w3, s1, s2] = Array.from({ length: 5 }, newUid);
 const weld = (uid, no, spool, spoolUid, kind = "weld-shop", extra = {}) => ({ id: `m${no}`, uid, kind, no, x: 0.2, y: 0.2, src: "hand", attrs: { ...(spool ? { spool } : {}), ...(spoolUid ? { spoolUid } : {}) }, ...extra });
@@ -235,6 +236,79 @@ test("V2. cutChecks keeps its old contract (text, warnings and worse only)", () 
   equal(t.length, 1); assert(/یک سرجوش است/.test(t[0]));
 });
 
+
+// ── revisions (pure) ─────────────────────────────────────────────────────
+
+const [a1, a2, as1, b1, b2, bs1, ca1, ca2, ca3, cb1, cb2] = Array.from({ length: 11 }, newUid);
+const revA = () => ({ payload: { ...sheet([weld(a1, "W-1", "SP-1", as1), weld(a2, "W-2", "SP-1", as1), spool(as1, "SP-1")], [
+  { uid: ca1, piece: 1, lengthMm: 900, ns: "4", material: "A106-B", schedule: "SCH 40", angle: "45", note: "n", from: "W-1", to: "W-2", fromUid: a1, toUid: a2, spool: "SP-1", spoolUid: as1 },
+  { uid: ca2, piece: 2, lengthMm: 500, ns: "4" }, { uid: ca3, piece: 3, lengthMm: 700, ns: "4" }]), bom: [] } });
+const revB = (cuts, items) => ({ payload: { ...sheet(items || [weld(b1, "W-1", "SP-9", bs1), weld(b2, "W-2", "SP-9", bs1), spool(bs1, "SP-9")], cuts), bom: [] } });
+const cutChange = (r, pred) => r.changes.find((c) => c.cls === "cut" && pred(c));
+
+test("T1. cut pieces: added, removed, and NOTHING paired by length, position or size — only a unique printed piece number is a CANDIDATE", () => {
+  const r = diffRevisions({ from: revA(), to: revB([{ uid: cb1, piece: 7, lengthMm: 900, ns: "4" }]), mappings: [], cutPairs: [] });
+  const k = r.changes.filter((c) => c.cls === "cut").map((c) => c.kind).sort();
+  equal(k, ["added", "removed", "removed", "removed"], "same length and size is not identity");
+  const cand = diffRevisions({ from: revA(), to: revB([{ uid: cb1, piece: 1, lengthMm: 905, ns: "4" }]) });
+  const c = cutChange(cand, (x) => x.kind === "candidate");
+  assert(c && c.requiresReview && c.action === "confirm" && c.fromUid === ca1 && c.toUid === cb1);
+});
+
+test("T2. duplicated printed piece numbers are AMBIGUOUS and nothing is offered as ready", () => {
+  const f = revA(); f.payload.cutLengths.push({ uid: newUid(), piece: 1, lengthMm: 10, ns: "2" });
+  const r = diffRevisions({ from: f, to: revB([{ uid: cb1, piece: 1, lengthMm: 900, ns: "4" }]) });
+  const amb = r.changes.filter((c) => c.cls === "cut" && c.kind === "ambiguous");
+  equal(amb.length, 1); assert(amb[0].candidates.from.length === 2 && amb[0].candidates.to.length === 1 && amb[0].requiresReview);
+  assert(!r.changes.some((c) => c.cls === "cut" && (c.kind === "candidate" || c.kind === "modified")));
+});
+
+test("T3. an explicit pair compares length / size / material / schedule / angle; endpoint and spool changes use the weld and spool MAPPINGS (uids), not numbers", () => {
+  const maps = [{ cls: "weld", fromUid: a1, toUid: b1 }, { cls: "weld", fromUid: a2, toUid: b2 }, { cls: "spool", fromUid: as1, toUid: bs1 }];
+  // same relationships, everything renumbered: no endpoint / spool change is reported
+  const same = diffRevisions({ from: revA(), to: revB([{ uid: cb1, piece: 11, lengthMm: 900, ns: "4", material: "A106-B", schedule: "SCH 40", angle: "45", note: "n", fromUid: b1, toUid: b2, spoolUid: bs1, from: "W-1", to: "W-2", spool: "SP-9" }]), mappings: maps, cutPairs: [{ fromUid: ca1, toUid: cb1 }] });
+  const c0 = cutChange(same, (x) => x.fromUid === ca1);
+  equal(c0.fields.map((f) => f.field), ["piece"], "only the printed piece number differs: identity held by the pair");
+  // endpoints swapped to the other weld + a new spool + other length / material
+  const diff = diffRevisions({ from: revA(), to: revB([{ uid: cb1, piece: 1, lengthMm: 950, ns: "6", material: "A312", schedule: "SCH 80", angle: "30", note: "n", fromUid: b2, toUid: b1, spoolUid: newUid() }]), mappings: maps, cutPairs: [{ fromUid: ca1, toUid: cb1 }] });
+  const c = cutChange(diff, (x) => x.fromUid === ca1);
+  for (const f of ["lengthMm", "ns", "material", "schedule", "angle", "from", "to", "spool"]) assert(c.fields.some((x) => x.field === f), `${f} in ${c.fields.map((x) => x.field)}`);
+});
+
+test("T4. a mapped weld whose spool relationship changed (by uid) is its own finding", () => {
+  const f = revA(), t = revB([], [weld(b1, "W-1", "SP-9", newUid()), spool(newUid(), "SP-9")]);
+  t.payload.sheetMarkup.items.push(spool(bs1, "SP-1"));
+  const r = diffRevisions({ from: f, to: t, mappings: [{ cls: "weld", fromUid: a1, toUid: b1 }, { cls: "spool", fromUid: as1, toUid: bs1 }] });
+  assert(r.changes.some((c) => c.id === `rel:spool:${a1}` && c.category === "spool"));
+});
+
+test("T5. carry plan: descriptive fields only into EMPTY target fields; the target's own length / piece / uid are never carried; refs only through mappings", () => {
+  const maps = [{ cls: "weld", fromUid: a1, toUid: b1 }, { cls: "spool", fromUid: as1, toUid: bs1 }];
+  const t = revB([{ uid: cb1, piece: 1, lengthMm: 999, ns: "4", note: "mine" }]);
+  const r = diffRevisions({ from: revA(), to: t, mappings: maps, cutPairs: [{ fromUid: ca1, toUid: cb1 }] });
+  const c = cutChange(r, (x) => x.fromUid === ca1);
+  equal(c.carry.ready.map((x) => x.field).sort(), ["angle", "from", "material", "schedule", "spool"].sort());
+  assert(c.carry.blocked.some((x) => x.field === "note" && x.reason === "TARGET_HAS_VALUE"));
+  assert(c.carry.blocked.some((x) => x.field === "to" && x.reason === "NO_MAPPED_WELD"), "W-2 has no mapping: not carried");
+  assert(!CARRY_FIELDS.cut.includes("lengthMm") && !CARRY_FIELDS.cut.includes("piece") && !CARRY_FIELDS.cut.includes("uid"));
+  assert(c.carry.ready.find((x) => x.field === "from").value === b1 && c.carry.ready.find((x) => x.field === "spool").value === bs1);
+});
+
+test("T6. applyCarry for a piece: fills only the named fields, sets the TARGET's uid and refreshes the printed label; the rest is untouched", () => {
+  const t = revB([{ uid: cb1, piece: 1, lengthMm: 999, ns: "4", legacy: "x" }]).payload;
+  const out = applyCarry(t, [{ klass: "cut", toUid: cb1, values: { material: "A106-B", from: b1, spool: bs1 } }]);
+  const c = out.cutLengths[0];
+  equal([c.material, c.fromUid, c.from, c.spoolUid, c.spool, c.lengthMm, c.piece, c.legacy, c.uid], ["A106-B", b1, "W-1", bs1, "SP-9", 999, 1, "x", cb1]);
+  equal(t.cutLengths[0].material, undefined, "the input is not mutated");
+});
+
+test("T7. a carried pair of pieces that would make both ends the same weld is not offered", () => {
+  const f = revA(); f.payload.cutLengths[0].toUid = a1;
+  const r = diffRevisions({ from: f, to: revB([{ uid: cb1, piece: 1, lengthMm: 900, ns: "4" }]), mappings: [{ cls: "weld", fromUid: a1, toUid: b1 }], cutPairs: [{ fromUid: ca1, toUid: cb1 }] });
+  const c = cutChange(r, (x) => x.fromUid === ca1);
+  assert(c.carry.blocked.some((x) => x.reason === "SAME_END") && !c.carry.ready.some((x) => x.field === "from" || x.field === "to"));
+});
+
 // ── the server: save / reload / renumber / revision boundary ─────────────
 
 process.env.AUTH_MODE = "dev";
@@ -245,6 +319,8 @@ const documentsRoute = await import("../../app/api/documents/route.js");
 const runsRoute = await import("../../app/api/runs/route.js");
 const runRoute = await import("../../app/api/runs/[id]/route.js");
 const validationRoute = await import("../../app/api/validation/route.js");
+const revRoute = await import("../../app/api/revisions/route.js");
+const carryRoute = await import("../../app/api/revisions/carry/route.js");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 
@@ -316,6 +392,62 @@ test("S5. a legacy ambiguous reference is saved as it is (no uid) and stays a st
   const v = await validationOf(doc);
   assert(v.body.findings.some((f) => f.code === "WELD_SPOOL_AMBIGUOUS"));
   assert(v.body.findings.some((f) => f.code === "CUT_REF_AMBIGUOUS" && f.detail.field === "spool" && f.detail.candidates.length === 2));
+});
+
+const compare = async (from, to) => json(await revRoute.GET(req(`http://x/api/revisions?projectId=${projectId}&documentId=${from}&compareTo=${to}`)));
+const carry = async (body) => json(await carryRoute.POST(req("http://x/api/revisions/carry", { method: "POST", body: { projectId, ...body } })));
+const X = { a: null, b: null, wa1: newUid(), wa2: newUid(), sa: newUid(), wb1: newUid(), wb2: newUid(), sb: newUid() };
+
+test("S6. revisions: compare finds the piece as a CANDIDATE; confirming it + its welds + spool carries the descriptive fields and the target's own uids, once", async () => {
+  X.a = await newDoc("P9-R");
+  equal((await post(X.a, mk([R("W-1", { uid: X.wa1 }), R("W-2", { uid: X.wa2 })], [spool(X.sa, "SP-1")], [{ piece: 1, lengthMm: 900, ns: "4", material: "A106-B", schedule: "SCH 40", angle: "45", from: "W-1", to: "W-2", spool: "SP-1" }]))).status, 201);
+  const cA = (await latest(X.a)).payload.cutLengths[0];
+  const mkRevision = await json(await revRoute.POST(req("http://x/api/revisions", { method: "POST", body: { projectId, action: "create", sourceDocumentId: X.a, revision: "1", noFile: true } })));
+  equal(mkRevision.status, 201, JSON.stringify(mkRevision.body)); X.b = mkRevision.body.document.id;
+  equal((await post(X.b, mk([R("W-1", { uid: X.wb1 }), R("W-2", { uid: X.wb2 })], [spool(X.sb, "SP-1")], [{ piece: 1, lengthMm: 905, ns: "4" }]))).status, 201);
+  const cB = (await latest(X.b)).payload.cutLengths[0];
+  X.cA = cA.uid; X.cB = cB.uid;
+  assert(isUid(cA.uid) && isUid(cB.uid) && cA.uid !== cB.uid, "each revision's piece has its own identity");
+  const cmp = await compare(X.a, X.b);
+  equal(cmp.status, 200, JSON.stringify(cmp.body).slice(0, 300));
+  const c = cmp.body.changes.find((x) => x.cls === "cut");
+  equal([c.kind, c.fromUid, c.toUid, c.requiresReview], ["candidate", cA.uid, cB.uid, true]);
+  X.hashes = { fromHash: cmp.body.from.hash, toHash: cmp.body.to.hash };
+  X.beforeA = JSON.stringify((await latest(X.a)).payload);
+});
+
+test("S7. carry: pair confirmed explicitly, endpoints go through the weld mappings, the target's length stays, the source revision is untouched", async () => {
+  const wk = (u) => `weld:${u}`;
+  const r = await carry({ fromDocumentId: X.a, toDocumentId: X.b, ...X.hashes, requestKey: "p9-carry-0001", decisions: [
+    { key: wk(X.wa1), pair: { fromUid: X.wa1, toUid: X.wb1 } }, { key: wk(X.wa2), pair: { fromUid: X.wa2, toUid: X.wb2 } }, { key: `spool:${X.sa}`, pair: { fromUid: X.sa, toUid: X.sb } },
+    { key: `cut:${X.cA}`, pair: { fromUid: X.cA, toUid: X.cB }, fields: ["material", "schedule", "angle", "from", "to", "spool"] }] });
+  equal(r.status, 200, JSON.stringify(r.body).slice(0, 400));
+  assert(r.body.mapped.some((m) => m.cls === "cut" && m.fromUid === X.cA && m.toUid === X.cB));
+  const c = (await latest(X.b)).payload.cutLengths[0];
+  equal([c.uid, c.lengthMm, c.material, c.schedule, c.angle, c.fromUid, c.toUid, c.spoolUid, c.from, c.to, c.spool], [X.cB, 905, "A106-B", "SCH 40", "45", X.wb1, X.wb2, X.sb, "W-1", "W-2", "SP-1"]);
+  equal(JSON.stringify((await latest(X.a)).payload), X.beforeA, "the previous revision is never changed");
+  const ops = await q("SELECT summary FROM revision_carry_op WHERE to_document_id = $1", [X.b]);
+  equal(ops[0].summary.cutPairs.map((x) => [x.fromUid, x.toUid]), [[X.cA, X.cB]]);
+  const maps = await q("SELECT cls FROM revision_carry_map WHERE to_document_id = $1 ORDER BY cls", [X.b]);
+  equal(maps.map((m) => m.cls), ["spool", "weld", "weld"], "no 'cut' row: the table does not admit one (no migration in this phase)");
+});
+
+test("S8. the same request again records nothing new; the pair is now an identity: comparing shows a mapped, modified piece (length differs), not a candidate", async () => {
+  const again = await carry({ fromDocumentId: X.a, toDocumentId: X.b, ...X.hashes, requestKey: "p9-carry-0001", decisions: [] });
+  equal([again.status, again.body.repeated], [200, true]);
+  const cmp = await compare(X.a, X.b);
+  const c = cmp.body.changes.find((x) => x.cls === "cut");
+  equal(c.kind, "modified"); assert(c.fields.some((f) => f.field === "lengthMm") && !c.fields.some((f) => ["from", "to", "spool"].includes(f.field)));
+  const v = await validationOf(X.b);
+  assert(!v.body.findings.some((f) => f.code === "REV_UNRESOLVED_MAP" && /قطعه/.test(f.message || "") ));
+});
+
+test("S9. a second confirmation of the same pair, or a stale hash, changes nothing", async () => {
+  const cmp = await compare(X.a, X.b);
+  const dupe = await carry({ fromDocumentId: X.a, toDocumentId: X.b, fromHash: cmp.body.from.hash, toHash: cmp.body.to.hash, requestKey: "p9-carry-0002", decisions: [{ key: `cut:${X.cA}`, pair: { fromUid: X.cA, toUid: X.cB } }] });
+  equal(dupe.status, 409, JSON.stringify(dupe.body).slice(0, 200));
+  const stale = await carry({ fromDocumentId: X.a, toDocumentId: X.b, fromHash: "stale", toHash: cmp.body.to.hash, requestKey: "p9-carry-0003", decisions: [{ key: `cut:${X.cA}`, fields: ["note"] }] });
+  equal(stale.status, 409); equal(stale.body.code, "STALE_SOURCE");
 });
 
 await run();
