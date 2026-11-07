@@ -658,3 +658,69 @@ Phase 12.2 must prove that SLD documents and drafts **enter the platform safely 
 6. `lib/db/repos/joint.mjs:337` loads every current run's payload; large SLD payloads would add cost — bound or filter by type.
 7. Open owner decisions: tag discipline of electrical equipment; multi-voltage model; unit canonical list; whether `from` should ever drive readiness; the `overview` approved-document semantics.
 8. No labeled real SLD dataset: recognition accuracy is unmeasurable (§10).
+
+---
+
+# 17. Phase 12.2 — implementation record (SLD document intake and isolated draft persistence)
+
+Base: `master` @ `a9b5459f5c761472ce7b276204b6bfd46d8fcc1f` (PR #88 merged). Implementation SHA tested: **`20aad9a6665ae151606b0ecb0524c53837f3f73d`**. This section is the only change of the commit that follows it (documentation only; `git diff 20aad9a..HEAD` lists this file alone). No migration; no UI; nothing of §16.3's exclusions was implemented.
+
+## 17.1 What was built
+* **Document types** — `lib/documents/types.mjs`: closed set `isometric|pid|sld`; absent/`null`/blank → `isometric` (unchanged); case-normalised; anything else → `400 INVALID_DOC_TYPE` with the allowed list, **before any byte is stored** (`app/api/documents/route.js`). `registerDocument` (`lib/db/repos/documents.mjs`): the same number and sheet already on file under another type → `409 DOC_TYPE_CONFLICT`.
+* **Run scope** — `lib/db/run-scope.mjs`: `isIsometricDoc(alias)` (SQL fragment on `document.doc_type`), `assertIsometricRun`, `assertIsometricDocument` (`allowMissing` keeps each routine's old answer for an unknown id), reserved pass names `pid`/`sld`.
+* **SLD drafts** — `lib/sld/envelope.mjs` (shape and size only), `lib/db/repos/sld.mjs`, `app/api/sld/route.js` (list / read / ingest), `app/api/sld/review/route.js` (edit with `baseHash`, approve); `/api/sld` is in area `electrical` (`lib/platform/areas.mjs`). Drafts are `extraction_run` rows with `pass_name='sld'`.
+* **Tests** — `db/test/sld-intake.mjs` (20), `db/test/run-isolation.mjs` (8), both in the `db:test` chain; drive `tools/drive-sld-intake.mjs`.
+
+## 17.2 Guards (every row marked L in §15.1)
+| Inventory row | Guard |
+|---|---|
+| 1 review queue | `isIsometricDoc("d")` replaces the `pid` deny-list |
+| 2 `applyCorrection` (`/api/runs/[id]/edits`) | `assertIsometricRun` |
+| 3 `hotspots` | joins run → document, isometric only |
+| 5 `createRun` / `POST /api/runs` | reserved `passName` refused (`400 INVALID_PASS_NAME`); document must be isometric (`409 NOT_AN_ISOMETRIC_DOCUMENT`) |
+| 7 `latestRunForDrawing` | isometric documents only |
+| 8 `validationFor`, `/api/validation` (both branches) | `assertIsometricDocument` |
+| 9 `GET /api/runs?documentId` | `assertIsometricDocument` |
+| 10 `/api/runs/[id]` GET, `approve`, `diff`, `edits` GET/POST, `ndt-sample` | `assertIsometricRun` (`409 NOT_AN_ISOMETRIC_RUN`); `diff` through `compareRuns` / `compareWithPrevious` |
+| 11 `compareRevisions`, `carryForward` | `isometricOnly` (`409 NOT_AN_ISOMETRIC_DOCUMENT`); `lineageOf`/`createRevision` stay type-agnostic |
+| 12 `revisions.mjs` | guard in `loadRun` / `compareWithPrevious` |
+| 13 activity log | isometric documents only |
+| 15 piping hub | isometric documents only |
+| 16 `piping-reports.mjs` drawing list (used by the bom / ndt / progress reports) | isometric documents only |
+| 17 `joint.mjs` tie-in scan | isometric documents only (defence in depth; the output was already equal) |
+| 19 overview card (weld registers) | isometric documents only |
+Rows 4, 6, 14, 18, 20–23 are safe by construction (document-scoped, shared on purpose, or reached only through spool/weld rows) and are listed in the source-scan test.
+
+## 17.3 Decisions made while implementing
+* The route guards are in the **routes** where the repository function is shared with the other disciplines (`approveRun` is reused by the P&ID repo, so it is not guarded; the approve **route** is).
+* Unknown ids keep their old answers (`allowMissing`): `POST /api/runs`, `GET /api/runs`, `/api/validation` still answer as before for a document that does not exist; only an existing non-isometric drawing is refused.
+* `baseHash` is **required** on an SLD edit (no silent last-write-wins). An edit replaces the envelope; it writes one `extraction_edit` row (`path '/'`, hash and counts before/after); an identical envelope (compared with sorted keys, because `jsonb` reorders) changes nothing.
+* The server stamps `meta.document` (`documentId`, `docNo`, `revision`, `sheetNo`) on every draft, whatever the client sent; each revision is its own document and therefore its own draft — nothing, including approval, is copied from an earlier revision (test R1).
+* Size limits: 2,000,000 bytes, 20,000 items, 50,000 edges, 100 meta keys; the request body is refused (`413`) before it is parsed when it exceeds 1.5× the limit.
+* The overview "documents" card is the weld-register tile (its text is "N approved registers"); it now counts isometric documents only. Owner decision recorded in §16.10 item 7 stays open for any wider meaning.
+
+## 17.4 Proofs
+* **Differential isolation (`db/test/run-isolation.mjs`)**: on an isometric-only project, every guarded function and route output (review queue, hotspots, piping hub totals, all four piping reports, activity log, tie-in, validation, overview, run/edits/diff/validation routes) equals the figure of the **original, unguarded SQL kept verbatim in the test** (A1); after adding a P&ID and an SLD (documents, runs, extraction edits, a signed draft each) the canonical outputs are byte-identical to the isometric-only capture (B1) while the unguarded reference figures *do* move (hotspots, hub, log, overview, drawing list) — the leak is demonstrated and is what the guards stop. C1–C4: every run-id and document-id route refuses the other disciplines' run/document (`NOT_AN_ISOMETRIC_RUN` / `NOT_AN_ISOMETRIC_DOCUMENT`), nothing is written, authorization (403) and project scope (404) are intact, and the isometric workflow still works (a signed isometric register is still `RUN_LOCKED`). D1–D2: the source scan fails on an unreviewed reader of `reporting.current_run` / `extraction_run` / `extraction_edit`, and on a "guarded" file that does not import the run-scope module.
+* **Not a cross-version diff:** the differential compares guarded code with **verbatim copies of the pre-change SQL inside the test**, not with the previous commit's binary output. A reviewer who wants the stronger check can run the same capture on `a9b5459` and on this branch and compare after masking ids and timestamps; that was not done here.
+* **Guard-reversion proofs** — each guard was removed in turn (the file restored after each run) and the named test failed: review queue → run-isolation B1; hotspots B1; `applyCorrection` C1; piping hub B1; activity log B1; overview B1; report drawing list B1; approve / run GET / edits GET / ndt-sample / compare route guards C1; `POST /api/runs` document guard C2; reserved pass name C2; validation route guard (spool branch; main branch with the repository guard) C2; `carryForward` guard C2; unknown type → isometric again: D1, D2; `DOC_TYPE_CONFLICT` removed: D3; SLD edit after approval unlocked: S7; stale check removed: S5, S6, S8; non-idempotent ingest: S2, S4, S7; SLD document type not required: S3. **One exception, stated:** the `joint.mjs` tie-in filter is behaviourally equivalent (its output did not change), so removing only that filter is not caught by an output test; the source scan (D2) catches removal of its import.
+* **Database lock**: S8 attempts a direct `UPDATE` of an approved SLD run's payload and the existing trigger `refuse_locked_edit` refuses it.
+
+## 17.5 Verification on the implementation SHA `20aad9a6665ae151606b0ecb0524c53837f3f73d`
+| Check | Result |
+|---|---|
+| `npm run db:test` | 127 suites, 1705 passes, **0 FAIL** (includes `sld-intake` 20/20 and `run-isolation` 8/8) |
+| `npm run db:test:pg` (local PostgreSQL 16) | 8/8, 15/15, 5/5, 3/3 |
+| `npm run eval:check` | GATE PASSED |
+| `npx next build` | passed |
+| P&ID drive (`tools/drive-pid.mjs`, fresh database) | 21 true, 0 false, no page errors |
+| Isometric drive (`tools/drive-equipment-spool.mjs`) | 26 true, 0 false, no page errors |
+| SLD intake drive (`tools/drive-sld-intake.mjs`) | 15 of 15 true, no page errors |
+| Differential isolation test | part of `db:test` (`run-isolation`, 8/8) |
+Notes: an earlier `db:test` run on `4cfc548` (the same code without the drive script) failed only in the migration 102/103 suite because the disk was full while that suite held ten database copies; the rerun on a disk with space passed. The drive script is the only difference between `4cfc548` and `20aad9a`. CI results of the PR are recorded in the PR, not here; Vercel's check is a preview deployment and is not evidence of database tests.
+
+## 17.6 Remaining risks and unverified items
+1. The L-row list was derived by reading the code; the source-scan test only catches a *new* reader, not a mis-classified existing one. `bom-allocations`, `iso-equipment` and `mark-identity` routes are document-addressed isometric routes that would still accept an SLD document id for sheet-mark data (not part of the §15.1 inventory; to be reviewed).
+2. `INVALID_DOC_TYPE` / `DOC_TYPE_CONFLICT` can reject a client or a production document number that mixes types — a read-only check of production data is recommended before deployment.
+3. The visible figures of the piping hub, activity log, hotspots and overview change **only** where a P&ID/SLD was previously (wrongly) included; for isometric-only projects they are identical.
+4. No real SLD sample exists: nothing here measures recognition, and nothing interprets `items`/`edges`.
+5. Approval signs the draft envelope; it promotes nothing (row counts of tag, asset, cable, IR and other registers are unchanged: test S9).

@@ -11,6 +11,7 @@ import { approvedRunFor } from "../../../lib/db/repos/review.mjs";
 import { lineForRegister, tieInRefsOf } from "../../../lib/db/repos/spine.mjs";
 import { fillLineList } from "../../../lib/db/repos/line-list.mjs";
 import { persistRegister, prepareSheetPayload, lockDocument, recordMarkWarnings } from "../../../lib/db/repos/register-persistence.mjs";
+import { assertIsometricDocument, assertPassNameAllowed } from "../../../lib/db/run-scope.mjs";
 
 /**
  * Persist an extraction and the register it produces.
@@ -39,7 +40,9 @@ export async function POST(request) {
     // not a model run that failed — nothing was extracted — so no run is kept.
     if (model.problems) return Response.json({ error: model.error, problems: model.problems }, { status: 400 });
 
+    assertPassNameAllowed(passName);        // an isometric run is not filed under the P&ID / SLD pass names
     return await withProject(db, projectId, async () => {
+      await assertIsometricDocument(db, { projectId, documentId, allowMissing: true });     // a P&ID / SLD document is not saved as a weld register
       // Everything this save writes — the line, the run, the register with its spools and welds
       // (identity carried from the last revision), the line list, the BOM — is ONE transaction
       // (architecture review, 2026-11-01): half a save is worse than none, since a run with no
@@ -166,6 +169,7 @@ export async function GET(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
 
     return await withProject(db, projectId, async () => {
+      await assertIsometricDocument(db, { projectId, documentId, allowMissing: true });
       const run = await latestRunForDocument(db, { projectId, documentId });
       if (!run) return Response.json({ run: null, register: [] });
       return Response.json({ run, register: await getRegister(db, { projectId, runId: run.id }) });

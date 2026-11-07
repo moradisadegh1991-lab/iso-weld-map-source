@@ -6,6 +6,7 @@ import { withProject } from "../../../../../lib/db/scope.mjs";
 import { getPipingClass, applyNdtRequirements, drawNdtSample }
   from "../../../../../lib/db/repos/piping-class.mjs";
 import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
+import { assertIsometricRun } from "../../../../../lib/db/run-scope.mjs";
 
 /**
  * Resolve the governing examination requirement for a run, then draw the
@@ -28,6 +29,7 @@ export async function POST(request, ctx) {
     assertCan(membership, ACTIONS.DRAW_NDT_SAMPLE);
 
     return await withProject(db, projectId, async () => {
+      await assertIsometricRun(db, { projectId, runId: params.id });
       const pipingClass = await getPipingClass(db, { projectId, code: pipingClassCode });
       if (!pipingClass) {
         return Response.json({ error: `Piping Class ${pipingClassCode} تعریف نشده` }, { status: 404 });

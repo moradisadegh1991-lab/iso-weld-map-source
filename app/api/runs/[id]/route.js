@@ -7,6 +7,7 @@ import { getRegister } from "../../../../lib/db/repos/runs.mjs";
 import { editsOf } from "../../../../lib/db/repos/review.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 import { payloadHash } from "../../../../lib/review/payload-hash.mjs";
+import { assertIsometricRun } from "../../../../lib/db/run-scope.mjs";
 
 /**
  * One run, with everything needed to open it for review.
@@ -27,6 +28,7 @@ export async function GET(request, ctx) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
 
     return await withProject(db, projectId, async () => {
+      await assertIsometricRun(db, { projectId, runId: params.id });     // 404 for a run of another project, 409 for a P&ID / SLD run
       const { rows: [run] } = await db.query(
         `SELECT r.*, d.doc_no, d.revision, d.sheet_no, d.file_sha256, d.content_type AS file_type,
                 (d.storage_uri NOT LIKE 'pending://%' AND d.storage_uri NOT LIKE 'none://%') AS has_file,

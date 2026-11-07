@@ -5,6 +5,7 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { unitByCode } from "../../../lib/db/repos/projects.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { registerDocument, currentRevision, supersedePrevious, NO_FILE_URI } from "../../../lib/db/repos/documents.mjs";
+import { normalizeDocType } from "../../../lib/documents/types.mjs";
 import { getStore } from "../../../lib/storage/index.mjs";
 import { keyFor } from "../../../lib/storage/content-store.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
@@ -31,6 +32,9 @@ export async function POST(request) {
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.UPLOAD_DOCUMENT);
+    // the drawing's type: absent → isometric (as before); a type outside the closed set is refused BEFORE any byte is stored
+    // (it used to be filed as an isometric silently: lib/documents/types.mjs)
+    const docType = normalizeDocType(body.docType);
 
     // Three paths. With bytes, the server hashes them itself and ignores any
     // digest the client claimed — a hash supplied by the uploader is a
@@ -74,8 +78,6 @@ export async function POST(request) {
       // unmatched code attaches nothing — the project grade then applies,
       // which is also what the preview used, so the two still agree.
       const unitId = givenUnitId || (await unitByCode(db, { projectId, code: unitCode }))?.id || null;
-      // a drawing is an isometric unless it says it is a P&ID (the only other kind this route files)
-      const docType = body.docType === "pid" ? "pid" : "isometric";
       const { document, created, attached = false } = await registerDocument(db, {
         projectId, unitId, docNo, docType, revision, revisionDate, sheetNo,
         fileSha256: blob.digest, storageUri: blob.uri,

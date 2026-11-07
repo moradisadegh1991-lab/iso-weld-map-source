@@ -5,6 +5,7 @@ import { authenticate, errorResponse } from "../../../../../lib/server/session.m
 import { withProject } from "../../../../../lib/db/scope.mjs";
 import { applyCorrection, editsOf } from "../../../../../lib/db/repos/review.mjs";
 import { assertCan, ACTIONS } from "../../../../../lib/authz.mjs";
+import { assertIsometricRun } from "../../../../../lib/db/run-scope.mjs";
 
 export async function GET(request, ctx) {
   const params = await ctx.params; // Next 15: route params arrive as a promise
@@ -15,8 +16,10 @@ export async function GET(request, ctx) {
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.VIEW_PROJECT);
 
-    return await withProject(db, projectId, async () =>
-      Response.json({ edits: await editsOf(db, { projectId, runId: params.id }) }));
+    return await withProject(db, projectId, async () => {
+      await assertIsometricRun(db, { projectId, runId: params.id });
+      return Response.json({ edits: await editsOf(db, { projectId, runId: params.id }) });
+    });
   } catch (e) { return errorResponse(e); }
 }
 

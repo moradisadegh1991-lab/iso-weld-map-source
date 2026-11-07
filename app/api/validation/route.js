@@ -7,6 +7,7 @@ import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { validationFor } from "../../../lib/db/repos/validation.mjs";
 import { latestRunForDocument } from "../../../lib/db/repos/runs.mjs";
 import { spoolDependencies } from "../../../lib/register/spool-guard.mjs";
+import { assertIsometricDocument } from "../../../lib/db/run-scope.mjs";
 
 /**
  * The validation of one drawing revision's SAVED state (lib/engineering/validation.mjs run on the stored register, equipment, BOM ledger and warnings):
@@ -26,11 +27,15 @@ export async function GET(request) {
     const spoolUid = url.searchParams.get("spoolUid");
     if (spoolUid) {
       return await withProject(db, projectId, async () => {
+        await assertIsometricDocument(db, { projectId, documentId, allowMissing: true });
         const run = await latestRunForDocument(db, { projectId, documentId });
         if (!run?.payload) return Response.json({ error: "no saved register for this revision", code: "NO_REGISTER" }, { status: 404 });
         return Response.json({ ...spoolDependencies(run.payload, spoolUid), runId: run.id });
       });
     }
-    return await withProject(db, projectId, async () => Response.json(await validationFor(db, { projectId, documentId })));
+    return await withProject(db, projectId, async () => {
+      await assertIsometricDocument(db, { projectId, documentId, allowMissing: true });     // the isometric validation engine is not run on a P&ID / SLD payload
+      return Response.json(await validationFor(db, { projectId, documentId }));
+    });
   } catch (e) { return errorResponse(e); }
 }
