@@ -15,7 +15,8 @@ const short = (u) => (u ? String(u).slice(0, 8) : "—");
 
 export default function RevisionPanel({ rc, current, onOpenRun, onSelect, selectedUid, onValidate, locked, session }) {
   const { lineage, compare, ui, patch } = rc;
-  const [newRev, setNewRev] = useState(""), [note, setNote] = useState(""), [msg, setMsg] = useState(""), [confirmOpen, setConfirmOpen] = useState(false);
+  const [newRev, setNewRev] = useState(""), [note, setNote] = useState(""), [msg, setMsgLocal] = useState(""), [confirmOpen, setConfirmOpen] = useState(false);
+  const setMsg = (v, persist) => { setMsgLocal(v); rc.setNotice(v, persist); };
   const changes = compare?.changes || [];
   const shown = useMemo(() => changes.filter((c) => {
     const k = ui.kind;
@@ -33,8 +34,9 @@ export default function RevisionPanel({ rc, current, onOpenRun, onSelect, select
   const me = lineage?.chain.find((c) => c.documentId === current);
   const canCarry = compare && !compare.to.locked && compare.linked && !locked;
 
+  const shownMsg = msg || rc.notice;
   const create = async () => { setMsg(""); const r = await rc.create(newRev.trim(), note.trim()); if (r.error) setMsg(r.error); else { setMsg(`رویژن ${newRev.trim()} ساخته و به این رویژن وصل شد. اطلاعاتش را با همان شمارهٔ نقشه و رویژن در یک فهرست جدید ثبت کنید، بعد اینجا مقایسه کنید.`); setNewRev(""); setNote(""); } };
-  const apply = async () => { setMsg(""); const r = await rc.apply(decisions); setConfirmOpen(false); setMsg(r.error ? r.error : `انتقال انجام شد: ${r.result.op.summary.fields} فیلد در ${r.result.op.summary.carried} مورد، ${r.result.op.summary.mappingsConfirmed} تطبیق تأییدشده.${r.result.repeated ? " (همین درخواست قبلاً انجام شده بود)" : ""}`); if (!r.error) onOpenRun?.(me?.runId, true); };
+  const apply = async () => { setMsg(""); const r = await rc.apply(decisions); setConfirmOpen(false); setMsg(r.error ? r.error : `انتقال انجام شد: ${r.result.op.summary.fields} فیلد در ${r.result.op.summary.carried} مورد، ${r.result.op.summary.mappingsConfirmed} تطبیق تأییدشده.${r.result.repeated ? " (همین درخواست قبلاً انجام شده بود)" : ""}`, !r.error); if (!r.error) onOpenRun?.(me?.runId, true); };
 
   return (
     <div className="rv" data-revisions>
@@ -64,7 +66,7 @@ export default function RevisionPanel({ rc, current, onOpenRun, onSelect, select
           </div>)}
       </section>
       {rc.error && <p className="note bad" role="alert" data-rv-error>{rc.error}</p>}
-      {msg && <p className="note" role="status" data-rv-msg>{msg}</p>}
+      {shownMsg && <p className="note" role="status" data-rv-msg>{shownMsg}</p>}
 
       {!compare ? <p className="muted" data-rv-none>{rc.loading ? "در حال مقایسه…" : rc.fromId ? "مقایسه ممکن نشد." : "این رویژن مبدأ ندارد؛ یک رویژن را برای مقایسه از زمان‌بندی انتخاب کنید (رویژن مبدأ و رجیستر ذخیره‌شده لازم است)."}</p> : (
         <>
