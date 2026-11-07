@@ -67,3 +67,28 @@ Deliberately **not** touched: extraction engine, geometry, coordinates, the iden
 5. `lib/register/workspace-validation.mjs` + a Validation tab.
 6. `lib/register/mark-protection.mjs` + the delete pre-check.
 7. Tests, results, screenshots, notes.
+
+## 4. What was built (branch `feat/piping-workspace-foundation`)
+
+| # | change | files |
+|---|---|---|
+| 2 | **Selection by persistent identity.** `markRef(m)` = the uid (legacy `id` only when the mark has none, never the printed number); `isMark` / `findMark` accept the uid *or* the legacy handle, so callers and marks saved before Phase 2 keep working. Every component emits `markRef`, compares with `isMark`, and exposes `data-mark-id`/`data-*-row` as the ref; `updateMark`, `placeAt` (move), `unplace`, `removeMark`, `duplicateMark`, `dependents` take either. `duplicateMark` also returns `key` (the copy's ref). Chosen in `markup.mjs` rather than a new `lib/client/mark-selection.mjs` — the helpers are the same module the marks live in and the tests already import it (no duplicate module). | `lib/sheet/markup.mjs`, `SheetMarkup`, `MarkTables`, `EquipmentTable`, `MarkForm`, `workspace/Explorer`, `WeldListEntry`, `app/piping/page.jsx` |
+| 3 | **Fit / Reset view** (view setting only — positions stay 0..1 fractions of the sheet). Fit = whole sheet in the frame, Reset = 100 % from the top-left. | `SheetMarkup` |
+| 4 | **BOM table**: search (any column), filter (all / with issues / reserved-used / installed / unused), sort (PT, group, description, N.S., qty), per-row checks (missing PT, duplicate PT, missing description, missing / negative quantity), live usage column, **saved ledger** column (reserved / installed / left from `GET /api/bom-allocations`, shown only for a saved revision), empty state, add even when the BOM is empty, view / edit / delete through the existing `BomForm`, read-only on an approved run. It replaces the collapsed `<details>` table (which only existed when rows did). Not wrapped in `TableKit`: TableKit reorders DOM rows, which fights a domain-aware sort/filter. | `lib/register/bom-table.mjs`, `components/BomTable.jsx`, `WeldListEntry` |
+| 5 | **Validation tab**: one list of what the page's existing checks already say (register problems, duplicate / unnumbered / unplaced marks, weld components vs BOM, equipment vs BOM, allocation ceilings, BOM row checks, cut table vs sheet and vs BOM), grouped by source, error / warning filter, badge with the count. A finding links to its mark (selects it by uid) only when it can be pointed at exactly (see header of `workspace-validation.mjs`); otherwise it is listed without a link, never guessed. | `lib/register/workspace-validation.mjs`, `components/ValidationPanel.jsx`, `WeldListEntry` |
+| 6 | **Delete-protection preview**: for a saved revision the page reads `GET /api/iso-equipment` and `GET /api/bom-allocations`; before the confirm it tells the person that installed / tested equipment, installed accessories, installed allocation lines or an approved revision will refuse the delete (blocked, nothing removed from the draft) and that reserved lines are released at save. Advice only: the server's 409s are unchanged and remain the authority. | `lib/register/mark-protection.mjs`, `SheetMarkup`, `MarkTables`, `EquipmentTable`, `WeldListEntry` |
+
+### 4.1 Decisions
+* **BOM semantics unchanged and respected.** The payload rule in `WeldListEntry` is untouched: the BOM is omitted when it was and still is empty, `bom: []` is sent only when a previously non-empty saved BOM was emptied — and `BomTable` asks for an explicit confirmation before the last saved row is removed. `BOM_LOCKED` / `BOM_IN_USE` / installed-line refusals stay server-side.
+* **No new routes, no migration, no writes from the client.** Everything reads through the existing GET routes and saves through `/api/runs` as before.
+* **Move / duplicate / delete** were already in the sheet's context menu and tables; this phase only made them identity-correct (above) and protected.
+* **Iso Info** (view, edit, dirty, validation) already existed in `IsoInfo`; not re-implemented.
+* Context-menu actions on empty space (Add weld / spool / support / equipment) already exist (`addHere`).
+
+### 4.2 Deferred / known limits (stated, not hidden)
+* **Typed weld-list flow has no uid.** `WeldListEntry` rebuilds weld marks from register rows (`lib/sheet/weld-list-marks.mjs`) every render, so welds there carry only the row handle; selection falls back to the legacy id (still correct inside one session, but not a persistent identity). Giving rows a uid is a change to the register-row contract and was left out.
+* The saved-ledger and protection reads exist only for a run that has been saved (`run.run.documentId`); for an unsaved draft there is no saved state to consult.
+* Protection preview does not cover a weld whose **spool** is installed (the server decides that on save).
+* The BOM table is wide for the left panel (11 columns); it scrolls horizontally. A denser or card layout was not attempted.
+* No component-level (DOM) test runner exists in the repo; UI behaviour was checked by driving the real page with Playwright (section 5), logic by pure tests.
+* Fit uses the image's natural aspect; with a tall frame it can equal 100 %.

@@ -25,7 +25,7 @@ export default function ValidationPanel({ input, onSelect }) {
       {total === 0 && <p className="muted" data-validation-empty>همهٔ بررسی‌های صفحه (رجیستر، نشان‌ها، BOM، قطعات، تجهیزات، برش) گذشت.</p>}
       <ul className="sm" style={{ paddingInlineStart: 18 }}>
         {shown.map((f, i) => (
-          <li key={i} className={f.level === "error" ? "err" : ""} data-finding={f.source} data-level={f.level}>
+          <li key={i} style={f.level === "error" ? { color: "var(--bad-ink)" } : undefined} data-finding={f.source} data-level={f.level}>
             <span className="muted">[{SOURCE[f.source] || f.source}]</span>{" "}
             {f.ref ? <button type="button" className="ghost sm" data-finding-select={f.ref} onClick={() => onSelect?.(f.ref)}>{f.message}</button> : f.message}
           </li>))}
