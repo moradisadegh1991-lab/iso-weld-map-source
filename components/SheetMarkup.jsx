@@ -74,7 +74,7 @@ export async function renderMarkedPng(src, items) {
 
 export default function SheetMarkup({ protect = null, src, items = [], onChange, readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null,
   selectedId: selectedProp, onSelect, attachId: attachProp, onAttach, states = null, legend = [], onEdit = null, onView = null, onAdd = null,
-  hidden: hiddenProp = null, onToggleLayer = null }) {
+  hidden: hiddenProp = null, onToggleLayer = null, cuts = [] }) {
   const [zoom, setZoom] = useState(1);
   // the picked mark and the mark waiting for its weld point may be held by the page, whose table picks the same mark
   const [selectedOwn, setSelectedOwn] = useState(null);
@@ -180,7 +180,7 @@ export default function SheetMarkup({ protect = null, src, items = [], onChange,
   async function remove(id) {
     const m = findMark(items, id);
     if (!m) return;
-    const yes = await askDelete(ask, { label: KINDS[m.kind].label, no: m.no, pr: protect?.(id), deps: dependents(items, id) });
+    const yes = await askDelete(ask, { label: KINDS[m.kind].label, no: m.no, pr: protect?.(id), deps: dependents(items, id, cuts) });
     if (!yes) return;
     if (isMark(m, pointFor)) setPointFor(null);
     if (isMark(m, selectedId)) setSelectedId(null);

@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import BomForm from "./BomForm";
 import BomTable from "./BomTable";
@@ -7,7 +7,9 @@ import ValidationPanel from "./ValidationPanel";
 import RevisionPanel from "./RevisionPanel";
 import { useRevisionCenter } from "../lib/client/revision-center.mjs";
 import CutForm from "./CutForm";
-import { cutChecks } from "../lib/register/cut-model.mjs";
+import SpoolDetail from "./SpoolDetail";
+import { cutChecks, cutIssues } from "../lib/register/cut-model.mjs";
+import { duplicateCut, spoolDependents } from "../lib/register/cut-identity.mjs";
 import TableKit from "./ui/TableKit";
 import Pick, { useValueLists } from "./ui/Pick";
 import { COLUMN_LIST } from "../lib/register/value-lists.mjs";
@@ -23,10 +25,10 @@ import SheetMarkup from "./SheetMarkup";
 import MarkTables from "./MarkTables";
 import EquipmentTable from "./EquipmentTable";
 import IsoInfo from "./IsoInfo";
-import { cutVsBom } from "../lib/register/cut-bom.mjs";
+import { cutBomReport } from "../lib/register/cut-bom.mjs";
 import { useSavedProtection } from "../lib/client/saved-protection.mjs";
 import { useValidationCenter } from "../lib/client/validation-center.mjs";
-import { isUid } from "../lib/sheet/mark-identity.mjs";
+import { isUid, newUid } from "../lib/sheet/mark-identity.mjs";
 import { KINDS } from "../lib/sheet/markup.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped, adoptLegacyPlacement, legacyMarks, extraMarks } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks, addMark, updateMark, placeAt, findMark, isPlaced } from "../lib/sheet/markup.mjs";
@@ -162,7 +164,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
       // (a renumbered weld keeps its place by its identity — nothing to move; the number is only what it is called)
       if (was && reviewed.has(was)) { const r = new Set(reviewed); r.delete(was); setReviewed(r); }
     }
-    setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+    // a weld's spool typed in the table: tied to the spool mark by identity ONLY when exactly one spool has that number
+    let patch = { [k]: v };
+    if (k === "spool") { const hits = extras.filter((m) => m.kind === "spool" && isUid(m.uid) && String(m.no ?? "").trim() === String(v ?? "").trim()); patch = { spool: v, spoolUid: String(v ?? "").trim() && hits.length === 1 ? hits[0].uid : "" }; }
+    setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   };
   const tick = (no, on) => { const r = new Set(reviewed); if (on) r.add(no); else r.delete(no); setReviewed(r); };
   const unchecked = nos.filter((no) => !reviewed.has(no));
@@ -362,20 +367,88 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   );
   const nextCutPiece = () => { const n = cutRows.map((c) => Number(c.piece)).filter(Number.isFinite); return (n.length ? Math.max(...n) : 0) + 1; };
   const cutProblems = useMemo(() => cutChecks(cutRows, items), [cutRows, items]);
-  const cutBom = useMemo(() => cutVsBom(cutLengths, bom), [cutLengths, bom]);
+  const cutIssueList = useMemo(() => cutIssues(cutRows, items), [cutRows, items]);
+  const cutBom = useMemo(() => cutBomReport(cutLengths, bom), [cutLengths, bom]);
+  const [cutQ, setCutQ] = useState(""), [cutFilter, setCutFilter] = useState("all"), [cutSort, setCutSort] = useState("piece");
+  const [selCut, setSelCut] = useState(null), [spoolSel, setSpoolSel] = useState(null);
+  // Printed numbers are LABELS of identities: when a weld or a spool is renumbered, the labels that name it (cut ends, cut spool, a weld's
+  // spool) follow by uid. Only the label changes; the references, the pieces and the order are untouched. (The server settles the same on save.)
+  useEffect(() => {
+    if (locked) return;
+    const lcu = (u) => (isUid(u) ? u.toLowerCase() : null);
+    const weldNo = new Map(rows.filter(rowTyped).filter((r) => lcu(r.uid)).map((r) => [lcu(r.uid), String(r.no ?? "").trim()]));
+    const spoolNo = new Map(extras.filter((m) => m.kind === "spool" && lcu(m.uid)).map((m) => [lcu(m.uid), String(m.no ?? "").trim()]));
+    let cutsChanged = false;
+    const nextCuts = cutRows.map((c) => {
+      let x = c;
+      for (const [lab, key, map] of [["from", "fromUid", weldNo], ["to", "toUid", weldNo], ["spool", "spoolUid", spoolNo]]) {
+        const no = lcu(c[key]) && map.get(lcu(c[key]));
+        if (no && String(x[lab] ?? "").trim() !== no) x = { ...x, [lab]: no };
+      }
+      if (x !== c) cutsChanged = true;
+      return x;
+    });
+    if (cutsChanged) setCutRows(nextCuts);
+    let rowsChanged = false;
+    const nextRows = rows.map((r) => { const no = lcu(r.spoolUid) && spoolNo.get(lcu(r.spoolUid)); if (no && String(r.spool ?? "").trim() !== no) { rowsChanged = true; return { ...r, spool: no }; } return r; });
+    if (rowsChanged) setRows(nextRows);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, extras, cutRows]);
   const SZ = (n) => (n == null ? "؟" : `${n}"`);
+  // ── navigation / selection between the cut table, the drawing and the spool detail (all by uid) ──
+  const markOfUid = (u) => (isUid(u) ? drawItems.find((m) => isUid(m.uid) && m.uid.toLowerCase() === u.toLowerCase()) || null : null);
+  const goUid = ({ kind, uid }) => {
+    if (kind === "cut") { setSelCut(uid); setWsTab("cut"); return; }
+    const m = markOfUid(uid);
+    if (!m) return;
+    setMarkSel(m.id);
+    if (kind === "spool") { setSpoolSel(uid); setWsTab("spools"); } else if (orphanIds.has(m.id)) setWsTab("validation");
+  };
+  const cutKey = (c, i) => (isUid(c.uid) ? c.uid : `i${i}`);
+  const selMarkU = (() => { const m = markSel ? findMark(drawItems, markSel) : null; return m && isUid(m.uid) ? m.uid.toLowerCase() : null; })();
+  const rank = { error: 3, warning: 2, info: 1 };
+  const worst = (c) => cutIssueList.filter((x) => (c.uid && x.uid === c.uid) || (!c.uid && x.piece === String(c.piece ?? "").trim()))
+    .reduce((w, x) => (rank[x.level] > rank[w] ? x.level : w), "none");
+  const cutView = useMemo(() => {
+    const q = cutQ.trim().toLowerCase();
+    const list = cutRows.map((c, i) => ({ c, i, flag: (() => { const f = cutIssueList.filter((x) => (c.uid && x.uid === c.uid) || (!c.uid && x.piece === String(c.piece ?? "").trim())); return f.reduce((w, x) => (rank[x.level] > rank[w] ? x.level : w), "none"); })() }))
+      .filter(({ c }) => !q || [c.piece, c.lengthMm, c.ns, c.material, c.schedule, c.from, c.to, c.spool, c.note].some((v) => String(v ?? "").toLowerCase().includes(q)))
+      .filter(({ flag }) => cutFilter === "all" || (cutFilter === "issues" ? flag === "error" || flag === "warning" : flag === "none"));
+    const by = { piece: (x) => Number(x.c.piece) || 0, length: (x) => Number(x.c.lengthMm) || 0, spool: (x) => String(x.c.spool ?? "") };
+    return list.sort((x, y) => { const a = by[cutSort](x), b = by[cutSort](y); return typeof a === "number" ? a - b : a.localeCompare(b, "en", { numeric: true }); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cutRows, cutIssueList, cutQ, cutFilter, cutSort]);
+  const sortCuts = (list) => list.sort((a, b) => (Number(a.piece) || 0) - (Number(b.piece) || 0));
+  const dupCut = (i) => {
+    const c = cutRows[i];
+    const src = isUid(c.uid) ? c : { ...c, uid: newUid() };           // a legacy piece is given its identity now, so the copy can be proven distinct
+    const copy = duplicateCut([src], src.uid, nextCutPiece());
+    setCutRows(sortCuts([...cutRows.map((x, j) => (j === i ? src : x)), copy]));
+    setSelCut(copy.uid);
+  };
+  const delCut = (i) => {
+    const c = cutRows[i];
+    const lines = [`قطعهٔ برش <${c.piece}> حذف شود؟`,
+      isUid(c.uid) ? `شناسه: ${c.uid}` : "شناسه: ندارد (ردیف قدیمی)",
+      `ابتدا: ${c.from || "—"} · انتها: ${c.to || "—"} · اسپول: ${c.spool || "—"}`,
+      `وابسته‌ای ندارد؛ ${c.lengthMm} mm از مجموع برشِ قطر ${c.ns || "؟"} کم می‌شود (مصرف لوله از BOM).`,
+      "سرجوش‌ها و اسپول دست‌نخورده می‌مانند."];
+    if (window.confirm(lines.join("\n"))) { setCutRows(cutRows.filter((_, j) => j !== i)); if (selCut === cutKey(c, i)) setSelCut(null); }
+  };
+  const FLAG = { error: ["خطا", "err"], warning: ["هشدار", "warnish"], info: ["اطلاع", "muted"] };
   const cutBlock = (
     <>
       {cutLengths.length > 0 && (
         <div className="cut-bom" data-cut-bom>
-          <b className="sm">برش در برابر BOM</b>
+          <b className="sm">برش در برابر BOM</b> <span className="muted sm" data-cut-bom-preview>پیش‌نمایش پیش‌نویس — BOM ذخیره‌شدهٔ سرور مرجع است؛ باقی‌ماندهٔ نظری موجودی قابل‌استفاده نیست</span>
           <TableKit name="iso-cut-bom"><table className="dtable">
-            <thead><tr><th>قطر</th><th>قطعه</th><th>جمع برش (m)</th><th>لولهٔ BOM (m)</th><th>وضعیت</th></tr></thead>
-            <tbody>{cutBom.sizes.map((z) => (
-              <tr key={String(z.size)} data-cut-size={z.size ?? "?"} data-cut-status={z.status}>
-                <td className="mono" dir="ltr">{SZ(z.size)}</td><td className="mono">{z.pieces}</td><td className="mono">{z.cutM}</td>
-                <td className="mono">{z.bomM ?? "—"}</td>
-                <td className={z.status === "ok" ? "ok sm" : "sm warnish"}>{{ ok: "هم‌خوان", over: "برش بیش از BOM", noBom: "ردیف لولهٔ BOM نیست", noSize: "قطر خوانده نشد" }[z.status]}</td>
+            <thead><tr><th>قطر</th><th>جنس</th><th>Sch</th><th>قطعه</th><th>جمع برش (m)</th><th>لولهٔ BOM (m)</th><th>باقی‌ماندهٔ نظری (m)</th><th>وضعیت</th></tr></thead>
+            <tbody>{cutBom.sizes.map((z, i) => (
+              <tr key={i} data-cut-size={z.size ?? "?"} data-cut-status={z.status}>
+                <td className="mono" dir="ltr">{SZ(z.size)}</td><td className="mono sm" dir="ltr">{z.material || "—"}</td><td className="mono sm" dir="ltr">{z.schedule || "—"}</td>
+                <td className="mono">{z.pieces}</td><td className="mono">{z.cutM}</td>
+                <td className="mono">{z.bomM ?? "—"}</td><td className="mono">{z.remainingM ?? "—"}</td>
+                <td className={z.status === "ok" ? "ok sm" : "sm warnish"}>{{ ok: "هم‌خوان", over: "برش بیش از BOM", noBom: "ردیف لولهٔ BOM نیست", noSize: "قطر خوانده نشد", mismatch: "جنس/Sch با BOM نمی‌خواند" }[z.status]}</td>
               </tr>))}</tbody>
           </table></TableKit>
           {cutBom.problems.length > 0 && <ul className="sm" data-cut-problems style={{ margin: "6px 0", paddingInlineStart: 18 }}>{cutBom.problems.map((x) => <li key={x} className="err">{x}</li>)}</ul>}
@@ -385,37 +458,54 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
           <b className="sm">جدول برش لوله (CUT PIPE LENGTH) — {cutLengths.length} قطعه</b>
           <span className="muted sm">خوانده‌شده با OCR؛ با نقشه بررسی کنید</span>
           <span className="grow" />
+          {cutLengths.length > 0 && (<>
+            <input type="search" dir="ltr" className="sm" data-cut-search placeholder="جست‌وجو" aria-label="جست‌وجوی قطعه" value={cutQ} onChange={(e) => setCutQ(e.target.value)} style={{ width: 120 }} />
+            <select className="sm" data-cut-filter aria-label="فیلتر" value={cutFilter} onChange={(e) => setCutFilter(e.target.value)}><option value="all">همه</option><option value="issues">دارای ایراد</option><option value="clean">بدون ایراد</option></select>
+            <select className="sm" data-cut-sort aria-label="مرتب‌سازی" value={cutSort} onChange={(e) => setCutSort(e.target.value)}><option value="piece">شماره</option><option value="length">طول</option><option value="spool">اسپول</option></select>
+          </>)}
           {!locked && <button type="button" className="ghost sm" data-cut-add onClick={() => setCutForm({ mode: "create", i: -1 })}>+ ثبت قطعه</button>}
         </div>
         {cutLengths.length > 0 && cutProblems.length > 0 && <ul className="sm" data-cut-model-problems style={{ margin: "6px 0", paddingInlineStart: 18 }}>{cutProblems.map((x) => <li key={x} className="err">{x}</li>)}</ul>}
         {cutLengths.length > 0 && (
           <TableKit name="iso-cut-read"><table className="dtable">
-            <thead><tr><th>قطعه</th><th>طول برش (mm)</th><th>N.S.</th><th>ابتدا</th><th>انتها</th><th>اسپول</th><th>زاویه</th><th>توضیح</th><th></th></tr></thead>
-            <tbody>{cutRows.map((c, i) => (
-              <tr key={i} data-cut-row={c.piece}>
+            <thead><tr><th></th><th>قطعه</th><th>طول برش (mm)</th><th>N.S.</th><th>جنس</th><th>Sch</th><th>ابتدا</th><th>انتها</th><th>اسپول</th><th>زاویه</th><th>توضیح</th><th></th></tr></thead>
+            <tbody>{cutView.map(({ c, i, flag }) => {
+              const hl = selMarkU && [c.fromUid, c.toUid, c.spoolUid].some((u) => isUid(u) && u.toLowerCase() === selMarkU);
+              return (
+              <tr key={cutKey(c, i)} data-cut-row={c.piece} data-cut-uid={isUid(c.uid) ? c.uid : ""} data-cut-flag={flag} aria-selected={selCut === cutKey(c, i)} data-cut-hl={hl ? "1" : undefined}
+                className={selCut === cutKey(c, i) || hl ? "sel" : ""} style={selCut === cutKey(c, i) || hl ? { background: "var(--sel, rgba(80,140,255,.14))" } : undefined}
+                onClick={() => { setSelCut(cutKey(c, i)); const m = markOfUid(c.fromUid) || markOfUid(c.toUid); if (m) setMarkSel(m.id); }}>
+                <td data-cut-cell="flag" title={flag === "none" ? "" : FLAG[flag][0]}>{flag !== "none" && <span className={`${FLAG[flag][1]} sm`} data-cut-indicator={flag}>{flag === "info" ? "ⓘ" : "⚠"}</span>}</td>
                 <td className="mono" data-cut-cell="piece">&lt;{c.piece}&gt;</td><td className="mono" data-cut-cell="lengthMm">{c.lengthMm}</td>
                 <td className="mono" dir="ltr" data-cut-cell="ns">{c.ns ?? "؟"}</td>
+                <td className="mono sm" dir="ltr" data-cut-cell="material">{c.material || "—"}</td>
+                <td className="mono sm" dir="ltr" data-cut-cell="schedule">{c.schedule || "—"}</td>
                 <td className="mono sm" dir="ltr" data-cut-cell="from">{c.from || "—"}</td>
                 <td className="mono sm" dir="ltr" data-cut-cell="to">{c.to || "—"}</td>
                 <td className="mono sm" dir="ltr" data-cut-cell="spool">{c.spool || "—"}</td>
                 <td className="mono sm" dir="ltr" data-cut-cell="angle">{c.angle || "—"}</td>
                 <td className="sm" data-cut-cell="note">{c.note || "—"}</td>
-                <td style={{ whiteSpace: "nowrap" }}>
+                <td className="row" style={{ gap: 4, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
                   <button type="button" className="ghost sm" data-cut-view={c.piece} onClick={() => setCutForm({ mode: "view", i })}>مشاهده</button>
+                  {markOfUid(c.fromUid) && <button type="button" className="ghost sm" data-cut-go-from={c.piece} onClick={() => goUid({ kind: "weld", uid: c.fromUid })}>◂ ابتدا</button>}
+                  {markOfUid(c.toUid) && <button type="button" className="ghost sm" data-cut-go-to={c.piece} onClick={() => goUid({ kind: "weld", uid: c.toUid })}>انتها ▸</button>}
+                  {markOfUid(c.spoolUid) && <button type="button" className="ghost sm" data-cut-go-spool={c.piece} onClick={() => goUid({ kind: "spool", uid: c.spoolUid })}>اسپول</button>}
                   {!locked && <button type="button" className="ghost sm" data-cut-edit={c.piece} onClick={() => setCutForm({ mode: "edit", i })}>ویرایش</button>}
-                  {!locked && <button type="button" className="ghost sm" data-cut-delete={c.piece} onClick={() => { if (window.confirm(`قطعهٔ برش <${c.piece}> حذف شود؟`)) setCutRows(cutRows.filter((_, j) => j !== i)); }}>حذف</button>}
+                  {!locked && <button type="button" className="ghost sm" data-cut-dup={c.piece} onClick={() => dupCut(i)}>رونوشت</button>}
+                  {!locked && <button type="button" className="ghost sm" data-cut-delete={c.piece} onClick={() => delCut(i)}>حذف</button>}
                 </td>
-              </tr>))}</tbody>
+              </tr>); })}</tbody>
           </table></TableKit>)}
+        {cutLengths.length > 0 && cutView.length === 0 && <p className="muted sm" data-cut-empty>هیچ قطعه‌ای با این جست‌وجو/فیلتر نیست.</p>}
       </div>
       {cutForm && (
         <CutForm key={`${cutForm.mode}-${cutForm.i}`} mode={cutForm.mode} lists={lists} readOnly={locked} cuts={cutRows} items={items}
-          spools={[...new Set(items.filter((m) => m.kind === "spool" && String(m.no ?? "").trim()).map((m) => String(m.no).trim()))]}
           cut={cutForm.i >= 0 ? cutRows[cutForm.i] : { piece: nextCutPiece() }}
           onClose={() => setCutForm(null)}
           onSave={(c) => {
-            setCutRows(cutForm.i >= 0 ? cutRows.map((x, j) => (j === cutForm.i ? c : x))
-              : [...cutRows, c].sort((a, b) => (Number(a.piece) || 0) - (Number(b.piece) || 0)));
+            const saved = { ...c, uid: isUid(c.uid) ? c.uid : newUid() };
+            setCutRows(cutForm.i >= 0 ? cutRows.map((x, j) => (j === cutForm.i ? saved : x)) : sortCuts([...cutRows, saved]));
+            setSelCut(saved.uid);
             setCutForm(null);
           }} />)}
     </>
@@ -503,7 +593,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const sheetBlock = () => (
     <>
         <div className="wl-sheet" data-wl-sheet>
-          <SheetMarkup protect={protect} src={sheet.src} items={drawItems} onChange={locked ? undefined : onDrawItems} readOnly={locked} height={640}
+          <SheetMarkup protect={protect} cuts={cutRows} src={sheet.src} items={drawItems} onChange={locked ? undefined : onDrawItems} readOnly={locked} height={640}
             fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={pickMark} attachId={attachId} onAttach={setAttachId}
             onEdit={locked ? null : editMark} onView={(id, k) => openForm("view", id, k)}
             onAdd={locked ? null : (k, p, aspect) => openForm("create", null, k, p, aspect)}
@@ -520,7 +610,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const registerTable = (tabs = ["weld"]) => (
     <>
         <div className="wl-table">
-          <MarkTables protect={protect} tabs={tabs} items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
+          <MarkTables protect={protect} cuts={cutRows} tabs={tabs} items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
             selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} bom={bom} focus={editFocus}
             onOpen={(mode, id, k) => openForm(mode, id, k)}
             checked={locked ? null : { has: (no) => reviewed.has(no), onTick: tick }} />
@@ -630,7 +720,8 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     { k: "welds", label: "سرجوش‌ها", hint: "رجیستر جوش‌ها و نشان‌های روی نقشه", badge: nos.length ? `${reviewedN}/${nos.length}` : "",
       tone: problems ? "bad" : undefined, node: (<>{registerTable()}{summaryBlock}</>) },
     { k: "spools", label: "اسپول‌ها", hint: "اسپول‌های نقشه و سرجوش‌های هر کدام", badge: items.filter((m) => m.kind === "spool").length || "",
-      node: (<>{registerTable(["spool"])}</>) },
+      node: (<>{registerTable(["spool"])}
+        <SpoolDetail spools={items.filter((m) => m.kind === "spool")} selectedUid={spoolSel || (selectedUid && isUid(selectedUid) ? selectedUid : null)} payload={data} findings={vc.draft.findings} onSelect={(u) => { setSpoolSel(u); const m = markOfUid(u); if (m) setMarkSel(m.id); }} onGo={goUid} /></>) },
     { k: "supports", label: "ساپورت‌ها", hint: "ساپورت‌های نقشه", badge: items.filter((m) => m.kind === "support").length || "",
       node: (<>{registerTable(["support"])}</>) },
     { k: "equip", label: "تجهیزات", hint: "تجهیزات نصب، سرجوش‌های متصل و متعلقات", badge: items.filter((m) => m.kind === "equipment").length || "",
