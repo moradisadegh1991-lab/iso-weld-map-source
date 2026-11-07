@@ -12,7 +12,7 @@ import { endSpoolMarks, endSpools } from "../../lib/register/cut-model.mjs";
 import { spoolDependencies, removedSpools, assertSpoolsRemovable } from "../../lib/register/spool-guard.mjs";
 import { validate } from "../../lib/engineering/validation.mjs";
 import { diffRevisions, applyCarry } from "../../lib/revision/revision-diff.mjs";
-import { dependents } from "../../lib/sheet/markup.mjs";
+import { dependents, normalize, updateMark } from "../../lib/sheet/markup.mjs";
 
 const [w1, w2, s1, s2, e1] = Array.from({ length: 5 }, newUid);
 const weld = (uid, no, spool, spoolUid) => ({ id: `w${no}`, uid, kind: "weld-shop", no, x: 0.2, y: 0.2, src: "hand", attrs: { ...(spool ? { spool } : {}), ...(spoolUid ? { spoolUid } : {}) } });
@@ -62,6 +62,14 @@ test("E4. endSpoolMarks: the two end welds' spool by IDENTITY — same spool pre
   const amb = [weld(w1, "W-1", "SP-1", null), weld(w2, "W-2", "SP-1", null), spool(s1, "SP-1"), spool(s2, "SP-1")];
   equal(endSpoolMarks({ fromUid: w1, toUid: w2 }, amb), [], "a printed number on two spools selects neither");
   equal(endSpools({ fromUid: w1, toUid: w2 }, [weld(w1, "W-1", "SP-1", s1), weld(w2, "W-2", "SP-2", s2), spool(s1, "SP-1"), spool(s2, "SP-2")]), ["SP-1", "SP-2"], "the old export keeps its shape");
+});
+
+test("E3b. the sheet-mark normalizer KEEPS attrs.spoolUid (an equipment and a sheet weld) through load, edit and save — it used to be dropped", () => {
+  const items = normalize([spool(s1, "SP-1"), equip(e1, "V-1", { spoolUid: s1, spool: "SP-1" }), weld(w1, "W-1", "SP-1", s1)]);
+  equal(items.find((m) => m.uid === e1).attrs.spoolUid, s1); equal(items.find((m) => m.uid === w1).attrs.spoolUid, s1);
+  const id = items.find((m) => m.uid === e1).id;
+  const moved = updateMark(items, id, { attrs: { ...items.find((m) => m.uid === e1).attrs, spoolUid: s2, spool: "SP-2" } });
+  equal(moved.find((m) => m.uid === e1).attrs.spoolUid, s2);
 });
 
 // ── dependencies, guard, validation (pure) ──────────────────────────────
