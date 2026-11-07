@@ -84,6 +84,10 @@ export default function MarkForm({ mode: mode0 = "view", mark, items = [], bom =
     <FormDialog title={title} subtitle={mark && mode !== "create" ? (isPlaced(mark) ? "روی نقشه جا دارد" : "هنوز روی نقشه جا ندارد") : ""}
       mode={mode} dirty={dirty} canEdit={!readOnly} onEdit={() => setMode("edit")} onSave={save} onClose={onClose} error={err}
       data-mark-form={cls}>
+      {mark && mode !== "create" && (mark.uid || mark.id) && (
+        <p className="muted sm mono" dir="ltr" data-mark-identity style={{ margin: "0 0 6px" }}>
+          {mark.uid ? `uid ${mark.uid}` : `id ${mark.id} (legacy — no uid yet)`}
+        </p>)}
       <div className="mk-grid">
         <label className="mk-f" data-form-field="no"><span className="muted sm">شماره *</span>
           <input data-input="no" data-autofocus dir="ltr" className="mono" value={d.no ?? ""} onChange={(e) => { setErr(""); setD((x) => ({ ...x, no: e.target.value })); }} /></label>

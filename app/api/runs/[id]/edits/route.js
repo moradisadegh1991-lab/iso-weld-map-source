@@ -30,7 +30,7 @@ export async function GET(request, ctx) {
 export async function POST(request, ctx) {
   const params = await ctx.params; // Next 15: route params arrive as a promise
   try {
-    const { projectId, payload, reason = null, options = {} } = await request.json();
+    const { projectId, payload, reason = null, options = {}, baseHash = null } = await request.json();
     if (!projectId || !payload) {
       return Response.json({ error: "projectId and payload are required" }, { status: 400 });
     }
@@ -40,7 +40,7 @@ export async function POST(request, ctx) {
 
     return await withProject(db, projectId, async () => Response.json(
       await applyCorrection(db, {
-        projectId, runId: params.id, payload, reason, options, userId: user.id }),
+        projectId, runId: params.id, payload, reason, options, userId: user.id, baseHash }),
       { status: 200 }));
   } catch (e) { return errorResponse(e); }
 }

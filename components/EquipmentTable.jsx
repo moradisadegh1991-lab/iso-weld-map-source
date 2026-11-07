@@ -1,4 +1,5 @@
 "use client";
+import { useConfirm, askDelete } from "./ui/ConfirmDialog";
 import { useEffect, useRef } from "react";
 import { KINDS, EQUIPMENT_STATUS, removeMark, unplace, isPlaced, equipmentChecks, dependents, weldsOf, accessoriesOf, markRef, isMark } from "../lib/sheet/markup.mjs";
 import TableKit from "./ui/TableKit";
@@ -23,6 +24,7 @@ export default function EquipmentTable({ protect = null, items = [], onChange, b
   const status = Object.fromEntries(EQUIPMENT_STATUS);
   const bomText = (pt) => { if (!pt) return "—"; const b = (bom || []).find((r) => String(r.pt) === String(pt)); return b ? `PT ${pt} — ${String(b.description || b.group || "").slice(0, 30)}` : `PT ${pt} (در BOM نیست)`; };
   const box = useRef(null);
+  const [ask, dialog] = useConfirm();
   const done = useRef(null);
   useEffect(() => {
     if (!focus?.id || done.current === focus.n) return;
@@ -33,8 +35,19 @@ export default function EquipmentTable({ protect = null, items = [], onChange, b
     row.querySelector("[data-row-edit]")?.focus();
   }, [focus?.id, focus?.n, rows.length]);
 
+  // an equipment mark picked on the drawing is brought into view here
+  const followed = useRef(null);
+  useEffect(() => {
+    if (!selectedId || followed.current === selectedId) return;
+    const m = rows.find((r) => isMark(r, selectedId));
+    if (!m) return;
+    followed.current = selectedId;
+    box.current?.querySelector(`[data-equip-row="${CSS.escape(String(markRef(m)))}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [selectedId, rows.length]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="equip-table" data-equip-table ref={box}>
+      {dialog}
       <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <b>تجهیزات نصب ({rows.length})</b>
         <span className="grow" />
@@ -65,12 +78,10 @@ export default function EquipmentTable({ protect = null, items = [], onChange, b
                         <button type="button" className={isMark(m, attachId) ? "on sm" : "ghost sm"} data-row-attach={markRef(m)}
                           onClick={(e) => { e.stopPropagation(); onSelect?.(markRef(m)); onAttach?.(isMark(m, attachId) ? null : markRef(m)); }}>{placed ? "جابه‌جایی روی نقشه" : "اتصال به نقشه"}</button>
                         {placed && <button type="button" className="ghost sm" onClick={(e) => { e.stopPropagation(); onChange?.(unplace(items, markRef(m))); }}>برداشتن از نقشه</button>}
-                        <button type="button" className="ghost sm" data-row-delete={m.id} aria-label={`حذف ${m.no}`} onClick={(e) => {
+                        <button type="button" className="ghost sm" data-row-delete={m.id} aria-label={`حذف ${m.no}`} onClick={async (e) => {
                           e.stopPropagation();
-                          const pr = protect?.(markRef(m));
-                          if (pr?.blocked) { window.alert(`تجهیز ${m.no || ""} حذف نمی‌شود:\n– ${pr.reasons.join("\n– ")}`); return; }
-                          const deps = [...(pr?.reasons || []), ...dependents(items, markRef(m))];
-                          if (!window.confirm(`تجهیز ${m.no || ""} حذف شود؟${deps.length ? `\n\n– ${deps.join("\n– ")}` : ""}`)) return;
+                          const yes = await askDelete(ask, { label: "تجهیز", no: m.no, pr: protect?.(markRef(m)), deps: dependents(items, markRef(m)) });
+                          if (!yes) return;
                           if (isMark(m, attachId)) onAttach?.(null);
                           onChange?.(removeMark(items, markRef(m)));
                         }}>حذف</button>

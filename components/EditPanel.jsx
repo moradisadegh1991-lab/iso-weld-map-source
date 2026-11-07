@@ -15,7 +15,7 @@ import TableKit from "./ui/TableKit";
  * tells the programme which field extraction gets wrong, which no amount of
  * aggregate accuracy ever could.
  */
-export default function EditPanel({ session, run, edited, onApplied }) {
+export default function EditPanel({ session, run, edited, onApplied, onReload }) {
   const { projectId, call } = session;
   const [reason, setReason] = useState("");
   const [state, setState] = useState({ phase: "idle" });
@@ -37,7 +37,8 @@ export default function EditPanel({ session, run, edited, onApplied }) {
     try {
       const body = await call(`/api/runs/${run.run.id}/edits`, {
         method: "POST",
-        body: JSON.stringify({ projectId, payload: parsed.value, reason: reason || null }),
+        // `baseHash`: the stored state this correction was made against — if the run changed since, the server refuses (STALE_RUN)
+        body: JSON.stringify({ projectId, payload: parsed.value, reason: reason || null, baseHash: run.run.payloadHash || null }),
       });
       setReason("");
       setState({ phase: "done",
@@ -45,7 +46,7 @@ export default function EditPanel({ session, run, edited, onApplied }) {
           (body.engineError ? ` · خطای موتور: ${body.engineError}` : "") });
       onApplied?.(body);
     } catch (e) {
-      setState({ phase: "error",
+      setState({ phase: "error", code: e.body?.code,
         msg: e.body?.code === "RUN_LOCKED"
           ? "این اجرا تأیید و قفل شده است. برای تغییر، رویژن جدید نقشه را ثبت کنید."
           : e.message });
@@ -102,7 +103,8 @@ export default function EditPanel({ session, run, edited, onApplied }) {
         </>
       )}
 
-      {state.msg && <p className={state.phase === "error" ? "err" : "note mono"}>{state.msg}</p>}
+      {state.msg && <p className={state.phase === "error" ? "err" : "note mono"} role={state.phase === "error" ? "alert" : undefined} data-edit-state={state.code || state.phase}>{state.msg}</p>}
+      {state.code === "STALE_RUN" && onReload && <button type="button" className="ghost sm" data-reload-run onClick={() => onReload()}>باز کردن نسخهٔ تازه (تغییرات این پنجره کنار گذاشته می‌شود)</button>}
 
       {run?.edits?.length > 0 && (
         <details className="editlog">

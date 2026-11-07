@@ -6,6 +6,7 @@ import { withProject } from "../../../../lib/db/scope.mjs";
 import { getRegister } from "../../../../lib/db/repos/runs.mjs";
 import { editsOf } from "../../../../lib/db/repos/review.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
+import { payloadHash } from "../../../../lib/review/payload-hash.mjs";
 
 /**
  * One run, with everything needed to open it for review.
@@ -48,6 +49,8 @@ export async function GET(request, ctx) {
           // the sheet itself, when its bytes were stored: GET /api/documents?projectId&file=<documentId>
           documentId: run.document_id, hasFile: Boolean(run.has_file), fileType: run.file_type || null,
           checks: run.validation_checks,
+          // what a correction names as the state it was made against (a stale one is refused, 409 STALE_RUN)
+          payloadHash: payloadHash(run.payload),
         },
         payload: run.payload,
         register: await getRegister(db, { projectId, runId: params.id }),

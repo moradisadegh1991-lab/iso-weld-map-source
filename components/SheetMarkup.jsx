@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { KINDS, KIND_IDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo, duplicateMark, removeMark, dependents, markRef, isMark, findMark } from "../lib/sheet/markup.mjs";
+import { markMenu, emptyMenu } from "../lib/sheet/mark-menu.mjs";
+import { useConfirm, askDelete } from "./ui/ConfirmDialog";
+import { KINDS, SHEET_SIZE, addMark, updateMark, placeAt, isPlaced, notOnSheet, plainNo, duplicateMark, removeMark, dependents, markRef, isMark, findMark } from "../lib/sheet/markup.mjs";
 import Shape, { COLOR, geometryOf } from "./MarkShape";
 
 /**
@@ -87,6 +89,7 @@ export default function SheetMarkup({ protect = null, src, items = [], onChange,
   const [aspect, setAspect] = useState(Math.SQRT2);   // the sheet's width / height, once its image is loaded
   const sheet = useRef(null);
   const box = useRef(null);
+  const [ask, dialog] = useConfirm();
   // which kinds of mark (and the leaders) are drawn: a view setting only, nothing in `items` changes
   const [hiddenOwn, setHidden] = useState(() => new Set());
   const hidden = hiddenProp || hiddenOwn;
@@ -174,15 +177,11 @@ export default function SheetMarkup({ protect = null, src, items = [], onChange,
     commit(next);
     setSelectedId(nid);
   }
-  function remove(id) {
+  async function remove(id) {
     const m = findMark(items, id);
     if (!m) return;
-    const pr = protect?.(id);
-    if (pr?.blocked) { window.alert(`${KINDS[m.kind].label} ${m.no || ""} حذف نمی‌شود:\n– ${pr.reasons.join("\n– ")}`); return; }
-    const deps = [...(pr?.reasons || []), ...dependents(items, id)];
-    const ask = `${KINDS[m.kind].label} ${m.no || ""} حذف شود؟` +
-      (deps.length ? `\n\nاین‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند (بعد از حذف در قاعده‌ها دیده می‌شوند):\n– ${deps.slice(0, 12).join("\n– ")}${deps.length > 12 ? "\n…" : ""}` : "");
-    if (!window.confirm(ask)) return;
+    const yes = await askDelete(ask, { label: KINDS[m.kind].label, no: m.no, pr: protect?.(id), deps: dependents(items, id) });
+    if (!yes) return;
     if (isMark(m, pointFor)) setPointFor(null);
     if (isMark(m, selectedId)) setSelectedId(null);
     commit(removeMark(items, id));
@@ -195,17 +194,14 @@ export default function SheetMarkup({ protect = null, src, items = [], onChange,
     setSelectedId(id);
     onEdit?.(id, kind);
   }
-  const menuItems = !menu ? [] : menu.id ? [
-    { k: "view", label: "مشاهدهٔ مشخصات", icon: "ⓘ", run: () => view(menu.id) },
-    ...(readOnly ? [] : [
-      { k: "edit", label: "ویرایش مشخصات", icon: "✎", run: () => edit(menu.id) },
-      { k: "duplicate", label: "کپی با همهٔ مشخصات", icon: "⧉", run: () => duplicate(menu.id) },
-      { k: "move", label: "جابه‌جایی روی نقشه", icon: "✥", run: () => { setTool(null); setSelectedId(menu.id); setPointFor(menu.id); } },
-      { k: "delete", label: "حذف…", icon: "✕", danger: true, run: () => remove(menu.id) },
-    ]),
-  ] : [
-    ...KIND_IDS.filter((k) => k !== "weld-unknown").map((k) => ({ k: `add-${k}`, label: `افزودن ${KINDS[k].label} همین‌جا`, kind: k, run: () => addHere(k, menu.p) })),
-  ];
+  // what the menu offers is lib/sheet/mark-menu.mjs; here each item is given what it does
+  const act = {
+    view: (id) => view(id), edit: (id) => edit(id), duplicate: (id) => duplicate(id), delete: (id) => remove(id),
+    move: (id) => { setTool(null); setSelectedId(id); setPointFor(id); },
+  };
+  const menuItems = !menu ? [] : menu.id
+    ? markMenu({ ref: menu.id, readOnly }).map((it) => ({ ...it, run: () => act[it.k](it.target) }))
+    : emptyMenu({ readOnly }).map((it) => ({ ...it, run: () => addHere(it.kind, menu.p) }));
   // the menu stays inside the window, opens toward the space there is, and takes the keys while open
   useEffect(() => {
     if (!menu) return undefined;
@@ -336,6 +332,7 @@ export default function SheetMarkup({ protect = null, src, items = [], onChange,
   const count = (cls) => items.filter((m) => KINDS[m.kind].cls === cls).length;
   return (
     <div className="sheet-markup" data-sheet-markup>
+      {dialog}
       <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <button type="button" className="ghost sm" onClick={() => setZoom((z) => Math.max(0.5, z / 1.25))} aria-label="zoom out">−</button>
         <span className="mono sm" data-zoom>{Math.round(zoom * 100)}%</span>
