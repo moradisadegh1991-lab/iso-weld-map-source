@@ -485,6 +485,40 @@ if (missingRaster.length === 0) {
 }
 function pfScan() { const v = sheet("vector-basic"); const img = scannedPdf(v, { dpi: 150 }); return pdfOf([{ width: img.Wu, height: img.Hu, image: img }]); }
 
+test("D12. model assistance through the project's LLM routing (a local OpenAI-compatible stub): suggestions are ADDED as alternatives (source model, capped), usage is accounted, class and status do not change; a failing model never fails the extraction", async () => {
+  const http = await import("node:http");
+  let mode = "ok", calls = 0;
+  const server = http.createServer((rq, rs) => {
+    calls++; rq.resume(); rq.on("end", () => {
+      if (mode === "fail") { rs.writeHead(500); rs.end("nope"); return; }
+      const uids = JSON.parse(globalThis.__assistUids || "[]");
+      const reply = JSON.stringify({ suggestions: [{ uid: uids[0], class: "transformer", confidence: 0.95, reason: "overlapping" }, { uid: "sld:ghost", class: "motor", confidence: 0.5 }] });
+      rs.writeHead(200, { "content-type": "text/event-stream" });
+      rs.write(`data: ${JSON.stringify({ choices: [{ delta: { content: reply }, finish_reason: null }] })}\n\n`);
+      rs.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 120, completion_tokens: 30 } })}\n\n`);
+      rs.end("data: [DONE]\n\n");
+    });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const old = { b: process.env.LLM_BASE_URL, p: process.env.LLM_PROVIDER }; process.env.LLM_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`; process.env.LLM_PROVIDER = "openai-compatible";
+  try {
+    const d = await newDoc("SLD-X-AS", "sld", pdfOf([(() => { const dr = new Drawing(600, 300); dr.unknownCircle(100, 100); dr.unknownSquare(200, 100); return dr.page; })()]));
+    const probe = await extractSld(pdfOf([(() => { const dr = new Drawing(600, 300); dr.unknownCircle(100, 100); dr.unknownSquare(200, 100); return dr.page; })()]), {}, { tools: {} });
+    globalThis.__assistUids = JSON.stringify(probe.draft.items.filter((i) => i.cls === UNKNOWN).map((i) => i.uid));
+    const r = await extract(d.id, { options: { assist: "stub-model" } }); equal(r.status, 201, JSON.stringify(r.body));
+    const g = (await json(await sldRoute.GET(req(`http://x/api/sld?${new URLSearchParams({ projectId: P, documentId: d.id, draft: "1" })}`)))).body;
+    const sug = g.draft.items.filter((i) => i.alternatives.some((a) => a.source === "model"));
+    equal(sug.length, 1); equal([sug[0].cls, sug[0].reviewStatus], [UNKNOWN, "unreviewed"]);
+    equal(sug[0].alternatives.find((a) => a.source === "model").confidence, MODEL_CAP);
+    assert(sug[0].evidence.some((e) => e.source === "model_interpretation")); equal(g.draft.meta.assist.accepted, 1); assert(g.draft.meta.config.assist === "stub-model");
+    const u = await q("SELECT pass, ok, input_tokens, output_tokens FROM llm_usage WHERE pass = 'sld-assist'"); equal([u.length, u[0].ok, u[0].input_tokens, u[0].output_tokens], [1, true, 120, 30]);
+    // a failing model: the reading is still filed (a warning, not an error)
+    mode = "fail"; const d2 = await newDoc("SLD-X-AS2", "sld", sheet("vector-ambiguous-symbols"));
+    const f = await extract(d2.id, { options: { assist: "stub-model" } }); equal(f.status, 201); assert(f.body.warnings.some((w) => w.code === "ASSIST_FAILED"));
+    equal((await q("SELECT count(*)::int AS n FROM llm_usage WHERE pass = 'sld-assist' AND ok = false"))[0].n, 1, "a failed call is still accounted");
+  } finally { server.close(); if (old.b === undefined) delete process.env.LLM_BASE_URL; else process.env.LLM_BASE_URL = old.b; if (old.p === undefined) delete process.env.LLM_PROVIDER; else process.env.LLM_PROVIDER = old.p; delete globalThis.__assistUids; void calls; }
+});
+
 test("E1. the evaluation gate: the vector sheets' per-category precision / recall / F1 are not worse than eval/sld/baseline.json (synthetic cases; NOT a real-drawing figure)", async () => {
   const { evaluate } = await import("../../eval/sld/run.mjs"); const { readFileSync } = await import("node:fs");
   const res = await evaluate({ only: CASES.filter((c) => c.kind === "vector").map((c) => c.id) });
