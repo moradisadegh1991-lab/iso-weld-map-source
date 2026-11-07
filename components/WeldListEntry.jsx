@@ -24,8 +24,8 @@ import IsoInfo from "./IsoInfo";
 import { cutVsBom } from "../lib/register/cut-bom.mjs";
 import { protector } from "../lib/register/mark-protection.mjs";
 import { collectFindings } from "../lib/register/workspace-validation.mjs";
-import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
-import { normalize as normalizeMarks, addMark, updateMark, placeAt, findMark } from "../lib/sheet/markup.mjs";
+import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped, adoptLegacyPlacement, legacyMarks, extraMarks } from "../lib/sheet/weld-list-marks.mjs";
+import { normalize as normalizeMarks, addMark, updateMark, placeAt, findMark, isPlaced } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
 import { parseDelimited, guessMapping, normalizeLoc } from "../lib/truth/parse.mjs";
 import { LIST_PATTERNS, modelFromWeldList } from "../lib/register/weld-list.mjs";
@@ -92,7 +92,10 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   // a weld log of many drawings (Piping.Tools, this platform's Weld Log, a contractor's register): one sheet is loaded at a time
   const [log, setLog] = useState(null);
   // the drawing beside the rows: where each weld is on it, and which rows a person has checked against it
+  // where each weld is on the drawing: by the row's persistent identity (`byUid`), with the legacy number-keyed places (`marks`) kept
+  // as a fallback for a number that is one row's alone; a legacy place is adopted under its row's identity at load
   const [marks, setMarks] = useState(() => ({ ...(initial?.weldMarkup?.marks || {}) }));
+  const [byUid, setByUid] = useState(() => adoptLegacyPlacement(rows, initial?.weldMarkup?.marks || {}, initial?.weldMarkup?.byUid || {}));
   const [reviewed, setReviewed] = useState(() => new Set(initial?.reviewed || []));
   // the line data and the BOM read off the sheet (OCR, for a person to check): kept with the payload
   const [lineData, setLineData] = useState(() => (initial?.lineData ? { ...initial.lineData } : null));
@@ -115,18 +118,21 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const cutLengths = cutRows;
   const [cutForm, setCutForm] = useState(null);  // { mode, i }
   // the spool numbers (oval) and support numbers (hexagon) marked on the sheet, kept with the payload
-  const [extras, setExtras] = useState(() => normalizeMarks(initial?.sheetMarkup?.items).filter((m) => m.kind === "spool" || m.kind === "support"));
+  const [extras, setExtras] = useState(() => extraMarks(normalizeMarks(initial?.sheetMarkup?.items)));
 
   const typed = rows.filter(rowTyped).map(registerRow);
   // A list read from the drawing's printed markers keeps what the model read
   // (weldMarks) beside what was completed by hand — the evidence for each row.
   const nos = typed.map((r) => String(r.no ?? "").trim()).filter(Boolean);
-  const keptMarks = Object.fromEntries(Object.entries(marks).filter(([no]) => nos.includes(no)));
+  // the places that go with the payload: by identity for every typed row, and the legacy number-keyed form for the unique numbers
+  const placement = useMemo(() => adoptLegacyPlacement(rows.filter(rowTyped), marks, byUid), [rows, marks, byUid]);
+  const keptByUid = Object.fromEntries(typed.filter((r) => r.uid && placement[r.uid]).map((r) => [r.uid, placement[r.uid]]));
+  const keptMarks = legacyMarks(typed, keptByUid);
   const keptReviewed = nos.filter((no) => reviewed.has(no));
   const data = useMemo(() => ({ meta: { ...meta, nps: meta.nps === "" ? null : Number(meta.nps) }, weldList: typed,
     ...(initial?.weldMarks ? { weldMarks: initial.weldMarks } : {}),
     // the page of the file the sheet is, kept even with nothing placed yet: a PDF of many sheets opens on this one
-    ...(Object.keys(keptMarks).length || sheet ? { weldMarkup: { page: sheet?.page ?? initial?.weldMarkup?.page ?? 1, marks: keptMarks } } : {}),
+    ...(Object.keys(keptByUid).length || Object.keys(keptMarks).length || sheet ? { weldMarkup: { page: sheet?.page ?? initial?.weldMarkup?.page ?? 1, marks: keptMarks, ...(Object.keys(keptByUid).length ? { byUid: keptByUid } : {}) } } : {}),
     ...(keptReviewed.length ? { reviewed: keptReviewed } : {}),
     ...(lineData && Object.values(lineData).some((v) => String(v ?? "").trim()) ? { lineData } : {}),
     // three states (lib/db/repos/register-persistence.mjs): rows replace the BOM; [] is the person emptying a BOM the sheet had (the
@@ -135,14 +141,14 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     ...(cutLengths.length ? { cutLengths } : {}),
     ...(extras.length ? { sheetMarkup: { page: sheet?.page ?? initial?.sheetMarkup?.page ?? 1, items: extras } } : {}) }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [meta, typed, initial, JSON.stringify(keptMarks), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras), JSON.stringify(lineData), JSON.stringify(bom)]);
+  [meta, typed, initial, JSON.stringify(keptMarks), JSON.stringify(keptByUid), keptReviewed.join("|"), sheet?.page, JSON.stringify(extras), JSON.stringify(lineData), JSON.stringify(bom)]);
   const model = useMemo(() => (typed.length ? modelFromWeldList(data) : { error: "هنوز جوشی وارد نشده است." }), [data, typed.length]);
 
   const setCell = (i, k, v) => {
     // a weld renumbered keeps its place on the drawing and its tick
     if (k === "no") {
       const was = String(rows[i]?.no ?? "").trim(), now = String(v ?? "").trim();
-      if (was && now && was !== now && marks[was] && !marks[now]) { const m = { ...marks, [now]: marks[was] }; delete m[was]; setMarks(m); }
+      // (a renumbered weld keeps its place by its identity — nothing to move; the number is only what it is called)
       if (was && reviewed.has(was)) { const r = new Set(reviewed); r.delete(was); setReviewed(r); }
     }
     setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
@@ -173,7 +179,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [hiddenLayers, setHiddenLayers] = useState(() => new Set());
   const toggleLayer = (k) => setHiddenLayers((h) => { const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const [attachId, setAttachId] = useState(null);
-  const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras) : []), [sheetMode, rows, marks, extras]);
+  const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras, byUid) : []), [sheetMode, rows, marks, byUid, extras]);
   const itemsRef = useRef(items); itemsRef.current = items;
   // what the SAVED revision holds against deleting a mark (installed / tested equipment, installed allocation lines) —
   // advice shown before the confirm; the server still decides on save
@@ -212,6 +218,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     setReviewed(r);
     setRowsRaw(got.rows.length ? got.rows : withRowIds([{ ...BLANK_ROW }]));
     setMarks(got.marks);
+    setByUid(got.byUid);
     setExtras(got.extras);
   }
 
@@ -485,7 +492,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
             onAdd={locked ? null : (k, p, aspect) => openForm("create", null, k, p, aspect)}
             hidden={hiddenLayers} onToggleLayer={toggleLayer} states={progressStates} legend={progress ? [[STATE_COLORS.done, "جوش و NDT پذیرفته"], [STATE_COLORS.inspection, "جوش‌شده، منتظر بازرسی/NDT"], [STATE_COLORS.open, "باز"]] : []} />
           <p className="note mono sm" data-wl-review-count>
-            {nos.length - unchecked.length} از {nos.length} جوش با نقشه بررسی شد · {Object.keys(keptMarks).length} روی نقشه جا دارد
+            {nos.length - unchecked.length} از {nos.length} جوش با نقشه بررسی شد · {items.filter((m) => m.kind.startsWith("weld") && isPlaced(m)).length} روی نقشه جا دارد
             {nos.length > 0 && !locked && <> · <button type="button" className="ghost sm" onClick={() => setReviewed(new Set(nos))}>همه بررسی شد</button></>}
           </p>
         </div>
