@@ -42,7 +42,7 @@ const TABS = [["weld", "سرجوش‌ها"], ["spool", "اسپول‌ها"], ["s
 const NEW_KIND = { weld: "weld-unknown", spool: "spool", support: "support" };
 const WORD = { weld: "سرجوش", spool: "اسپول", support: "ساپورت" };
 
-export default function MarkTables({ items = [], onChange, model = null, selectedId = null, onSelect, attachId = null, onAttach,
+export default function MarkTables({ protect = null, items = [], onChange, model = null, selectedId = null, onSelect, attachId = null, onAttach,
   readOnly = false, tabs = ["weld", "spool", "support"], weldList = null, checked = null, bom = [], focus = null, onOpen = null }) {
   const shown = TABS.filter(([k]) => tabs.includes(k));
   const [tab, setTab] = useState(shown[0]?.[0] || "weld");
@@ -154,7 +154,9 @@ export default function MarkTables({ items = [], onChange, model = null, selecte
                       <button type="button" className="ghost sm" aria-label={`حذف ${m.no}`} data-row-delete={markRef(m)}
                         onClick={(ev) => {
                           ev.stopPropagation();
-                          const deps = dependents(items, markRef(m));
+                          const pr = protect?.(markRef(m));
+                          if (pr?.blocked) { window.alert(`${WORD[KINDS[m.kind].cls]} ${m.no || ""} حذف نمی‌شود:\n– ${pr.reasons.join("\n– ")}`); return; }
+                          const deps = [...(pr?.reasons || []), ...dependents(items, markRef(m))];
                           if (deps.length && !window.confirm(`${WORD[KINDS[m.kind].cls]} ${m.no || ""} حذف شود؟\n\nاین‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند:\n– ${deps.slice(0, 12).join("\n– ")}`)) return;
                           if (isMark(m, attachId)) onAttach?.(null);
                           onChange?.(removeMark(items, markRef(m)));

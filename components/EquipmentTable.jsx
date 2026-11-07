@@ -17,7 +17,7 @@ import TableKit from "./ui/TableKit";
  *   onOpen(mode, id, kind)   open the form: "view" | "edit" | "create"
  *   focus             { id, n } — a row to bring into view
  */
-export default function EquipmentTable({ items = [], onChange, bom = [], selectedId = null, onSelect, attachId = null, onAttach, readOnly = false, focus = null, onOpen = null }) {
+export default function EquipmentTable({ protect = null, items = [], onChange, bom = [], selectedId = null, onSelect, attachId = null, onAttach, readOnly = false, focus = null, onOpen = null }) {
   const rows = items.filter((m) => KINDS[m.kind]?.cls === "equipment");
   const issues = equipmentChecks(items, bom);
   const status = Object.fromEntries(EQUIPMENT_STATUS);
@@ -67,7 +67,9 @@ export default function EquipmentTable({ items = [], onChange, bom = [], selecte
                         {placed && <button type="button" className="ghost sm" onClick={(e) => { e.stopPropagation(); onChange?.(unplace(items, markRef(m))); }}>برداشتن از نقشه</button>}
                         <button type="button" className="ghost sm" data-row-delete={m.id} aria-label={`حذف ${m.no}`} onClick={(e) => {
                           e.stopPropagation();
-                          const deps = dependents(items, markRef(m));
+                          const pr = protect?.(markRef(m));
+                          if (pr?.blocked) { window.alert(`تجهیز ${m.no || ""} حذف نمی‌شود:\n– ${pr.reasons.join("\n– ")}`); return; }
+                          const deps = [...(pr?.reasons || []), ...dependents(items, markRef(m))];
                           if (!window.confirm(`تجهیز ${m.no || ""} حذف شود؟${deps.length ? `\n\n– ${deps.join("\n– ")}` : ""}`)) return;
                           if (isMark(m, attachId)) onAttach?.(null);
                           onChange?.(removeMark(items, markRef(m)));

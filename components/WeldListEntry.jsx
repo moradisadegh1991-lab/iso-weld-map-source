@@ -1,8 +1,9 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import TemplateButton from "./ui/TemplateButton";
 import BomForm from "./BomForm";
 import BomTable from "./BomTable";
+import ValidationPanel from "./ValidationPanel";
 import CutForm from "./CutForm";
 import { cutChecks } from "../lib/register/cut-model.mjs";
 import TableKit from "./ui/TableKit";
@@ -21,6 +22,8 @@ import MarkTables from "./MarkTables";
 import EquipmentTable from "./EquipmentTable";
 import IsoInfo from "./IsoInfo";
 import { cutVsBom } from "../lib/register/cut-bom.mjs";
+import { protector } from "../lib/register/mark-protection.mjs";
+import { collectFindings } from "../lib/register/workspace-validation.mjs";
 import { itemsFromWeldRows, weldRowsFromItems, withRowIds, registerRow, rowTyped } from "../lib/sheet/weld-list-marks.mjs";
 import { normalize as normalizeMarks, addMark, updateMark, placeAt, findMark } from "../lib/sheet/markup.mjs";
 import { usage } from "../lib/register/bom-allocation.mjs";
@@ -172,6 +175,26 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const [attachId, setAttachId] = useState(null);
   const items = useMemo(() => (sheetMode ? itemsFromWeldRows(rows, marks, extras) : []), [sheetMode, rows, marks, extras]);
   const itemsRef = useRef(items); itemsRef.current = items;
+  // what the SAVED revision holds against deleting a mark (installed / tested equipment, installed allocation lines) —
+  // advice shown before the confirm; the server still decides on save
+  const savedDocId = run?.run?.documentId || null;
+  const [saved, setSaved] = useState({ equipment: [], lines: [] });
+  useEffect(() => {
+    if (!savedDocId || !session?.projectId) { setSaved({ equipment: [], lines: [] }); return undefined; }
+    let gone = false;
+    (async () => {
+      try {
+        const q = `projectId=${session.projectId}&documentId=${savedDocId}`;
+        const [e, a] = await Promise.all([session.call(`/api/iso-equipment?${q}`), session.call(`/api/bom-allocations?${q}`)]);
+        if (!gone) setSaved({ equipment: e?.equipment || [], lines: a?.lines || [] });
+      } catch { if (!gone) setSaved({ equipment: [], lines: [] }); }
+    })();
+    return () => { gone = true; };
+  }, [savedDocId, session?.projectId, run?.run?.status]);
+  const protect = useMemo(() => protector(items, { ...saved, locked: run?.run?.status === "approved" }), [items, saved, run?.run?.status]);
+  const validationInput = useMemo(() => ({ items, bom, bomRows, cutRows, cutLengths, registerProblems: model.problems || [] }),
+    [items, bom, bomRows, cutRows, cutLengths, model]);
+  const validationTotal = useMemo(() => collectFindings(validationInput).total, [validationInput]);
   // who uses what of this sheet's BOM: the welds' ends against each row's (lib/register/bom-allocation.mjs)
   const alloc = useMemo(() => usage(items, bom), [items, bom]);
   // a saved sheet: each weld painted by where its joint stands on site
@@ -456,7 +479,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const sheetBlock = () => (
     <>
         <div className="wl-sheet" data-wl-sheet>
-          <SheetMarkup src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
+          <SheetMarkup protect={protect} src={sheet.src} items={items} onChange={locked ? undefined : onItems} readOnly={locked} height={640}
             fileName={meta.drawingNo || "iso-marked"} selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId}
             onEdit={locked ? null : editMark} onView={(id, k) => openForm("view", id, k)}
             onAdd={locked ? null : (k, p, aspect) => openForm("create", null, k, p, aspect)}
@@ -473,7 +496,7 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
   const registerTable = (tabs = ["weld"]) => (
     <>
         <div className="wl-table">
-          <MarkTables tabs={tabs} items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
+          <MarkTables protect={protect} tabs={tabs} items={items} onChange={locked ? undefined : onItems} readOnly={locked} weldList={typed}
             selectedId={markSel} onSelect={setMarkSel} attachId={attachId} onAttach={setAttachId} bom={bom} focus={editFocus}
             onOpen={(mode, id, k) => openForm(mode, id, k)}
             checked={locked ? null : { has: (no) => reviewed.has(no), onTick: tick }} />
@@ -559,12 +582,14 @@ export default function WeldListEntry({ session, initial = null, run = null, onS
     { k: "supports", label: "ساپورت‌ها", hint: "ساپورت‌های نقشه", badge: items.filter((m) => m.kind === "support").length || "",
       node: (<>{registerTable(["support"])}</>) },
     { k: "equip", label: "تجهیزات", hint: "تجهیزات نصب، سرجوش‌های متصل و متعلقات", badge: items.filter((m) => m.kind === "equipment").length || "",
-      node: (<EquipmentTable items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
+      node: (<EquipmentTable protect={protect} items={items} onChange={locked ? undefined : onItems} readOnly={locked} bom={bom} selectedId={markSel} onSelect={setMarkSel}
         attachId={attachId} onAttach={setAttachId} focus={editFocus} onOpen={(mode, id, k) => openForm(mode, id, k)} />) },
     { k: "bom", label: "BOM", hint: "BOM همین برگ و سرجوش‌های مورد انتظار از آن", badge: bom.length || "",
       node: (<>{bomBlock}{bomWeldsBlock}</>) },
     { k: "cut", label: "برش", hint: "جدول برش لوله و مقایسه با BOM", badge: cutLengths.length || "", tone: cutBom.problems.length || cutProblems.length ? "bad" : undefined,
       node: (<>{cutBlock}{cutLengths.length === 0 && <p className="muted sm">جدول برش روی این برگ خوانده نشد.</p>}</>) },
+    { k: "validation", label: "اعتبارسنجی", hint: "همهٔ ایرادهای بررسی‌های موجود یک‌جا", tone: validationTotal ? "bad" : undefined, badge: validationTotal || "",
+      node: (<ValidationPanel input={validationInput} onSelect={(ref) => { setMarkSel(ref); }} />) },
     ...(styleTab ? [{ k: "style", label: "الگوی نقشه", hint: "الگوی این سبک نقشه: خانهٔ هر مقدار روی نقشه", node: styleTab }] : []),
     { k: "import", label: "ورود", hint: "خواندن از Excel / CSV یا چسباندن", node: (<>{importBlock}</>) },
     { k: "save", label: "ثبت", hint: "ذخیره و تأیید", tone: problems ? "bad" : undefined, badge: problems || "",

@@ -70,7 +70,7 @@ export async function renderMarkedPng(src, items) {
   return cv.toDataURL("image/png");
 }
 
-export default function SheetMarkup({ src, items = [], onChange, readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null,
+export default function SheetMarkup({ protect = null, src, items = [], onChange, readOnly = false, height = 680, fileName = "iso-marked", onSeedEngine = null,
   selectedId: selectedProp, onSelect, attachId: attachProp, onAttach, states = null, legend = [], onEdit = null, onView = null, onAdd = null,
   hidden: hiddenProp = null, onToggleLayer = null }) {
   const [zoom, setZoom] = useState(1);
@@ -177,7 +177,9 @@ export default function SheetMarkup({ src, items = [], onChange, readOnly = fals
   function remove(id) {
     const m = findMark(items, id);
     if (!m) return;
-    const deps = dependents(items, id);
+    const pr = protect?.(id);
+    if (pr?.blocked) { window.alert(`${KINDS[m.kind].label} ${m.no || ""} حذف نمی‌شود:\n– ${pr.reasons.join("\n– ")}`); return; }
+    const deps = [...(pr?.reasons || []), ...dependents(items, id)];
     const ask = `${KINDS[m.kind].label} ${m.no || ""} حذف شود؟` +
       (deps.length ? `\n\nاین‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند (بعد از حذف در قاعده‌ها دیده می‌شوند):\n– ${deps.slice(0, 12).join("\n– ")}${deps.length > 12 ? "\n…" : ""}` : "");
     if (!window.confirm(ask)) return;
