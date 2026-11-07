@@ -27,7 +27,7 @@ await page.fill("#email", email); await page.fill("#password", password); await 
 
 // the synthetic sheet (1000×800 CSS px), every label where the readers will say it is
 const B = (x, y, w = 80, h = 20) => [x, y, x + w, y + h];
-const LABELS = [["30-P-1201A", B(100, 100)], ["30-V-1101", B(420, 100)], ["30-E-1129", B(700, 100)], ["MP140001A-EA01-H", B(100, 300, 120)], ["MP140002A-EA01-H", B(420, 400, 120)], ["PIC 1101", B(300, 180, 60)], ["PIC 1101", B(300, 240, 60)]];
+const LABELS = [["30-P-1201A", B(100, 100)], ["30-V-1101", B(420, 100)], ["30-E-1129", B(700, 100)], ["MP140001A-EA01-H", B(100, 300, 120)], ["MP140002A-EA01-H", B(420, 400, 120)], ["PIC 1101", B(300, 180, 60)], ["PIC 1101", B(300, 240, 60)], ["K110-30-PID-0021-10-15/1", B(780, 300, 150)]];
 const html = `<html><body style="margin:0;width:1000px;height:800px;position:relative;font:14px monospace;background:#fff">
 <div style="position:absolute;left:10px;top:770px;font-size:11px">SYNTHETIC SAMPLE SHEET — drawn for the Phase 11 drive, not a K110 drawing</div>
 ${LABELS.map(([t, bb]) => `<div style="position:absolute;left:${bb[0]}px;top:${bb[1]}px;border:1px solid #000;padding:1px 3px">${t}</div>`).join("")}
@@ -42,6 +42,9 @@ const projectId = projects[0].id;
 const up = await api("/api/documents", { projectId, docNo: `DRIVE-PID-${Date.now() % 100000}`, revision: "A", sheetNo: "1/1", docType: "pid", contentType: "application/pdf", fileBase64: pdf.toString("base64") });
 ok("upload as pid document", up.status === 201 || up.status === 200);
 const documentId = up.body.document?.id || up.body.id || up.body.documentId;
+// Phase 11.1: a second P&ID drawing exists in the project but has NO draft read — the off-page connector toward it must be UNCONFIRMED, never resolved
+const other = await api("/api/documents", { projectId, docNo: "K110-30-PID-0021-10-15", revision: "A", sheetNo: "1/1", docType: "pid", contentType: "application/pdf", fileBase64: pdf.toString("base64") });
+ok("target drawing filed (no draft)", other.status === 201 || other.status === 200);
 const ocr = { page: 1, w: 1000, h: 800, items: LABELS.map(([t, bb]) => ({ t, b: bb, c: 0.93 })) };
 const r1 = await api("/api/pid", { projectId, documentId, ocr, reader: "drive-ocr" });
 ok("ocr ingest", r1.status === 201);
@@ -73,6 +76,14 @@ const g1 = (await api(`/api/pid?projectId=${projectId}&documentId=${documentId}`
 const pumpNow = g1.draft.items.find((i) => i.uid === pump.uid);
 ok("correction: status corrected + original kept", pumpNow.review.status === "corrected" && pumpNow.review.original?.tag === "30-P-1201A" && pumpNow.tag === "30-P-1201B");
 await shot("pid-03-corrected");
+// off-page: unconfirmed in the register, not counted as a connection
+await page.click('button:has-text("اتصال‌ها")'); await page.waitForTimeout(400);
+const offRow = page.locator('[data-offpage-status]');
+ok("off-page row listed as unconfirmed (target drawing exists, no draft)", await offRow.count() === 1 && (await offRow.first().getAttribute("data-offpage-status")) === "unconfirmed");
+const gOff = (await api(`/api/pid?projectId=${projectId}&documentId=${documentId}`)).body;
+ok("register off-page status = unconfirmed and it is not in the stated connectivity", gOff.registers.offpage[0]?.status === "unconfirmed" && gOff.registers.connectivity.length === 0);
+ok("validation raises the off-page finding", gOff.validation.findings.some((f) => f.code === "P_OFFPAGE_UNRESOLVED"));
+await shot("pid-09-offpage-unconfirmed");
 
 // sign-off refused while undecided
 await page.click('button:has-text("نمای کلی")'); await page.waitForTimeout(300);
