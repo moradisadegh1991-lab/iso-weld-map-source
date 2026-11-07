@@ -1,14 +1,14 @@
 {
  "equipmentTag": {
-  "gold": 13,
-  "predicted": 12,
-  "tp": 11,
+  "gold": 14,
+  "predicted": 13,
+  "tp": 12,
   "fp": 1,
   "fn": 2,
-  "precision": 0.9166666666666666,
-  "recall": 0.8461538461538461,
-  "f1": 0.88,
-  "falsePositiveRate": 0.08333333333333333
+  "precision": 0.9230769230769231,
+  "recall": 0.8571428571428571,
+  "f1": 0.8888888888888888,
+  "falsePositiveRate": 0.07692307692307693
  },
  "instrumentTag": {
   "gold": 3,
@@ -66,16 +66,16 @@
   "falsePositiveRate": 0
  },
  "offpageResolution": {
-  "gold": 3,
-  "correct": 3,
+  "gold": 6,
+  "correct": 6,
   "wrongResolved": 0,
   "missed": 0,
   "accuracy": 1,
   "falseResolutionRate": 0
  },
  "falsePositiveRate": {
-  "predicted": 24,
+  "predicted": 25,
   "fp": 2,
-  "rate": 0.08333333333333333
+  "rate": 0.08
  }
 }

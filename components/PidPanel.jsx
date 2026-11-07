@@ -80,7 +80,7 @@ export default function PidPanel({ pid, data, selectedUid, onSelect, onGo, locke
 
   const tabs = [
     ["overview", "نمای کلی"], ["equipment", `تجهیزات (${regs.equipment.length})`], ["instruments", `ابزار (${regs.instruments.length})`], ["lines", `خطوط (${regs.lines.length})`], ["valves", `شیرها (${regs.valves.length})`],
-    ["connectivity", `اتصال‌ها (${regs.connectivity.length + regs.offpage.length})`], ["validation", `اعتبارسنجی (${summ.errors + summ.warnings})`], ["compare", "مقایسهٔ رویژن"],
+    ["connectivity", `اتصال‌ها (${regs.connectivity.length + regs.offpage.filter((o) => o.status === "resolved").length})`], ["validation", `اعتبارسنجی (${summ.errors + summ.warnings})`], ["compare", "مقایسهٔ رویژن"],
   ];
   const editing = form && byUid.get(form.uid);
   return (
@@ -97,7 +97,7 @@ export default function PidPanel({ pid, data, selectedUid, onSelect, onGo, locke
           <p className="sm">وضعیت پیش‌نویس: <b data-pid-run-status>{{ extracted: "استخراج‌شده (تأیید نشده)", approved: "تأییدشدهٔ نهایی", superseded: "جایگزین‌شده با رویژن" }[data.run.status] || data.run.status}</b>
             {data.run.approvedAt ? ` · ${short(data.run.approvedBy)} · ${data.run.approvedAt}` : ""}</p>
           <table className="dtable" data-pid-counts><tbody>
-            {[["تجهیز", regs.equipment.length], ["ابزار", regs.instruments.length], ["خط", regs.lines.length], ["شیر/قطعهٔ خط", regs.valves.length], ["اتصال مصرح", regs.connectivity.length], ["اتصال بین‌برگی", regs.offpage.length]].map(([l, n]) => <tr key={l}><td>{l}</td><td className="mono">{n}</td></tr>)}
+            {[["تجهیز", regs.equipment.length], ["ابزار", regs.instruments.length], ["خط", regs.lines.length], ["شیر/قطعهٔ خط", regs.valves.length], ["اتصال مصرح", regs.connectivity.length], ["اتصال بین‌برگی تأییدشده", regs.offpage.filter((o) => o.status === "resolved").length], ["اتصال بین‌برگی تأییدنشده/حل‌نشده/مبهم", regs.offpage.filter((o) => o.status !== "resolved").length]].map(([l, n]) => <tr key={l}><td>{l}</td><td className="mono">{n}</td></tr>)}
           </tbody></table>
           <p className="sm" data-pid-review-summary>بازبینی: {Object.entries(rs).map(([k, n]) => `${STATUS_FA[k] || k} ${n}`).join(" · ") || "—"}</p>
           <p className="sm" data-pid-validation-summary>اعتبارسنجی: {summ.errors} خطا · {summ.warnings} هشدار · {summ.info} اطلاع</p>
