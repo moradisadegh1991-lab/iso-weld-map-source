@@ -1,3 +1,4 @@
+import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 #!/usr/bin/env node
 /**
  * Phase 5 — the engineering interaction layer (docs/audit/phase-5-engineering-crud.md).
@@ -158,7 +159,7 @@ const EQ = { id: "m9", uid: newUid(), kind: "equipment", no: "V-1", x: 0.5, y: 0
 const payload = (rows, extra = {}) => ({ meta: { drawingNo: "ECR-1", sheet: "1/1", lineNo: "ECR-L1", nps: 4 }, weldList: rows, ...extra });
 const post = async (documentId, rows, extra) => json(await runsRoute.POST(req("http://x/api/runs", { method: "POST", body: { projectId, documentId, lineNo: "ECR-L1", payload: payload(rows, extra) } })));
 const get = async (id) => json(await runRoute.GET(req(`http://x/api/runs/${id}?projectId=${projectId}`), ctx(id)));
-const correct = async (id, edited, baseHash) => json(await editsRoute.POST(req(`http://x/api/runs/${id}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", ...(baseHash ? { baseHash } : {}) } }), ctx(id)));
+const correct = async (id, edited, baseHash) => json(await editsRoute.POST(req(`http://x/api/runs/${id}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", baseHash: baseHash || correctionPayloadHash((await q("SELECT payload FROM extraction_run WHERE id = $1", [id]))[0].payload) } }), ctx(id)));
 const stored = async (id) => (await q("SELECT payload FROM extraction_run WHERE id = $1", [id]))[0].payload;
 let docA, runA;
 
