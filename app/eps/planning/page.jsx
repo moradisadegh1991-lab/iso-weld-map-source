@@ -146,7 +146,7 @@ export default function PlanningPage() {
       </div>
       {grip}
       <div className="p6-detail" data-plan-rows>
-        <div className="p6-tabs" role="tablist"><button type="button" role="tab" aria-selected className="on">تاریخچه فعالیت جاری</button></div>
+        <div className="p6-tabs" role="tablist"><button type="button" role="tab" aria-selected className="on">{t("ep.historyTitle")}</button></div>
         <PlanningActivityHistory data={history.data} selected={sel} loading={history.busy} error={history.error} />
       </div>
     </div>
