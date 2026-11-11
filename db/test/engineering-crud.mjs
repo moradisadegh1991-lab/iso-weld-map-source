@@ -1,4 +1,3 @@
-import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 #!/usr/bin/env node
 /**
  * Phase 5 — the engineering interaction layer (docs/audit/phase-5-engineering-crud.md).
@@ -9,6 +8,7 @@ import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-h
  * revision cannot be corrected; typed weld rows keep their own semantics. Browser behaviour is checked by driving the real page
  * (tools/drive-engineering-crud.mjs) — there is no DOM test runner in this repository.
  */
+import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 import { test, run, assert, equal, scratchDir } from "./harness.mjs";
 import { isUid, newUid } from "../../lib/sheet/mark-identity.mjs";
 import { normalize, findMark, markRef, isMark, placeAt, duplicateMark, removeMark, updateMark } from "../../lib/sheet/markup.mjs";
