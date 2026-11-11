@@ -77,6 +77,20 @@ jobs:
       - name: Data layer tests
         run: npm run db:test
 
+  # Planning's DB regression tests do not use OCR. Keep this gate independent
+  # of the OS package mirrors so a transient apt outage cannot hide a bug.
+  planning-db:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Planning database regression tests
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/planning.mjs
+
   # The pages compile: a type or import error in a page is found here, not on the server.
   # (db:test imports the libraries and routes, but not the React pages.)
   build:
