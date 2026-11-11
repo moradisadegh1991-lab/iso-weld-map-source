@@ -227,6 +227,29 @@ test("B12. the same offline override sent twice at once: one step, one audit eve
   void px;
 });
 
+test("B14. six concurrent retries of one WEB command make one activity and override event", async () => {
+  const px = await import("../../lib/db/repos/piping-execution.mjs");
+  const runs = await import("../../lib/db/repos/runs.mjs");
+  const { DEMO } = await import("../../lib/demo.js");
+  const spool = await inP(async () => {
+    const { rows: [doc] } = await db.query(`INSERT INTO document (project_id, doc_no, revision, file_sha256, storage_uri) VALUES ($1,'ISO-B14','0',$2,'local://b') RETURNING id`, [P, "e".repeat(64)]);
+    const run = await runs.createRun(db, { projectId: P, documentId: doc.id, payload: DEMO });
+    const { rows: [sp] } = await db.query("INSERT INTO spool (project_id, extraction_run_id, spool_no) VALUES ($1,$2,'SP-B14') RETURNING id", [P, run.id]);
+    await db.query("INSERT INTO spool_material (project_id, spool_id, kind, qty, uom, stock_code) VALUES ($1,$2,'pipe',5,'m','PIPE-B14')", [P, sp.id]);
+    await wh.upsertItem(db, { projectId: P, code: "PIPE-B14", description: "x", category: "pipe", uom: "m" });
+    return sp;
+  });
+  const args = { projectId: P, spoolId: spool.id, code: "fit_up", doneAt: "2026-09-10",
+    materialOverride: "yard stock", userId: alice.id, membership: { role: "engineer", areas: [] },
+    opId: globalThis.crypto.randomUUID() };
+  const results = await Promise.all(Array.from({ length: 6 }, () => inP(() => px.recordWebSpoolActivity(db, args))));
+  equal(results.filter((x) => !x.replayed).length, 1);
+  equal(new Set(results.map((x) => x.activity.id)).size, 1);
+  equal(await num("SELECT count(*) AS n FROM spool_activity WHERE spool_id = $1 AND code = 'fit_up'", [spool.id]), 1);
+  equal(await num("SELECT count(*) AS n FROM material_override WHERE spool_id = $1", [spool.id]), 1);
+  equal(await num("SELECT count(*) AS n FROM web_spool_operation WHERE op_id = $1", [args.opId]), 1);
+});
+
 test("B13. material_override on PostgreSQL (Phase 2d.1): composite keys, no UPDATE for anyone, no DELETE/TRUNCATE for app_rw", async () => {
   const runs = await import("../../lib/db/repos/runs.mjs");
   const { DEMO } = await import("../../lib/demo.js");
