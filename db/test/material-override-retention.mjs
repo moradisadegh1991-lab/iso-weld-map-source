@@ -85,6 +85,7 @@ test("1,4,5,6. editing and re-deriving the register: the spool rows are replaced
   equal(h.length, 1);
   equal([h[0].spool_no, h[0].doc_no, h[0].revision, h[0].spool_id, h[0].activity_id, h[0].same_spool, h[0].reason],
         [spoolNo, "SW-RET", "0", oldSpoolId, oldActivityId, false, "yard stock, MIV to follow"]);
+  equal(h[0].match_basis, "same_run_number_unverified");
 });
 
 test("2. a new extraction run of the same document: the old event is still there and the new spool finds it", async () => {
@@ -94,6 +95,7 @@ test("2. a new extraction run of the same document: the old event is still there
   const h = await inP(() => px.materialOverrides(db, { projectId: P, spoolId: run2.spools[spoolNo] }));
   equal(h.length, 1);
   equal([h[0].run_id, h[0].same_spool], [run1.runId, false], "made on the first run, shown on the second");
+  equal(h[0].match_basis, "same_revision_number_unverified");
 });
 
 test("3. a new drawing revision: the event is still the old revision's and says so", async () => {
@@ -102,6 +104,7 @@ test("3. a new drawing revision: the event is still the old revision's and says 
   const h = await inP(() => px.materialOverrides(db, { projectId: P, spoolId: run3.spools[spoolNo] }));
   equal(h.length, 1);
   equal([h[0].revision, h[0].document_id, h[0].doc_no], ["0", docA, "SW-RET"]);
+  equal(h[0].match_basis, "cross_revision_number_unverified");
   const own = await inP(async () => (await db.query("SELECT d.revision FROM spool s JOIN extraction_run r ON r.id = s.extraction_run_id JOIN document d ON d.id = r.document_id WHERE s.id = $1", [run3.spools[spoolNo]])).rows[0].revision);
   equal(own, "B", "the spool being looked at is revision B, the event revision 0: distinguishable");
   // an override made on revision B is its own event, listed with the older one
@@ -109,6 +112,7 @@ test("3. a new drawing revision: the event is still the old revision's and says 
   await inP(() => px.recordSpoolActivity(db, { projectId: P, spoolId: run3.spools[spoolNo], code: "fit_up", doneAt: "2026-09-20", userId: eng.id, membership: ENG, materialOverride: "again on rev B" }));
   const both = await inP(() => px.materialOverrides(db, { projectId: P, spoolId: run3.spools[spoolNo] }));
   equal(both.map((e) => [e.revision, e.same_spool]), [["B", true], ["0", false]]);
+  equal(both.map((e) => e.match_basis), ["exact_spool", "cross_revision_number_unverified"]);
 });
 
 test("a spool of the same number on ANOTHER drawing does not see the event", async () => {
