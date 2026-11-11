@@ -221,7 +221,7 @@ test("a fabricated spool turns the diff into a rework warning", async () => {
   for (const code of ["released", "fit_up"]) {
     const r = await json(await executionRoute.POST(req("http://x/api/piping/execution", {
       method: "POST",
-      body: { projectId: project.id, kind: "activity", spoolId, code, doneAt: "2026-09-10" } })));
+      body: { projectId: project.id, kind: "activity", opId: globalThis.crypto.randomUUID(), spoolId, code, doneAt: "2026-09-10" } })));
     equal(r.status, 200, `recording ${code}`);
   }
 
