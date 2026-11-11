@@ -33,6 +33,21 @@ test("a row takes from its activity what was not typed: start, finish, work done
   equal(w.finishOf("2026-12-30", 3), "2027-01-01", "across a year");
 });
 
+test("selected activity history: durations, period quantity and percentages are derived", () => {
+  const f = pl.activityHistoryFigures({
+    plannedStart: "2026-03-01", plannedEnd: "2026-03-10",
+    actualStart: "2026-03-03", actualEnd: "2026-03-12",
+    plannedVolume: 40, actualVolume: 100, doneBefore: 20, doneToDate: 55,
+  });
+  equal([f.plannedDays, f.actualDays, f.doneThisPeriod, f.remainingVolume, f.progressPct, f.periodProgressPct],
+    [10, 10, 35, 45, 55, 87.5]);
+  const missing = pl.activityHistoryFigures({ plannedVolume: 0, actualVolume: null, doneBefore: 0, doneToDate: 0 });
+  equal([missing.plannedDays, missing.actualDays, missing.doneThisPeriod, missing.remainingVolume, missing.progressPct, missing.periodProgressPct],
+    [null, null, 0, null, null, null], "missing or zero denominator must not become a fabricated percentage");
+  equal(pl.activityHistoryFigures({ plannedVolume: 12, actualVolume: 80, doneBefore: 50, doneToDate: 40 }).doneThisPeriod, -10,
+    "negative correction remains visible rather than being silently clamped");
+});
+
 test("an activity under a version: the plan's dates and quantity stand over its own; without a plan it keeps its own", () => {
   const a = { id: "a", plan_start: "2026-01-01", plan_end: "2026-01-31", volume_plan: 100, volume_actual: 100 };
   const o = w.overlayPlan(a, { id: "p", start_on: "2026-02-01", end_on: "2026-02-10", volume_plan: 40, done_before: 60 });
