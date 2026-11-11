@@ -37,12 +37,12 @@ export async function POST(request, ctx) {
     if (!projectId || !payload) {
       return Response.json({ error: "projectId and payload are required" }, { status: 400 });
     }
-    if (typeof baseHash !== "string" || !/^[a-f0-9]{64}$/i.test(baseHash)) {
-      return Response.json({ error: "baseHash (SHA-256) is required to prevent stale corrections", code: "BASE_HASH_REQUIRED" }, { status: 400 });
-    }
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.EDIT_EXTRACTION);
+    if (typeof baseHash !== "string" || !/^[a-f0-9]{64}$/i.test(baseHash)) {
+      return Response.json({ error: "baseHash (SHA-256) is required to prevent stale corrections", code: "BASE_HASH_REQUIRED" }, { status: 400 });
+    }
 
     return await withProject(db, projectId, async () => Response.json(
       await applyCorrection(db, {
