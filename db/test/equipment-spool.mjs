@@ -258,7 +258,7 @@ test("S6. after an explicit reassignment (equipment and cut piece to SP-2, weld 
 
 test("S7. a stale edit is refused (STALE_RUN) before anything is decided; a dangling uid then stays visible, never silently replaced", async () => {
   const cur = await latest(D.a);
-  const stale = await correct(cur.id, { ...cur.payload, meta: { ...cur.payload.meta, lineNo: "P10-STALE" } }, "0".repeat(32));
+  const stale = await correct(cur.id, { ...cur.payload, meta: { ...cur.payload.meta, lineNo: "P10-STALE" } }, "0".repeat(64));
   equal([stale.status, stale.body.code], [409, "STALE_RUN"]);
   equal((await latest(D.a)).payload.meta.lineNo, cur.payload.meta.lineNo, "the stale edit changed nothing");
   const dang = { ...cur.payload, sheetMarkup: { ...cur.payload.sheetMarkup, items: cur.payload.sheetMarkup.items.map((m) => (m.uid === D.e ? { ...m, attrs: { ...m.attrs, spoolUid: newUid(), spool: "SP-2" } } : m)) } };
