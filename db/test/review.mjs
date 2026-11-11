@@ -171,6 +171,16 @@ test("the hotspot report names the field, not the row", async () => {
   });
 });
 
+test("a stale no-op correction is rejected before the early return", async () => {
+  await withProject(db, project.id, async () => {
+    const { rows: [current] } = await db.query("SELECT payload FROM extraction_run WHERE id = $1", [runId]);
+    const e = await throws(() => review.applyCorrection(db, {
+      projectId: project.id, runId, payload: current.payload,
+      baseHash: "0".repeat(64), userId: alice.id }), "STALE_RUN");
+    equal(e.status, 409);
+  });
+});
+
 test("approving locks the run, in the database and not only in the route", async () => {
   await withProject(db, project.id, async () => {
     await runsRepo.approveRun(db, { projectId: project.id, runId, userId: alice.id });
@@ -238,6 +248,16 @@ const req = (url, { method = "GET", as = "kc|alice", body } = {}) =>
     headers: { authorization: `Bearer ${as}`, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body) });
 const json = async (res) => ({ status: res.status, body: await res.json() });
+
+test("correction API rejects missing or malformed baseHash", async () => {
+  for (const baseHash of [null, "invalid"]) {
+    const res = await json(await editsRoute.POST(req("http://x/api/runs/" + runId + "/edits", {
+      method: "POST", body: { projectId: project.id, payload: DEMO, baseHash }
+    }), { params: Promise.resolve({ id: runId }) }));
+    equal(res.status, 400);
+    equal(res.body.code, "BASE_HASH_REQUIRED");
+  }
+});
 
 test("re-extracting over a signed revision is refused, pointing at the remedy", async () => {
   const res = await json(await runsRoute.POST(req("http://x/api/runs", {
