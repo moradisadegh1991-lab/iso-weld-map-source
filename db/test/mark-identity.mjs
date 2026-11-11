@@ -1,4 +1,3 @@
-import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 #!/usr/bin/env node
 /**
  * Stable mark identity (Phase 2, migration 105; lib/sheet/mark-identity.mjs).
@@ -8,6 +7,7 @@ import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-h
  * re-extraction hands out again; an ambiguity never lends an identity and never puts an installed record at risk; a revision's marks
  * are its own; the migration turns what is already there into identities without inventing a relationship.
  */
+import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { readdir, copyFile } from "node:fs/promises";
 import path from "node:path";
