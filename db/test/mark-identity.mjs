@@ -1,3 +1,4 @@
+import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 #!/usr/bin/env node
 /**
  * Stable mark identity (Phase 2, migration 105; lib/sheet/mark-identity.mjs).
@@ -220,7 +221,7 @@ test("a correction keeps identities, and a row typed in without one is settled a
   edited.sheetMarkup.items.find((m) => m.no === "1").attrs.size = "6";                                      // an attribute edit
   edited.sheetMarkup.items.find((m) => m.no === "2").no = "20";                                              // a number edit (identity carried)
   const hand = edited.sheetMarkup.items.find((m) => m.no === "V-1"); delete hand.uid;                        // a typed-over row with no uid
-  const r = await json(await editsRoute.POST(req(`http://x/api/runs/${runId}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t" } }), ctx(runId)));
+  const r = await json(await editsRoute.POST(req(`http://x/api/runs/${runId}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", baseHash: correctionPayloadHash((await q("SELECT payload FROM extraction_run WHERE id = $1", [runId]))[0].payload) } }), ctx(runId)));
   equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
   const by = Object.fromEntries((await storedItems(runId)).map((m) => [m.no, m.uid]));
   equal([by["1"], by["20"], by["V-1"]], [uids["1"], uids["2"], uids["V-1"]], "edited, renumbered and un-identified marks are themselves");
@@ -296,7 +297,7 @@ test("17. a legacy payload (no uids anywhere, as saved before this phase) stays 
   const stored = (await q("SELECT payload FROM extraction_run WHERE id = $1", [runId]))[0].payload;
   assert(stored.sheetMarkup.items.every((m) => !m.uid), "legacy: no uids");
   const edited = JSON.parse(JSON.stringify(stored)); edited.sheetMarkup.items[0].attrs.size = "6";
-  const e = await json(await editsRoute.POST(req(`http://x/api/runs/${runId}/edits`, { method: "POST", body: { projectId, payload: edited } }), ctx(runId)));
+  const e = await json(await editsRoute.POST(req(`http://x/api/runs/${runId}/edits`, { method: "POST", body: { projectId, payload: edited, baseHash: correctionPayloadHash((await q("SELECT payload FROM extraction_run WHERE id = $1", [runId]))[0].payload) } }), ctx(runId)));
   equal(e.status, 200, JSON.stringify(e.body).slice(0, 200));
   const after = await storedItems(runId);
   equal(after[0].uid, legacyMarkUid(doc, "m1"), "the deterministic legacy identity — the one migration 105 gives the same handle");
