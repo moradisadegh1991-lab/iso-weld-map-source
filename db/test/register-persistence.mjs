@@ -1,4 +1,3 @@
-import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 #!/usr/bin/env node
 /**
  * Register, BOM, allocations and equipment: one persistence path (lib/db/repos/register-persistence.mjs).
@@ -8,6 +7,7 @@ import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-h
  * allocations and equipment instead of leaving them as the first save made them; that nothing installed or tested is dropped;
  * that an approved BOM and a run that is not the revision's current one are not changed; that a failure anywhere undoes the lot.
  */
+import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { DEMO } from "../../lib/demo.js";
 
