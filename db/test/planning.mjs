@@ -182,6 +182,22 @@ test("read under a version, an activity it plans takes the plan's dates and quan
   });
 });
 
+test("history returns only the selected activity across versions of the same PMS", async () => {
+  await inP(async () => {
+    const h = await plan.activityPlanningHistory(db, { projectId: P, versionId: V2.id, activityId: A.id });
+    equal(h.activity.id, A.id);
+    equal(h.rows.map((x) => x.versionCode), ["PM01-R1", "PM01-R2"]);
+    equal(h.rows.map((x) => x.current), [false, true]);
+    equal(h.rows.map((x) => x.plannedVolume), [100, 70]);
+    equal(h.rows.map((x) => x.doneBefore), [0, 30]);
+    equal(h.rows.map((x) => x.actualVolume), [100, 100]);
+    equal(h.rows.map((x) => x.doneThisPeriod), [0, -30]);
+    equal(h.rows.map((x) => x.periodProgressPct), [0, -42.86]);
+    equal((await plan.activityPlanningHistory(db, { projectId: P, versionId: V1.id, activityId: B.id })).rows.length, 1);
+    await throws(() => plan.activityPlanningHistory(db, { projectId: P, versionId: V1.id, activityId: X.id }), "not found");
+  });
+});
+
 test("editing a row where it stands: days set the finish from the start, a field emptied goes back to the activity's, the rest kept", async () => {
   await inP(async () => {
     const row = (await plan.planRows(db, { projectId: P, versionId: V2.id })).rows[0];
