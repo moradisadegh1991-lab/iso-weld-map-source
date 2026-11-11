@@ -44,14 +44,24 @@ function PipingExecutionBody() {
 
   async function record(spoolId, code, refNo = null, materialOverride = null) {
     setMsg(null);
+    // A failed response does not mean the write failed. Keep the same UUID for
+    // the same command across retries, even after this page is refreshed.
+    const command = { projectId, kind: "activity", spoolId, code, doneAt: workOn, refNo,
+      ...(materialOverride ? { materialOverride } : {}) };
+    const key = `piping-op:${projectId}:${spoolId}:${code}`;
+    const signature = JSON.stringify(command);
+    let pending = null;
+    try { pending = JSON.parse(sessionStorage.getItem(key) || "null"); } catch { /* storage may be disabled */ }
+    const opId = pending?.signature === signature && pending?.opId ? pending.opId : crypto.randomUUID();
+    try { sessionStorage.setItem(key, JSON.stringify({ signature, opId })); } catch { /* storage may be disabled */ }
     try {
-      await call("/api/piping/execution", { method: "POST", body: JSON.stringify({
-        projectId, kind: "activity", spoolId, code, doneAt: workOn, refNo, ...(materialOverride ? { materialOverride } : {}) }) });
+      await call("/api/piping/execution", { method: "POST", body: JSON.stringify({ ...command, opId }) });
+      try { sessionStorage.removeItem(key); } catch { /* storage may be disabled */ }
       setDetail(await call(detailUrl(spoolId)));
       reload();
     } catch (e) {
       setMsg(e.message);
-      // The step uses material that is not all issued: issue it, or go on with a reason (kept in the step's note).
+      // A materially different command (with a reason) gets its own opId.
       if (/materialOverride/.test(e.message || "")) {
         const why = window.prompt(`${e.message}\n\n${t("pi.ex.materialWhy")}`);
         if (why && why.trim()) return record(spoolId, code, refNo, why.trim());
