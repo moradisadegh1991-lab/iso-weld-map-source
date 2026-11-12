@@ -13,6 +13,17 @@ export default function PlanningActivityHistory({ data, selected, loading, error
   }
   if (error) return <p className="err" role="alert">{error}</p>;
   if (loading || !data) return <p className="muted">{t("common.loading")}</p>;
+  // Compare the selected version with the immediately preceding planned version.
+  // Live actual quantities are not historical snapshots.
+  const current = data.rows?.find((row) => row.current);
+  const changes = current?.planChanges;
+  const signed = (value, decimals = 0) => value == null || !Number.isFinite(value) ? "—" : `${value > 0 ? "+" : ""}${fmt(value, decimals)}`;
+  const comparisons = changes ? [
+    [t("ep.historyShiftStart"), changes.startDays, 0],
+    [t("ep.historyShiftFinish"), changes.finishDays, 0],
+    [t("ep.historyDeltaVolume"), changes.volume, 10],
+    [t("ep.historyDeltaBefore"), changes.doneBefore, 10],
+  ] : [];
   const fields = [
     ["versionCode", t("ep.historyVersionCode")],
     ["versionTitle", t("ep.historyVersionTitle")],
@@ -46,6 +57,15 @@ export default function PlanningActivityHistory({ data, selected, loading, error
   return <section data-plan-history>
     <p className="sm muted">{t("ep.historyCaption")} <strong dir="ltr">{data.activity?.code || selected.item?.code}</strong> — {data.activity?.name || selected.item?.name || ""}
       {" · "}{t("ep.historyReadOnly")}</p>
+    {changes && <div className="toolbar-left" data-plan-version-comparison
+      style={{ flexWrap: "wrap", gap: 12, marginBottom: 10, alignItems: "center" }}>
+      <strong className="sm">{t("ep.historyComparison", { version: current.previousVersionCode })}</strong>
+      {comparisons.map(([label, value, decimals]) => <span key={label} className="sm">
+        <span className="muted">{label}: </span><strong dir="ltr">{signed(value, decimals)}</strong>
+      </span>)}
+    </div>}
+    {changes && <p className="sm muted">{t("ep.historyChangeHint")}</p>}
+    <p className="sm muted">{t("ep.historyLiveActuals")}</p>
     {!data.rows?.length ? <p className="empty-note">{t("ep.historyEmpty")}</p> :
       <div className="tablewrap" style={{ overflowX: "auto" }}>
         <table className="dtable" data-plan-history-table>
