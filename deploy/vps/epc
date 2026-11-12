@@ -34,24 +34,37 @@ wait_up() {
 # Stop the service for the length of the given command, then bring it back.
 offline() {
   local was=no; systemctl is-active --quiet epc && was=yes
-  [ $was = yes ] && systemctl stop epc
+  if [ "$was" = yes ]; then systemctl stop epc || { echo "[ !! ] توقف سرویس epc شکست خورد." >&2; return 1; }; fi
   local rc=0; "$@" || rc=$?
-  if [ $was = yes ]; then systemctl start epc; wait_up || echo "[ !! ] سرویس دوباره بالا نیامد: journalctl -u epc -n 80" >&2; fi
-  return $rc
+  if [ "$was" = yes ]; then
+    if ! systemctl start epc || ! wait_up; then
+      echo "[ !! ] سرویس دوباره بالا نیامد: journalctl -u epc -n 80" >&2
+      [ "$rc" -ne 0 ] && return "$rc"
+      return 1
+    fi
+  fi
+  return "$rc"
 }
 build() {
   local reg=(); [ -n "${NPM_REGISTRY:-}" ] && reg=(--registry "$NPM_REGISTRY")
-  run npm ci --no-audit --no-fund --loglevel=error "${reg[@]}"
-  run npm run build
+  run npm ci --no-audit --no-fund --loglevel=error "${reg[@]}" || return 1
+  run npm run build || return 1
 }
 # git as user epc; the token travels in the environment, never in argv or .git/config.
 git_epc() {
   local token=""
-  [ -f "$TOKEN_FILE" ] && token=$(cat "$TOKEN_FILE")
-  if [ -z "$token" ]; then read -rsp "GitHub token (Contents: read): " token; echo >&2; fi
+  if [ ! -s "$TOKEN_FILE" ]; then
+    echo "[ !! ] توکن GitHub ثبت نشده است. ابتدا sudo epc save-token را اجرا کنید." >&2
+    return 1
+  fi
+  token=$(tr -d '\r\n' < "$TOKEN_FILE")
+  [ -n "$token" ] || { echo "[ !! ] توکن GitHub خالی است." >&2; return 1; }
   local auth; auth=$(printf 'x-access-token:%s' "$token" | base64 -w0)
-  runuser -u epc -- env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
-    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" git -C "$APP_DIR" "$@"
+  runuser -u epc -- env GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never \
+    GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+    GIT_CONFIG_KEY_1=credential.helper GIT_CONFIG_VALUE_1= \
+    git -C "$APP_DIR" "$@"
 }
 # The system packages the checkout lists (deploy/vps/packages.txt) that are
 # not installed yet, and this helper itself from the checkout: an update that
@@ -63,8 +76,8 @@ deps() {
   local need=() p
   for p in $(grep -v '^#' "$list" | xargs); do dpkg -s "$p" >/dev/null 2>&1 || need+=("$p"); done
   if [ ${#need[@]} -gt 0 ]; then
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}" >/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq || return 1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}" >/dev/null || return 1
     echo "[ ok ] نصب شد: ${need[*]}"
   else
     echo "[ ok ] همهٔ بسته‌های سیستم نصب است"
@@ -75,12 +88,25 @@ deps() {
   mv /usr/local/bin/epc.new /usr/local/bin/epc
 }
 update() {
-  local branch; branch=$(runuser -u epc -- git -C "$APP_DIR" rev-parse --abbrev-ref HEAD)
-  git_epc fetch --depth 1 origin "$branch"
-  runuser -u epc -- git -C "$APP_DIR" reset --hard FETCH_HEAD
-  deps
-  build
-  run npm run db:migrate
+  local branch
+  branch=$(runuser -u epc -- git -C "$APP_DIR" symbolic-ref --quiet --short HEAD) || {
+    echo "[ !! ] شاخه Git مشخص نیست (detached HEAD)؛ به‌روزرسانی انجام نشد." >&2
+    return 1
+  }
+  # Always fetch from the expected canonical URL, not a stale URL with a
+  # username/password embedded in the checkout's origin configuration.
+  if ! git_epc fetch --depth 1 "$REPO_URL" "$branch"; then
+    echo "[ !! ] دریافت کد از GitHub شکست خورد. Build و Migration اجرا نشدند." >&2
+    echo "       توکن Contents:read مخزن را با sudo epc save-token ثبت/تمدید کنید." >&2
+    return 1
+  fi
+  if ! runuser -u epc -- git -C "$APP_DIR" reset --hard FETCH_HEAD; then
+    echo "[ !! ] اعمال نسخه دریافت‌شده شکست خورد؛ Build و Migration اجرا نشدند." >&2
+    return 1
+  fi
+  deps || return 1
+  build || return 1
+  run npm run db:migrate || return 1
 }
 backup() { run npm run db:backup -- --keep "${KEEP:-14}"; }
 
@@ -103,7 +129,9 @@ case "$cmd" in
            s="$1"; shift; offline run npm run "$s" -- "$@" ;;
   save-token)
            read -rsp "GitHub token (Contents: read): " t; echo >&2
-           umask 077; printf '%s' "$t" > "$TOKEN_FILE"; echo "[ ok ] ذخیره شد در $TOKEN_FILE (فقط root)" ;;
+           [ -n "$t" ] || { echo "[ !! ] توکن خالی است." >&2; exit 1; }
+           umask 077; printf '%s' "$t" > "$TOKEN_FILE"; chmod 600 "$TOKEN_FILE"
+           echo "[ ok ] ذخیره شد در $TOKEN_FILE (فقط root)" ;;
   _run)    run "$@" ;;
   _build)  build ;;
   _wait)   wait_up ;;
