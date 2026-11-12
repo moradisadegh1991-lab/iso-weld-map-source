@@ -15,8 +15,8 @@
 | برنامه‌ریزی | مقایسهٔ فعالیت بین نسخه‌های PMS در PR #99 ادغام شده | [PR #99](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/99)؛ بازسازی همین قابلیت کار جدید نیست |
 | خواندن نقشه | پایپینگ در رجیستری live؛ خواندن نقشهٔ شش رشتهٔ دیگر planned | [modules.mjs](../../lib/platform/modules.mjs)؛ اجرای کار آن رشته‌ها جداگانه live ثبت شده |
 | تصحیح هم‌زمان | سخت‌گیری baseHash و سریالی‌کردن اصلاحات در Draft PR #92 | [PR #92](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/92)؛ هنوز جزو master نیست |
-| تکرار عملیات وب | شناسهٔ عملیات و دفتر immutable در Draft PR #93 | [PR #93](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/93)؛ migration پیشنهادی و سازگاری مشتری باید بررسی شوند |
-| سابقهٔ اسپول | تفکیک سابقهٔ قطعی از تطبیق شماره در Draft PR #94 | [PR #94](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/94)؛ هویت نهایی اسپول را حل نمی‌کند |
+| تکرار عملیات وب | شناسهٔ عملیات و دفتر immutable در PR #93 ادغام‌شده | [PR #93](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/93)؛ بررسی کامل شده؛ اجرای migrationهای ۱۲۰ و ۱۲۱ روی VPS با مالک است |
+| سابقهٔ اسپول | تفکیک سابقهٔ همین رکورد از تطبیق شماره در Draft PR #94 | [PR #94](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/94)؛ هویت نهایی اسپول را حل نمی‌کند |
 | استقرار VPS | توقف update در خطای احراز هویت GitHub در PR باز #100 | [PR #100](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/100)؛ استقرار این اصلاح تأیید نشده |
 | SLD | intake و پیش‌نویس در master؛ استخراج در Draft PR #91 | [PR #91](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/91)؛ تحلیل توپولوژی و فضای کار کامل جزو این PR نیست |
 | پشتیبان | ابزار backup/restore و آزمون موجود است | [backup.mjs](../../lib/db/backup.mjs)، [آزمون](../../db/test/backup.mjs)؛ بازیابی سرور واقعی و فایل‌های آن هنوز در این بررسی انجام نشده |
@@ -44,7 +44,7 @@
 | EPC-01 | مبنای مخزن و فهرست قابلیت‌ها | P0 | — | راهبر فنی + QA | Review؛ یافته‌های بخش ۱ |
 | EPC-02 | مجموعهٔ مرجع و سناریوی پایلوت | P0 | EPC-01 | مهندس پایپینگ + QC + مالک | Blocked؛ مدارک مرجع و پذیرندگان تعیین نشده‌اند |
 | EPC-03 | پذیرش جداسازی و دسترسی | P0 | EPC-01 | Backend + QA | Ready برای تحلیل شکاف و آزمون موجود |
-| EPC-04 | هم‌زمانی، retry، امضا و هویت سابقه | P0 | EPC-03 | Backend + Frontend + QA | In Progress؛ #92 و #93 ادغام شده‌اند؛ #94 باز است؛ استقرار VPS با مالک است |
+| EPC-04 | هم‌زمانی، retry، امضا و هویت سابقه | P0 | EPC-03 | Backend + Frontend + QA | In Progress؛ #92 و #93 ادغام شده‌اند؛ #94 محلی Verified و پیش‌نویس؛ هویت پایدار و استقرار باقی است |
 | EPC-05 | استقرار، backup و بازیابی کامل | P0 | EPC-01 | مسئول زیرساخت + QA | Ready برای تمرین ایزوله؛ سرور واقعی نامعلوم |
 | EPC-06 | تکمیل CI و شواهد پذیرش | P0 | EPC-01 | QA + راهبر فنی | Ready |
 | EPC-07 | ورود، اصلاح و تأیید نقشهٔ واقعی | P0 | EPC-02، EPC-04 | مهندس پایپینگ + Frontend | Blocked به دادهٔ مرجع |
@@ -158,6 +158,8 @@
 | 2026-11-12 | EPC-04: زیرکار retry عملیات وب اسپول | [PR #93 در 58b67c2](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/93): زنجیرهٔ کامل محلی ۱۲۹ مجموعه، build و eval موفق؛ PostgreSQL واقعی ۳۶/۳۶؛ مرورگر ۷/۷؛ آزمون برگشت محافظ‌ها شکست مورد انتظار داشت | Verified محلی؛ PR پیش‌نویس و CI جدید در حال اجرا؛ نیازمند migrationهای ۱۲۰ و ۱۲۱ پیش از استقرار؛ #94 باز است |
 
 | 2026-11-12 | EPC-04: ادغام زیرکار retry وب | [PR #93](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/93) پس از موفقیت CI گیت‌هاب با squash در master ادغام شد: `7adc967acf8317131c0ec9b071424cbaf1a0dd50`؛ دو بررسی Vercel به سقف تعداد build رسیده بودند | Merged؛ مالک اعلام کرد migrationهای ۱۲۰ و ۱۲۱ و استقرار VPS را خودش انجام می‌دهد؛ انجام آن هنوز تأیید نشده؛ #94 باز است |
+
+| 2026-11-12 | EPC-04: شواهد ارتباط سابقهٔ اسپول | [PR #94 در 0d032ca](https://github.com/moradisadegh1991-lab/iso-weld-map-source/pull/94): روی master شامل #92/#93؛ ۱۲۹ مجموعهٔ کامل، build و eval موفق؛ آزمون متمرکز ۱۵/۱۵؛ مرورگر واقعی ۹/۹ در سه زبان و موبایل؛ برگشت محافظ‌ها شکست مورد انتظار داشت | Verified محلی؛ PR پیش‌نویس، CI جدید جداگانه؛ بدون migration تازه؛ هویت پایدار با UID و revision_carry_map هنوز باقی است؛ استقرار VPS بررسی نشده |
 
 برای هر اجرای بعدی یک ردیف شامل SHA، نتیجهٔ آزمون و محدودیت اضافه شود. «توسعه انجام شد»، «CI عبور کرد»، «در پایلوت پذیرفته شد» و «روی سرور نصب شد» وضعیت‌های متفاوت‌اند.
 
