@@ -8,7 +8,7 @@
  * PGlite is one connection and runs scoped blocks one at a time, so it cannot show any of this; without PG_TEST_URL
  * the file says SKIPPED and exits 0 — that is NOT a pass.
  */
-import { test, run, assert, equal } from "./harness.mjs";
+import { test, run, assert, equal, throws } from "./harness.mjs";
 
 const URL = process.env.PG_TEST_URL;
 if (!URL) { console.log("material-concurrency: SKIPPED — PG_TEST_URL is not set; nothing here ran against PostgreSQL."); process.exit(0); }
@@ -242,12 +242,28 @@ test("B14. six concurrent retries of one WEB command make one activity and overr
   const args = { projectId: P, spoolId: spool.id, code: "fit_up", doneAt: "2026-09-10",
     materialOverride: "yard stock", userId: alice.id, membership: { role: "engineer", areas: [] },
     opId: globalThis.crypto.randomUUID() };
-  const results = await Promise.all(Array.from({ length: 6 }, () => inP(() => px.recordWebSpoolActivity(db, args))));
+  const results = await Promise.all(Array.from({ length: 6 }, (_, i) => inP(() => px.recordWebSpoolActivity(db,
+    { ...args, opId: i % 2 ? args.opId.toUpperCase() : args.opId }))));
   equal(results.filter((x) => !x.replayed).length, 1);
   equal(new Set(results.map((x) => x.activity.id)).size, 1);
   equal(await num("SELECT count(*) AS n FROM spool_activity WHERE spool_id = $1 AND code = 'fit_up'", [spool.id]), 1);
   equal(await num("SELECT count(*) AS n FROM material_override WHERE spool_id = $1", [spool.id]), 1);
   equal(await num("SELECT count(*) AS n FROM web_spool_operation WHERE op_id = $1", [args.opId]), 1);
+  const otherSpool = await inP(async () => {
+    const { rows: [doc] } = await db.query(`INSERT INTO document (project_id, doc_no, revision, file_sha256, storage_uri) VALUES ($1,'ISO-B14-Q','0',$2,'local://b') RETURNING id`, [Q, "f".repeat(64)]);
+    const run = await runs.createRun(db, { projectId: Q, documentId: doc.id, payload: DEMO });
+    const { rows: [sp] } = await db.query("INSERT INTO spool (project_id, extraction_run_id, spool_no) VALUES ($1,$2,'SP-B14-Q') RETURNING id", [Q, run.id]);
+    await db.query("INSERT INTO spool_material (project_id, spool_id, kind, qty, uom, stock_code) VALUES ($1,$2,'pipe',5,'m','PIPE-B14-Q')", [Q, sp.id]);
+    await wh.upsertItem(db, { projectId: Q, code: "PIPE-B14-Q", description: "x", category: "pipe", uom: "m" });
+    return sp;
+  }, Q);
+  await throws(() => inP(() => px.recordWebSpoolActivity(db, { ...args, projectId: Q, spoolId: otherSpool.id }), Q), "OP_ID_CONFLICT");
+  equal(await num("SELECT count(*) AS n FROM spool_activity WHERE spool_id = $1", [otherSpool.id], Q), 0);
+  equal(await num("SELECT count(*) AS n FROM material_override WHERE spool_id = $1", [otherSpool.id], Q), 0);
+  // The login role owns the table, so these prove the triggers rather than app_rw's revoked privileges.
+  await throws(() => db.query("UPDATE web_spool_operation SET result = '{}' WHERE op_id = $1", [args.opId]), "append-only");
+  await throws(() => db.query("DELETE FROM web_spool_operation WHERE op_id = $1", [args.opId]), "append-only");
+  await throws(() => db.query("TRUNCATE web_spool_operation"), "append-only");
 });
 
 test("B13. material_override on PostgreSQL (Phase 2d.1): composite keys, no UPDATE for anyone, no DELETE/TRUNCATE for app_rw", async () => {

@@ -57,9 +57,6 @@ export async function POST(request) {
         return Response.json({ result: await reserveSpoolMaterial(db, { projectId, spoolId: body.spoolId, needBy: body.needBy || null, userId: user.id }) });
       }
       if (kind === "activity") {
-        if (typeof body.opId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.opId)) {
-          return Response.json({ error: "A stable opId UUID is required for retry-safe spool activity", code: "OP_ID_REQUIRED" }, { status: 400 });
-        }
         return Response.json(await recordWebSpoolActivity(db,
           { ...body, projectId, userId: user.id, membership, source: "web" }));
       }

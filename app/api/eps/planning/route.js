@@ -64,6 +64,7 @@ export async function GET(request) {
       if (!contractId) throw notFound();
       const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
       const activityId = url.searchParams.get("activityId");
+      if (activityId && url.searchParams.get("view") === "history") return Response.json(await plan.activityPlanningHistory(db, { projectId, versionId, activityId }));
       if (activityId) return Response.json({ ...(await plan.previewDetail(db, { projectId, versionId, activityId })), may: { edit: access !== "view" } });
       return Response.json({ ...(await plan.planRows(db, { projectId, versionId })), may: { edit: access !== "view" } });
     });
