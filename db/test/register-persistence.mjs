@@ -7,6 +7,7 @@
  * allocations and equipment instead of leaving them as the first save made them; that nothing installed or tested is dropped;
  * that an approved BOM and a run that is not the revision's current one are not changed; that a failure anywhere undoes the lot.
  */
+import { payloadHash as correctionPayloadHash } from "../../lib/review/payload-hash.mjs";
 import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import { DEMO } from "../../lib/demo.js";
 
@@ -51,7 +52,7 @@ const newDoc = async (docNo, revision = "0") => (await json(await documentsRoute
   method: "POST", body: { projectId, docNo, revision, fileBase64: Buffer.from(`scan ${docNo} ${revision} ${++seq}`).toString("base64") } })))).body.document.id;
 const save = async (documentId, payload) => json(await runsRoute.POST(req("http://x/api/runs", { method: "POST", body: { projectId, documentId, lineNo: "RP-L1", payload } })));
 const ctx = (id) => ({ params: Promise.resolve({ id }) });
-const correct = async (runId, payload, as = "kc|alice") => json(await editsRoute.POST(req(`http://x/api/runs/${runId}/edits`, { method: "POST", as, body: { projectId, payload, reason: "t" } }), ctx(runId)));
+const correct = async (runId, payload, as = "kc|alice") => json(await editsRoute.POST(req(`http://x/api/runs/${runId}/edits`, { method: "POST", as, body: { projectId, payload, reason: "t", baseHash: correctionPayloadHash((await q("SELECT payload FROM extraction_run WHERE id = $1", [runId]))[0].payload) } }), ctx(runId)));
 const bomOf = (documentId) => q("SELECT pt, qty FROM iso_bom_row WHERE document_id = $1 ORDER BY pt", [documentId]);
 const allocs = (documentId, status = null) => q("SELECT pt, owner_ref, qty, status FROM bom_allocation WHERE document_id = $1 AND ($2::text IS NULL OR status = $2) ORDER BY pt, owner_ref", [documentId, status]);
 const equipment = (documentId) => q("SELECT mark_id, status FROM iso_equipment WHERE document_id = $1 ORDER BY mark_id", [documentId]);
