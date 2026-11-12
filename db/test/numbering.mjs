@@ -32,6 +32,7 @@ const KEYED_BY_PARENT = {
   structure_spec: "one row per structure tag",
   user_credential: "one row per user",
   field_op: "the device's own operation id — the idempotency key of offline sync",
+  web_spool_operation: "the browser's retained operation UUID — web retry identity, like field_op, not a generated business record number",
   sheet_mark_identity: "the mark's own persistent identity, born with the mark in the payload (lib/sheet/mark-identity.mjs) — registered here, not generated here",
   schema_migrations: "the migration's file name",
 };
