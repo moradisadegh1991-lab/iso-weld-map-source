@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { prepareSpoolOperation, acknowledgeSpoolOperation } from "../../../lib/client/spool-operation.mjs";
+import { overrideProvenance } from "../../../lib/piping/override-provenance.mjs";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { CHAINS, spoolStageTitle } from "../../../lib/platform/precedence.mjs";
@@ -208,16 +209,22 @@ function MaterialOverrides({ rows }) {
       <b className="sm">{t("pi.ex.ovr.title")}</b>
       <table className="dtable">
         <thead><tr><th>{t("pi.ex.ovr.rev")}</th><th>{t("pi.ex.ovr.step")}</th><th>{t("pi.ex.ovr.reason")}</th><th>{t("pi.ex.ovr.by")}</th><th>{t("pi.ex.ovr.at")}</th><th>{t("pi.ex.ovr.source")}</th></tr></thead>
-        <tbody>{rows.map((o) => (
+        <tbody>{rows.map((o) => {
+          const provenance = overrideProvenance(o);
+          return (
           <tr key={o.id}>
-            <td className="sm mono">{o.doc_no} · {o.revision}{o.same_spool ? "" : ` · ${t("pi.ex.ovr.earlier")}`}</td>
+            <td className="sm mono">
+              <div>{o.doc_no} · {o.revision}</div>
+              <span className={`pill ${provenance.exact ? "" : "warn"}`} style={{ whiteSpace: "normal" }} title={t(provenance.hint)}
+                data-history-basis={provenance.basis} data-history-exact={String(provenance.exact)}>{t(provenance.label)}</span>
+            </td>
             <td className="sm">{L(`chain.piping_spool.${o.code}`, o.code)}</td>
             <td className="sm">{o.reason}</td>
             <td className="sm">{o.authorized_by_name || "—"}</td>
             <td className="sm mono">{dateTime(o.authorized_at)}</td>
             <td className="sm">{t(`pi.ex.ovr.src.${o.source}`)}</td>
           </tr>
-        ))}</tbody>
+        ); })}</tbody>
       </table>
     </div>
   );
