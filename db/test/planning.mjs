@@ -48,6 +48,25 @@ test("selected activity history: durations, period quantity and percentages are 
     "negative correction remains visible rather than being silently clamped");
 });
 
+test("successive planning versions expose exact schedule and quantity changes, preserving unknowns", () => {
+  const changes = pl.activityHistoryChanges([
+    { versionCode: "R1", plannedStart: "2026-12-30", plannedEnd: "2026-12-31", plannedVolume: 5.25, doneBefore: 3 },
+    { versionCode: "R2", plannedStart: "2027-01-02", plannedEnd: "2027-01-01", plannedVolume: 9.125, doneBefore: 1.5 },
+    { versionCode: "R3", plannedStart: null, plannedEnd: "invalid", plannedVolume: null, doneBefore: 0 },
+  ]);
+  equal([changes[0].previousVersionCode, changes[0].planChanges], [null, null], "first version has no invented baseline");
+  equal(changes[1].previousVersionCode, "R1");
+  equal(changes[1].planChanges, { startDays: 3, finishDays: 1, volume: 3.875, doneBefore: -1.5 },
+    "date shifts cross calendar years using whole UTC days; quantities keep decimal precision");
+  equal(changes[2].planChanges, { startDays: null, finishDays: null, volume: null, doneBefore: -1.5 },
+    "missing or invalid values remain unknown, never zero");
+  equal(pl.activityHistoryChanges([
+    { versionCode: "R1", plannedStart: "2024-02-28" },
+    { versionCode: "R2", plannedStart: "2024-03-01" },
+  ])[1].planChanges.startDays, 2, "leap day is counted");
+  equal(pl.activityHistoryChanges([]), [], "no versions means no comparisons");
+});
+
 test("an activity under a version: the plan's dates and quantity stand over its own; without a plan it keeps its own", () => {
   const a = { id: "a", plan_start: "2026-01-01", plan_end: "2026-01-31", volume_plan: 100, volume_actual: 100 };
   const o = w.overlayPlan(a, { id: "p", start_on: "2026-02-01", end_on: "2026-02-10", volume_plan: 40, done_before: 60 });
@@ -187,6 +206,10 @@ test("history returns only the selected activity across versions of the same PMS
     const h = await plan.activityPlanningHistory(db, { projectId: P, versionId: V2.id, activityId: A.id });
     equal(h.activity.id, A.id);
     equal(h.rows.map((x) => x.versionCode), ["PM01-R1", "PM01-R2"]);
+    equal(h.rows.map((x) => x.previousVersionCode), [null, "PM01-R1"]);
+    equal(h.rows[0].planChanges, null, "first planned version has no comparison");
+    equal(h.rows[1].planChanges, { startDays: 90, finishDays: 100, volume: -30, doneBefore: 30 },
+      "selected version compares only version plans, not present-day execution totals");
     equal(h.rows.map((x) => x.current), [false, true]);
     equal(h.rows.map((x) => x.plannedVolume), [100, 70]);
     equal(h.rows.map((x) => x.doneBefore), [0, 30]);
