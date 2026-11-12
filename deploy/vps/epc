@@ -34,7 +34,7 @@ wait_up() {
 # Stop the service for the length of the given command, then bring it back.
 offline() {
   local was=no; systemctl is-active --quiet epc && was=yes
-  [ $was = yes ] && systemctl stop epc
+  if [ "$was" = yes ]; then systemctl stop epc || { echo "[ !! ] توقف سرویس epc شکست خورد." >&2; return 1; }; fi
   local rc=0; "$@" || rc=$?
   if [ "$was" = yes ]; then
     if ! systemctl start epc || ! wait_up; then
@@ -47,8 +47,8 @@ offline() {
 }
 build() {
   local reg=(); [ -n "${NPM_REGISTRY:-}" ] && reg=(--registry "$NPM_REGISTRY")
-  run npm ci --no-audit --no-fund --loglevel=error "${reg[@]}"
-  run npm run build
+  run npm ci --no-audit --no-fund --loglevel=error "${reg[@]}" || return 1
+  run npm run build || return 1
 }
 # git as user epc; the token travels in the environment, never in argv or .git/config.
 git_epc() {
@@ -76,8 +76,8 @@ deps() {
   local need=() p
   for p in $(grep -v '^#' "$list" | xargs); do dpkg -s "$p" >/dev/null 2>&1 || need+=("$p"); done
   if [ ${#need[@]} -gt 0 ]; then
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}" >/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq || return 1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}" >/dev/null || return 1
     echo "[ ok ] نصب شد: ${need[*]}"
   else
     echo "[ ok ] همهٔ بسته‌های سیستم نصب است"
