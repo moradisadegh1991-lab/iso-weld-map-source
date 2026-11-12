@@ -151,7 +151,7 @@ test("C1. every run-id route of the isometric workflow refuses a P&ID / SLD run 
     const calls = [
       ["GET run", () => call(runRoute, "GET", `http://x/api/runs/${run}?projectId=${P}`)],
       ["GET edits", () => call(editsRoute, "GET", `http://x/api/runs/${run}/edits?projectId=${P}`)],
-      ["POST edits", () => call(editsRoute, "POST", `http://x/api/runs/${run}/edits`, { projectId: P, payload: { meta: {} }, reason: "x" })],
+      ["POST edits", () => call(editsRoute, "POST", `http://x/api/runs/${run}/edits`, { projectId: P, payload: { meta: {} }, reason: "x", baseHash: "0".repeat(32) })],
       ["POST approve", () => call(approveRoute, "POST", `http://x/api/runs/${run}/approve`, { projectId: P })],
       ["GET diff", () => call(diffRoute, "GET", `http://x/api/runs/${run}/diff?projectId=${P}`)],
       ["GET diff against", () => call(diffRoute, "GET", `http://x/api/runs/${run}/diff?projectId=${P}&against=${D.runOf["ISO-A"]}`)],

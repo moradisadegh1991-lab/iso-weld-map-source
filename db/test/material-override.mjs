@@ -285,4 +285,84 @@ test("the history is listed newest first with the person's name", async () => {
   assert("authorized_by_name" in h[0]);
 });
 
+test("web: repeated command returns the saved result without adding an override", async () => {
+  const s = await newSpool();
+  const opId = uuid();
+  const args = { projectId: P, spoolId: s.id, code: "fit_up", doneAt: "2026-09-10",
+    materialOverride: "yard inventory", userId: eng.id, membership: ENG, opId };
+  const first = await inP(() => px.recordWebSpoolActivity(db, args));
+  const replay = await inP(() => px.recordWebSpoolActivity(db, args));
+  equal(first.replayed, false);
+  equal(replay.replayed, true);
+  equal(first.activity.id, replay.activity.id);
+  equal((await events(s.id)).length, 1);
+  equal(await acts(s.id, "fit_up"), 1);
+  const conflict = await throws(() => inP(() => px.recordWebSpoolActivity(db, {
+    ...args, materialOverride: "a different reason" })), "OP_ID_CONFLICT");
+  equal(conflict.status, 409);
+  equal((await events(s.id)).length, 1);
+});
+
+test("web: a failed override write leaves no operation receipt; retry succeeds once", async () => {
+  const s = await newSpool();
+  const args = { projectId: P, spoolId: s.id, code: "fit_up", doneAt: "2026-09-10",
+    materialOverride: "yard inventory", userId: eng.id, membership: ENG, opId: uuid() };
+  await throws(() => inP(() => px.recordWebSpoolActivity(failInTx(/INSERT INTO material_override/), args)), "injected failure");
+  equal((await events(s.id)).length, 0);
+  equal(await acts(s.id, "fit_up"), 0);
+  const { rows: receipt } = await inP(() => db.query("SELECT op_id FROM web_spool_operation WHERE op_id = $1", [args.opId]));
+  equal(receipt.length, 0);
+  await inP(() => px.recordWebSpoolActivity(db, args));
+  equal((await events(s.id)).length, 1);
+});
+
+test("web: operation result is project-scoped and an opId cannot be reused by another actor", async () => {
+  const s = await newSpool();
+  const args = { projectId: P, spoolId: s.id, code: "fit_up", doneAt: "2026-09-10",
+    materialOverride: "yard inventory", userId: eng.id, membership: ENG, opId: uuid() };
+  await inP(() => px.recordWebSpoolActivity(db, args));
+  const c = await throws(() => inP(() => px.recordWebSpoolActivity(db, { ...args, userId: qc.id })), "OP_ID_CONFLICT");
+  equal(c.status, 409);
+  const elsewhere = await withProject(db, Q, () => db.query("SELECT op_id FROM web_spool_operation WHERE op_id = $1", [args.opId]));
+  equal(elsewhere.rows.length, 0);
+});
+
+test("web: a failure writing the receipt rolls back both activity and override", async () => {
+  const s = await newSpool();
+  const args = { projectId: P, spoolId: s.id, code: "fit_up", doneAt: "2026-09-10",
+    materialOverride: "receipt failure", userId: eng.id, membership: ENG, opId: uuid() };
+  await throws(() => inP(() => px.recordWebSpoolActivity(failInTx(/INSERT INTO web_spool_operation/), args)), "injected failure");
+  equal(await acts(s.id, "fit_up"), 0);
+  equal((await events(s.id)).length, 0);
+  equal((await inP(() => db.query("SELECT op_id FROM web_spool_operation WHERE op_id = $1", [args.opId]))).rows, []);
+  await inP(() => px.recordWebSpoolActivity(db, args));
+  equal((await events(s.id)).length, 1);
+});
+
+test("web: UUID case does not change command identity or its lock key", async () => {
+  const s = await newSpool();
+  const args = { projectId: P, spoolId: s.id, code: "fit_up", doneAt: "2026-09-10",
+    materialOverride: "case insensitive UUID", userId: eng.id, membership: ENG, opId: uuid() };
+  const first = await inP(() => px.recordWebSpoolActivity(db, args));
+  const replay = await inP(() => px.recordWebSpoolActivity(db, {
+    ...args, projectId: P.toUpperCase(), spoolId: s.id.toUpperCase(), opId: args.opId.toUpperCase()
+  }));
+  equal([replay.replayed, replay.activity.id], [true, first.activity.id]);
+  equal((await events(s.id)).length, 1);
+});
+
+test("web: receipts cannot be rewritten, deleted or truncated even by the table owner", async () => {
+  const s = await newSpool();
+  const args = { projectId: P, spoolId: s.id, code: "fit_up", doneAt: "2026-09-10",
+    materialOverride: "immutable receipt", userId: eng.id, membership: ENG, opId: uuid() };
+  const first = await inP(() => px.recordWebSpoolActivity(db, args));
+  const owner = (fn) => withProject(db, P, fn, { role: null });
+  for (const sql of ["UPDATE web_spool_operation SET result = '{}' WHERE op_id = $1", "DELETE FROM web_spool_operation WHERE op_id = $1"]) {
+    await throws(() => owner(() => db.query(sql, [args.opId])), "append-only");
+  }
+  await throws(() => owner(() => db.query("TRUNCATE web_spool_operation")), "append-only");
+  const replay = await inP(() => px.recordWebSpoolActivity(db, args));
+  equal(replay.activity.id, first.activity.id);
+});
+
 await run();

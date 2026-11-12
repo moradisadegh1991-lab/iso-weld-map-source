@@ -164,7 +164,8 @@ const payload = (rows, extra = {}) => ({ meta: { drawingNo: "TWI-1", sheet: "1/1
 const post = async (documentId, rows, extra) => json(await runsRoute.POST(req("http://x/api/runs", { method: "POST", body: { projectId, documentId, lineNo: "TWI-L1", payload: payload(rows, extra) } })));
 const stored = async (runId) => (await q("SELECT payload FROM extraction_run WHERE id = $1", [runId]))[0].payload;
 const registry = (d) => q("SELECT uid, cls, first_no FROM sheet_mark_identity WHERE document_id = $1 ORDER BY first_no", [d]);
-const correct = async (runId, edited) => json(await editsRoute.POST(req(`http://x/api/runs/${runId}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t" } }), ctx(runId)));
+const { payloadHash } = await import("../../lib/review/payload-hash.mjs");
+const correct = async (runId, edited) => json(await editsRoute.POST(req(`http://x/api/runs/${runId}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", baseHash: payloadHash(await stored(runId)) } }), ctx(runId)));
 const U = { a: newUid(), b: newUid() };
 let docA, run1;
 

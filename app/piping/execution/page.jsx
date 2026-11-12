@@ -1,5 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { prepareSpoolOperation, acknowledgeSpoolOperation } from "../../../lib/client/spool-operation.mjs";
+import { overrideProvenance } from "../../../lib/piping/override-provenance.mjs";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../../lib/authz.mjs";
 import { CHAINS, spoolStageTitle } from "../../../lib/platform/precedence.mjs";
@@ -26,11 +28,13 @@ const stepName = (x, L) => L(`chain.piping_spool.${x.code}`, x.title);
 
 function PipingExecutionBody() {
   const workOn = useWorkDate();
-  const { projectId, role, call } = usePlatform();
+  const { projectId, role, call, user } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/piping/execution?projectId=${id}`, []);
   const [open, setOpen] = useState(null);
   const [detail, setDetail] = useState(null);
   const [msg, setMsg] = useState(null);
+  const inFlight = useRef(new Set());
+  const [recording, setRecording] = useState({});
   const mayRecord = can({ role }, ACTIONS.ASSIGN_WELD);
   const { t, L } = usePrefs();
 
@@ -43,20 +47,33 @@ function PipingExecutionBody() {
   }
 
   async function record(spoolId, code, refNo = null, materialOverride = null) {
+    const flightKey = `${spoolId}:${code}`;
+    if (inFlight.current.has(flightKey)) return;
+    inFlight.current.add(flightKey);
+    setRecording((r) => ({ ...r, [flightKey]: true }));
     setMsg(null);
+    let sent = false, retryWhy = null;
     try {
-      await call("/api/piping/execution", { method: "POST", body: JSON.stringify({
-        projectId, kind: "activity", spoolId, code, doneAt: workOn, refNo, ...(materialOverride ? { materialOverride } : {}) }) });
+      const operation = prepareSpoolOperation(window.sessionStorage, {
+        actorId: user?.id, projectId, spoolId, code, doneAt: workOn, refNo, materialOverride,
+      });
+      await call("/api/piping/execution", { method: "POST", body: JSON.stringify(operation.command) });
+      sent = true;
       setDetail(await call(detailUrl(spoolId)));
+      acknowledgeSpoolOperation(window.sessionStorage, operation);
       reload();
     } catch (e) {
-      setMsg(e.message);
-      // The step uses material that is not all issued: issue it, or go on with a reason (kept in the step's note).
-      if (/materialOverride/.test(e.message || "")) {
+      setMsg(e.code === "PENDING_OPERATION_STORAGE" || e.name === "SecurityError" ? t("pi.ex.retryStorage")
+        : sent ? t("pi.ex.savedRefreshFailed") : e.message);
+      if (!sent && /materialOverride/.test(e.message || "")) {
         const why = window.prompt(`${e.message}\n\n${t("pi.ex.materialWhy")}`);
-        if (why && why.trim()) return record(spoolId, code, refNo, why.trim());
+        if (why && why.trim()) retryWhy = why.trim();
       }
+    } finally {
+      inFlight.current.delete(flightKey);
+      setRecording((r) => { const next = { ...r }; delete next[flightKey]; return next; });
     }
+    if (retryWhy) return record(spoolId, code, refNo, retryWhy);
   }
 
   async function reserveMaterial(spoolId) {
@@ -102,7 +119,7 @@ function PipingExecutionBody() {
                     detail={open === b.spoolId ? detail : null}
                     onToggle={() => expand(b.spoolId)}
                     onRecord={mayRecord ? (code, ref) => record(b.spoolId, code, ref) : null}
-                    onReserve={mayRecord ? () => reserveMaterial(b.spoolId) : null} />
+                    onReserve={mayRecord ? () => reserveMaterial(b.spoolId) : null} recording={recording} />
                 ))}
               </tbody>
             </table>
@@ -119,7 +136,7 @@ function PipingExecutionBody() {
   );
 }
 
-function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve }) {
+function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve, recording }) {
   const [refs, setRefs] = useState({});
   const { t, L, date } = usePrefs();
   const stage = (code) => (code === "planned" ? t("wa.spool.planned") : !code || code === "unknown" ? t("wa.spool.unknown") : L(`chain.piping_spool.${code}`, spoolStageTitle(code)));
@@ -167,7 +184,7 @@ function SpoolRow({ b, open, detail, onToggle, onRecord, onReserve }) {
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <input aria-label={t("st.refOf", { step: stepName(s, L) })} placeholder={t("st.ref")} dir="ltr" style={{ width: 120 }}
                                value={refs[s.code] || ""} onChange={(e) => setRefs({ ...refs, [s.code]: e.target.value })} />
-                        <button className="btn" style={{ padding: "4px 10px" }}
+                        <button className="btn" style={{ padding: "4px 10px" }} disabled={!!recording[`${b.spoolId}:${s.code}`]}
                                 onClick={() => onRecord(s.code, refs[s.code] || null)}>{t("st.record")}</button>
                       </div>
                     )}
@@ -192,16 +209,22 @@ function MaterialOverrides({ rows }) {
       <b className="sm">{t("pi.ex.ovr.title")}</b>
       <table className="dtable">
         <thead><tr><th>{t("pi.ex.ovr.rev")}</th><th>{t("pi.ex.ovr.step")}</th><th>{t("pi.ex.ovr.reason")}</th><th>{t("pi.ex.ovr.by")}</th><th>{t("pi.ex.ovr.at")}</th><th>{t("pi.ex.ovr.source")}</th></tr></thead>
-        <tbody>{rows.map((o) => (
+        <tbody>{rows.map((o) => {
+          const provenance = overrideProvenance(o);
+          return (
           <tr key={o.id}>
-            <td className="sm mono">{o.doc_no} · {o.revision}{o.same_spool ? "" : ` · ${t("pi.ex.ovr.earlier")}`}{o.match_basis?.endsWith("_unverified") && <span className="pill warn" title="ارتباط با این اسپول فقط براساس شماره است و با نگاشت هویت تأیید نشده است">≈ تأییدنشده</span>}</td>
+            <td className="sm mono">
+              <div>{o.doc_no} · {o.revision}</div>
+              <span className={`pill ${provenance.exact ? "" : "warn"}`} style={{ whiteSpace: "normal" }} title={t(provenance.hint)}
+                data-history-basis={provenance.basis} data-history-exact={String(provenance.exact)}>{t(provenance.label)}</span>
+            </td>
             <td className="sm">{L(`chain.piping_spool.${o.code}`, o.code)}</td>
             <td className="sm">{o.reason}</td>
             <td className="sm">{o.authorized_by_name || "—"}</td>
             <td className="sm mono">{dateTime(o.authorized_at)}</td>
             <td className="sm">{t(`pi.ex.ovr.src.${o.source}`)}</td>
           </tr>
-        ))}</tbody>
+        ); })}</tbody>
       </table>
     </div>
   );
