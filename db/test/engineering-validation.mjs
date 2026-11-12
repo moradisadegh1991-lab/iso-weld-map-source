@@ -247,7 +247,7 @@ const getRun = async (id) => json(await runRoute.GET(req(`http://x/api/runs/${id
 const validation = async (documentId, as, pid = projectId) => json(await validationRoute.GET(req(`http://x/api/validation?projectId=${pid}&documentId=${documentId}`, { as })));
 const warningList = async (documentId) => json(await warningsRoute.GET(req(`http://x/api/mark-warnings?projectId=${projectId}&documentId=${documentId}`)));
 const resolveW = async (documentId, warningId, extra = {}, as = "kc|alice") => json(await warningsRoute.POST(req("http://x/api/mark-warnings", { method: "POST", as, body: { projectId, documentId, warningId, resolution: "پیوند در فرم تجهیز انتخاب شد", ...extra } })));
-const correct = async (id, edited, baseHash) => json(await editsRoute.POST(req(`http://x/api/runs/${id}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", ...(baseHash ? { baseHash } : {}) } }), ctx(id)));
+const correct = async (id, edited, baseHash) => json(await editsRoute.POST(req(`http://x/api/runs/${id}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", baseHash: baseHash === undefined ? (await getRun(id)).body.run.payloadHash : baseHash } }), ctx(id)));
 const events = (d) => q("SELECT count(*)::int AS n FROM bom_allocation_event WHERE document_id = $1", [d]);
 
 const typed = (rows, items = [], extra = {}) => ({ meta: { drawingNo: "PVV-1", sheet: "1/1", lineNo: "PVV-L1", nps: 4 }, weldList: rows, bom: BOM, sheetMarkup: { page: 1, items }, ...extra });

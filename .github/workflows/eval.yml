@@ -34,7 +34,9 @@ jobs:
           if-no-files-found: warn
 
   data-layer:
-    runs-on: ubuntu-latest
+    # Pin the runner: ubuntu-latest currently resolves to Ubuntu 26.04
+    # (resolute), whose apt mirror DNS has repeatedly failed in CI.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -47,12 +49,47 @@ jobs:
 
       # The document intake reads scanned PDFs with Tesseract; its tests run it.
       - name: OCR engine
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr poppler-utils
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v tesseract >/dev/null && command -v pdftoppm >/dev/null; then
+            echo "OCR dependencies already installed."
+          else
+            # Transient DNS/mirror errors should not abort the entire test suite
+            # on the first attempt; still fail if installation never succeeds.
+            for attempt in 1 2 3; do
+              if sudo apt-get update -o Acquire::Retries=3 -qq &&
+                 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq -o Acquire::Retries=3 tesseract-ocr poppler-utils; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "::error::Could not install OCR dependencies after three attempts"
+                exit 1
+              fi
+              sleep $((attempt * 10))
+            done
+          fi
+          tesseract --version
+          pdftoppm -v
 
       # Runs against real PostgreSQL via PGlite, in-process: no service
       # container, no credentials, and the same migrations production applies.
       - name: Data layer tests
         run: npm run db:test
+
+  # Planning's DB regression tests do not use OCR. Keep this gate independent
+  # of the OS package mirrors so a transient apt outage cannot hide a bug.
+  planning-db:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Planning database regression tests
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/planning.mjs
 
   # The pages compile: a type or import error in a page is found here, not on the server.
   # (db:test imports the libraries and routes, but not the React pages.)

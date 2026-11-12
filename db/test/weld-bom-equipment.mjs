@@ -136,6 +136,7 @@ const equipRoute = await import("../../app/api/iso-equipment/route.js");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
 const { DEMO } = await import("../../lib/demo.js");
+const { payloadHash } = await import("../../lib/review/payload-hash.mjs");
 
 const req = (url, { method = "GET", as = "kc|alice", body } = {}) =>
   new Request(url, { method, headers: { authorization: `Bearer ${as}`, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -154,7 +155,7 @@ const lines = (d, status) => q(`SELECT id, pt, owner_kind, owner_ref, owner_no, 
 const events = (d) => q("SELECT event, allocation_id, qty_before, qty_after FROM bom_allocation_event WHERE document_id = $1 ORDER BY at, id", [d]);
 const links = (d) => q("SELECT w.weld_ref, w.weld_no, e.equipment_no FROM iso_equipment_weld w JOIN iso_equipment e ON e.id = w.equipment_id WHERE e.document_id = $1 ORDER BY w.weld_no", [d]);
 const warnings = (d) => q("SELECT detail FROM sheet_mark_warning WHERE document_id = $1 AND resolved_at IS NULL", [d]);
-const correct = async (id, edited, baseHash) => json(await editsRoute.POST(req(`http://x/api/runs/${id}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", ...(baseHash ? { baseHash } : {}) } }), ctx(id)));
+const correct = async (id, edited, baseHash) => json(await editsRoute.POST(req(`http://x/api/runs/${id}/edits`, { method: "POST", body: { projectId, payload: edited, reason: "t", baseHash: baseHash === undefined ? payloadHash(await stored(id)) : baseHash } }), ctx(id)));
 const transition = async (documentId, allocationId, action, reason) => json(await allocRoute.POST(req("http://x/api/bom-allocations", { method: "POST", body: { projectId, documentId, allocationId, action, reason } })));
 
 let docA, runA, wA, wB;

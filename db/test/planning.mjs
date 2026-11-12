@@ -33,6 +33,40 @@ test("a row takes from its activity what was not typed: start, finish, work done
   equal(w.finishOf("2026-12-30", 3), "2027-01-01", "across a year");
 });
 
+test("selected activity history: durations, period quantity and percentages are derived", () => {
+  const f = pl.activityHistoryFigures({
+    plannedStart: "2026-03-01", plannedEnd: "2026-03-10",
+    actualStart: "2026-03-03", actualEnd: "2026-03-12",
+    plannedVolume: 40, actualVolume: 100, doneBefore: 20, doneToDate: 55,
+  });
+  equal([f.plannedDays, f.actualDays, f.doneThisPeriod, f.remainingVolume, f.progressPct, f.periodProgressPct],
+    [10, 10, 35, 45, 55, 87.5]);
+  const missing = pl.activityHistoryFigures({ plannedVolume: 0, actualVolume: null, doneBefore: 0, doneToDate: 0 });
+  equal([missing.plannedDays, missing.actualDays, missing.doneThisPeriod, missing.remainingVolume, missing.progressPct, missing.periodProgressPct],
+    [null, null, 0, null, null, null], "missing or zero denominator must not become a fabricated percentage");
+  equal(pl.activityHistoryFigures({ plannedVolume: 12, actualVolume: 80, doneBefore: 50, doneToDate: 40 }).doneThisPeriod, -10,
+    "negative correction remains visible rather than being silently clamped");
+});
+
+test("successive planning versions expose exact schedule and quantity changes, preserving unknowns", () => {
+  const changes = pl.activityHistoryChanges([
+    { versionCode: "R1", plannedStart: "2026-12-30", plannedEnd: "2026-12-31", plannedVolume: 5.25, doneBefore: 3 },
+    { versionCode: "R2", plannedStart: "2027-01-02", plannedEnd: "2027-01-01", plannedVolume: 9.125, doneBefore: 1.5 },
+    { versionCode: "R3", plannedStart: null, plannedEnd: "invalid", plannedVolume: null, doneBefore: 0 },
+  ]);
+  equal([changes[0].previousVersionCode, changes[0].planChanges], [null, null], "first version has no invented baseline");
+  equal(changes[1].previousVersionCode, "R1");
+  equal(changes[1].planChanges, { startDays: 3, finishDays: 1, volume: 3.875, doneBefore: -1.5 },
+    "date shifts cross calendar years using whole UTC days; quantities keep decimal precision");
+  equal(changes[2].planChanges, { startDays: null, finishDays: null, volume: null, doneBefore: -1.5 },
+    "missing or invalid values remain unknown, never zero");
+  equal(pl.activityHistoryChanges([
+    { versionCode: "R1", plannedStart: "2024-02-28" },
+    { versionCode: "R2", plannedStart: "2024-03-01" },
+  ])[1].planChanges.startDays, 2, "leap day is counted");
+  equal(pl.activityHistoryChanges([]), [], "no versions means no comparisons");
+});
+
 test("an activity under a version: the plan's dates and quantity stand over its own; without a plan it keeps its own", () => {
   const a = { id: "a", plan_start: "2026-01-01", plan_end: "2026-01-31", volume_plan: 100, volume_actual: 100 };
   const o = w.overlayPlan(a, { id: "p", start_on: "2026-02-01", end_on: "2026-02-10", volume_plan: 40, done_before: 60 });
@@ -164,6 +198,26 @@ test("read under a version, an activity it plans takes the plan's dates and quan
     equal([b2.plan, b2.plan_start], [null, "2026-01-01"], "not in this version: the activity's own (here its node's)");
     equal(bare, null);
     equal(flat(await act.activityView(db, { projectId: P, pmsId: PM.id })).find((a) => a.id === A.id).plan_start, "2026-01-01", "the bare tree: the activity's own");
+  });
+});
+
+test("history returns only the selected activity across versions of the same PMS", async () => {
+  await inP(async () => {
+    const h = await plan.activityPlanningHistory(db, { projectId: P, versionId: V2.id, activityId: A.id });
+    equal(h.activity.id, A.id);
+    equal(h.rows.map((x) => x.versionCode), ["PM01-R1", "PM01-R2"]);
+    equal(h.rows.map((x) => x.previousVersionCode), [null, "PM01-R1"]);
+    equal(h.rows[0].planChanges, null, "first planned version has no comparison");
+    equal(h.rows[1].planChanges, { startDays: 90, finishDays: 100, volume: -30, doneBefore: 30 },
+      "selected version compares only version plans, not present-day execution totals");
+    equal(h.rows.map((x) => x.current), [false, true]);
+    equal(h.rows.map((x) => x.plannedVolume), [100, 70]);
+    equal(h.rows.map((x) => x.doneBefore), [0, 30]);
+    equal(h.rows.map((x) => x.actualVolume), [100, 100]);
+    equal(h.rows.map((x) => x.doneThisPeriod), [0, -30]);
+    equal(h.rows.map((x) => x.periodProgressPct), [0, -42.86]);
+    equal((await plan.activityPlanningHistory(db, { projectId: P, versionId: V1.id, activityId: B.id })).rows.length, 1);
+    await throws(() => plan.activityPlanningHistory(db, { projectId: P, versionId: V1.id, activityId: X.id }), "not found");
   });
 });
 

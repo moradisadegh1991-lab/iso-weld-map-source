@@ -87,6 +87,8 @@ const runsRepo = await import("../../lib/db/repos/runs.mjs");
 const review = await import("../../lib/db/repos/review.mjs");
 const { buildModel } = await import("../../lib/engine.js");
 const { DEMO } = await import("../../lib/demo.js");
+const { modelFor } = await import("../../lib/register/weld-list.mjs");
+const { payloadHash } = await import("../../lib/review/payload-hash.mjs");
 
 const db = await getDb();
 const alice = await projects.ensureUser(db, { subject: "kc|alice", displayName: "Alice" });
@@ -176,7 +178,7 @@ test("a stale no-op correction is rejected before the early return", async () =>
     const { rows: [current] } = await db.query("SELECT payload FROM extraction_run WHERE id = $1", [runId]);
     const e = await throws(() => review.applyCorrection(db, {
       projectId: project.id, runId, payload: current.payload,
-      baseHash: "0".repeat(64), userId: alice.id }), "STALE_RUN");
+      baseHash: "0".repeat(32), userId: alice.id }), "STALE_RUN");
     equal(e.status, 409);
   });
 });
@@ -322,6 +324,66 @@ test("a run from another project is not found", async () => {
   const { status } = await json(await runRoute.GET(
     req(`http://x/api/runs/${runId}?projectId=${stranger.id}`), { params: { id: runId } }));
   equal(status, 404);
+});
+
+const correctionFixture = (docNo) => withProject(db, project.id, async () => {
+  const { rows: [doc] } = await db.query(
+    `INSERT INTO document (project_id, doc_no, revision, file_sha256, storage_uri)
+     VALUES ($1,$2,'0',$3,'local://review-token') RETURNING id`, [project.id, docNo, "c".repeat(64)]);
+  const payload = { meta: { drawingNo: docNo, nps: 4 },
+    weldList: [{ no: "1", loc: "Shop", kind: "BW", nps: "4", spool: "SP-1" }], weldMarkup: { byUid: {} } };
+  const run = await runsRepo.createRun(db, { projectId: project.id, documentId: doc.id, payload, createdBy: alice.id });
+  await runsRepo.saveRegister(db, { projectId: project.id, runId: run.id, documentId: doc.id, model: modelFor(payload) });
+  return run.id;
+});
+
+test("the correction API accepts its own issued token, including no-op, and refuses stale no-op without writes", async () => {
+  const id = await correctionFixture("REVIEW-TOKEN");
+  const ctx = { params: Promise.resolve({ id }) };
+  const read = async () => (await json(await runRoute.GET(req(`http://x/api/runs/${id}?projectId=${project.id}`), ctx))).body;
+  const first = await read();
+  equal(first.run.payloadHash.length, 32, "preserve the token already issued to clients");
+  const post = async (payload, baseHash) => json(await editsRoute.POST(req(`http://x/api/runs/${id}/edits`, {
+    method: "POST", body: { projectId: project.id, payload, baseHash }
+  }), ctx));
+  const noop = await post(first.payload, first.run.payloadHash);
+  equal(noop.status, 200, JSON.stringify(noop.body));
+  equal(noop.body.edits, []);
+  const edited = structuredClone(first.payload); edited.weldList[0].nps = "6";
+  const changed = await post(edited, first.run.payloadHash);
+  equal(changed.status, 200, JSON.stringify(changed.body));
+  const current = await read();
+  equal(changed.body.payloadHash, current.run.payloadHash);
+  const stale = await post(current.payload, first.run.payloadHash);
+  equal([stale.status, stale.body.code], [409, "STALE_RUN"]);
+  const after = await read();
+  equal(after.payload, current.payload);
+  equal(after.edits, current.edits, "a stale no-op adds no audit record");
+  equal(after.register, current.register, "and does not rebuild the register");
+
+  for (const token of [undefined, null, "", 42, {}, [], "g".repeat(32), "a".repeat(31), "a".repeat(64)]) {
+    const refused = await post(current.payload, token);
+    equal([refused.status, refused.body.code], [400, "BASE_HASH_REQUIRED"], JSON.stringify(token));
+  }
+  equal((await read()).edits, current.edits, "invalid tokens have no business effect");
+});
+
+test("adding weld identity and moving its display position do not create engineering correction history", async () => {
+  const id = await correctionFixture("REVIEW-IDENTITY");
+  await withProject(db, project.id, async () => {
+    const { rows: [before] } = await db.query("SELECT payload FROM extraction_run WHERE id = $1", [id]);
+    const register = await runsRepo.getRegister(db, { projectId: project.id, runId: id });
+    const edited = structuredClone(before.payload), uid = globalThis.crypto.randomUUID();
+    edited.weldList[0].uid = uid;
+    edited.weldMarkup.byUid[uid] = { x: 0.2, y: 0.3 };
+    const result = await review.applyCorrection(db, { projectId: project.id, runId: id,
+      payload: edited, baseHash: payloadHash(before.payload), userId: alice.id });
+    equal(result.edits, [], "identity/display metadata must not pollute extraction correction metrics");
+    equal(await review.editsOf(db, { projectId: project.id, runId: id }), []);
+    equal(result.register, register, "an identity-only no-op does not rebuild the welds");
+    const { rows: [after] } = await db.query("SELECT payload FROM extraction_run WHERE id = $1", [id]);
+    equal(after.payload, before.payload, "the existing no-op behaviour is preserved");
+  });
 });
 
 await run();

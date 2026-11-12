@@ -40,8 +40,10 @@ export async function POST(request, ctx) {
     const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     assertCan(membership, ACTIONS.EDIT_EXTRACTION);
-    if (typeof baseHash !== "string" || !/^[a-f0-9]{64}$/i.test(baseHash)) {
-      return Response.json({ error: "baseHash (SHA-256) is required to prevent stale corrections", code: "BASE_HASH_REQUIRED" }, { status: 400 });
+    // payloadHash() hands clients the first 32 hex characters of SHA-256.
+    // Keep that existing token contract: requiring all 64 would reject every normal save.
+    if (typeof baseHash !== "string" || !/^[a-f0-9]{32}$/.test(baseHash)) {
+      return Response.json({ error: "شناسهٔ نسخهٔ اجرا (baseHash) معتبر نیست؛ اجرا را دوباره باز کنید.", code: "BASE_HASH_REQUIRED" }, { status: 400 });
     }
 
     return await withProject(db, projectId, async () => Response.json(
