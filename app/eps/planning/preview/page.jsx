@@ -120,7 +120,7 @@ export default function PlanningPreviewPage() {
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.roots.length === 0 ? <p className="empty-note">{t("ep.pl.empty")}</p> : (
         <div style={{ height }}>
-          <ActivityGrid data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "pStart", "pDays", "pFinish", "pBefore", "pPlanned", "pDesc", ...PLAN_COST_COLUMNS.map((c) => c.key)]}
+          <ActivityGrid planningDates data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "pStart", "pDays", "pFinish", "pBefore", "pPlanned", "pDesc", ...PLAN_COST_COLUMNS.map((c) => c.key)]}
             storeKey="p6-plan-preview" selected={sel?.id} onSelect={(r) => setSel(r)} ops={ops} />
         </div>)}
       {grip}
