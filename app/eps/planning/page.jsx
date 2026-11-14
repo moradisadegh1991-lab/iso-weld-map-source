@@ -140,7 +140,7 @@ export default function PlanningPage() {
         </div>
       </>}
       <div style={{ height }}>
-        <ActivityGrid data={tree.data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "inPlan", "pStart", "pDays", "pFinish", "pBefore", "pPlanned"]}
+        <ActivityGrid planningDates data={tree.data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "inPlan", "pStart", "pDays", "pFinish", "pBefore", "pPlanned"]}
           storeKey="p6-planning" selected={sel?.id} onSelect={(r) => setSel(r)} onVisible={setVisible}
           onOpen={may ? (r) => { setSel(r); add([r.id]); } : null} />
       </div>

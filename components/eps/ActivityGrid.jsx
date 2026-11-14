@@ -73,7 +73,7 @@ export function Hl({ text, q }) {
   return <>{splitHits(text, q).map((p, i) => (p.hit ? <mark key={i} style={{ background: "#ffe14d", color: "#111", padding: 0 }}>{p.text}</mark> : <span key={i}>{p.text}</span>))}</>;
 }
 
-export default function ActivityGrid({ data, columns: own, defaultCols, storeKey, selected, onSelect, onOpen = null, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null, customKey = null }) {
+export default function ActivityGrid({ data, columns: own, defaultCols, storeKey, selected, onSelect, onOpen = null, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null, customKey = null, planningDates = false }) {
   const all = useMemo(() => flatRows(data.roots), [data]);
   const { t, locale } = usePrefs();
   // the project's own columns (owner's requirements 2026-10-22, item 7): shown after the page's, unless unticked; a row's value kept by its id
@@ -266,18 +266,29 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
   const setShown = (n) => { setCols(n); setCfOff(cfCols.map((c) => c.key).filter((k) => !n.includes(k))); };
   const width = (c) => widths[c.key] || c.width || 100;
 
-  // the chart's span: every date of every row, a few days either side
+  // Render the server's day first, then use the browser's local calendar day.
+  const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10));
+  useEffect(() => {
+    const now = new Date();
+    setToday(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
+  }, []);
+  // Planning forms use the selected version's dates, falling back to PMS dates.
+  const chartItem = (row) => {
+    const a = row.item;
+    if (!planningDates || row.kind !== "act" || !a.plan) return a;
+    return { ...a, plan_start: a.plan.start_on || a.plan_start, plan_end: a.plan.end_on || a.plan_end };
+  };
   const span = useMemo(() => {
-    let lo = null, hi = null;
-    for (const r of all) for (const k of ["plan_start", "plan_end", "actual_start", "actual_end"]) {
-      const d = r.item[k];
-      if (!d) continue;
-      const t = ms(d);
-      lo = lo === null ? t : Math.min(lo, t); hi = hi === null ? t : Math.max(hi, t);
-    }
-    if (lo === null) return null;
-    return { lo: lo - 3 * DAY, hi: hi + 4 * DAY };
-  }, [all]);
+    const currentDay = ms(today);
+    const activities = all.filter((r) => r.kind === "act");
+    const source = activities.length ? activities : all;
+    const items = source.map(chartItem);
+    const starts = items.map((a) => a.plan_start).filter(Boolean).map(ms).filter(Number.isFinite);
+    const ends = items.map((a) => a.plan_end).filter(Boolean).map(ms).filter(Number.isFinite);
+    const lo = starts.length ? Math.min(...starts) : ends.length ? Math.min(...ends) : currentDay;
+    const dates = items.flatMap((a) => [a.plan_start, a.plan_end, a.actual_start, a.actual_end]).filter(Boolean).map(ms).filter(Number.isFinite);
+    return { lo: Math.min(lo, currentDay), initial: lo, hi: Math.max(lo + 14 * DAY, currentDay, ...dates) + DAY };
+  }, [all, planningDates, today]);
   const px = { day: 22, week: 7, month: 2.4 }[zoom];
   const xOf = (d) => ((ms(d) - span.lo) / DAY) * px;
   const chartW = span ? Math.max(((span.hi - span.lo) / DAY) * px, 300) : 300;
@@ -292,7 +303,9 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
     }
     return { months, marks };
   }, [span, px, zoom, locale]);
-  const today = new Date().toISOString().slice(0, 10);
+  useEffect(() => {
+    if (right.current && span) right.current.scrollLeft = Math.max(0, ((span.initial - span.lo) / DAY) * px);
+  }, [span, px]);
   const rowIndex = new Map(shownRows.map((r, i) => [r.id, i]));
 
   const cell = (r, c) => {
@@ -428,7 +441,7 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
         </div>
         {gantt && <>
           <div className="p6-vsplit" role="separator" aria-orientation="vertical" title={t("ep.g.dragWidth")} onMouseDown={(e) => dragFrom(e, leftW, (w) => setLeftW(Math.max(200, Math.round(w))))} />
-          <div className="p6-right" ref={right} onScroll={sync(right, left)}>
+          <div className="p6-right" ref={right} onScroll={sync(right, left)} style={{ direction: "ltr" }}>
             {!span ? <p className="empty-note">{t("ep.g.noDates")}</p> : (
               <div style={{ width: chartW, position: "relative" }}>
                 <div className="p6-ghead" style={{ width: chartW }}>
@@ -439,10 +452,8 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
                   <defs><marker id="p6-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--dim)" /></marker></defs>
                   {shownRows.map((r, i) => <rect key={`bg${r.id}`} x={0} y={i * ROW} width={chartW} height={ROW} fill={r.id === selected ? "var(--cy-soft)" : i % 2 ? "var(--hover)" : "transparent"}
                     onClick={() => onSelect && onSelect(r)} />)}
-                  {today >= new Date(span.lo).toISOString().slice(0, 10) && today <= new Date(span.hi).toISOString().slice(0, 10) &&
-                    <line x1={xOf(today)} x2={xOf(today)} y1={0} y2={shownRows.length * ROW} stroke="var(--fld)" strokeDasharray="3 3" />}
                   {shownRows.map((r, i) => {
-                    const a = r.item, y = i * ROW;
+                    const a = chartItem(r), y = i * ROW;
                     const bar = (s, e) => (s && e ? { x: xOf(s), w: Math.max(xOf(e) - xOf(s) + px, 2) } : null);
                     const plan = bar(a.plan_start, a.plan_end), act = bar(a.actual_start, a.actual_end);
                     if (r.kind === "node") return plan && (
@@ -466,6 +477,8 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
                     const bend = fromEnd ? x1 + 6 : x1 - 6;
                     return <path key={rel.id} d={`M${x1},${y1} L${bend},${y1} L${bend},${y2} L${x2 + (toEnd ? 0 : -1)},${y2}`} fill="none" stroke="var(--dim)" strokeWidth={1} markerEnd="url(#p6-arrow)" />;
                   })}
+                  {today >= new Date(span.lo).toISOString().slice(0, 10) && today <= new Date(span.hi).toISOString().slice(0, 10) &&
+                    <line x1={xOf(today)} x2={xOf(today)} y1={0} y2={shownRows.length * ROW} stroke="#e11d48" strokeWidth="2" pointerEvents="none" data-gantt-today={today} />}
                 </svg>
               </div>)}
           </div></>}
