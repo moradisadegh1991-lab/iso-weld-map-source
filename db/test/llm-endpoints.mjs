@@ -53,7 +53,7 @@ test("what a provider's factory is given: the kind chosen only — the other is 
   equal(providerOptions("gemini", { baseUrl: "", secretKind: "api_key", secret: "key-12345678" }), { apiKey: "key-12345678", relayToken: null });
   const o = providerOptions("openai-compatible", { baseUrl: "https://ai.example/v1", secretKind: "api_key", secret: "k-12345678", models: ["vl-72b", "vl-7b"] });
   equal([o.apiKey, o.defaultModel, o.repairModel, o.models.map((m) => m.id)], ["k-12345678", "vl-72b", "vl-7b", ["vl-72b", "vl-7b"]]);
-  equal(providerOptions("openai-compatible", { baseUrl: "https://ai.example/v1", secret: null, models: [] }), { baseUrl: "https://ai.example/v1" }, "no key: none sent");
+  equal(providerOptions("openai-compatible", { baseUrl: "https://ai.example/v1", secret: null, models: [] }), { baseUrl: "https://ai.example/v1", apiKey: "" }, "no key: no environment key inherited");
   equal(parseModels("a, b\nb،c"), ["a", "b", "c"]);
   equal([hintOf("sk-abcdefghijkl"), hintOf("short")], ["••••ijkl", "••••"], "a short secret shows nothing of itself");
 });
