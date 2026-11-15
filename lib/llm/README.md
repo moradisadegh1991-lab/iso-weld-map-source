@@ -3,6 +3,7 @@
 > سند مرجع: `docs/epc-llm/02-reference-architecture.md` §۲٫۱
 
 > سیاست فعلی استخراج ایزومتریک: `/api/extract` فقط نشانی عددی `127.0.0.1` را می‌پذیرد و تغییر مسیر را رد می‌کند. مثال‌های ارائه‌دهندگان بیرونی در این سند، توضیح adapter هستند و به معنی مجاز بودن ارسال نقشه به سرویس بیرونی نیستند. سرویس محلی باید مورد اعتماد و از نظر خروج شبکه کنترل‌شده باشد.
+> برای ثبت کلید OpenAI از `OPENAI_API_KEY` یا کلید اختصاصی endpoint استفاده می‌شود؛ این آماده‌سازی محدودیت ارسال ابری را برطرف نمی‌کند.
 
 هدف این لایه یک جمله است: **مهاجرت از API میزبان‌شده به خوشهٔ vLLM داخل سایت،
 یک تغییر پیکربندی باشد نه بازنویسی.**
@@ -12,7 +13,7 @@
 
 ```
 LLM_PROVIDER=anthropic          # پیش‌فرض
-LLM_PROVIDER=openai-compatible  # + LLM_BASE_URL=http://vllm:8000/v1
+LLM_PROVIDER=openai-compatible  # + LLM_BASE_URL=https://api.openai.com/v1 + OPENAI_API_KEY=…
 LLM_PROVIDER=gemini             # + GEMINI_API_KEY=…
 ```
 
