@@ -311,6 +311,7 @@ test("an unknown provider fails loudly at startup, not on the first drawing", as
 process.env.AUTH_MODE = "dev";
 process.env.PGLITE_DIR = await scratchDir("llm-db-");
 const extractRoute = await import("../../app/api/extract/route.js");
+const localReviewRoute = await import("../../app/api/iso-local-review/route.js");
 const modelsRoute = await import("../../app/api/models/route.js");
 const usageRoute = await import("../../app/api/llm-usage/route.js");
 const { getDb } = await import("../../lib/server/db.mjs");
@@ -332,6 +333,30 @@ const post = (body, as = "kc|alice") => new Request("http://x/api/extract", {
   method: "POST",
   headers: { authorization: `Bearer ${as}`, "content-type": "application/json" },
   body: JSON.stringify(body),
+});
+
+test("local OCR review requires a project member with extraction permission", async () => {
+  const request = (as) => new Request("http://x/api/iso-local-review", { method: "POST",
+    headers: { ...(as ? { authorization: `Bearer ${as}` } : {}), "content-type": "application/json" },
+    body: JSON.stringify({ projectId, image: "YQ==", marks: [], bom: [] }) });
+  equal((await localReviewRoute.POST(request(null))).status, 401);
+  equal((await localReviewRoute.POST(request("kc|bob"))).status, 403);
+});
+
+test("local OCR review rejects an externally configured model before any network call", async () => {
+  const before = { url: process.env.ISO_LOCAL_MODEL_URL, model: process.env.ISO_LOCAL_MODEL, fetch: globalThis.fetch };
+  let called = false; process.env.ISO_LOCAL_MODEL_URL = "http://example.com/v1"; process.env.ISO_LOCAL_MODEL = "model";
+  globalThis.fetch = async () => { called = true; throw new Error("unexpected network"); };
+  try {
+    const res = await localReviewRoute.POST(new Request("http://x/api/iso-local-review", { method: "POST",
+      headers: { authorization: "Bearer kc|alice", "content-type": "application/json" },
+      body: JSON.stringify({ projectId, image: "YQ==", marks: [], bom: [] }) }));
+    equal(res.status, 503); equal((await res.json()).code, "LOCAL_MODEL_UNCONFIGURED"); equal(called, false);
+  } finally {
+    globalThis.fetch = before.fetch;
+    if (before.url === undefined) delete process.env.ISO_LOCAL_MODEL_URL; else process.env.ISO_LOCAL_MODEL_URL = before.url;
+    if (before.model === undefined) delete process.env.ISO_LOCAL_MODEL; else process.env.ISO_LOCAL_MODEL = before.model;
+  }
 });
 
 test("extraction requires an identity, now that the key is the server's", async () => {
@@ -378,7 +403,7 @@ test("the model catalogue comes from the configured provider", async () => {
 /** Run the route against a Gemini that answers with these SSE events (or this status). */
 async function withGemini(events, fn, { status = 200, text = "", env = {} } = {}) {
   const saved = { fetch: globalThis.fetch, env: { ...process.env } };
-  Object.assign(process.env, { LLM_PROVIDER: "gemini", GEMINI_API_KEY: "g" }, env);
+  Object.assign(process.env, { LLM_PROVIDER: "gemini", GEMINI_API_KEY: "g", GEMINI_BASE_URL: "http://127.0.0.1:8090/v1beta" }, env);
   const fake = fakeSse(events, { ok: status === 200, status, text });
   globalThis.fetch = fake;
   try { return await fn(fake); } finally {
@@ -396,6 +421,14 @@ test("a reading names its project: none, or one the caller is not in, is refused
     equal((await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }] }, "kc|bob"))).status, 403, "a viewer may not spend tokens");
     equal(fake.calls.length, 0);
   });
+});
+
+test("full-sheet extraction blocks an external model before network access", async () => {
+  await withGemini(geminiStream, async (fake) => {
+    const res = await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }] }));
+    equal(res.status, 403); equal((await res.json()).code, "ISO_EXTERNAL_BLOCKED");
+    equal(fake.calls.length, 0, "no raw drawing reaches a hosted provider");
+  }, { env: { GEMINI_BASE_URL: "https://example.com/v1beta" } });
 });
 
 test("every call is written down: who, which model and pass, the tokens spent", async () => {

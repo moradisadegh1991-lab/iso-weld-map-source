@@ -1,0 +1,11 @@
+# Isometric local OCR and vision review
+
+The page starts in PDF OCR mode on each load; a browser's old model preference is not restored. The existing local reader returns its weld candidates, BOM, line data and other readings. A person can explicitly request one local vision review after OCR. The reduced page image and selected OCR weld/BOM fields go to the configured same-host vision service. The model response is untrusted: notes and coordinates are bounded, displayed as proposals and never written to, or used to approve, the register automatically. A new sheet, project or saved run invalidates the review state.
+
+Both this review and the older extraction endpoint refuse any model destination other than numeric `127.0.0.1` over HTTP. The adapters reject HTTP redirects. The operator must run a trusted local model, not a forwarding proxy, and apply server/network egress controls. This is a server-wide restriction, not a per-project policy. The requested redacted external economic mode is not implemented; do not disable or bypass this restriction for it.
+
+`ISO_LOCAL_MODEL_URL` and `ISO_LOCAL_MODEL` configure the optional same-host OpenAI-compatible vision server. A missing model reports an error without discarding OCR. The existing reader's Python, OpenCV, NumPy, Tesseract and Poppler dependencies remain necessary on the VPS. No migration is introduced.
+
+Validation and limits: the existing golden PDF `25-1004-SH1-0` produced all 15 expected weld numbers with no extra numbers in a direct OCR run. The browser flow is exercised with that PDF and a fake loopback service, not a real vision model. The fake service checks request plumbing and displays a sample proposal; it cannot establish model quality, engineering accuracy, real-world cost savings, or confidentiality of a separately operated model server. Provider routing, permission checks and loopback/redirect guards have focused automated tests. The guard was removed in an isolated copy and its test failed as expected.
+
+Do not claim production acceptance without testing representative project drawings against independently approved weld registers and verifying the deployed model's network isolation. Count missed/extra welds, BOM errors, review time, GPU cost and any external token charges before selecting a deployment.

@@ -2,6 +2,8 @@
 
 > سند مرجع: `docs/epc-llm/02-reference-architecture.md` §۲٫۱
 
+> سیاست فعلی استخراج ایزومتریک: `/api/extract` فقط نشانی عددی `127.0.0.1` را می‌پذیرد و تغییر مسیر را رد می‌کند. مثال‌های ارائه‌دهندگان بیرونی در این سند، توضیح adapter هستند و به معنی مجاز بودن ارسال نقشه به سرویس بیرونی نیستند. سرویس محلی باید مورد اعتماد و از نظر خروج شبکه کنترل‌شده باشد.
+
 هدف این لایه یک جمله است: **مهاجرت از API میزبان‌شده به خوشهٔ vLLM داخل سایت،
 یک تغییر پیکربندی باشد نه بازنویسی.**
 
@@ -150,3 +152,20 @@ npm run db:test    # شامل ۲۵ تست این لایه
 هر دو adapter در برابر یک transport ساختگی که SSE واقعی را بازپخش می‌کند تست
 می‌شوند: بازسازی متن، شمارش توکن، نگاشت stop reason، ارسال تصویر، و رفتار در
 برابر خطای upstream — بدون مدل، بدون کلید، بدون شبکه.
+
+### Optional same-host isometric OCR review
+
+After local PDF OCR, the piping page offers a separate read-only AI review. Configure
+`ISO_LOCAL_MODEL_URL=http://127.0.0.1:PORT/v1` and `ISO_LOCAL_MODEL=<vision-model-id>`
+on the application server. The service at that address must itself be a trusted,
+self-hosted model; a loopback proxy that forwards content externally defeats that
+assumption. The route accepts numeric loopback HTTP only and refuses redirects. It
+sends a reduced JPEG and marker candidates, then shows unverified advice to the
+engineer. It never edits or approves the register. Missing or failed model setup
+leaves the OCR result available.
+
+The older `/api/extract` route also refuses non-loopback destinations, including
+requests made directly to the API, and provider adapters reject redirects. This
+policy applies globally to isometric extraction, not per project. A loopback service
+must be trusted not to forward data; enforce network egress restrictions at deployment.
+Redacted external mode and project-level privacy settings are not yet implemented.
