@@ -83,10 +83,18 @@ export default function Page() {
   const [styleRead, setStyleRead] = useState(null);
   // How a sheet is read: a model (the three passes), or with no model at all —
   // OpenCV and a local tesseract on this server read the printed weld markers
-  // (app/api/read-local, tools/iso-read.py). Remembered on this browser.
-  const [reader, setReaderState] = useState("model");
-  useEffect(() => { try { const r = localStorage.getItem("epc.isoReader"); if (r === "local" || r === "model") setReaderState(r); } catch { /* ignore */ } }, []);
-  const setReader = (r) => { setReaderState(r); try { localStorage.setItem("epc.isoReader", r); } catch { /* ignore */ } };
+  // (app/api/read-local, tools/iso-read.py). A new page always starts locally;
+  // an old browser preference must not silently send a new drawing to a model.
+  const [reader, setReader] = useState("local");
+  const [localReviewInput, setLocalReviewInput] = useState(null);
+  const [localReview, setLocalReview] = useState(null);
+  const [localReviewError, setLocalReviewError] = useState("");
+  const [localReviewBusy, setLocalReviewBusy] = useState(false);
+  const localReviewEpoch = useRef(0);
+  const clearLocalReview = () => {
+    localReviewEpoch.current += 1;
+    setLocalReviewInput(null); setLocalReview(null); setLocalReviewError(""); setLocalReviewBusy(false);
+  };
   const [renderMode, setRenderMode] = useState("solid");
   const [colorBy, setColorBy] = useState("spool");
   const [editing, setEditing] = useState("");
@@ -101,6 +109,7 @@ export default function Page() {
   const [pdfPage, setPdfPage] = useState(null);
   const fileRef = useRef(null);
   const session = useSession();
+  useEffect(() => { clearLocalReview(); }, [session.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
   // what the saved revision holds against deleting a mark (installed / tested equipment, installed allocation lines, an approved run): advice
   // before the confirm — the server decides on save
   const { protect, saved: savedState } = useSavedProtection({ session, documentId: openRun?.run?.documentId || null, items: data?.sheetMarkup?.items || [], status: openRun?.run?.status });
@@ -136,7 +145,7 @@ export default function Page() {
 
   /* Open a persisted run for review: its payload becomes what is on screen. */
   async function openRunForReview(runId) {
-    setErr(null);
+    clearLocalReview(); setErr(null);
     setBusy("خواندن اجرا…");
     try {
       const body = await session.call(`/api/runs/${runId}?projectId=${session.projectId}`);
@@ -280,7 +289,7 @@ export default function Page() {
 
   async function onFile(f) {
     if (!f) return;
-    setErr(null); setNote(null); setSelected(null);
+    setErr(null); setNote(null); setSelected(null); clearLocalReview();
 
     if (isPdf(f)) {
       try {
@@ -440,6 +449,7 @@ export default function Page() {
   async function onPdfPage(index, source = pdf) {
     if (!source) return;
     setErr(null); setNote(null); setSelected(null);
+    clearLocalReview();
     if (reader === "local") return readLocal(index, source);
     try {
       setBusy(`رندر برگ ${index} در ۳۰۰ DPI…`);
@@ -468,6 +478,7 @@ export default function Page() {
    * person to check.
    */
   async function readLocal(index, source) {
+    const epoch = localReviewEpoch.current;
     try {
       setBusy(`خواندن برگ ${index} بدون مدل (OCR روی سرور)…`);
       // the sheet the rows are reviewed beside: sharp enough to read a weld number at a zoom
@@ -477,6 +488,14 @@ export default function Page() {
       const pdfBase64 = base64FromBuffer(new Uint8Array(await source.file.arrayBuffer()));
       const r = await session.call("/api/read-local", { method: "POST",
         body: JSON.stringify({ projectId: session.projectId, pdfBase64, page: index }) });
+      if (epoch !== localReviewEpoch.current) return;
+      // The optional vision review is an explicit second step, after OCR.
+      // Downsize locally; this data is sent only to the dedicated local-only route.
+      const thumb = document.createElement("canvas");
+      const scale = Math.min(1, 1600 / Math.max(canvas.width, canvas.height));
+      thumb.width = Math.max(1, Math.round(canvas.width * scale)); thumb.height = Math.max(1, Math.round(canvas.height * scale));
+      thumb.getContext("2d").drawImage(canvas, 0, 0, thumb.width, thumb.height);
+      setLocalReviewInput({ image: thumb.toDataURL("image/jpeg", 0.72).split(",")[1], marks: r.marks, bom: Array.isArray(r.bom) ? r.bom : [] });
       const title = r.meta || {};
       const line = r.lineData || {};
       // the line number and class only as read for certain (the reader returns null otherwise)
@@ -533,8 +552,20 @@ export default function Page() {
     }
   }
 
+  async function reviewLocalOcr() {
+    if (!localReviewInput) return;
+    const epoch = ++localReviewEpoch.current;
+    setLocalReviewBusy(true); setLocalReview(null); setLocalReviewError("");
+    try {
+      const result = await session.call("/api/iso-local-review", { method: "POST",
+        body: JSON.stringify({ projectId: session.projectId, ...localReviewInput }) });
+      if (epoch === localReviewEpoch.current) setLocalReview(result.review);
+    } catch (e) { if (epoch === localReviewEpoch.current) setLocalReviewError(e.message); }
+    finally { if (epoch === localReviewEpoch.current) setLocalReviewBusy(false); }
+  }
+
   function loadDemo() {
-    setErr(null); setNote(null); setPreview(null); setSelected(null); setSourceFile(null);
+    clearLocalReview(); setErr(null); setNote(null); setPreview(null); setSelected(null); setSourceFile(null);
     setOpenRun(null);
     setData(DEMO);
     setEditing(JSON.stringify(DEMO, null, 2));
@@ -547,6 +578,7 @@ export default function Page() {
    * a drawing number guessed from a file name would be a fact nobody read.
    */
   function manualEntry() {
+    clearLocalReview();
     const blank = { meta: { drawingNo: "", rev: "", sheet: "1/1", lineNo: "", unit: "", pipingClass: "", nps: null, schedule: "" },
       bom: [], nodes: [], edges: [], notes: [] };
     setErr(null); setNote(null); setPdf(null); setOpenRun(null); setSelected(null);
@@ -617,9 +649,10 @@ export default function Page() {
           <div className="iso-reader" data-reader={reader}>
             <span className="muted sm">روش خواندن نقشه:</span>
             <label className="sm"><input type="radio" name="iso-reader" value="model" checked={reader === "model"}
-              onChange={() => setReader("model")} /> مدل هوش مصنوعی (کلید API، توکن)</label>
+              onChange={() => setReader("model")} /> مدل محلی — خواندن مستقیم نقشه</label>
             <label className="sm"><input type="radio" name="iso-reader" value="local" checked={reader === "local"}
               onChange={() => setReader("local")} /> بدون مدل — OCR روی همین سرور، بدون توکن (فقط PDF)</label>
+            {reader === "model" && <span className="muted sm" role="note">این روش تصویر کامل و برش‌ها را فقط به مدل مورد اعتماد روی همین سرور می‌فرستد. ارسال به نشانی بیرونی مسدود است؛ سرویس محلی نباید اطلاعات را به بیرون منتقل کند.</span>}
             {reader === "local" && <span className="muted sm">شمارهٔ جوش، شکل قاب و برچسب THD/FFW/BR خوانده می‌شود؛ شمارهٔ نقشه، قطر، نوع اتصال و اسپول را شخص در فرم کامل می‌کند.</span>}
           </div>
 
@@ -629,7 +662,7 @@ export default function Page() {
             onClick={() => dim && !busy && fileRef.current?.click()}>
             <div className="big">{busy || (dim ? "نقشه ایزومتریک را اینجا رها کنید (PDF یا تصویر)" : "اول نما را انتخاب کنید")}</div>
             <div className="muted">
-              PDF · JPG · PNG — PDF برداری بهترین ورودی است و در ۳۰۰ DPI رندر می‌شود. تقسیم به کاشی و فشرده‌سازی در مرورگر شما انجام می‌شود، پس فایل اصلی جایی نمی‌رود
+              PDF · JPG · PNG — PDF برداری بهترین ورودی است و در ۳۰۰ DPI رندر می‌شود. PDF برای OCR به سرور فرستاده می‌شود؛ بررسی مدل تنها به سرویس مورد اعتماد روی همان سرور محدود است
             </div>
             <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden
               onChange={(e) => onFile(e.target.files?.[0])} />
@@ -722,6 +755,21 @@ export default function Page() {
       {data && listed && (
         // one column: the weld list (and the drawing beside its rows) takes the page's width
         <section className="stage listed">
+          {!openRun && localReviewInput && <div className="note" data-local-ai-review>
+            <button type="button" className="btn ghost sm" disabled={localReviewBusy} onClick={reviewLocalOcr}>
+              {localReviewBusy ? "در حال بررسی با مدل محلی…" : "بررسی نتیجهٔ OCR با مدل محلی"}</button>
+            <span className="sm muted"> پیشنهاد مدل نیاز به بازبینی مهندس دارد و رجیستر را تغییر نمی‌دهد.</span>
+            {localReviewError && <p className="err">{localReviewError}</p>}
+            {localReview && <div data-local-ai-proposals>
+              <p className="sm muted">علامت‌های قرمز فقط پیشنهاد مدل‌اند؛ شماره و محل را پیش از ثبت کنترل کنید.</p>
+              <div style={{ position: "relative", width: "min(100%, 800px)" }}>
+                <img alt="نقاط پیشنهادی مدل روی تصویر ارسالی" src={`data:image/jpeg;base64,${localReviewInput.image}`} style={{ display: "block", width: "100%" }} />
+                {localReview.welds.map((w, i) => <span key={i} title={w.reason} style={{ position: "absolute", left: `${w.x * 100}%`, top: `${w.y * 100}%`, transform: "translate(-50%, -50%)", background: "#c40000", color: "white", borderRadius: "50%", padding: "3px 6px" }}>{w.no || "?"}</span>)}
+              </div>
+              {localReview.notes.map((n, i) => <p className="sm" key={i}>{n}</p>)}
+              {localReview.welds.map((w, i) => <p className="sm" key={`w${i}`}>{w.no || "؟"}: {w.reason}</p>)}
+            </div>}
+          </div>}
           <div className="pane">
             <WeldListEntry key={`${openRun?.run?.id || "new"}:${openRun?.run?.payloadHash || ""}`} session={session} initial={data} run={openRun}
               sheet={openRun ? runSheet : preview ? { src: preview, page: pdfPage || 1, file: sourceFile } : null}
@@ -729,7 +777,7 @@ export default function Page() {
               // the sheets of the open PDF, to move between them from the workspace's explorer (a saved run opened from the queue has no PDF here)
               sheets={!openRun && pdf && pdf.pages.length > 1 ? { pages: pdf.pages, current: pdfPage || 1,
                 onPick: (i) => { if (window.confirm("برگ دیگر خوانده شود؟ تغییرات ذخیره‌نشدهٔ این برگ از بین می‌رود.")) onPdfPage(i); } } : null}
-              onSaved={openRunForReview} onClose={() => { setData(null); setOpenRun(null); }}
+              onSaved={openRunForReview} onClose={() => { clearLocalReview(); setData(null); setOpenRun(null); }}
               // the drawing style's template (another designer's sheets): its own tab of the workspace
               styleTab={data.weldMarks?.reader === "local" && styleRead?.style === "generic" && preview ? (
                 <StyleTemplate session={session} preview={preview} read={styleRead} open
