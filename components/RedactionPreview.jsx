@@ -2,17 +2,18 @@
 import { useEffect, useRef, useState } from "react";
 import { prepareMaskedSource } from "../lib/client/image-redaction.mjs";
 
-/** Local preview only. It does not authorize or perform any model request. */
-export default function RedactionPreview({ src }) {
+/** The preview is local; a separately confirmed action can submit the selected masks. */
+export default function RedactionPreview({ src, onSend, busy = false }) {
   const image = useRef(null), origin = useRef(null);
+  const [confirmed, setConfirmed] = useState(false);
   const [boxes, setBoxes] = useState([]), [drag, setDrag] = useState(null), [masked, setMasked] = useState(null), [error, setError] = useState("");
-  useEffect(() => { origin.current = null; setBoxes([]); setDrag(null); setMasked(null); setError(""); }, [src]);
+  useEffect(() => { origin.current = null; setBoxes([]); setDrag(null); setMasked(null); setError(""); setConfirmed(false); }, [src]);
   const point = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) };
   };
   const box = (a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) });
-  const down = (e) => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); origin.current = point(e); setDrag(box(origin.current, origin.current)); };
+  const down = (e) => { if (e.button !== 0 || busy) return; setConfirmed(false); setMasked(null); e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); origin.current = point(e); setDrag(box(origin.current, origin.current)); };
   const move = (e) => { if (origin.current) setDrag(box(origin.current, point(e))); };
   const up = (e) => {
     if (!origin.current) return;
@@ -27,8 +28,8 @@ export default function RedactionPreview({ src }) {
     } catch { setMasked(null); setError("پیش‌نمایش ساخته نشد؛ کادرها و تصویر را بررسی کنید."); }
   };
   return <details className="pane" data-redaction-preview>
-    <summary>پیش‌نمایش محلی پوشاندن اطلاعات محرمانه</summary>
-    <p className="sm muted">روی نام پروژه، کارفرما، لوگو و هر اطلاعات محرمانهٔ دیگر کادر بکشید. فقط نواحی انتخاب‌شده پوشانده می‌شوند. این پیش‌نمایش هیچ چیزی به مدل نمی‌فرستد و تمام ناشناس‌سازی را تضمین نمی‌کند.</p>
+    <summary>پوشاندن لوگو و بازبینی پیش از ارسال</summary>
+    <p className="sm muted">روی تمام لوگوهای نقشه کادر بکشید و پیش‌نمایش را بررسی کنید. فقط نواحی انتخاب‌شده پوشانده می‌شوند؛ تشخیص لوگو خودکار نیست. سایر اطلاعات نقشه به مدل انتخاب‌شده ارسال می‌شود.</p>
     <div onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { origin.current = null; setDrag(null); }}
       style={{ position: "relative", width: "min(100%, 800px)", touchAction: "none", cursor: "crosshair" }} data-redaction-source>
       <img ref={image} src={src} alt="نقشه برای انتخاب نواحی محرمانه" draggable={false} style={{ display: "block", width: "100%" }} />
@@ -36,12 +37,14 @@ export default function RedactionPreview({ src }) {
     </div>
     <div className="row" style={{ gap: 8, marginTop: 8 }}>
       <span className="sm">{boxes.length} کادر</span>
-      <button type="button" className="btn ghost sm" disabled={!boxes.length} onClick={() => { setBoxes((old) => old.slice(0, -1)); setMasked(null); }}>حذف آخرین کادر</button>
-      <button type="button" className="btn ghost sm" disabled={!boxes.length} onClick={() => { setBoxes([]); setMasked(null); }}>پاک‌کردن کادرها</button>
+      <button type="button" className="btn ghost sm" disabled={!boxes.length} onClick={() => { setBoxes((old) => old.slice(0, -1)); setMasked(null); setConfirmed(false); }}>حذف آخرین کادر</button>
+      <button type="button" className="btn ghost sm" disabled={!boxes.length} onClick={() => { setBoxes([]); setMasked(null); setConfirmed(false); }}>پاک‌کردن کادرها</button>
       <button type="button" className="btn sm" disabled={!boxes.length} onClick={preview}>ساخت پیش‌نمایش پوشیده</button>
     </div>
     {error && <p className="err" role="alert">{error}</p>}
     {masked && <div data-redaction-result><p className="sm">پیش‌نمایش محلی؛ {masked.count} تصویر از نسخهٔ پوشیده ساخته شد. خروجی هنوز به هیچ مدلی ارسال نشده است.</p>
-      <img src={masked.url} alt="پیش‌نمایش نقشهٔ پوشیده" style={{ display: "block", maxWidth: "min(100%, 800px)" }} /></div>}
+      <img src={masked.url} alt="پیش‌نمایش نقشهٔ پوشیده" style={{ display: "block", maxWidth: "min(100%, 800px)" }} />
+      {onSend && <><label className="sm"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> همهٔ لوگوها را مشخص کرده‌ام و پیش‌نمایش را بررسی کرده‌ام</label> <button type="button" className="btn sm" data-send-masked disabled={!confirmed || busy} onClick={() => onSend(boxes)}>ارسال تصویر پوشیده به مدل و استخراج</button></>}
+    </div>}
   </details>;
 }

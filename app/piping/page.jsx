@@ -34,7 +34,8 @@ import ReviewQueue from "../../components/ReviewQueue";
 import EditPanel from "../../components/EditPanel";
 import { useSession } from "../../lib/client/session.mjs";
 import { useProjectData } from "../../lib/client/platform.mjs";
-import { prepare, prepareSource } from "../../lib/client/image-prep.mjs";
+import { loadImage } from "../../lib/client/image-prep.mjs";
+import { prepareMaskedSource } from "../../lib/client/image-redaction.mjs";
 import RedactionPreview from "../../components/RedactionPreview";
 import { isPdf, openPdf, renderPage } from "../../lib/client/pdf.mjs";
 import PdfSheetPicker from "../../components/PdfSheetPicker";
@@ -51,6 +52,8 @@ const SHEET_MARKUP = true;
 export default function Page() {
   const [data, setData] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [pendingCloud, setPendingCloud] = useState(null);
+  const [sourceProject, setSourceProject] = useState(null);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState(null);
   const [note, setNote] = useState(null);
@@ -110,7 +113,9 @@ export default function Page() {
   const [pdfPage, setPdfPage] = useState(null);
   const fileRef = useRef(null);
   const session = useSession();
-  useEffect(() => { clearLocalReview(); }, [session.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const currentProject = useRef(session.projectId);
+  currentProject.current = session.projectId;
+  useEffect(() => { clearLocalReview(); setPendingCloud(null); }, [session.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
   // what the saved revision holds against deleting a mark (installed / tested equipment, installed allocation lines, an approved run): advice
   // before the confirm — the server decides on save
   const { protect, saved: savedState } = useSavedProtection({ session, documentId: openRun?.run?.documentId || null, items: data?.sheetMarkup?.items || [], status: openRun?.run?.status });
@@ -290,7 +295,7 @@ export default function Page() {
 
   async function onFile(f) {
     if (!f) return;
-    setErr(null); setNote(null); setSelected(null); clearLocalReview();
+    setErr(null); setNote(null); setSelected(null); clearLocalReview(); setPendingCloud(null); setSourceProject(session.projectId);
 
     if (isPdf(f)) {
       try {
@@ -318,7 +323,9 @@ export default function Page() {
       setPreview(URL.createObjectURL(f));
       setPdf(null);
       setPdfPage(null);
-      await runExtraction(await prepare(f));
+      const image = await loadImage(f);
+      setPendingCloud({ image, page: null, projectId: session.projectId });
+      setBusy("");
     } catch (e) {
       setErr(e.message);
       setBusy("");
@@ -457,9 +464,8 @@ export default function Page() {
       const { canvas, effectiveDpi } = await renderPage(source.doc, index, { dpi: 300 });
       setPreview(canvas.toDataURL("image/jpeg", 0.6));
       setPdfPage(index);
-      await runExtraction(prepareSource(canvas), {
-        prefix: `برگ ${index} · ${effectiveDpi} DPI · `, page: index,
-      });
+      setPendingCloud({ image: canvas, page: index, projectId: session.projectId, prefix: `برگ ${index} · ${effectiveDpi} DPI · ` });
+      setBusy("");
     } catch (e) {
       setErr(e.message);
       setBusy("");
@@ -551,6 +557,18 @@ export default function Page() {
     } finally {
       setBusy("");
     }
+  }
+
+  async function sendMaskedToModel(boxes, pending = null) {
+    try {
+      setErr(null); setBusy("آماده‌سازی تصویر پوشیده برای مدل…");
+      if (!sourceProject || sourceProject !== currentProject.current || (pending && pending.projectId !== currentProject.current)) throw new Error("پروژه تغییر کرده است؛ نقشه را دوباره انتخاب کنید.");
+      const rendered = pending?.image || (await renderPage(pdf.doc, pdfPage, { dpi: 300 })).canvas;
+      if (sourceProject !== currentProject.current) throw new Error("پروژه تغییر کرده است؛ نقشه را دوباره انتخاب کنید.");
+      const prepared = prepareMaskedSource(rendered, boxes);
+      setPendingCloud(null);
+      await runExtraction(prepared, { prefix: pending?.prefix || `برگ ${pdfPage} · `, page: pending?.page ?? pdfPage });
+    } catch (e) { setErr(e.message); setBusy(""); }
   }
 
   async function reviewLocalOcr() {
@@ -650,10 +668,10 @@ export default function Page() {
           <div className="iso-reader" data-reader={reader}>
             <span className="muted sm">روش خواندن نقشه:</span>
             <label className="sm"><input type="radio" name="iso-reader" value="model" checked={reader === "model"}
-              onChange={() => setReader("model")} /> مدل محلی — خواندن مستقیم نقشه</label>
+              onChange={() => setReader("model")} /> مدل API — خواندن نقشه پس از پوشاندن لوگو</label>
             <label className="sm"><input type="radio" name="iso-reader" value="local" checked={reader === "local"}
               onChange={() => setReader("local")} /> بدون مدل — OCR روی همین سرور، بدون توکن (فقط PDF)</label>
-            {reader === "model" && <span className="muted sm" role="note">این روش تصویر کامل و برش‌ها را فقط به مدل مورد اعتماد روی همین سرور می‌فرستد. ارسال به نشانی بیرونی مسدود است؛ سرویس محلی نباید اطلاعات را به بیرون منتقل کند.</span>}
+            {reader === "model" && <span className="muted sm" role="note">پس از مشخص‌کردن لوگو، تصویر پوشیده و اطلاعات نقشه به ارائه‌دهندهٔ مدل انتخاب‌شده ارسال می‌شود.</span>}
             {reader === "local" && <span className="muted sm">شمارهٔ جوش، شکل قاب و برچسب THD/FFW/BR خوانده می‌شود؛ شمارهٔ نقشه، قطر، نوع اتصال و اسپول را شخص در فرم کامل می‌کند.</span>}
           </div>
 
@@ -663,11 +681,13 @@ export default function Page() {
             onClick={() => dim && !busy && fileRef.current?.click()}>
             <div className="big">{busy || (dim ? "نقشه ایزومتریک را اینجا رها کنید (PDF یا تصویر)" : "اول نما را انتخاب کنید")}</div>
             <div className="muted">
-              PDF · JPG · PNG — PDF برداری بهترین ورودی است و در ۳۰۰ DPI رندر می‌شود. PDF برای OCR به سرور فرستاده می‌شود؛ بررسی مدل تنها به سرویس مورد اعتماد روی همان سرور محدود است
+              PDF · JPG · PNG — PDF برداری بهترین ورودی است و در ۳۰۰ DPI رندر می‌شود. PDF برای OCR به سرور فرستاده می‌شود؛ برای مدل API ابتدا لوگو را روی پیش‌نمایش مشخص کنید
             </div>
             <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden
               onChange={(e) => onFile(e.target.files?.[0])} />
           </div>
+
+          {pendingCloud && preview && <RedactionPreview src={preview} onSend={(boxes) => sendMaskedToModel(boxes, pendingCloud)} busy={!!busy} />}
 
           <div className="key">
             <label className="muted">
@@ -756,7 +776,7 @@ export default function Page() {
       {data && listed && (
         // one column: the weld list (and the drawing beside its rows) takes the page's width
         <section className="stage listed">
-          {!openRun && preview && data.weldMarks?.reader === "local" && <RedactionPreview src={preview} />}
+          {!openRun && preview && data.weldMarks?.reader === "local" && <RedactionPreview src={preview} onSend={pdf && pdfPage && sourceProject === session.projectId ? (boxes) => sendMaskedToModel(boxes) : undefined} busy={!!busy} />}
           {!openRun && localReviewInput && <div className="note" data-local-ai-review>
             <button type="button" className="btn ghost sm" disabled={localReviewBusy} onClick={reviewLocalOcr}>
               {localReviewBusy ? "در حال بررسی با مدل محلی…" : "بررسی نتیجهٔ OCR با مدل محلی"}</button>
