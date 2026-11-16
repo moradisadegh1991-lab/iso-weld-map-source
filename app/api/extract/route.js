@@ -6,7 +6,6 @@ export const maxDuration = 300;
 import { ELL90, ELL45, TEE_C } from "../../../lib/standards";
 import { createLlmRouter } from "../../../lib/llm/index.mjs";
 import { resolveEndpoints } from "../../../lib/db/repos/llm-endpoints.mjs";
-import { localReviewUrl } from "../../../lib/llm/iso-local-review.mjs";
 import { parseLoose, cleanJsonText } from "../../../lib/llm/parse.mjs";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
@@ -466,13 +465,6 @@ export async function POST(req) {
             : "سرویس سازگار با OpenAI تنظیم نشده: آدرس و کلید را در صفحهٔ ایزومتریک (ثبت کلید و آدرس سرور) ثبت کنید، یا LLM_BASE_URL را در Environment Variables بگذارید.",
         code: "LLM_NOT_CONFIGURED",
       }, { status: 400 });
-    }
-
-    // Full drawings and repair JSON may contain confidential project identifiers.
-    // Legacy extraction is therefore confined to an explicitly trusted model on
-    // this host. A browser cannot override this with its selected model or body.
-    try { localReviewUrl(client.baseUrl); } catch {
-      return Response.json({ code: "ISO_EXTERNAL_BLOCKED", error: "ارسال نقشه به مدل خارج از سرور مسدود است؛ از OCR یا مدل محلی استفاده کنید." }, { status: 403 });
     }
 
     // the project's monthly allowance, before anything is spent

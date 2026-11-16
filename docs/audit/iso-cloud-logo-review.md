@@ -1,0 +1,7 @@
+# Cloud isometric extraction and logo review
+
+The project owner has permitted sending drawing information to the configured OpenAI, Gemini or Claude API, with the exception of logos. The normal browser workflow pauses before model extraction. The user selects every logo region and reviews the local preview before explicitly submitting. The browser paints those regions on the original image or 300-DPI PDF render before generating the full image and overlapping tiles; all extraction passes use those painted images. OCR remains available locally before a model extraction. Extraction results and weld positions remain proposals for an engineer to review.
+
+Logo detection is manual: the application cannot detect an omitted logo or establish that the selected boxes cover it. The server receives the image data supplied by the authenticated caller; the endpoint does not independently detect logos or prove they were masked. Direct API clients must perform equivalent masking. Other drawing content, including names and project information and any model repair context, may be sent to the chosen provider. Model requests can incur costs: the existing extraction pipeline uses multiple passes and may use a repair or second-reader pass. This change does not establish a measured reduction in cost or extraction accuracy. Provider keys stay on the server and authorization, accounting, and monthly limits remain in place.
+
+No database migration is required. Testing with a mocked provider does not establish connectivity, price, or accuracy for real provider accounts.

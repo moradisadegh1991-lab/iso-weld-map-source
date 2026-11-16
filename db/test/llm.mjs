@@ -423,20 +423,12 @@ test("a reading names its project: none, or one the caller is not in, is refused
   });
 });
 
-test("full-sheet extraction blocks an external model before network access", async () => {
-  await withGemini(geminiStream, async (fake) => {
-    const res = await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }] }));
-    equal(res.status, 403); equal((await res.json()).code, "ISO_EXTERNAL_BLOCKED");
-    equal(fake.calls.length, 0, "no raw drawing reaches a hosted provider");
-  }, { env: { GEMINI_BASE_URL: "https://example.com/v1beta" } });
-});
-
 test("every call is written down: who, which model and pass, the tokens spent", async () => {
   const before = (await usageRows()).length;
   await withGemini(geminiStream, async () => {
     const res = await extractRoute.POST(post({ projectId, pass: "meta", images: [{ data: "A" }] }));
     equal(res.status, 200);
-  });
+  }, { env: { GEMINI_BASE_URL: "https://example.com/v1beta" } });
   const rows = await usageRows();
   equal(rows.length, before + 1);
   const r = rows.at(-1);
