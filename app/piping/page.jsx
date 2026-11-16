@@ -92,12 +92,13 @@ export default function Page() {
   const [reader, setReader] = useState("local");
   const [localReviewInput, setLocalReviewInput] = useState(null);
   const [localReview, setLocalReview] = useState(null);
+  const [reviewSource, setReviewSource] = useState("");
   const [localReviewError, setLocalReviewError] = useState("");
   const [localReviewBusy, setLocalReviewBusy] = useState(false);
   const localReviewEpoch = useRef(0);
   const clearLocalReview = () => {
     localReviewEpoch.current += 1;
-    setLocalReviewInput(null); setLocalReview(null); setLocalReviewError(""); setLocalReviewBusy(false);
+    setLocalReviewInput(null); setLocalReview(null); setReviewSource(""); setLocalReviewError(""); setLocalReviewBusy(false);
   };
   const [renderMode, setRenderMode] = useState("solid");
   const [colorBy, setColorBy] = useState("spool");
@@ -250,7 +251,7 @@ export default function Page() {
 
       if (!resp.ok || !j) {
         const snippet = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
-        if ((resp.status === 504 || resp.status === 502) && attempt === 0 && !(j && j.raw)) {
+        if (pass !== "ocr_review" && (resp.status === 504 || resp.status === 502) && attempt === 0 && !(j && j.raw)) {
           return callPass(pass, images, 1, extra, overrideModel);
         }
         throw new Error(
@@ -571,6 +572,21 @@ export default function Page() {
     } catch (e) { setErr(e.message); setBusy(""); }
   }
 
+  async function reviewCloudOcr(boxes) {
+    if (!localReviewInput || !pdf || !pdfPage) return;
+    const epoch = ++localReviewEpoch.current;
+    setLocalReviewBusy(true); setLocalReview(null); setLocalReviewError("");
+    try {
+      if (!sourceProject || sourceProject !== currentProject.current) throw new Error("پروژه تغییر کرده است؛ نقشه را دوباره انتخاب کنید.");
+      const rendered = (await renderPage(pdf.doc, pdfPage, { dpi: 300 })).canvas;
+      if (epoch !== localReviewEpoch.current || sourceProject !== currentProject.current) return;
+      const prepared = prepareMaskedSource(rendered, boxes);
+      const result = await callPass("ocr_review", prepared.images, 0, { ocrContext: { marks: localReviewInput.marks, bom: localReviewInput.bom } });
+      if (epoch === localReviewEpoch.current && sourceProject === currentProject.current) { setLocalReview(result.data); setReviewSource(`بازبینی API · ${result.model || "مدل انتخاب‌شده"}`); }
+    } catch (e) { if (epoch === localReviewEpoch.current) setLocalReviewError(e.message); }
+    finally { if (epoch === localReviewEpoch.current) setLocalReviewBusy(false); }
+  }
+
   async function reviewLocalOcr() {
     if (!localReviewInput) return;
     const epoch = ++localReviewEpoch.current;
@@ -578,7 +594,7 @@ export default function Page() {
     try {
       const result = await session.call("/api/iso-local-review", { method: "POST",
         body: JSON.stringify({ projectId: session.projectId, ...localReviewInput }) });
-      if (epoch === localReviewEpoch.current) setLocalReview(result.review);
+      if (epoch === localReviewEpoch.current) { setLocalReview(result.review); setReviewSource("بازبینی مدل محلی"); }
     } catch (e) { if (epoch === localReviewEpoch.current) setLocalReviewError(e.message); }
     finally { if (epoch === localReviewEpoch.current) setLocalReviewBusy(false); }
   }
@@ -776,14 +792,14 @@ export default function Page() {
       {data && listed && (
         // one column: the weld list (and the drawing beside its rows) takes the page's width
         <section className="stage listed">
-          {!openRun && preview && data.weldMarks?.reader === "local" && <RedactionPreview src={preview} onSend={pdf && pdfPage && sourceProject === session.projectId ? (boxes) => sendMaskedToModel(boxes) : undefined} busy={!!busy} />}
+          {!openRun && preview && data.weldMarks?.reader === "local" && <RedactionPreview src={preview} onSend={pdf && pdfPage && sourceProject === session.projectId ? (boxes) => sendMaskedToModel(boxes) : undefined} onReview={pdf && pdfPage && localReviewInput && sourceProject === session.projectId ? reviewCloudOcr : undefined} busy={!!busy || localReviewBusy} />}
           {!openRun && localReviewInput && <div className="note" data-local-ai-review>
             <button type="button" className="btn ghost sm" disabled={localReviewBusy} onClick={reviewLocalOcr}>
               {localReviewBusy ? "در حال بررسی با مدل محلی…" : "بررسی نتیجهٔ OCR با مدل محلی"}</button>
-            <span className="sm muted"> پیشنهاد مدل نیاز به بازبینی مهندس دارد و رجیستر را تغییر نمی‌دهد.</span>
+            <span className="sm muted">  پیشنهاد مدل نیاز به بازبینی مهندس دارد و رجیستر را تغییر نمی‌دهد؛ بازبینی ابری در بخش پوشاندن لوگو با یک درخواست انجام می‌شود.</span>
             {localReviewError && <p className="err">{localReviewError}</p>}
             {localReview && <div data-local-ai-proposals>
-              <p className="sm muted">علامت‌های قرمز فقط پیشنهاد مدل‌اند؛ شماره و محل را پیش از ثبت کنترل کنید.</p>
+              <p className="sm muted">{reviewSource} — علامت‌های قرمز فقط پیشنهاد مدل‌اند؛ شماره و محل را پیش از ثبت کنترل کنید.</p>
               <div style={{ position: "relative", width: "min(100%, 800px)" }}>
                 <img alt="نقاط پیشنهادی مدل روی تصویر ارسالی" src={`data:image/jpeg;base64,${localReviewInput.image}`} style={{ display: "block", width: "100%" }} />
                 {localReview.welds.map((w, i) => <span key={i} title={w.reason} style={{ position: "absolute", left: `${w.x * 100}%`, top: `${w.y * 100}%`, transform: "translate(-50%, -50%)", background: "#c40000", color: "white", borderRadius: "50%", padding: "3px 6px" }}>{w.no || "?"}</span>)}
