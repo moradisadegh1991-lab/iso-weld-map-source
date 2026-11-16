@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { prepareMaskedSource } from "../lib/client/image-redaction.mjs";
 
 /** The preview is local; a separately confirmed action can submit the selected masks. */
-export default function RedactionPreview({ src, onSend, busy = false }) {
+export default function RedactionPreview({ src, onSend, onReview, busy = false }) {
   const image = useRef(null), origin = useRef(null);
   const [confirmed, setConfirmed] = useState(false);
   const [boxes, setBoxes] = useState([]), [drag, setDrag] = useState(null), [masked, setMasked] = useState(null), [error, setError] = useState("");
@@ -44,7 +44,7 @@ export default function RedactionPreview({ src, onSend, busy = false }) {
     {error && <p className="err" role="alert">{error}</p>}
     {masked && <div data-redaction-result><p className="sm">پیش‌نمایش محلی؛ {masked.count} تصویر از نسخهٔ پوشیده ساخته شد. خروجی هنوز به هیچ مدلی ارسال نشده است.</p>
       <img src={masked.url} alt="پیش‌نمایش نقشهٔ پوشیده" style={{ display: "block", maxWidth: "min(100%, 800px)" }} />
-      {onSend && <><label className="sm"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> همهٔ لوگوها را مشخص کرده‌ام و پیش‌نمایش را بررسی کرده‌ام</label> <button type="button" className="btn sm" data-send-masked disabled={!confirmed || busy} onClick={() => onSend(boxes)}>ارسال تصویر پوشیده به مدل و استخراج</button></>}
+      {(onSend || onReview) && <><label className="sm"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> همهٔ لوگوها را مشخص کرده‌ام و پیش‌نمایش را بررسی کرده‌ام</label> {onReview && <button type="button" className="btn sm" data-review-masked disabled={!confirmed || busy} onClick={() => onReview(boxes)}>بازبینی OCR با یک درخواست مدل</button>} {onSend && <button type="button" className="btn sm" data-send-masked disabled={!confirmed || busy} onClick={() => onSend(boxes)}>استخراج کامل با چند درخواست مدل</button>}</>}
     </div>}
   </details>;
 }

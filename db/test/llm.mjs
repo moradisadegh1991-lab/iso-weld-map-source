@@ -670,5 +670,24 @@ test("anthropic relay: adds the key, drops the relay token, passes Anthropic's a
   assert((await refused.res.text()).includes("invalid x-api-key"), "Anthropic's own reason comes back");
 });
 
+test("cloud OCR review makes one provider call, sends bounded OCR evidence and accepts only complete proposals", async () => {
+  const make = (content, finishReason = "STOP") => [{ candidates: [{ content: { parts: [{ text: content }] }, finishReason }] }];
+  const context = { marks: [{no:"W7",shape:"circle",at:[0.2,0.3],ignored:"secret-extra"}], bom: [{pt:1,description:"ELBOW"}] };
+  const body = {projectId, pass:"ocr_review", images:[{data:"A"}], ocrContext:context};
+  await withGemini(make('{"notes":["check BOM"],"welds":[{"no":"W7","x":0.2,"y":0.3,"reason":"check"}]}'), async (fake) => {
+    const res = await extractRoute.POST(post(body)); equal(res.status,200);
+    equal((await res.json()).data.welds[0].no,"W7"); equal(fake.calls.length,1);
+    const wire = JSON.stringify(fake.calls[0].body); assert(wire.includes("W7") && wire.includes("ELBOW"));
+    assert(!wire.includes("secret-extra"), "unknown OCR fields do not travel");
+  });
+  for (const [content, finish] of [['{"notes":[],"welds":[{"no":"W7","x":2,"y":0.3,"reason":"x"}]}',"STOP"], ['{"notes":[],"welds":[]}',"MAX_TOKENS"], ['{"notes":[],"welds":[',"STOP"]]) {
+    await withGemini(make(content, finish), async () => { const res = await extractRoute.POST(post(body)); equal(res.status,502); equal((await res.json()).code,"OCR_REVIEW_INVALID"); });
+  }
+  await withGemini([], async (fake) => {
+    const res = await extractRoute.POST(post({...body,ocrContext:{marks:[],bom:Array(501).fill({})}}));
+    equal(res.status,400); equal(fake.calls.length,0);
+  });
+});
+
 await run();
 

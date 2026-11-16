@@ -6,6 +6,7 @@ export const maxDuration = 300;
 import { ELL90, ELL45, TEE_C } from "../../../lib/standards";
 import { createLlmRouter } from "../../../lib/llm/index.mjs";
 import { resolveEndpoints } from "../../../lib/db/repos/llm-endpoints.mjs";
+import { ocrReviewContext, checkedOcrReview } from "../../../lib/llm/ocr-cloud-review.mjs";
 import { parseLoose, cleanJsonText } from "../../../lib/llm/parse.mjs";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
@@ -372,7 +373,10 @@ Rules
    with where it is, not in "items".
 3. NEVER refuse and NEVER explain. Your entire reply is the JSON object.`;
 
+const OCR_REVIEW_PROMPT = `Review the OCR candidates against the provided isometric sheet. Suggest missing, extra or unreadable weld marks and material items. Return only JSON: {"notes":["..."],"welds":[{"no":"printed number or empty","x":0.5,"y":0.5,"reason":"why to inspect"}]}. Coordinates are fractions of the FULL SHEET, measured from top left, not tile coordinates. If unsure of a point omit it. Do not invent numbers, dimensions, field/shop classification or approval. All findings are proposals for a human engineer.`;
+
 const PASSES = {
+  ocr_review: { prompt: OCR_REVIEW_PROMPT, maxTokens: 2000 },
   meta: { prompt: META_PROMPT, maxTokens: 4000 },
   nodes: { prompt: NODES_PROMPT, maxTokens: 4000 },
   repair: { prompt: REPAIR_PROMPT, maxTokens: 5000 },
@@ -420,7 +424,7 @@ export async function POST(req) {
         { status: 413 });
     }
 
-    const { images, imageBase64, mediaType, model, pass, json, issues, projectId } = body || {};
+    const { images, imageBase64, mediaType, model, pass, json, issues, projectId, ocrContext } = body || {};
 
     // Now that the key lives on the server, an open endpoint would let anyone
     // who can reach it spend it. Moving the key server-side without this
@@ -435,6 +439,11 @@ export async function POST(req) {
     if (!projectId) return Response.json({ error: "projectId لازم است: مصرف مدل به حساب پروژه نوشته می‌شود." }, { status: 400 });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     try { assertCan(membership, ACTIONS.RUN_EXTRACTION); } catch (e) { return errorResponse(e); }
+    let reviewContext = null;
+    if (pass === "ocr_review") {
+      try { reviewContext = ocrReviewContext(ocrContext); }
+      catch { return Response.json({ code: "INVALID_OCR_CONTEXT", error: "دادهٔ OCR نامعتبر است." }, { status: 400 }); }
+    }
     const cfg = PASSES[pass] || PASSES.meta;
     const label = pass || "meta";
 
@@ -486,7 +495,7 @@ export async function POST(req) {
     const extraText = pass === "repair"
       ? `CURRENT EXTRACTION:\n${JSON.stringify(json)}\n\nFAILED CHECKS:\n` +
         (issues || []).map((i) => `- ${i}`).join("\n")
-      : null;
+      : pass === "ocr_review" ? `OCR CANDIDATES (unverified):\n${JSON.stringify(reviewContext)}` : null;
 
     let out;
     try {
@@ -500,9 +509,14 @@ export async function POST(req) {
       return Response.json({ error: hint(e), code: e.code || "LLM_ERROR" }, { status: e.status || 502 });
     }
 
-    const cleaned0 = out.text.trim() ? parseLoose(cleanJsonText(out.text)) : null;
+    let review = null;
+    if (pass === "ocr_review" && out.text.trim() && out.stopReason !== "max_tokens") {
+      try { review = checkedOcrReview(JSON.parse(cleanJsonText(out.text))); } catch { /* partial or invalid JSON is not a review */ }
+    }
+    const cleaned0 = pass === "ocr_review" ? review : out.text.trim() ? parseLoose(cleanJsonText(out.text)) : null;
     await account({ ok: !!cleaned0, usage: out.usage, model: out.model, stopReason: out.stopReason,
       errorCode: cleaned0 ? null : out.text.trim() ? "LLM_BAD_JSON" : "LLM_EMPTY" });
+    if (pass === "ocr_review" && !review) return Response.json({ code: "OCR_REVIEW_INVALID", error: "پاسخ مدل ناقص یا نامعتبر است؛ نتیجهٔ OCR بدون تغییر باقی ماند." }, { status: 502 });
 
     if (!out.text.trim()) {
       return Response.json({
@@ -524,7 +538,7 @@ export async function POST(req) {
     }
 
     return Response.json({
-      data: parsed,
+      data: pass === "ocr_review" ? review : parsed,
       usage: Object.keys(out.usage || {}).length ? out.usage : null,
       model: out.model,
       provider: client.id,
