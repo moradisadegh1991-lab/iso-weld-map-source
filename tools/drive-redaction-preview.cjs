@@ -36,6 +36,26 @@ if (!BASE_URL || !DRIVE_EMAIL || !DRIVE_PASSWORD) throw Error("Set explicit test
     return { expected: el.dataset.previewSha256, actual: [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, "0")).join(""), count: items.length };
   });
   assert.equal(fingerprint.actual, fingerprint.expected); assert.equal(fingerprint.count, 5);
+  const issue = section.locator("[data-receipt-issue]"); assert(await issue.isDisabled(), "must inspect all tiles before requesting a receipt");
+  for (let i = 0; i < fingerprint.count; i++) {
+    const detail = section.locator(`[data-redaction-image="${i}"]`);
+    if (!(await detail.evaluate((el) => el.open))) await detail.locator("summary").click();
+    await detail.locator("input[type=checkbox]").check();
+  }
+  assert(await issue.isEnabled());
+  const issuedResponse = page.waitForResponse((r) => r.url().includes("/api/iso-redaction-receipt") && r.request().method() === "POST");
+  await issue.click(); const issued = await issuedResponse; assert.equal(issued.status(), 200);
+  const issuedBody = await issued.json(); assert.equal(issuedBody.digest, fingerprint.expected); assert(issuedBody.receipt);
+  await section.locator("[data-receipt-verify]").click();
+  await section.getByText("تصاویر با رسید موقت همین نشست مطابقت دارند.").waitFor();
+  const altered = await section.locator("[data-redaction-result]").evaluate(async (el, { projectId, receipt }) => {
+    const images = [...el.querySelectorAll("[data-redaction-image]")].map((e) => ({ label: e.dataset.imageLabel, mediaType: "image/jpeg", data: e.querySelector("img").getAttribute("src").split(",")[1] }));
+    const original = images[0].data; const at = Math.floor(original.length / 2);
+    images[0].data = original.slice(0, at) + (original[at] === "A" ? "B" : "A") + original.slice(at + 1);
+    const res = await fetch(`/api/iso-redaction-receipt?projectId=${projectId}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "verify", images, receipt }) });
+    return { status: res.status, body: await res.json() };
+  }, { projectId: project.id, receipt: issuedBody.receipt });
+  assert.equal(altered.status, 200); assert.equal(altered.body.valid, false);
   assert(!paths.includes("/api/extract") && !paths.includes("/api/iso-local-review"), "preview must not call a model");
   // Hold hashing open while the reviewer changes a mask: stale results must never reappear.
   await page.evaluate(() => { const original = crypto.subtle.digest.bind(crypto.subtle); Object.defineProperty(crypto.subtle, "digest", { configurable: true, value: (...args) => new Promise((resolve, reject) => setTimeout(() => original(...args).then(resolve, reject), 1200)) }); });

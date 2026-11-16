@@ -312,6 +312,8 @@ process.env.AUTH_MODE = "dev";
 process.env.PGLITE_DIR = await scratchDir("llm-db-");
 const extractRoute = await import("../../app/api/extract/route.js");
 const localReviewRoute = await import("../../app/api/iso-local-review/route.js");
+const receiptRoute = await import("../../app/api/iso-redaction-receipt/route.js");
+const { imageBundleDigest } = await import("../../lib/server/iso-redaction-receipt.mjs");
 const modelsRoute = await import("../../app/api/models/route.js");
 const usageRoute = await import("../../app/api/llm-usage/route.js");
 const { getDb } = await import("../../lib/server/db.mjs");
@@ -333,6 +335,40 @@ const post = (body, as = "kc|alice") => new Request("http://x/api/extract", {
   method: "POST",
   headers: { authorization: `Bearer ${as}`, "content-type": "application/json" },
   body: JSON.stringify(body),
+});
+
+test("image-integrity receipts require extraction permission and remain scoped, with no model call", async () => {
+  const labels = ["FULL SHEET", "TOP-LEFT TILE", "TOP-RIGHT TILE", "BOTTOM-LEFT TILE", "BOTTOM-RIGHT TILE"];
+  const images = labels.map((label) => ({ label, mediaType: "image/jpeg", data: Buffer.from([255, 216, 255, 217]).toString("base64") }));
+  const sha256 = imageBundleDigest(images);
+  const request = (as, body, project = projectId) => new Request(`http://x/api/iso-redaction-receipt?projectId=${project}`, {
+    method: "POST", headers: { ...(as ? { authorization: `Bearer ${as}` } : {}), "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  const saved = { secret: process.env.SESSION_SECRET, special: process.env.SECRETS_KEY, fetch: globalThis.fetch };
+  process.env.SESSION_SECRET = "receipt-test-session-secret-over-32-characters"; delete process.env.SECRETS_KEY;
+  let calls = 0; globalThis.fetch = async () => { calls++; throw Error("unexpected outbound call"); };
+  try {
+    const body = { kind: "issue", images, sha256 };
+    equal((await receiptRoute.POST(request(null, body))).status, 401);
+    equal((await receiptRoute.POST(request("kc|bob", body))).status, 403);
+    const issued = await receiptRoute.POST(request("kc|alice", body)); equal(issued.status, 200);
+    equal(issued.headers.get("cache-control"), "no-store");
+    const { receipt, digest } = await issued.json(); equal(digest, sha256);
+    const valid = await receiptRoute.POST(request("kc|alice", { kind: "verify", images, receipt }));
+    equal((await valid.json()).valid, true);
+    const changed = images.map((v, i) => i ? v : { ...v, data: Buffer.from([255, 216, 0, 255, 217]).toString("base64") });
+    const invalid = await receiptRoute.POST(request("kc|alice", { kind: "verify", images: changed, receipt }));
+    equal((await invalid.json()).valid, false);
+    equal((await receiptRoute.POST(request("kc|alice", { kind: "issue", images, sha256: "0".repeat(64) }))).status, 400);
+    equal((await receiptRoute.POST(request("kc|alice", { kind: "issue", images: images.slice(0, 3), sha256 }))).status, 400);
+    const huge = await receiptRoute.POST(request("kc|alice", { kind: "issue", images: [], padding: "x".repeat(3_600_001) })); equal(huge.status, 413);
+    delete process.env.SESSION_SECRET; equal((await receiptRoute.POST(request("kc|alice", body))).status, 503);
+    equal(calls, 0, "issuing or verifying never calls a model");
+  } finally {
+    globalThis.fetch = saved.fetch;
+    if (saved.secret === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = saved.secret;
+    if (saved.special === undefined) delete process.env.SECRETS_KEY; else process.env.SECRETS_KEY = saved.special;
+  }
 });
 
 test("local OCR review requires a project member with extraction permission", async () => {
