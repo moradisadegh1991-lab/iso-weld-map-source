@@ -756,7 +756,7 @@ export default function Page() {
       {data && listed && (
         // one column: the weld list (and the drawing beside its rows) takes the page's width
         <section className="stage listed">
-          {!openRun && preview && data.weldMarks?.reader === "local" && <RedactionPreview src={preview} />}
+          {!openRun && preview && data.weldMarks?.reader === "local" && <RedactionPreview src={preview} session={session} />}
           {!openRun && localReviewInput && <div className="note" data-local-ai-review>
             <button type="button" className="btn ghost sm" disabled={localReviewBusy} onClick={reviewLocalOcr}>
               {localReviewBusy ? "در حال بررسی با مدل محلی…" : "بررسی نتیجهٔ OCR با مدل محلی"}</button>
