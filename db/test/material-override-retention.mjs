@@ -8,6 +8,8 @@
  * stay append-only and project-scoped. These tests drive the real flows (createRun → saveRegister → applyCorrection).
  */
 import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
+import { overrideProvenance } from "../../lib/piping/override-provenance.mjs";
+import { has, translate } from "../../lib/i18n/index.mjs";
 
 process.env.AUTH_MODE = "dev";
 process.env.PGLITE_DIR = await scratchDir("mat-retention-");
@@ -50,7 +52,7 @@ const events = () => inP(async () => (await db.query("SELECT * FROM material_ove
 const count = (sql, params = []) => inP(async () => Number((await db.query(sql, params)).rows[0].n));
 const spoolsOf = (runId) => inP(async () => Object.fromEntries((await db.query("SELECT id, spool_no FROM spool WHERE extraction_run_id = $1", [runId])).rows.map((s) => [s.spool_no, s.id])));
 
-let docA, docB, run1, spoolNo, oldSpoolId, oldActivityId, ev0;
+let docA, docB, run1, spoolNo, oldSpoolId, oldActivityId, ev0, currentSpoolId;
 
 await inP(async () => { await wh.upsertItem(db, { projectId: P, code: "PIPE-RET", description: "pipe", category: "pipe", uom: "m" }); });
 
@@ -65,6 +67,8 @@ test("setup: an override is made on a spool of the first derivation", async () =
   [ev0] = await events();
   equal([ev0.spool_no, ev0.doc_no, ev0.revision, ev0.sheet_no, ev0.run_id, ev0.document_id, ev0.spool_id, ev0.activity_id],
         [spoolNo, "SW-RET", "0", "1/1", run1.runId, docA, oldSpoolId, oldActivityId], "the snapshot is the live rows' reading");
+  const own = await inP(() => px.materialOverrides(db, { projectId: P, spoolId: oldSpoolId }));
+  equal([own[0].match_basis, own[0].same_spool, overrideProvenance(own[0]).exact], ["exact_spool", true, true]);
 });
 
 test("1,4,5,6. editing and re-deriving the register: the spool rows are replaced, the event is not lost, duplicated or unreadable", async () => {
@@ -85,6 +89,7 @@ test("1,4,5,6. editing and re-deriving the register: the spool rows are replaced
   equal(h.length, 1);
   equal([h[0].spool_no, h[0].doc_no, h[0].revision, h[0].spool_id, h[0].activity_id, h[0].same_spool, h[0].reason],
         [spoolNo, "SW-RET", "0", oldSpoolId, oldActivityId, false, "yard stock, MIV to follow"]);
+  equal(h[0].match_basis, "same_run_number_unverified");
 });
 
 test("2. a new extraction run of the same document: the old event is still there and the new spool finds it", async () => {
@@ -94,14 +99,17 @@ test("2. a new extraction run of the same document: the old event is still there
   const h = await inP(() => px.materialOverrides(db, { projectId: P, spoolId: run2.spools[spoolNo] }));
   equal(h.length, 1);
   equal([h[0].run_id, h[0].same_spool], [run1.runId, false], "made on the first run, shown on the second");
+  equal(h[0].match_basis, "same_revision_number_unverified");
 });
 
 test("3. a new drawing revision: the event is still the old revision's and says so", async () => {
   docB = await doc("B", "b");
   const run3 = await derive(docB, 12.6);
+  currentSpoolId = run3.spools[spoolNo];
   const h = await inP(() => px.materialOverrides(db, { projectId: P, spoolId: run3.spools[spoolNo] }));
   equal(h.length, 1);
   equal([h[0].revision, h[0].document_id, h[0].doc_no], ["0", docA, "SW-RET"]);
+  equal(h[0].match_basis, "cross_revision_number_unverified");
   const own = await inP(async () => (await db.query("SELECT d.revision FROM spool s JOIN extraction_run r ON r.id = s.extraction_run_id JOIN document d ON d.id = r.document_id WHERE s.id = $1", [run3.spools[spoolNo]])).rows[0].revision);
   equal(own, "B", "the spool being looked at is revision B, the event revision 0: distinguishable");
   // an override made on revision B is its own event, listed with the older one
@@ -109,6 +117,7 @@ test("3. a new drawing revision: the event is still the old revision's and says 
   await inP(() => px.recordSpoolActivity(db, { projectId: P, spoolId: run3.spools[spoolNo], code: "fit_up", doneAt: "2026-09-20", userId: eng.id, membership: ENG, materialOverride: "again on rev B" }));
   const both = await inP(() => px.materialOverrides(db, { projectId: P, spoolId: run3.spools[spoolNo] }));
   equal(both.map((e) => [e.revision, e.same_spool]), [["B", true], ["0", false]]);
+  equal(both.map((e) => e.match_basis), ["exact_spool", "cross_revision_number_unverified"]);
 });
 
 test("a spool of the same number on ANOTHER drawing does not see the event", async () => {
@@ -157,6 +166,70 @@ test("deleting a step or a spool directly does not touch the events either", asy
   const before = (await events()).length;
   await inP(() => db.query("DELETE FROM spool WHERE extraction_run_id = $1", [run1.runId]));
   equal((await events()).length, before, "events survive the spool rows");
+});
+
+test("the same drawing and spool number on another sheet finds no history", async () => {
+  const other = await inP(async () => (await db.query(
+    `INSERT INTO document (project_id, doc_no, revision, sheet_no, file_sha256, storage_uri)
+     VALUES ($1,'SW-RET','C','2/2',$2,'local://sheet') RETURNING id`, [P, "d".repeat(64)])).rows[0].id);
+  const r = await derive(other);
+  equal(await inP(() => px.materialOverrides(db, { projectId: P, spoolId: r.spools[spoolNo] })), []);
+});
+
+test("renumbering the current spool keeps its direct event exact, without treating old printed numbers as continuity", async () => {
+  await inP(() => db.query("UPDATE spool SET spool_no = 'RENAMED-HISTORY' WHERE id = $1", [currentSpoolId]));
+  try {
+    const h = await inP(() => px.materialOverrides(db, { projectId: P, spoolId: currentSpoolId }));
+    equal(h.length, 1);
+    equal([h[0].reason, h[0].match_basis, h[0].same_spool], ["again on rev B", "exact_spool", true]);
+  } finally { await inP(() => db.query("UPDATE spool SET spool_no = $1 WHERE id = $2", [spoolNo, currentSpoolId])); }
+});
+
+test("unfiltered history is not a verified target association; unknown and foreign targets disclose no matches", async () => {
+  const before = await events();
+  const all = await inP(() => px.materialOverrides(db, { projectId: P }));
+  equal(all.length, before.length);
+  assert(all.every((e) => e.match_basis === "all" && !e.same_spool && !overrideProvenance(e).exact));
+  equal(await inP(() => px.materialOverrides(db, { projectId: P, spoolId: crypto.randomUUID() })), []);
+  equal(await withProject(db, Q, () => px.materialOverrides(db, { projectId: Q, spoolId: currentSpoolId })), []);
+  equal(await withProject(db, Q, () => px.materialOverrides(db, { projectId: P, spoolId: currentSpoolId })), []);
+  equal(await events(), before, "reading associations never changes or duplicates audit events");
+});
+
+test("only a consistent exact-spool association is presented as direct; all number matches and unknown contracts stay unverified", () => {
+  equal(overrideProvenance({ match_basis: "exact_spool", same_spool: true }).exact, true);
+  for (const basis of ["same_run_number_unverified", "same_revision_number_unverified", "cross_revision_number_unverified"]) {
+    const p = overrideProvenance({ match_basis: basis, same_spool: false });
+    equal([p.basis, p.exact], [basis, false]);
+  }
+  for (const row of [null, {}, { same_spool: true }, { match_basis: 7 }, { match_basis: "future_basis", same_spool: true },
+    { match_basis: "exact_spool", same_spool: false }, { match_basis: "cross_revision_number_unverified", same_spool: true }]) {
+    equal([overrideProvenance(row).basis, overrideProvenance(row).exact], ["unknown", false]);
+  }
+});
+
+test("the execution API exposes association basis without altering immutable history", async () => {
+  const route = await import("../../app/api/piping/execution/route.js");
+  const before = await events();
+  const res = await route.GET(new Request(`http://x/api/piping/execution?projectId=${P}&spoolId=${currentSpoolId}`,
+    { headers: { authorization: "Bearer kc|eng" } }));
+  equal(res.status, 200);
+  const body = await res.json();
+  assert(body.overrides.some((e) => e.match_basis === "exact_spool" && e.same_spool));
+  assert(body.overrides.some((e) => e.match_basis === "cross_revision_number_unverified" && !e.same_spool));
+  equal(await events(), before);
+});
+
+test("association labels and explanations are translated in Persian, English and Arabic", () => {
+  const variants = [{ match_basis: "exact_spool", same_spool: true }, {},
+    ...["same_run_number_unverified", "same_revision_number_unverified", "cross_revision_number_unverified"].map((match_basis) => ({ match_basis, same_spool: false }))];
+  for (const lang of ["fa", "en", "ar"]) for (const row of variants) {
+    const p = overrideProvenance(row);
+    for (const key of [p.label, p.hint]) {
+      assert(has(lang, key), `${lang}: ${key} must not fall back to another language`);
+      assert(translate(lang, key).trim() && translate(lang, key) !== key);
+    }
+  }
 });
 
 await run();
