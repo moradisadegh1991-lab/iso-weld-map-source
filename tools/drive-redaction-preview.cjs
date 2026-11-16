@@ -23,12 +23,35 @@ if (!BASE_URL || !DRIVE_EMAIL || !DRIVE_PASSWORD) throw Error("Set explicit test
   await page.mouse.move(rect.x + rect.width * 0.2, rect.y + rect.height * 0.2); await page.mouse.down();
   await page.mouse.move(rect.x + rect.width * 0.4, rect.y + rect.height * 0.4, { steps: 5 }); await page.mouse.up();
   await section.getByRole("button", { name: "ساخت پیش‌نمایش پوشیده" }).click();
-  const img = section.locator("[data-redaction-result] img"); await img.waitFor();
+  const img = section.locator("[data-redaction-result] img").first(); await img.waitFor();
   const pixel = await img.evaluate(async (im) => { await im.decode(); const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight; const x = c.getContext("2d"); x.drawImage(im, 0, 0); return [...x.getImageData(Math.floor(c.width * 0.3), Math.floor(c.height * 0.3), 1, 1).data]; });
   assert(pixel[0] < 5 && pixel[1] < 5 && pixel[2] < 5, `expected black preview pixel: ${pixel}`);
+  const fingerprint = await section.locator("[data-redaction-result]").evaluate(async (el) => {
+    const items = [...el.querySelectorAll("[data-redaction-image]")].map((e) => {
+      const [header, data] = e.querySelector("img").getAttribute("src").split(",");
+      return [e.dataset.imageLabel, header.slice(5, header.indexOf(";")), data];
+    });
+    const bytes = new TextEncoder().encode(JSON.stringify(items));
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return { expected: el.dataset.previewSha256, actual: [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, "0")).join(""), count: items.length };
+  });
+  assert.equal(fingerprint.actual, fingerprint.expected); assert.equal(fingerprint.count, 5);
   assert(!paths.includes("/api/extract") && !paths.includes("/api/iso-local-review"), "preview must not call a model");
+  // Hold hashing open while the reviewer changes a mask: stale results must never reappear.
+  await page.evaluate(() => { const original = crypto.subtle.digest.bind(crypto.subtle); Object.defineProperty(crypto.subtle, "digest", { configurable: true, value: (...args) => new Promise((resolve, reject) => setTimeout(() => original(...args).then(resolve, reject), 1200)) }); });
+  await section.getByRole("button", { name: "ساخت پیش‌نمایش پوشیده" }).click();
   await section.getByRole("button", { name: "پاک‌کردن کادرها" }).click();
+  await page.waitForTimeout(1700);
   assert.equal(await section.locator("[data-redaction-result]").count(), 0);
+  // An HTTP origin can lack Web Crypto: preview remains usable, with no claimed fingerprint.
+  await page.evaluate(() => Object.defineProperty(crypto, "subtle", { configurable: true, value: undefined }));
+  await source.scrollIntoViewIfNeeded(); const second = await source.boundingBox();
+  await page.mouse.move(second.x + second.width * 0.2, second.y + second.height * 0.2); await page.mouse.down();
+  await page.mouse.move(second.x + second.width * 0.4, second.y + second.height * 0.4, { steps: 4 }); await page.mouse.up();
+  await section.getByRole("button", { name: "ساخت پیش‌نمایش پوشیده" }).click();
+  const httpResult = section.locator("[data-redaction-result]"); await httpResult.waitFor();
+  assert.equal(await httpResult.getAttribute("data-preview-sha256"), null);
+  assert((await httpResult.innerText()).includes("HTTPS"));
   console.log("sample PDF OCR, local masking preview and no model request passed");
  } finally { await browser.close(); }
 })().catch((e) => { console.error(e); process.exitCode = 1; });
