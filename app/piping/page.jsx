@@ -35,6 +35,7 @@ import EditPanel from "../../components/EditPanel";
 import { useSession } from "../../lib/client/session.mjs";
 import { useProjectData } from "../../lib/client/platform.mjs";
 import { prepare, prepareSource } from "../../lib/client/image-prep.mjs";
+import RedactionPreview from "../../components/RedactionPreview";
 import { isPdf, openPdf, renderPage } from "../../lib/client/pdf.mjs";
 import PdfSheetPicker from "../../components/PdfSheetPicker";
 import { base64FromBuffer } from "../../lib/client/base64.mjs";
@@ -755,6 +756,7 @@ export default function Page() {
       {data && listed && (
         // one column: the weld list (and the drawing beside its rows) takes the page's width
         <section className="stage listed">
+          {!openRun && preview && data.weldMarks?.reader === "local" && <RedactionPreview src={preview} />}
           {!openRun && localReviewInput && <div className="note" data-local-ai-review>
             <button type="button" className="btn ghost sm" disabled={localReviewBusy} onClick={reviewLocalOcr}>
               {localReviewBusy ? "در حال بررسی با مدل محلی…" : "بررسی نتیجهٔ OCR با مدل محلی"}</button>
