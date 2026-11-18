@@ -689,5 +689,57 @@ test("cloud OCR review makes one provider call, sends bounded OCR evidence and a
   });
 });
 
+
+test("Arvan IAM auth: opt-in header and streamed JSON usage", async () => {
+  const fake = fakeSse([
+    { choices: [{delta:{content:'{"weld_no":"W-002",'} }] },
+    { choices: [{delta:{content:'"nps":8}'} }] },
+    { choices: [{delta:{},finish_reason:"stop"}] },
+    { usage:{prompt_tokens:108,completion_tokens:28,input_tokens:0,output_tokens:0} },
+  ]);
+  const p = createOpenAiCompatProvider({
+    baseUrl:"https://api.arvancloudai.ir/v1",
+    apiKey:"apikey synthetic-test-token",
+    authScheme:"arvan-apikey",
+    defaultModel:"Qwen-3.8-Flash",
+    fetchImpl:fake,
+  });
+  const result = await p.complete({ maxTokens:128,prompt:"synthetic weld" });
+  equal(fake.calls[0].init.headers.authorization,"apikey synthetic-test-token");
+  equal(fake.calls[0].url,"https://api.arvancloudai.ir/v1/chat/completions");
+  equal(fake.calls[0].body.response_format,{type:"json_object"});
+  equal(fake.calls[0].body.stream_options,{include_usage:true});
+  equal(JSON.parse(result.text),{weld_no:"W-002",nps:8});
+  equal(result.usage,{input_tokens:108,output_tokens:28});
+  equal(result.stopReason,"stop");
+});
+
+test("Arvan IAM key is rejected for unrelated hosts and invalid scheme", async () => {
+  for (const baseUrl of ["http://api.arvancloudai.ir/v1",
+    "https://api.arvancloudai.ir.evil.example/v1",
+    "https://api.arvancloudai.ir/v1?redirect=1"]) {
+    let rejected = false;
+    try { createOpenAiCompatProvider({baseUrl,apiKey:"apikey synthetic",authScheme:"arvan-apikey"}); }
+    catch (e) { rejected = e.code === "LLM_NOT_CONFIGURED"; }
+    assert(rejected,"unsafe endpoint was accepted");
+  }
+  let rejected = false;
+  try { createOpenAiCompatProvider({
+    baseUrl:"https://api.arvancloudai.ir/v1",
+    apiKey:"Bearer synthetic",authScheme:"arvan-apikey",
+  }); } catch (e) { rejected = e.code === "LLM_NOT_CONFIGURED"; }
+  assert(rejected,"Bearer must not be passed as an Arvan IAM key");
+});
+
+test("legacy OpenAI-compatible adapter still uses Bearer by default", async () => {
+  const fake = fakeSse(vllmStream);
+  const p = createOpenAiCompatProvider({
+    baseUrl:"http://127.0.0.1:8000/v1",
+    apiKey:"local-synthetic-key",fetchImpl:fake,
+  });
+  await p.complete({maxTokens:30,prompt:"test"});
+  equal(fake.calls[0].init.headers.authorization,"Bearer local-synthetic-key");
+});
+
 await run();
 
