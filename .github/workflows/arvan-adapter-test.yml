@@ -1,0 +1,33 @@
+name: Arvan AI adapter regression
+on:
+  push:
+    branches:
+      - feat/arvan-ai-adapter-safe
+  pull_request:
+    paths:
+      - "lib/llm/openai-compat.mjs"
+      - "db/test/llm.mjs"
+      - ".github/workflows/arvan-adapter-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  arvan-adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - name: Validate JavaScript syntax
+        run: |
+          node --check lib/llm/openai-compat.mjs
+          node --check db/test/llm.mjs
+      - name: Run mocked provider regression suite
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tools/register.mjs db/test/llm.mjs
