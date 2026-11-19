@@ -9,6 +9,8 @@
  */
 import { test, run, assert, equal, throws, scratchDir } from "./harness.mjs";
 import * as XLSX from "xlsx";
+import { workingDays, workingFinish } from "../../lib/eps/calendar.mjs";
+import * as ea from "../../lib/eps/activities.mjs";
 import * as pl from "../../lib/eps/planning.mjs";
 import * as w from "../../lib/eps/wbs.mjs";
 
@@ -394,6 +396,72 @@ test("through the route: contract access decides; a version and a row of another
   equal((await route.POST(req("/api/eps/planning", "plan-x", { projectId: P, kind: "plan-add", versionId: V1.id, activityIds: [B.id] }))).status, 404);
   equal((await route.POST(req("/api/eps/planning", "plan", { projectId: P, kind: "plan-copy", fromVersionId: V1.id, toVersionId: VX.id }))).status, 400,
     "a copy across PMSs of one contract reaches the repository, which refuses it");
+});
+
+test("a work calendar counts scheduled weekdays and explicit date exceptions", () => {
+  const calendar = { weekdays: [1, 2, 3, 4, 5], exceptions: { "2026-07-03": false, "2026-07-04": true } };
+  equal(workingDays("2026-07-01", "2026-07-05", calendar), 3);
+  equal(workingFinish("2026-07-01", 3, calendar), "2026-07-04");
+  equal(workingFinish("2026-07-05", 1, calendar), "2026-07-06");
+  equal(workingDays("2026-02-30", "2026-03-10", calendar), null);
+  equal(pl.spanShare("2026-07-01", "2026-07-05", "2026-07-03", calendar), 2 / 3);
+  const row = { id: "a", plan_start: "2026-07-01", plan_end: "2026-07-05", calendar, volumePlan: 30, volumeActual: 30 };
+  equal(ea.workFront(row).rows.map((x) => x.plan), [10, 10, 0, 10, 0]);
+  equal(ea.periodColumns([{ id: "n", activities: [row] }], [], ["2026-07-03"]).get("a").CPP, 0);
+});
+
+test("contract calendars have one default and inherit to PMS and versions with independent activity overrides", async () => {
+  const { saveCalendar, listCalendars } = await import("../../lib/db/repos/contract-calendars.mjs");
+  const { importPlan } = await import("../../lib/db/repos/eps-import.mjs");
+  await inP(async () => {
+    const ctx = { projectId: P, contractId: C.id };
+    const week = await saveCalendar(db, { ...ctx, name: "Weekdays", weekdays: [1, 2, 3, 4, 5], exceptions: { "2026-07-03": false } });
+    equal(week.is_default, true);
+    const all = await saveCalendar(db, { ...ctx, name: "All days", weekdays: [0, 1, 2, 3, 4, 5, 6] });
+    const pms = await eps.savePms(db, { ...ctx, code: "PCAL", title: "Calendar", userId: U.id });
+    const rev = await eps.saveVersion(db, { projectId: P, pmsId: pms.id, code: "PCAL-R1", title: "Revision", userId: U.id });
+    equal([pms.calendar_id, rev.calendar_id], [week.id, week.id]);
+    await saveCalendar(db, { ...ctx, id: all.id, name: all.name, weekdays: all.weekdays, isDefault: true });
+    equal((await listCalendars(db, ctx)).filter((c) => c.is_default).map((c) => c.id), [all.id]);
+    const node = await eps.saveNode(db, { projectId: P, pmsId: pms.id, name: "Work", wf: 100, planStart: "2026-07-01", planEnd: "2026-07-05" });
+    const a = await eps.saveActivity(db, { projectId: P, nodeId: node.id, name: "Activity", wf: 100, calendarId: all.id });
+    equal(flat(await act.activityView(db, { projectId: P, pmsId: pms.id }))[0].planDays, 5);
+    await plan.addToPlan(db, { projectId: P, versionId: rev.id, activityIds: [a.id], days: 3, userId: U.id });
+    let row = (await plan.planRows(db, { projectId: P, versionId: rev.id })).rows[0];
+    equal([row.end_on, row.days], ["2026-07-06", 3]);
+    await plan.savePlanRow(db, { projectId: P, id: row.id, calendarId: all.id, days: 3, userId: U.id });
+    row = (await plan.planRows(db, { projectId: P, versionId: rev.id })).rows[0];
+    equal([row.end_on, row.calendar_id], ["2026-07-03", all.id]);
+    equal((await one(rev.id, a.id)).effectiveCalendarId, all.id);
+
+    const { upsertResource } = await import("../../lib/db/repos/resources.mjs");
+    const resource = await upsertResource(db, { ...ctx, kind: "person", name: "Crew" });
+    await act.saveRole(db, { projectId: P, activityId: a.id, resourceId: resource.id, perDay: 8, calendarId: week.id });
+    const detail = await act.activityDetail(db, { projectId: P, activityId: a.id, versionId: rev.id });
+    equal([detail.activity.planDays, detail.roles[0].planDays, detail.roles[0].totalTime], [3, 2, 16]);
+
+    const uploadRev = await eps.saveVersion(db, { projectId: P, pmsId: pms.id, code: "PCAL-R2", title: "Upload", userId: U.id });
+    equal(uploadRev.calendar_id, all.id);
+    const sheet = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(sheet, XLSX.utils.aoa_to_sheet([
+      ["WBS code", "Activity code", "Start", "Days"], [node.code, a.code, "2026-07-01", 3],
+    ]), "Planning");
+    await plan.importPlanSheet(db, { projectId: P, versionId: uploadRev.id, calendarId: week.id, userId: U.id,
+      content: XLSX.write(sheet, { type: "buffer", bookType: "xlsx" }) });
+    equal((await eps.planOf(db, P, { versionId: uploadRev.id })).calendar.id, week.id);
+    equal((await plan.planRows(db, { projectId: P, versionId: uploadRev.id })).rows[0].end_on, "2026-07-06");
+
+    const other = await ctr.upsertContract(db, { projectId: P, contractNo: "CAL-OTHER", title: "Other", kind: "main", counterparty: "Other", currency: "USD", userId: U.id });
+    const foreign = await saveCalendar(db, { projectId: P, contractId: other.id, name: "Foreign", weekdays: [0] });
+    await throws(() => plan.savePlanRow(db, { projectId: P, id: row.id, calendarId: foreign.id, userId: U.id }), "همین قرارداد");
+    await throws(() => eps.saveActivity(db, { projectId: P, nodeId: node.id, id: a.id, name: a.name, wf: 100, calendarId: foreign.id }), "همین قرارداد");
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Type", "Parent code", "Code", "Name"], ["WBS", "", "W1", "Work"], ["Activity", "W1", "A1", "Weld"]]), "EPS");
+    const uploaded = await importPlan(db, { ...ctx, mode: "new", pmsCode: "IMP-CAL", title: "Uploaded", kind: "sheet", sourceName: "eps.xlsx",
+      content: XLSX.write(wb, { type: "buffer", bookType: "xlsx" }), calendarId: week.id, userId: U.id });
+    equal(uploaded.pms.calendar_id, week.id);
+  });
 });
 
 await run();
