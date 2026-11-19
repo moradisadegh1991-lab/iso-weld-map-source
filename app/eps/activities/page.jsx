@@ -61,18 +61,18 @@ export default function ActivitiesPage() {
       try { for (const b of list) await send(b); live.current.reload(); live.current.detail.reload(); if (done) setOk(done); return true; }
       catch (e) { setMsg(e.message); live.current.reload(); return false; }
     };
-    const own = (v) => ({ name: v.name, wf: wOut(v.wf), volumeActual: v.volActual === "" ? null : v.volActual,
+    const own = (v) => ({ name: v.name, unit: v.unit, wf: wOut(v.wf), volumeActual: v.volActual === "" ? null : v.volActual,
       actType: v.actType, activityNo: v.activityNo, wfRate: v.wfRate === "" ? null : v.wfRate, description: v.description,
       ...Object.fromEntries(COST_FIELDS.map((f) => [f.key, v[f.key] === "" ? null : v[f.key]])) });
     const actBody = (v) => ({ ...own(v), planStart: v.start || null, planEnd: v.finish || null, volumePlan: v.volPlan === "" ? null : v.volPlan });
-    const valueOf = (it) => ({ name: it.name ?? "", wf: wIn(it.wf), volPlan: it.volumePlan ?? "", volActual: it.volumeActual ?? "",
+    const valueOf = (it) => ({ name: it.name ?? "", unit: it.own?.unit ?? "", wf: wIn(it.wf), volPlan: it.volumePlan ?? "", volActual: it.volumeActual ?? "",
       start: it.plan_start ? String(it.plan_start).slice(0, 10) : "", finish: it.plan_end ? String(it.plan_end).slice(0, 10) : "",
       actType: it.act_type ?? "", activityNo: it.activity_no ?? "", wfRate: it.wf_rate ?? "", description: it.description ?? "", ...costValues(it) });
     // under a version that plans the activity, its dates and planned quantity are the version's row (owner's requirements 2026-10-22)
     const planned = (row) => !!(versionId && row.item?.plan);
     const toPlan = (row, v) => ({ url: "/api/eps/planning", kind: "plan-edit", id: row.item.plan.id, startOn: v.start || "", endOn: v.finish || "", volumePlan: v.volPlan });
     return {
-      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "actType", type: "text" }, { key: "activityNo", type: "text" },
+      fields: (row) => (row.kind === "act" ? [{ key: "name", type: "text" }, { key: "actType", type: "text" }, { key: "activityNo", type: "text" }, { key: "unit", type: "text" },
         { key: "wf", type: "number" }, { key: "wfRate", type: "number" }, { key: "volPlan", type: "number" },
         { key: "volActual", type: "number" }, { key: "start", type: "date" }, { key: "finish", type: "date" }, { key: "description", type: "text" },
         ...COST_FIELDS.map((f) => ({ key: f.key, type: "number" }))] : []),

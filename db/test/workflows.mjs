@@ -114,6 +114,22 @@ test("a duty in a group: its holders are members with its rights; whoever holds 
   });
 });
 
+test("inactive duty holders lose access immediately and inactive duties cannot be assigned", async () => {
+  await as(async () => {
+    const members = async () => (await rp.workflowOf(db, { projectId: P, workflowId: flow.id }))[0].groups[0].members.map((m) => m.userId);
+    await wfs.setDutyMember(db, { projectId: P, dutyId: site.id, userId: ali.id, active: false });
+    assert(!(await members()).includes(ali.id));
+    await wfs.setDutyMember(db, { projectId: P, dutyId: site.id, userId: ali.id, active: true });
+    assert((await members()).includes(ali.id));
+    const data = { projectId: P, id: site.id, code: "SM", name: site.name, permissions: site.permissions };
+    await wfs.saveDuty(db, { ...data, active: false });
+    await throws(() => wfs.setGroupDuty(db, { projectId: P, groupId: G.site.id, dutyId: site.id }), "وظیفهٔ فعال");
+    assert(!(await members()).includes(ali.id));
+    await wfs.saveDuty(db, { ...data, active: true });
+    assert((await members()).includes(ali.id));
+  });
+});
+
 let rep;
 test("pages and rows: a duty reaches only its pages and the branches it was given; a member named directly reaches all", async () => {
   await as(async () => {

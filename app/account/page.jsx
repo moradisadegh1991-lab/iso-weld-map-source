@@ -97,6 +97,8 @@ function Language() {
       <Choice name="lang" label={t("settings.language")} value={prefs.lang} options={PREFS.lang} onPick={pick("lang")}
               render={(o) => <span lang={o}>{LANGS[o].name}</span>} />
       <p className="sm muted">{t("settings.languageHint")}</p>
+      <Choice name="calendar" label={t("settings.calendar")} value={prefs.calendar} options={PREFS.calendar} onPick={pick("calendar")}
+              render={(o) => t(`settings.calendar.${o}`)} />
       <Saved note={note} err={saveError} />
     </section>
   );

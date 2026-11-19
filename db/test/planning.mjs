@@ -106,7 +106,7 @@ test("status: plan weight spread over the version's days, holds of unreleased re
     "a released requirement holds nothing; an unknown column counts as others; an unknown weight adds nothing");
   equal(pl.statusRow({ act, plan, total: 100, done: 95, requirements: [{ hold_group: "site", hold_weight: 10 }], today: "2026-03-04" }).frontWeight, 0, "never below zero");
   const u = pl.statusRow({ act: { ...act, volumeActual: null }, plan: { ...plan, volume_plan: null }, total: null, done: 0, today: "2026-03-04" });
-  equal([u.planWeight, u.planProgress, u.remainWeight, u.frontWeight, u.actualProgress], [null, null, null, null, null], "unknown inputs: unknown figures, not zero");
+  equal([u.planWeight, u.planProgress, u.remainWeight, u.frontWeight, u.actualProgress], [null, 40, null, null, null], "planned progress falls back to elapsed days while actual progress stays unknown");
   equal([pl.spanShare("2026-03-01", "2026-03-10", "2026-02-27"), pl.spanShare("2026-03-01", "2026-03-10", "2026-03-10"), pl.spanShare(null, "2026-03-10", "2026-03-05")], [0, 1, null]);
 });
 

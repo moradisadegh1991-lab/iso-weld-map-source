@@ -19,6 +19,15 @@ import { pickable, checkPick, templateOf } from "../../lib/import-templates.mjs"
 
 // ── the rules ────────────────────────────────────────────────────────────
 
+test("PMS worksheet reads the activity unit and volume from distinct columns", () => {
+  const rows = fromSheet([
+    ["Type", "Parent code", "Code", "Name", "Unit", "Volume"],
+    ["WBS", "", "W1", "Pipework", "m", 90],
+    ["Activity", "W1", "A1", "Weld", "joint", 15],
+  ]);
+  equal([rows.nodes[0].unit, rows.nodes[0].volume, rows.activities[0].unit, rows.activities[0].volume], ["m", 90, "joint", 15]);
+});
+
 test("the two percentages as P6 defines them: actual over the at completion total, actual over the budget; empty while a side is empty or a divisor is 0", () => {
   equal(costPercents({ targetCost: 800, actCost: 300, totalCost: 1000 }), { costCompletePct: 30, actPctSpent: 37.5 });
   equal(costPercents({ targetCost: 3, actCost: 2, totalCost: 3 }), { costCompletePct: 66.6667, actPctSpent: 66.6667 });

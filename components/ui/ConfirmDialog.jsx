@@ -30,15 +30,15 @@ export async function askDelete(ask, { label, no, pr, deps = [] }) {
   return ask({ title: `${name} حذف شود؟`, lines: lines.length ? ["این‌ها هنوز به آن ارجاع می‌دهند و همان‌طور می‌مانند (نیمه‌کاره حذف نمی‌شود):", ...lines.slice(0, 12), ...(lines.length > 12 ? ["…"] : [])] : ["فقط همین نشان حذف می‌شود؛ چیز دیگری به آن وابسته نیست."] });
 }
 
-export default function ConfirmDialog({ title, lines = [], blocked = false, confirmLabel = "حذف", onDone }) {
+export default function ConfirmDialog({ title, lines = [], blocked = false, confirmLabel = "حذف", badge = "تأیید حذف", cancelLabel = "انصراف", onDone }) {
   const box = useRef(null);
-  useEffect(() => { box.current?.querySelector("button")?.focus(); }, []);
+  useEffect(() => { box.current?.querySelector("[data-confirm-no], [data-confirm-close]")?.focus(); }, []);
   if (typeof document === "undefined") return null;
   return createPortal(
     <div className="tk-view mk-form-back" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onDone(false); }}
       onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onDone(false); } }}>
       <div ref={box} role="alertdialog" aria-modal="true" aria-label={title} className="mk-form" style={{ maxWidth: 520 }} data-confirm={blocked ? "blocked" : "confirm"}>
-        <header><b>{title}</b><span className={`pill sm ${blocked ? "warn" : ""}`}>{blocked ? "حذف نمی‌شود" : "تأیید حذف"}</span></header>
+        <header><b>{title}</b><span className={`pill sm ${blocked ? "warn" : ""}`}>{blocked ? "حذف نمی‌شود" : badge}</span></header>
         <div className="mk-form-body">
           {lines.length > 0 && (
             <ul className="sm" data-confirm-lines style={{ margin: "6px 0", paddingInlineStart: 18 }}>
@@ -49,7 +49,7 @@ export default function ConfirmDialog({ title, lines = [], blocked = false, conf
               ? <button type="button" className="ghost" data-confirm-close onClick={() => onDone(false)}>بستن</button>
               : (<>
                 <button type="button" data-confirm-yes onClick={() => onDone(true)}>{confirmLabel}</button>
-                <button type="button" className="ghost" data-confirm-no onClick={() => onDone(false)}>انصراف</button>
+                <button type="button" className="ghost" data-confirm-no onClick={() => onDone(false)}>{cancelLabel}</button>
               </>)}
           </footer>
         </div>
