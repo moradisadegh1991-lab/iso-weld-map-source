@@ -6,6 +6,7 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
 import { BUDGET_UNITS as BUDGET_FA, ROLE_STATUS as ROLE_FA } from "../../lib/eps/activities.mjs";
 
 import { createPortal } from "react-dom";
+import { CalendarSelect } from "./WorkCalendar";
 import TreeEditor from "../ui/TreeEditor";
 import TableKit from "../ui/TableKit";
 import { wIn, wOut } from "./shared";
@@ -92,7 +93,7 @@ function Detail({ d, a, may, post, planCosts = false }) {
   // the cost and float: the version's plan row in the planning preview (its two percentages worked out), else the activity's own
   const plan = planCosts ? a.plan : null;
   const costs = planCosts ? plan : a;
-  const open = () => setF({ code: a.code, activityNo: a.activity_no || "", ...costValues(costs), name: a.name, wf: wIn(a.wf), description: a.description || "", progress: a.progress ?? "",
+  const open = () => setF({ calendarId: (planCosts ? plan?.calendar_id : a.calendar_id) ?? "", code: a.code, activityNo: a.activity_no || "", ...costValues(costs), name: a.name, wf: wIn(a.wf), description: a.description || "", progress: a.progress ?? "",
     planStart: a.own?.plan_start || "", planEnd: a.own?.plan_end || "", actualStart: a.own?.actual_start || "", actualEnd: a.own?.actual_end || "",
     unit: a.own?.unit ?? "", volumePlan: a.own?.volume_plan ?? "", volumeActual: a.own?.volume_actual ?? "", updateDate: a.update_date || "", statusText: a.status_text || "",
     addToInvoice: !!a.add_to_invoice, suspended: !!a.suspended, scaleUpPct: a.scale_up_pct ?? "", constraintStart: a.constraint_start || "", constraintEnd: a.constraint_end || "" });
@@ -105,9 +106,9 @@ function Detail({ d, a, may, post, planCosts = false }) {
   const save = async (e) => {
     e.preventDefault();
     if (!window.confirm(t("ep.d.saveAsk"))) return;
-    const own = Object.fromEntries(Object.entries(f).filter(([k]) => !planCosts || !COST_FIELDS.some((c) => c.key === k)));
+    const own = Object.fromEntries(Object.entries(f).filter(([k]) => !planCosts || (k !== "calendarId" && !COST_FIELDS.some((c) => c.key === k))));
     if (!(await post("/api/eps", { kind: "activity", nodeId: a.node_id, id: a.id, ...own, wf: wOut(f.wf) }, () => t("ep.activitySaved")))) return;
-    if (plan && !(await post("/api/eps/planning", { kind: "plan-edit", id: plan.id, ...Object.fromEntries(COST_FIELDS.filter((c) => !c.derived).map((c) => [c.key, f[c.key]])) },
+    if (plan && !(await post("/api/eps/planning", { kind: "plan-edit", id: plan.id, calendarId: f.calendarId, ...Object.fromEntries(COST_FIELDS.filter((c) => !c.derived).map((c) => [c.key, f[c.key]])) },
       () => t("ep.activitySaved")))) return;
     setF(null);
   };
@@ -133,6 +134,9 @@ function Detail({ d, a, may, post, planCosts = false }) {
       </div>
       <div className="p6-kv" onDoubleClick={() => { if (may && !f) open(); }} title={may && !f ? t("ep.d.clickToEdit") : undefined}>
         <fieldset><legend>Original Status</legend>
+          {f && (!planCosts || plan) ? <CalendarSelect calendars={d.calendars} value={f.calendarId}
+            inherited={(planCosts ? d.defaultCalendar : d.pmsCalendar)?.name} onChange={(value) => setF({ ...f, calendarId: value })} />
+            : <KV k={t("ep.cal.title")} v={(planCosts ? a.calendar : d.activityCalendar)?.name ?? t("ep.cal.allDays")} />}
           <KV k="Start Date" v={V(day(a.plan_start), () => I("planStart", "date"))} /><KV k="Duration" v={fmt(a.planDays)} /><KV k="Finish Date" v={V(day(a.plan_end), () => I("planEnd", "date"))} />
           <KV k="Remain Duration" v={fmt(a.remainDays)} /><KV k="Duration % Complete" v={pct(x.durationPct)} />
           <KV k="Schedule % Complete" v={pct(x.schedulePct)} /><KV k="Duration of Original (%)" v={pct(x.originalPct)} /></fieldset>
@@ -255,30 +259,31 @@ function Progress({ a, codes }) {
 function Roles({ d, may, post, resources }) {
   const { t, L } = usePrefs();
   const { fmt, day } = useEpsFmt();
-  const blank = { id: null, resourceId: "", budgetUnit: "hour", perDay: "", rate: "", actualTime: "", status: "planned", remark: "" };
+  const blank = { id: null, calendarId: "", resourceId: "", budgetUnit: "hour", perDay: "", rate: "", actualTime: "", status: "planned", remark: "" };
   const [f, setF] = useState(blank);
   const a = d.activity;
   return (
     <div>
       <div className="tablewrap"><TableKit name="eps-activitydetail-5" min={8}><table className="dtable">
-        <thead><tr><th>Activity No.</th><th>{t("ep.ro.role")}</th><th>{t("ep.category")}</th><th>{t("ep.start")}</th><th>{t("ep.dur")}</th><th>{t("ep.finish")}</th><th>{t("ep.ro.budgetUnit")}</th><th>{t("ep.ro.perDay")}</th><th>{t("ep.ro.rate")}</th>
+        <thead><tr><th>Activity No.</th><th>{t("ep.ro.role")}</th><th>{t("ep.category")}</th><th>{t("ep.start")}</th><th>{t("ep.dur")}</th><th>{t("ep.finish")}</th><th>{t("ep.cal.title")}</th><th>{t("ep.ro.budgetUnit")}</th><th>{t("ep.ro.perDay")}</th><th>{t("ep.ro.rate")}</th>
           <th>{t("ep.ro.totalTime")}</th><th>{t("ep.ro.totalPrice")}</th><th>{t("ep.ro.actualTime")}</th><th>{t("ep.ro.actualPrice")}</th><th>{t("ep.status")}</th><th>{t("ep.remark")}</th>{may && <th />}</tr></thead>
         <tbody>{d.roles.map((r) => (
           <tr key={r.id} data-role={r.resource_name}><td className="mono" dir="ltr">{a.code}</td><td>{r.resource_name}</td><td className="sm">{r.category || "—"}</td>
-            <td className="mono">{day(a.plan_start)}</td><td className="mono">{fmt(a.planDays)}</td><td className="mono">{day(a.plan_end)}</td>
-            <td>{L(`eps.budgetUnit.${r.budget_unit}`, BUDGET_FA[r.budget_unit])}</td><td className="mono">{fmt(r.per_day)}</td><td className="mono">{fmt(r.rate)}</td>
+            <td className="mono">{day(a.plan_start)}</td><td className="mono">{fmt(r.planDays)}</td><td className="mono">{day(a.plan_end)}</td>
+            <td>{r.calendarName ?? t("ep.cal.allDays")}</td><td>{L(`eps.budgetUnit.${r.budget_unit}`, BUDGET_FA[r.budget_unit])}</td><td className="mono">{fmt(r.per_day)}</td><td className="mono">{fmt(r.rate)}</td>
             <td className="mono">{fmt(r.totalTime)}</td><td className="mono"><b>{fmt(r.totalPrice)}</b></td><td className="mono">{fmt(r.actualTime)}</td><td className="mono">{fmt(r.actualPrice)}</td>
             <td>{L(`eps.roleStatus.${r.status}`, ROLE_FA[r.status])}</td><td className="sm">{r.remark || ""}</td>
-            {may && <td style={{ whiteSpace: "nowrap" }}><button className="btn ghost sm" type="button" onClick={() => setF({ id: r.id, resourceId: r.resource_id, budgetUnit: r.budget_unit, perDay: r.per_day ?? "",
+            {may && <td style={{ whiteSpace: "nowrap" }}><button className="btn ghost sm" type="button" onClick={() => setF({ id: r.id, calendarId: r.calendar_id || "", resourceId: r.resource_id, budgetUnit: r.budget_unit, perDay: r.per_day ?? "",
               rate: r.rate ?? "", actualTime: r.actual_time ?? "", status: r.status, remark: r.remark || "" })}>{t("ep.edit")}</button>
               <button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "role-remove", id: r.id }, () => t("ep.removed"))}>{t("ep.remove")}</button></td>}</tr>))}
-          {d.roles.length > 0 && <tr><td colSpan={10}><b>{t("ep.ro.total")}</b></td><td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.totalPrice || 0), 0))}</b></td><td />
+          {d.roles.length > 0 && <tr><td colSpan={11}><b>{t("ep.ro.total")}</b></td><td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.totalPrice || 0), 0))}</b></td><td />
             <td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.actualPrice || 0), 0))}</b></td><td colSpan={may ? 3 : 2} /></tr>}</tbody></table></TableKit></div>
       {may && (
         <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}
           onSubmit={async (e) => { e.preventDefault(); if (await post("/api/eps/activities", { kind: "role", activityId: a.id, ...f }, () => t("ep.ro.saved"))) setF(blank); }}>
           <div className="field"><label htmlFor="ro-res">{t("ep.ro.roleField")}</label><select id="ro-res" required value={f.resourceId} onChange={(e) => setF({ ...f, resourceId: e.target.value })}>
             <option value="">—</option>{resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.unit ? ` (${r.unit})` : ""}</option>)}</select></div>
+          <CalendarSelect calendars={d.calendars} value={f.calendarId} inherited={a.calendar?.name} onChange={(value) => setF({ ...f, calendarId: value })} />
           <div className="field"><label htmlFor="ro-bu">{t("ep.ro.budgetUnit")}</label><select id="ro-bu" value={f.budgetUnit} onChange={(e) => setF({ ...f, budgetUnit: e.target.value })}>
             {Object.keys(BUDGET_FA).map((k) => <option key={k} value={k}>{L(`eps.budgetUnit.${k}`, BUDGET_FA[k])}</option>)}</select></div>
           {[["perDay", t(f.budgetUnit === "unit" ? "ep.ro.qtyTotal" : "ep.ro.perDay")], ["rate", t("ep.ro.rateField")], ["actualTime", t("ep.ro.actualTime")], ["remark", t("ep.remark")]].map(([k, l]) => (

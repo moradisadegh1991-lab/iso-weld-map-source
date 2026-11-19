@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
+import { listCalendars, saveCalendar } from "../../../lib/db/repos/contract-calendars.mjs";
 import * as eps from "../../../lib/db/repos/eps.mjs";
 import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
 import { BUDGET_MODES, SEPARATORS } from "../../../lib/eps/wbs.mjs";
@@ -42,6 +43,7 @@ const ACTIVITY = `SELECT p.contract_id FROM wbs_activity a JOIN wbs_node n ON n.
 async function contractOf(db, projectId, b) {
   const q = async (sql, id) => (id ? (await db.query(sql, [id, projectId])).rows[0]?.contract_id ?? null : null);
   switch (b.kind) {
+    case "calendar": return b.contractId || null;
     case "pms": return b.id ? q(PMS, b.id) : b.contractId || null;
     case "pms-budget": case "pms-active": return q(PMS, b.id);
     case "version": return b.id ? q(VERSION, b.id) : q(PMS, b.pmsId);
@@ -81,7 +83,7 @@ export async function GET(request) {
       const contractId = q("contractId");
       if (!contractId) return Response.json({ error: "contractId is required" }, { status: 400 });
       const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
-      return Response.json({ pms: await eps.epsBoard(db, { projectId, contractId }), labels: LABELS, may: { edit: access !== "view" },
+      return Response.json({ calendars: await listCalendars(db, { projectId, contractId }), pms: await eps.epsBoard(db, { projectId, contractId }), labels: LABELS, may: { edit: access !== "view" },
         legacy: await legacyImports(db, { projectId }) });
     });
   } catch (e) { return errorResponse(e); }
@@ -120,6 +122,7 @@ export async function POST(request) {
         a.contractId = contractId;
       }
       const run = {
+        calendar: () => saveCalendar(db, a),
         pms: () => eps.savePms(db, a),
         "pms-budget": () => eps.savePmsBudget(db, a),
         "pms-active": () => eps.setPmsActive(db, a),

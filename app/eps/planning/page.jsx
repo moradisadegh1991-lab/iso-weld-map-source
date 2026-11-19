@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
+import { CalendarSelect } from "../../../components/eps/WorkCalendar";
 import { useEpsFmt } from "../../../components/eps/ActivityDetail";
 import { COLUMNS, PLAN_COST_COLUMNS, useVersion } from "../../../components/eps/shared";
 import { PLAN_COST_FIELDS } from "../../../lib/eps/costs.mjs";
@@ -42,6 +43,7 @@ export default function PlanningPage() {
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [importChoice, setImportChoice] = useState(null);
   const { height, grip } = useSplit("p6-planning", 380);
 
   async function post(body, done, url = "/api/eps/planning") {
@@ -56,7 +58,7 @@ export default function PlanningPage() {
     setMsg(null); setOk(null); setBusy(true);
     try {
       const form = new FormData();
-      for (const [k, v] of Object.entries({ projectId, kind: "plan-import", versionId })) form.set(k, v);
+      for (const [k, v] of Object.entries({ projectId, kind: "plan-import", versionId, calendarId: importChoice?.versionId === versionId ? importChoice.id : tree.data?.version?.calendar?.id || "" })) form.set(k, v);
       form.set("file", file);
       const res = await fetch("/api/eps/planning", { method: "POST", body: form, credentials: "same-origin" });
       const b = await res.json().catch(() => ({}));
@@ -135,6 +137,8 @@ export default function PlanningPage() {
               post({ kind: "plan-copy", fromVersionId: copy.from, toVersionId: versionId, replace: copy.replace }, (r) => t("ep.pl.copied", r.row)); }}>{t("ep.pl.copy")}</button>
           <TemplateButton kind="planning" />
           <button className="btn ghost sm" type="button" onClick={exportSheet} data-plan-export>{t("ep.pl.export")}</button>
+          <CalendarSelect calendars={tree.data.version.calendars} value={importChoice?.versionId === versionId ? importChoice.id : tree.data.version.calendar?.id}
+            onChange={(id) => setImportChoice({ versionId, id })} />
           <label className="btn ghost sm" style={{ cursor: "pointer" }}>{t("ep.pl.import")}
             <input type="file" accept=".xlsx,.xls" hidden data-plan-import onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ""; if (x && window.confirm(t("ep.pl.importAsk", { name: x.name }))) importFile(x); }} /></label>
         </div>
@@ -147,6 +151,9 @@ export default function PlanningPage() {
       {grip}
       <div className="p6-detail" data-plan-rows>
         <div className="p6-tabs" role="tablist"><button type="button" role="tab" aria-selected className="on">{t("ep.historyTitle")}</button></div>
+        {selectedActivityId && plan.get(selectedActivityId) && <CalendarSelect calendars={tree.data.version.calendars}
+          value={plan.get(selectedActivityId).calendar_id} inherited={tree.data.version.calendar?.name}
+          disabled={!may || busy} onChange={(calendarId) => post({ kind: "plan-edit", id: plan.get(selectedActivityId).id, calendarId }, () => t("ep.cal.saved"))} />}
         <PlanningActivityHistory data={history.data} selected={sel} loading={history.busy} error={history.error} />
       </div>
     </div>

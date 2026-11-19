@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 import { useEpsFmt } from "../../components/eps/ActivityDetail";
+import WorkCalendar, { CalendarSelect } from "../../components/eps/WorkCalendar";
 import ActivityGrid, { useSplit } from "../../components/eps/ActivityGrid";
 /**
  * The contract's EPS (owner's requirements 2026-10-22: «کادر بالای صفحه
@@ -36,7 +37,7 @@ const EPS_COLUMNS = [
   { key: "count", title: "ep.bd.versionsNodes", width: 150, get: (r, x) => (r.kind === "node" ? x.t("ep.bd.pmsCounts", { v: r.item.activities.length, n: r.item.nodes }) : x.t("ep.bd.planned", { n: r.item.planned })) },
   { key: "description", title: "ep.description", width: 200, hits: true, get: (r) => r.item.description || "" },
 ];
-const DEFAULT_COLS = ["code", "active", "name", "type", "master", "start", "finish", "dur", "aStart", "aFinish", "budget", "count"];
+const DEFAULT_COLS = ["code", "active", "name", "calendarId", "type", "master", "start", "finish", "dur", "aStart", "aFinish", "budget", "count"];
 const COLORS = ["#1f6f8b", "#7d3c98"];
 // the board as the tree's data: a PMS is a node, its versions the rows under it (a version's span on the chart is its schedule's)
 const asTree = (pms) => ({ roots: pms.map((p) => ({ ...p, name: p.title, level: 1, color: COLORS[0], children: [],
@@ -95,7 +96,8 @@ export default function EpsPage() {
     { key: "active", title: "ep.bd.active", width: 60, get: (r) => (r.kind !== "node" ? "" : (
       <input type="checkbox" aria-label={t("ep.bd.activeOf", { code: r.item.code })} checked={r.item.active !== false} disabled={!data?.may?.edit} data-pms-active={r.item.code}
         onChange={(e) => post({ kind: "pms-active", id: r.item.id, active: e.target.checked }, () => t(e.target.checked ? "ep.bd.activeOn" : "ep.bd.activeOff", { code: r.item.code }))} />)) },
-    ...EPS_COLUMNS.slice(1)], [data?.may?.edit, t]); // eslint-disable-line react-hooks/exhaustive-deps
+    { key: "calendarId", title: "ep.cal.title", width: 130, get: (r) => data?.calendars?.find((c) => c.id === r.item.effectiveCalendarId)?.name ?? t("ep.cal.allDays") },
+    ...EPS_COLUMNS.slice(1)], [data?.may?.edit, data?.calendars, t]); // eslint-disable-line react-hooks/exhaustive-deps
   const ops = useMemo(() => {
     if (!data?.may?.edit) return null;
     const send = (body) => call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, contractId, ...body }) });
@@ -105,18 +107,19 @@ export default function EpsPage() {
       catch (e) { setMsg(e.message); live.current.reload(); return false; }
     };
     const n = (v) => (v === "" || v === undefined ? null : v);
-    const pmsBody = (p, v) => ({ kind: "pms", id: p.id, code: p.code, title: v.name, pmsType: v.type, description: v.description, registeredOn: p.registered_on,
+    const pmsBody = (p, v) => ({ kind: "pms", id: p.id, code: p.code, title: v.name, calendarId: v.calendarId, pmsType: v.type, description: v.description, registeredOn: p.registered_on,
       planStart: v.start || null, planEnd: v.finish || null, actualStart: v.aStart || null, actualEnd: v.aFinish || null, budgetPlan: n(v.budget), budgetActual: n(v.budgetA) });
-    const verBody = (x, v) => ({ kind: "version", id: x.id, pmsId: x.pms_id, code: x.code, title: v.name, description: v.description, registeredOn: x.registered_on,
+    const verBody = (x, v) => ({ kind: "version", id: x.id, pmsId: x.pms_id, code: x.code, title: v.name, calendarId: v.calendarId, description: v.description, registeredOn: x.registered_on,
       startOn: v.start || null, endOn: v.finish || null, budgetPlan: n(v.budget), budgetActual: n(v.budgetA) });
     const list = (row) => (row.kind === "node" ? data.pms : data.pms.find((p) => p.id === row.item.pms_id)?.versions || []);
     return {
-      fields: (row) => (row.kind === "node"
+      fields: (row) => [...(row.kind === "node"
         ? ["name", "type", "start", "finish", "aStart", "aFinish", "budget", "budgetA", "description"]
         : ["name", "start", "finish", "budget", "budgetA", "description"]).map((key) => ({ key, type: ["start", "finish", "aStart", "aFinish"].includes(key) ? "date" : ["budget", "budgetA"].includes(key) ? "number" : "text" })),
+        { key: "calendarId", type: "select", options: (data.calendars || []).map((c) => [c.id, c.name]) }],
       value: (row) => {
         const it = row.item;
-        const v = { name: it.name ?? "", start: it.plan_start || "", finish: it.plan_end || "", budget: it.budget_plan ?? "", budgetA: it.budget_actual ?? "", description: it.description ?? "" };
+        const v = { name: it.name ?? "", calendarId: it.effectiveCalendarId ?? "", start: it.plan_start || "", finish: it.plan_end || "", budget: it.budget_plan ?? "", budgetA: it.budget_actual ?? "", description: it.description ?? "" };
         return row.kind === "node" ? { ...v, type: it.pms_type ?? "", aStart: it.actual_start || "", aFinish: it.actual_end || "" } : v;
       },
       save: (row, v) => batch([row.kind === "node" ? pmsBody(row.item, v) : verBody(row.item, v)], t("ep.bd.saved", { code: row.item.code })),
@@ -165,6 +168,7 @@ export default function EpsPage() {
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {asking && <RemoveAsk items={asking.items} close={(r) => { asking.resolve(r); setAsking(null); }} />}
+      <WorkCalendar key={contractId} calendars={data.calendars || []} may={may} post={post} />
       {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} contractId={contractId} call={call} done={(m, notes = []) => { setImp(null); setOk(m); setNotes(notes); reload(); }} fail={setMsg} />}
       {notes.length > 0 && <div className="card" data-import-notes><b>{t("ep.im.notes", { n: notes.length })}</b>
         <ul className="sm" style={{ maxHeight: 220, overflowY: "auto" }}>{notes.map((x, i) => <li key={i} dir="auto">{x}</li>)}</ul>
@@ -177,9 +181,9 @@ export default function EpsPage() {
         </div>
         {grip}</>}
       <div className="p6-detail" data-eps-detail>
-        {adding ? <PmsForm init={{ ...BLANK_PMS }} labels={data.labels} post={post} close={() => setAdding(false)} />
-          : pickedPms ? <PmsForm key={`${pickedPms.id}|${pickedPms.title}|${pickedPms.budget_plan}`} p={pickedPms} labels={data.labels} post={post} may={may} askRemove={askRemovePms} />
-          : pickedVer ? <VersionForm key={pickedVer.v.id} v={pickedVer.v} p={pickedVer.p} post={post} may={may}
+        {adding ? <PmsForm init={{ ...BLANK_PMS }} calendars={data.calendars} labels={data.labels} post={post} close={() => setAdding(false)} />
+          : pickedPms ? <PmsForm key={`${pickedPms.id}|${pickedPms.title}|${pickedPms.budget_plan}`} p={pickedPms} calendars={data.calendars} labels={data.labels} post={post} may={may} askRemove={askRemovePms} />
+          : pickedVer ? <VersionForm key={pickedVer.v.id} v={pickedVer.v} p={pickedVer.p} calendars={data.calendars} post={post} may={may}
             askRemove={async () => { const a = await askRemove([{ kind: "version", item: pickedVer.v }]); if (a) await removeNow([{ kind: "version", item: pickedVer.v }], a.all); }} />
           : data.pms.length > 0 && <p className="empty-note">{t("ep.bd.pick")}</p>}
       </div>
@@ -192,15 +196,16 @@ const field = (st, set, k, l, type = "text", extra = {}) => (
     <input id={`ep-${k}`} type={type} dir={type === "text" && k !== "title" && k !== "description" ? "ltr" : undefined} value={st[k] ?? ""} onChange={(e) => set({ ...st, [k]: e.target.value })} {...extra} /></div>);
 
 /** A PMS: new, or the one picked — its WBS opens from here. */
-function PmsForm({ p = null, init = null, labels, post, may = true, close = null, askRemove = null }) {
+function PmsForm({ p = null, init = null, labels, calendars = [], post, may = true, close = null, askRemove = null }) {
   const { t } = usePrefs();
   const { fmt } = useEpsFmt();
   const [pf, setPf] = useState(() => init || { id: p.id, code: p.code, title: p.title, pmsType: p.pms_type || "", description: p.description || "", registeredOn: p.registered_on || "",
     planStart: p.plan_start || "", planEnd: p.plan_end || "", actualStart: p.actual_start || "", actualEnd: p.actual_end || "", budgetPlan: p.budget_plan ?? "", budgetActual: p.budget_actual ?? "" });
+  const calendarId = pf.calendarId ?? p?.calendar_id ?? calendars.find((c) => c.is_default)?.id ?? "";
   const F = (k, l, type, extra) => field(pf, setPf, k, l, type, extra);
   return (
     <form data-pms-form={pf.code || "new"} onSubmit={async (e) => { e.preventDefault(); if (!window.confirm(t(pf.id ? "gr.saveAsk" : "gr.addAsk"))) return;
-      if (await post({ kind: "pms", ...pf }, (r) => t("ep.bd.pmsSaved", { code: r.row.code })) && close) close(); }}>
+      if (await post({ kind: "pms", ...pf, calendarId }, (r) => t("ep.bd.pmsSaved", { code: r.row.code })) && close) close(); }}>
       <h3 style={{ margin: "0 0 6px" }}>{pf.id ? t("ep.bd.pmsEdit", { code: pf.code }) : t("ep.bd.pmsNew")}
         {p && <Link className="btn sm" style={{ marginInlineStart: 8 }} href={`/eps/wbs?pms=${p.id}`}>WBS</Link>}</h3>
       <fieldset disabled={!may} style={{ border: 0, padding: 0, margin: 0 }}>
@@ -209,6 +214,7 @@ function PmsForm({ p = null, init = null, labels, post, may = true, close = null
           <div className="field"><label htmlFor="ep-pmsType">{t("ep.bd.pmsType")}</label>
             <input id="ep-pmsType" dir="ltr" list="pms-types" value={pf.pmsType} onChange={(e) => setPf({ ...pf, pmsType: e.target.value })} placeholder="Level 3" />
             <datalist id="pms-types">{(labels.pmsTypes || []).map((x) => <option key={x} value={x} />)}</datalist></div>
+          <CalendarSelect calendars={calendars} value={calendarId} onChange={(value) => setPf({ ...pf, calendarId: value })} required />
           {F("description", t("ep.bd.pmsDesc"))}
           {F("registeredOn", t("ep.bd.registered"), "date")}
           {F("planStart", t("ep.planStart"), "date")}{F("planEnd", t("ep.planEnd"), "date")}
@@ -224,19 +230,21 @@ function PmsForm({ p = null, init = null, labels, post, may = true, close = null
 }
 
 /** A version picked: its schedule's fields, master plan or not, and its planning and activities a click away. */
-function VersionForm({ v, p, post, may, askRemove }) {
+function VersionForm({ v, p, calendars = [], post, may, askRemove }) {
   const { t } = usePrefs();
   const [vf, setVf] = useState({ id: v.id, pmsId: p.id, code: v.code, title: v.title, description: v.description || "", registeredOn: v.registered_on || "",
     startOn: v.start_on || "", endOn: v.end_on || "", budgetPlan: v.budget_plan ?? "", budgetActual: v.budget_actual ?? "" });
+  const calendarId = vf.calendarId ?? v.calendar_id ?? calendars.find((c) => c.is_default)?.id ?? "";
   const F = (k, l, type, extra) => field(vf, setVf, k, l, type, extra);
   return (
-    <form data-version-form={v.code} onSubmit={async (e) => { e.preventDefault(); if (!window.confirm(t("gr.saveAsk"))) return; await post({ kind: "version", ...vf }, (r) => t("ep.bd.verSaved", { code: r.row.code })); }}>
+    <form data-version-form={v.code} onSubmit={async (e) => { e.preventDefault(); if (!window.confirm(t("gr.saveAsk"))) return; await post({ kind: "version", ...vf, calendarId }, (r) => t("ep.bd.verSaved", { code: r.row.code })); }}>
       <h3 style={{ margin: "0 0 6px" }}>{t("ep.bd.verEdit", { code: v.code })} <span className="sm muted">— PMS {p.code}</span>
         <Link className="btn sm" style={{ marginInlineStart: 8 }} href={`/eps/planning?version=${v.id}`}>{t("ep.link.planning")}</Link>
         <Link className="btn ghost sm" href={`/eps/activities?version=${v.id}`}>{t("ep.link.activities")}</Link></h3>
       <fieldset disabled={!may} style={{ border: 0, padding: 0, margin: 0 }}>
         <div className="grid2">
           {F("code", t("ep.bd.verCode"), "text", { required: true })}{F("title", t("ep.bd.verTitle"), "text", { required: true })}
+          <CalendarSelect calendars={calendars} value={calendarId} onChange={(value) => setVf({ ...vf, calendarId: value })} required />
           {F("description", t("ep.bd.verDesc"))}{F("registeredOn", t("ep.bd.registered"), "date")}
           {F("startOn", t("ep.bd.verStart"), "date")}{F("endOn", t("ep.bd.verEnd"), "date")}
           {F("budgetPlan", t("ep.bd.budgetPlan"), "text", { inputMode: "decimal" })}{F("budgetActual", t("ep.d.budgetActual"), "text", { inputMode: "decimal" })}
@@ -261,6 +269,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
   const { t } = usePrefs();
   const [busy, setBusy] = useState(false);
   const pms = data.pms.find((p) => p.id === imp.pmsId);
+  const calendarId = imp.calendarId ?? (imp.mode === "replace" ? pms?.calendar_id : null) ?? data.calendars?.find((c) => c.is_default)?.id ?? "";
   async function send(e) {
     e.preventDefault(); fail(null);
     if (imp.mode === "replace") {
@@ -274,7 +283,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
     try {
       const form = new FormData();
       const fields = imp.mode === "new" ? { contractId, pmsCode: imp.pmsCode, title: imp.title } : { pmsId: imp.pmsId };
-      for (const [k, v] of Object.entries({ projectId, kind: "import-plan", mode: imp.mode, fileKind: imp.fileKind, ...fields })) form.set(k, v);
+      for (const [k, v] of Object.entries({ projectId, kind: "import-plan", mode: imp.mode, fileKind: imp.fileKind, calendarId, ...fields })) form.set(k, v);
       form.set("file", imp.file);
       const res = await fetch("/api/eps", { method: "POST", body: form, credentials: "same-origin" });
       const b = await res.json().catch(() => ({}));
@@ -290,7 +299,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
     setBusy(true); fail(null);
     try {
       const res = await fetch("/api/eps", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId, kind: "convert-legacy", pmsId: imp.pmsId, versionCode: code, source, importId }) });
+        body: JSON.stringify({ projectId, kind: "convert-legacy", calendarId, pmsId: imp.pmsId, versionCode: code, source, importId }) });
       const b = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(b.error || t("ep.im.status", { n: res.status }));
       done(t("ep.im.converted", { code: b.row.version.code, label, nodes: b.row.nodes, acts: b.row.activities }));
@@ -318,6 +327,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
               onChange={(e) => setImp({ ...imp, pmsCode: e.target.value.toUpperCase() })} /></div>
           <div className="field"><label htmlFor="im-newtitle">{t("ep.im.newTitle")}</label>
             <input id="im-newtitle" value={imp.title} onChange={(e) => setImp({ ...imp, title: e.target.value })} /></div></>}
+        <CalendarSelect calendars={data.calendars} value={calendarId} onChange={(value) => setImp({ ...imp, calendarId: value })} required />
         <div className="field"><label htmlFor="im-kind">{t("ep.im.kind")}</label>
           <select id="im-kind" value={imp.fileKind} onChange={(e) => setImp({ ...imp, fileKind: e.target.value })}>
             <option value="mspdi">MS Project (XML — Save As ◄ XML Format)</option>
