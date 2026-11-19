@@ -110,15 +110,16 @@ export async function GET(request) {
       if (activityId) {
         const a = await access(await one(ACTIVITY, activityId));
         await assertPmsTargets(db, projectId, scopeIds, [["activity", activityId], ["version", versionId], ["pms", pmsId]]);
-        return Response.json({ ...(await act.activityDetail(db, { projectId, activityId, versionId, userId: user.id })), labels: LABELS, may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });
+        return Response.json({ ...(await act.activityDetail(db, { projectId, activityId, versionId, userId: user.id, dutyScope: scopeIds })), labels: LABELS, may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });
       }
       if (versionId || pmsId) {
         const a = await access(versionId ? await one(VERSION, versionId) : await one(PMS, pmsId));
-        await assertPmsTargets(db, projectId, scopeIds, [["pms", pmsId], ["version", versionId]]);
-        const at = { projectId, pmsId, versionId, userId: user.id };
+        const targets = await assertPmsTargets(db, projectId, scopeIds, [["pms", pmsId], ["version", versionId]], { whole: !!q("unplanned") });
+        const fullPms = !scopeIds || [...targets].every((id) => scopeIds.whole.has(id));
+        const at = { projectId, pmsId, versionId, userId: user.id, dutyScope: scopeIds };
         if (q("lines")) return Response.json({ lines: await act.versionLines(db, at) });
         if (q("unplanned")) return Response.json({ unplanned: await scope.unplanned(db, at), labels: LABELS });
-        const autoApplied = a !== "view" ? (await scope.autoApply(db, { ...at, userId: user.id })).filter((x) => x.error || x.added || x.removed || x.changed || x.made || x.dropped) : [];
+        const autoApplied = fullPms && a !== "view" ? (await scope.autoApply(db, { ...at, userId: user.id })).filter((x) => x.error || x.added || x.removed || x.changed || x.made || x.dropped) : [];
         if (q("days") !== null || url.searchParams.has("days")) {
           const days = String(q("days") || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 62);
           return Response.json({ ...(await act.daysView(db, { ...at, days })), labels: LABELS, may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });

@@ -78,6 +78,16 @@ function writeTargets(b) {
   }
 }
 
+function writesWholePms(b) {
+  switch (b.kind) {
+    case "node": return !b.id && !b.parentId;
+    case "node-copy": return !b.parentId;
+    case "wf-fit": return !b.nodeId;
+    case "node-remove": case "attach": case "activity": case "activity-remove": return false;
+    default: return true;
+  }
+}
+
 export async function GET(request) {
   try {
     const url = new URL(request.url);
@@ -96,16 +106,25 @@ export async function GET(request) {
         const contractId = await contractOf(db, projectId, { kind: "settings", versionId, pmsId });
         if (!contractId) throw notFound();
         const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
-        await assertPmsTargets(db, projectId, scope, [["pms", pmsId], ["version", versionId], ["node", q("parentId")]]);
+        const parentId = q("parentId");
+        const targets = await assertPmsTargets(db, projectId, scope, [["pms", pmsId], ["version", versionId], ["node", parentId]], {
+          whole: !!q("contents") || (!!q("suggest") && !parentId),
+        });
+        const fullPms = !scope || [...targets].every((id) => scope.whole.has(id));
         if (q("suggest")) return Response.json({ code: await eps.suggestNodeCode(db, { projectId, pmsId, versionId, parentId: q("parentId") }) });
         // what deleting (or replacing) the PMS takes with it, and what stops it — asked before the question is put
         if (q("contents")) return Response.json(await eps.pmsContents(db, { projectId, id: pmsId }));
-        return Response.json({ ...(await eps.wbsView(db, { projectId, pmsId, versionId })), labels: LABELS, may: { edit: access !== "view" } });
+        return Response.json({ ...(await eps.wbsView(db, { projectId, pmsId, versionId, dutyScope: scope })), labels: LABELS, may: { edit: access !== "view", fullPms } });
       }
       const contractId = q("contractId");
       if (!contractId) return Response.json({ error: "contractId is required" }, { status: 400 });
       const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
-      return Response.json({ calendars: await listCalendars(db, { projectId, contractId }), pms: await eps.epsBoard(db, { projectId, contractId, pmsIds: scope ? [...scope] : null }), labels: LABELS, may: { edit: access !== "view", contractWide: !scope && access !== "view" },
+      const board = await eps.epsBoard(db, { projectId, contractId, pmsIds: scope ? [...scope.pmsIds] : null });
+      const pms = board.map((p) => {
+        if (!scope || scope.whole.has(p.id)) return p;
+        return { ...p, nodes: null, partialWbs: true, versions: p.versions.map((v) => ({ ...v, planned: null })) };
+      });
+      return Response.json({ calendars: await listCalendars(db, { projectId, contractId }), pms, labels: LABELS, may: { edit: access !== "view", contractWide: !scope && access !== "view" },
         legacy: scope ? { schedules: [], pms: [] } : await legacyImports(db, { projectId }) });
     });
   } catch (e) { return errorResponse(e); }
@@ -143,7 +162,7 @@ export async function POST(request) {
         const contractId = await contractOf(db, projectId, b);
         if (!contractId) throw notFound();
         await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: "edit" });
-        await assertPmsTargets(db, projectId, scope, writeTargets(b));
+        await assertPmsTargets(db, projectId, scope, writeTargets(b), { whole: writesWholePms(b) });
         a.contractId = contractId;
       }
       const run = {

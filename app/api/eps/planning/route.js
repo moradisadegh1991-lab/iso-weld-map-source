@@ -54,7 +54,8 @@ async function contractOf(db, projectId, b) {
 
 function writeTargets(b) {
   switch (b.kind) {
-    case "plan-add": case "plan-import": return [["version", b.versionId]];
+    case "plan-add": return [["version", b.versionId], ...(Array.isArray(b.activityIds) ? b.activityIds : []).map((id) => ["activity", id])];
+    case "plan-import": return [["version", b.versionId]];
     case "plan-edit": return [["plan", b.id]];
     case "plan-remove": return (Array.isArray(b.ids) ? b.ids : []).map((id) => ["plan", id]);
     case "plan-copy": return [["version", b.fromVersionId], ["version", b.toVersionId]];
@@ -80,11 +81,12 @@ export async function GET(request) {
       const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
       const activityId = url.searchParams.get("activityId");
       const scope = await pmsScopeOf(db, { projectId, userId: user.id });
-      await assertPmsTargets(db, projectId, scope, [["version", versionId], ["activity", activityId]]);
+      const targets = await assertPmsTargets(db, projectId, scope, [["version", versionId], ["activity", activityId]]);
       if (activityId && url.searchParams.get("view") === "history") return Response.json(await plan.activityPlanningHistory(db, { projectId, versionId, activityId }));
-      const may = { edit: access !== "view", contractWide: !scope && access !== "view" };
-      if (activityId) return Response.json({ ...(await plan.previewDetail(db, { projectId, versionId, activityId })), may });
-      return Response.json({ ...(await plan.planRows(db, { projectId, versionId })), may });
+      const may = { edit: access !== "view", contractWide: !scope && access !== "view",
+        fullPms: !scope || [...targets].every((id) => scope.whole.has(id)) };
+      if (activityId) return Response.json({ ...(await plan.previewDetail(db, { projectId, versionId, activityId, dutyScope: scope })), may });
+      return Response.json({ ...(await plan.planRows(db, { projectId, versionId, dutyScope: scope })), may });
     });
   } catch (e) { return errorResponse(e); }
 }
@@ -111,7 +113,7 @@ export async function POST(request) {
       if (!contractId) throw notFound();
       await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: "edit" });
       const a = { ...b, projectId, contractId, userId: user.id };
-      await assertPmsTargets(db, projectId, await pmsScopeOf(db, a), writeTargets(b));
+      await assertPmsTargets(db, projectId, await pmsScopeOf(db, a), writeTargets(b), { whole: kind === "plan-import" || kind === "plan-copy" });
       const run = {
         "plan-add": () => plan.addToPlan(db, a),
         "plan-edit": () => plan.savePlanRow(db, a),

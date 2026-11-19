@@ -116,7 +116,7 @@ export default function WbsPage() {
         const list = [row.kind === "act" ? actBody(row.item, rest) : nodeBody(row.item, rest)];
         // a new place typed in «display order»: before the sibling that holds it now, or after the last
         const want = Math.round(Number(order)), now = row.kind === "node" ? positionOf(row.item) : null;
-        if (row.kind === "node" && Number.isFinite(want) && want >= 1 && want !== now) {
+        if (data.may.fullPms && row.kind === "node" && Number.isFinite(want) && want >= 1 && want !== now) {
           const sib = siblings(row.item).filter((x) => x.id !== row.id);
           const to = sib[Math.min(want, sib.length + 1) - 1];
           list.push({ kind: "node-move", id: row.id, parentId: row.item.parent_id || null, ...(to ? { beforeId: to.id } : { afterId: sib[sib.length - 1]?.id }) });
@@ -124,7 +124,7 @@ export default function WbsPage() {
         return batch(list, t("ep.wb.saved", { code: row.item.code }));
       },
       // dragged by its row: before / after another node (its sibling there) or into it (its child)
-      drop: (row, target, zone) => batch([zone === "inside" ? { kind: "node-move", id: row.id, parentId: target.id }
+      drop: !data.may.fullPms ? undefined : (row, target, zone) => batch([zone === "inside" ? { kind: "node-move", id: row.id, parentId: target.id }
         : { kind: "node-move", id: row.id, parentId: target.item.parent_id || null, [zone === "before" ? "beforeId" : "afterId"]: target.id }],
       zone === "inside" ? t("ep.wb.droppedInto", { code: row.item.code, under: target.item.code }) : t("ep.wb.moved")),
       create: (node, v) => batch([{ ...nodeBody({ parent_id: node.id }, v), id: null, code: null }], t("ep.wb.added")),
@@ -146,7 +146,7 @@ export default function WbsPage() {
           ...(how === "cut" ? lone.map((a) => ({ kind: "activity-remove", id: a.id })) : []),
         ], t("ep.wb.pastedN", { n: rows.length }));
       },
-      reorder: (row, dir) => {
+      reorder: !data.may.fullPms ? undefined : (row, dir) => {
         const sib = siblings(row.item), i = sib.findIndex((x) => x.id === row.id), to = sib[i + dir];
         if (!to) return true;
         return batch([{ kind: "node-move", id: row.id, parentId: row.item.parent_id || null, [dir < 0 ? "beforeId" : "afterId"]: to.id }], t("ep.wb.moved"));
@@ -170,6 +170,7 @@ export default function WbsPage() {
   if (!pmsId) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
   if (!data) return <div className="page">{head}<p className="muted">{t("common.loading")}</p></div>;
   const may = data.may.edit;
+  const mayPms = may && data.may.fullPms;
   const S = data.settings;
   const withActs = data.templates.filter((x) => x.activities.length > 0);
   const findNode = (id) => { const f = (ns) => { for (const n of ns) { if (n.id === id) return n; const c = f(n.children); if (c) return c; } return null; }; return f(data.roots); };
@@ -181,9 +182,9 @@ export default function WbsPage() {
     setAdding({ parentId, code }); setTab("wbs");
   }
   const toolbar = may && <>
-    <button type="button" className="btn sm" data-add-top onClick={() => openAdd(null)}>{t("ep.wb.addTop")}</button>
+    {mayPms && <button type="button" className="btn sm" data-add-top onClick={() => openAdd(null)}>{t("ep.wb.addTop")}</button>}
     <button type="button" className="btn ghost sm" disabled={!node} data-add-child onClick={() => node && openAdd(node.id)}>+ {t("ep.wb.child")}</button>
-    {S.budgetMode !== "manual" && <button className="btn ghost sm" type="button" data-refresh-weights
+    {mayPms && S.budgetMode !== "manual" && <button className="btn ghost sm" type="button" data-refresh-weights
       title={t(S.budgetMode === "wf_to_budget" ? "ep.wb.refreshBudgetTip" : "ep.wb.refreshWfTip")}
       onClick={() => { if (window.confirm(t("ep.wb.refreshAsk"))) post({ kind: "refresh-weights" }, (r) => t("ep.wb.refreshed", { n: r.row.updated })); }}>{t("ep.wb.refresh")}</button>}
     <span className="sm muted" data-root-wf>{t("ep.wb.rootSum", { code: data.version.pms_code, wf: data.rootWf == null ? "—" : w(data.rootWf) })}</span></>;
@@ -203,18 +204,18 @@ export default function WbsPage() {
           toolbar={<>{toolbar}{overBtn}</>} ops={ops} />
       </div>
       {grip}
-      {may && <p className="sm muted" data-drag-hint>{t("ep.wb.dragHint")}</p>}
+      {mayPms && <p className="sm muted" data-drag-hint>{t("ep.wb.dragHint")}</p>}
       <div className="p6-detail">
         <div className="p6-tabs" role="tablist">
           {TABS.map((k) => <button key={k} type="button" role="tab" data-wbs-tab={k} aria-selected={tab === k} className={tab === k ? "on" : undefined} onClick={() => setTab(k)}>{t(`ep.wb.tab.${k}`)}</button>)}
         </div>
-        {tab === "pms" && <PmsDetail p={data.pms} labels={data.labels} rootWf={data.rootWf} may={may} post={post} contractId={contractId} />}
+        {tab === "pms" && <PmsDetail p={data.pms} labels={data.labels} rootWf={data.rootWf} may={mayPms} post={post} contractId={contractId} />}
         {tab === "wbs" && (adding ? <NodeForm key={`add-${adding.parentId}`} init={{ mode: "add", ...BLANK_NODE, parentId: adding.parentId, code: adding.code }} mode={S.budgetMode}
             templates={withActs} post={post} may={may} close={() => setAdding(null)} parent={adding.parentId ? findNode(adding.parentId) : null} />
           : node ? <NodeForm key={node.id} init={{ mode: "edit", ...toForm(node) }} n={node} mode={S.budgetMode} templates={data.templates} post={post} may={may} />
           : <p className="empty-note">{t("ep.wb.pickNode")}</p>)}
         {tab === "acts" && (node ? <Activities n={node} may={may} post={post} templates={withActs} /> : <p className="empty-note">{t("ep.wb.pickNode")}</p>)}
-        {tab === "settings" && <Settings S={S} labels={data.labels} may={may} post={post} pmsCode={data.version.pms_code} />}
+        {tab === "settings" && <Settings S={S} labels={data.labels} may={mayPms} post={post} pmsCode={data.version.pms_code} />}
       </div>
     </div>
   );
