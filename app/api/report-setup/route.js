@@ -79,7 +79,7 @@ const LABEL = {
   workflow: (b) => `گردش کار «${b.name}»`, "workflow-remove": () => "حذف گره گردش کار", attach: () => "گردش کار فرم",
   page: (b) => `صفحهٔ ${b.pageNo} «${b.name}»`, "page-remove": () => "حذف صفحه",
   "group-duty": () => "وظیفه در گروه", "group-duty-remove": () => "برداشتن وظیفه از گروه",
-  role: (b) => `نقش «${b.name}»`, "role-remove": () => "حذف نقش", "duty-member": () => "دارندهٔ وظیفه و دسترسی او", "duty-member-remove": () => "برداشتن دارندهٔ وظیفه",
+  role: (b) => b.name ? `نقش «${b.name}»` : "جابه‌جایی نقش", "role-remove": () => "حذف نقش", "duty-member": () => "دارندهٔ وظیفه و دسترسی او", "duty-member-remove": () => "برداشتن دارندهٔ وظیفه",
   "stage-deadline": () => "مهلت مرحله",
 };
 // what only the project's manager decides: the duties, the tree, and which workflow a form follows
