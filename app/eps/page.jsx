@@ -138,7 +138,7 @@ export default function EpsPage() {
         if (how !== "cut") { setMsg(t("ep.bd.copyNo")); return false; }
         return batch(rows.filter((x) => x.kind === "act").map((x) => ({ kind: "eps-move", epsKind: "version", id: x.id, pmsId: node.id })), t("ep.bd.versionMoved", { code: node.item.code }));
       },
-      reorderable: () => true,
+      reorderable: (row) => row.kind !== "node" || data.may.contractWide,
       reorder: (row, dir) => {
         const sib = list(row), i = sib.findIndex((x) => x.id === row.id), to = sib[i + dir];
         if (!to) return true;
@@ -157,8 +157,8 @@ export default function EpsPage() {
   if (!data) return <p className="muted">{t("common.loading")}</p>;
   const may = data.may.edit;
   const toolbar = may && <>
-    <button className="btn sm" type="button" data-new-pms onClick={() => { setAdding(true); setSel(null); }}>{t("ep.bd.newPms")}</button>
-    <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.some((p) => p.active !== false) ? "replace" : "new", pmsId: data.pms.find((p) => p.active !== false)?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></>;
+    {data.may.contractWide && <button className="btn sm" type="button" data-new-pms onClick={() => { setAdding(true); setSel(null); }}>{t("ep.bd.newPms")}</button>}
+    {(data.may.contractWide || data.pms.some((p) => p.active !== false)) && <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.some((p) => p.active !== false) ? "replace" : "new", pmsId: data.pms.find((p) => p.active !== false)?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button>}</>;
   const pickedPms = sel?.kind === "node" ? data.pms.find((p) => p.id === sel.id) : null;
   const pickedVer = sel?.kind === "act" ? data.pms.flatMap((p) => p.versions.map((v) => ({ v, p }))).find((x) => x.v.id === sel.id) : null;
   return (
@@ -168,12 +168,12 @@ export default function EpsPage() {
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {asking && <RemoveAsk items={asking.items} close={(r) => { asking.resolve(r); setAsking(null); }} />}
-      <WorkCalendar key={contractId} calendars={data.calendars || []} may={may} post={post} />
+      <WorkCalendar key={contractId} calendars={data.calendars || []} may={data.may.contractWide} post={post} />
       {imp && <ImportPlan data={data} imp={imp} setImp={setImp} projectId={projectId} contractId={contractId} call={call} done={(m, notes = []) => { setImp(null); setOk(m); setNotes(notes); reload(); }} fail={setMsg} />}
       {notes.length > 0 && <div className="card" data-import-notes><b>{t("ep.im.notes", { n: notes.length })}</b>
         <ul className="sm" style={{ maxHeight: 220, overflowY: "auto" }}>{notes.map((x, i) => <li key={i} dir="auto">{x}</li>)}</ul>
         <button type="button" className="btn ghost sm" onClick={() => setNotes([])}>{t("ep.close")}</button></div>}
-      {data.pms.length === 0 && !adding ? <div className="card"><p className="empty-note">{t("ep.bd.none")}</p>{may && <p className="row" style={{ gap: 6 }}><button className="btn" type="button" data-new-pms onClick={() => setAdding(true)}>{t("ep.bd.newPms")}</button>
+      {data.pms.length === 0 && !adding ? <div className="card"><p className="empty-note">{t("ep.bd.none")}</p>{data.may.contractWide && <p className="row" style={{ gap: 6 }}><button className="btn" type="button" data-new-pms onClick={() => setAdding(true)}>{t("ep.bd.newPms")}</button>
         <button className="btn ghost" type="button" data-import-open onClick={() => setImp({ mode: "new", pmsId: "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></p>}</div> : <>
         <div style={{ height }} data-eps-tree>
           <ActivityGrid data={tree} columns={columns} defaultCols={DEFAULT_COLS} storeKey="p6-eps" customKey="eps-board" selected={sel?.id}
@@ -313,7 +313,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
       <div role="radiogroup" aria-label={t("ep.im.mode")} className="row" style={{ gap: 14, marginBottom: 6 }}>
         <label className="sm"><input type="radio" name="im-mode" value="replace" data-im-mode="replace" disabled={!data.pms.length} checked={imp.mode === "replace"}
           onChange={() => setImp({ ...imp, mode: "replace" })} /> {t("ep.im.modeReplace")}</label>
-        <label className="sm"><input type="radio" name="im-mode" value="new" data-im-mode="new" checked={imp.mode === "new"}
+        <label className="sm"><input type="radio" name="im-mode" value="new" data-im-mode="new" disabled={!data.may.contractWide} checked={imp.mode === "new"}
           onChange={() => setImp({ ...imp, mode: "new" })} /> {t("ep.im.modeNew")}</label>
       </div>
       <div className="grid2">

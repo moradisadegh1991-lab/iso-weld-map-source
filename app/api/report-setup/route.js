@@ -40,7 +40,7 @@ export async function GET(request) {
         stageList: await rp.workflowOf(db, { projectId, workflowId: w.id }), pages: await rp.pagesOf(db, { workflowId: w.id }) })));
       const scope = url.searchParams.get("trees") ? await wfs.scopeTrees(db, { projectId }) : null;
       const contracts = admin ? (await db.query("SELECT id, contract_no, title FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId])).rows : [];
-      return Response.json({ types, users, permissions: PERMISSIONS, workflows, duties: admin ? await wfs.duties(db, { projectId }) : (await wfs.duties(db, { projectId })).map((d) => ({ ...d, members: [], formRules: [] })),
+      return Response.json({ types, users, permissions: PERMISSIONS, workflows, duties: admin ? await wfs.duties(db, { projectId }) : (await wfs.duties(db, { projectId })).map((d) => ({ ...d, members: [], formRules: [], pmsScope: [] })),
         roles: admin ? await wfs.roles(db, { projectId }) : [], contracts,
         sections: wfs.FORM_PARTS, scope, may: { types: admin, tree: admin, duties: admin } });
     });

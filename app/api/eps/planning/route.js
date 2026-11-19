@@ -5,6 +5,7 @@ import { authenticate, errorResponse } from "../../../../lib/server/session.mjs"
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 import * as plan from "../../../../lib/db/repos/planning.mjs";
+import { pmsScopeOf, assertPmsTargets } from "../../../../lib/db/repos/duty-pms-scope.mjs";
 import { assertContractAccess } from "../../../../lib/db/repos/users.mjs";
 
 /**
@@ -51,6 +52,20 @@ async function contractOf(db, projectId, b) {
   }
 }
 
+function writeTargets(b) {
+  switch (b.kind) {
+    case "plan-add": case "plan-import": return [["version", b.versionId]];
+    case "plan-edit": return [["plan", b.id]];
+    case "plan-remove": return (Array.isArray(b.ids) ? b.ids : []).map((id) => ["plan", id]);
+    case "plan-copy": return [["version", b.fromVersionId], ["version", b.toVersionId]];
+    case "req": return [["requirement", b.id], ["version", b.versionId], ["activity", b.activityId], ["activity", b.predActivityId]];
+    case "comment": return [["comment", b.id], ["version", b.versionId], ["activity", b.activityId]];
+    case "req-remove": return [["requirement", b.id]];
+    case "comment-remove": return [["comment", b.id]];
+    default: return [];
+  }
+}
+
 export async function GET(request) {
   try {
     const url = new URL(request.url);
@@ -64,9 +79,12 @@ export async function GET(request) {
       if (!contractId) throw notFound();
       const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
       const activityId = url.searchParams.get("activityId");
+      const scope = await pmsScopeOf(db, { projectId, userId: user.id });
+      await assertPmsTargets(db, projectId, scope, [["version", versionId], ["activity", activityId]]);
       if (activityId && url.searchParams.get("view") === "history") return Response.json(await plan.activityPlanningHistory(db, { projectId, versionId, activityId }));
-      if (activityId) return Response.json({ ...(await plan.previewDetail(db, { projectId, versionId, activityId })), may: { edit: access !== "view" } });
-      return Response.json({ ...(await plan.planRows(db, { projectId, versionId })), may: { edit: access !== "view" } });
+      const may = { edit: access !== "view", contractWide: !scope && access !== "view" };
+      if (activityId) return Response.json({ ...(await plan.previewDetail(db, { projectId, versionId, activityId })), may });
+      return Response.json({ ...(await plan.planRows(db, { projectId, versionId })), may });
     });
   } catch (e) { return errorResponse(e); }
 }
@@ -93,6 +111,7 @@ export async function POST(request) {
       if (!contractId) throw notFound();
       await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: "edit" });
       const a = { ...b, projectId, contractId, userId: user.id };
+      await assertPmsTargets(db, projectId, await pmsScopeOf(db, a), writeTargets(b));
       const run = {
         "plan-add": () => plan.addToPlan(db, a),
         "plan-edit": () => plan.savePlanRow(db, a),

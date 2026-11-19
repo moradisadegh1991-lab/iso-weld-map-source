@@ -52,7 +52,7 @@ export function Requirements({ p, a, acts = [], may, post }) {
         </table></TableKit></div>
       {p.requirements.length === 0 && <p className="sm muted">{t("ep.rq.none")}</p>}
       <p className="sm muted">{t("ep.rq.note")}</p>
-      <RequirementTypes p={p} may={may} post={post} />
+      <RequirementTypes p={p} may={may && p.may?.contractWide !== false} post={post} />
     </div>);
 }
 

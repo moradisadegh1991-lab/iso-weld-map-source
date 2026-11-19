@@ -88,7 +88,7 @@ export default function ProgressPage() {
   if (!plan) return <div className="page">{head}<p className="empty-note">{t("ep.noPlan")}</p></div>;
   if (!data) return <div className="page">{head}<p className="muted">{t("common.loading")}</p></div>;
   const rep = (reports.data?.reports || []).find((r) => r.id === f.reportId);
-  const canAdd = rep?.may.edit && (f.mode === "remain" || String(f.value).trim() !== "");
+  const canAdd = data.may.edit && rep?.may.edit && (f.mode === "remain" || String(f.value).trim() !== "");
   const companyName = new Map(data.companies.map((c) => [c.id, c.name]));
   const picked = summary.find((c) => c.id === codePick) || null;
 
@@ -107,8 +107,8 @@ export default function ProgressPage() {
         <button className="btn" type="button" disabled={!canAdd || visible.length === 0} data-add="multi"
           onClick={() => { if (window.confirm(t("pg.addMultiAsk", { n: visible.length }))) add(visible.map((a) => a.id)); }}>{t("pg.addMulti", { n: visible.length })}</button>
         <TemplateButton kind="daily" />
-        <label className="btn ghost sm" style={{ cursor: "pointer" }}>{t("ep.pl.import")}
-          <input type="file" accept=".xlsx,.xls" hidden data-progress-import onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ""; if (x && window.confirm(t("ep.pg.importAsk", { name: x.name }))) importFile(x); }} /></label>
+        {data.may.contractWide && <label className="btn ghost sm" style={{ cursor: "pointer" }}>{t("ep.pl.import")}
+          <input type="file" accept=".xlsx,.xls" hidden data-progress-import onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ""; if (x && window.confirm(t("ep.pg.importAsk", { name: x.name }))) importFile(x); }} /></label>}
         <span className="sm" data-day-progress>{t("pg.dayProgress", { day: f.day, plan: num(toDay.get("__all")?.TPP ?? null, { maximumFractionDigits: 2 }), actual: num(toDay.get("__all")?.TPA ?? null, { maximumFractionDigits: 2 }) })}</span>
       </div>
       <div className="card row" style={{ gap: 18, flexWrap: "wrap", alignItems: "flex-start" }} data-entry-box>

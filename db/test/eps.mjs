@@ -70,6 +70,7 @@ test("order and codes: reorder before / after; a code follows its moved prefix, 
 
 // ── in the database ──────────────────────────────────────────────────────
 
+process.env.AUTH_MODE = "dev";
 process.env.PGLITE_DIR = await scratchDir("eps-db-");
 const { getDb } = await import("../../lib/server/db.mjs");
 const { withProject } = await import("../../lib/db/scope.mjs");
@@ -284,6 +285,67 @@ test("a template's activity carries the activity table's fields and the project'
     await setCol(ta.id, "7 men");
     equal((await eps.syncTemplate(db, { projectId: P, templateId: TT.id, dryRun: true, userId: U.id })).updated, 1, "a column changed alone is a change to apply");
   });
+});
+
+test("a scoped duty reaches only its PMS and descendants across EPS, Activity and Planning routes", async () => {
+  const epsApi = await import("../../app/api/eps/route.js");
+  const activityApi = await import("../../app/api/eps/activities/route.js");
+  const planningApi = await import("../../app/api/eps/planning/route.js");
+  const wfs = await import("../../lib/db/repos/workflows.mjs");
+  const holder = await projects.ensureUser(db, { subject: "kc|pms-scope" });
+  await projects.addMember(db, { projectId: P, userId: holder.id, role: "engineer" });
+  const fx = await inP(async () => {
+    const base = { projectId: P, contractId: C.id };
+    const other = (await eps.epsBoard(db, base)).find((p) => p.code === "PM02");
+    const nodeIn = await eps.saveNode(db, { projectId: P, pmsId: PM.id, name: "Scoped root", wf: 0 });
+    const nodeOut = await eps.saveNode(db, { projectId: P, pmsId: other.id, name: "Other root", wf: 100 });
+    const actIn = await eps.saveActivity(db, { projectId: P, nodeId: nodeIn.id, name: "Scoped activity", wf: 100 });
+    const actOut = await eps.saveActivity(db, { projectId: P, nodeId: nodeOut.id, name: "Other activity", wf: 100 });
+    const role = await wfs.saveRole(db, { ...base, name: "Duty plan owner" });
+    const foreign = (await eps.epsBoard(db, { projectId: P, contractId: C2.id }))[0];
+    const args = { projectId: P, roleId: role.id, name: "Scoped planning duty" };
+    await throws(() => wfs.saveDuty(db, { ...args, pmsScope: [foreign.id] }), "قرارداد همان نقش");
+    const duty = await wfs.saveDuty(db, { ...args, pmsScope: [PM.id, PM.id] });
+    await wfs.saveDuty(db, { ...args, id: duty.id });
+    equal((await wfs.duties(db, { projectId: P })).find((d) => d.id === duty.id).pmsScope, [PM.id]);
+    await wfs.setDutyMember(db, { projectId: P, dutyId: duty.id, userId: holder.id });
+    return { other, nodeIn, nodeOut, actIn, actOut, duty, args };
+  });
+  const req = (query = "", body = null, actor = holder) => new Request(`http://x/?projectId=${P}${query}`, {
+    method: body ? "POST" : "GET", body: body ? JSON.stringify({ projectId: P, ...body }) : undefined,
+    headers: { authorization: `Bearer ${actor.id === U.id ? "kc|eps" : "kc|pms-scope"}`, "content-type": "application/json" },
+  });
+  const status = async (res, expected) => {
+    const data = await res.json();
+    equal(res.status, expected, JSON.stringify(data));
+    return data;
+  };
+  const contract = `&contractId=${C.id}`;
+  await status(await epsApi.GET(req(contract)), 404);
+  await inP(() => db.query("INSERT INTO contract_member (project_id, contract_id, user_id, position, access) VALUES ($1,$2,$3,'Tester','edit')", [P, C.id, holder.id]));
+  equal((await status(await epsApi.GET(req(contract)), 200)).pms.map((p) => p.id), [PM.id]);
+  assert((await status(await epsApi.GET(req(contract, null, U)), 200)).pms.some((p) => p.id === fx.other.id));
+  await status(await epsApi.GET(req(`&pmsId=${PM.id}`)), 200);
+  await status(await epsApi.GET(req(`&pmsId=${fx.other.id}`)), 403);
+  await status(await activityApi.GET(req(`&activityId=${fx.actIn.id}`)), 200);
+  await status(await activityApi.GET(req(`&activityId=${fx.actOut.id}`)), 403);
+  await status(await planningApi.GET(req(`&versionId=${V.id}`)), 200);
+  await status(await planningApi.GET(req(`&versionId=${fx.other.versions[0].id}`)), 403);
+  await status(await epsApi.POST(req("", { kind: "node", pmsId: PM.id, parentId: fx.nodeOut.id, name: "No" })), 403);
+  await status(await epsApi.POST(req("", { kind: "pms", contractId: C.id, code: "PMNEW", title: "No" })), 403);
+  await status(await epsApi.POST(req("", { kind: "eps-move", epsKind: "version", id: V.id, pmsId: fx.other.id })), 403);
+  await status(await activityApi.POST(req("", { kind: "relation", predId: fx.actIn.id, succId: fx.actOut.id })), 403);
+  await status(await planningApi.POST(req("", { kind: "plan-copy", fromVersionId: fx.other.versions[0].id, toVersionId: V.id })), 403);
+  await status(await epsApi.POST(req("", { kind: "node", pmsId: PM.id, id: fx.nodeIn.id, name: "Scoped edited root", wf: 0 })), 200);
+
+  await inP(() => db.query("UPDATE contract_member SET access = 'view' WHERE contract_id = $1 AND user_id = $2", [C.id, holder.id]));
+  await status(await epsApi.GET(req(`&pmsId=${PM.id}`)), 200);
+  await status(await epsApi.POST(req("", { kind: "node", pmsId: PM.id, id: fx.nodeIn.id, name: "No", wf: 0 })), 403);
+
+  await inP(() => wfs.setDutyMember(db, { projectId: P, dutyId: fx.duty.id, userId: holder.id,
+    temporary: true, startsOn: "2001-01-01", endsOn: "2001-01-02" }));
+  equal((await status(await epsApi.GET(req(contract)), 200)).pms, []);
+  await status(await epsApi.GET(req(`&pmsId=${PM.id}`)), 403);
 });
 
 await run();
