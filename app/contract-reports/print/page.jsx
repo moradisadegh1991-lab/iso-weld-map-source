@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../lib/client/platform.mjs";
+import { usePrefs } from "../../../lib/client/prefs.mjs";
 import PrintSheet from "../../../components/reports/PrintSheet";
 
 /**
@@ -21,6 +22,7 @@ const total = (e) => ["day", "night", "leave", "sick"].reduce((s, k) => s + (Num
 
 export default function ContractReportPrint() {
   const { projectId, call } = usePlatform();
+  const { t } = usePrefs();
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {
@@ -61,7 +63,8 @@ export default function ContractReportPrint() {
         {pg && <p className="sm no-print" style={{ margin: "8px 0 2px" }}><b>صفحهٔ {pg.pageNo} — {pg.name}</b></p>}
         <PrintSheet mode="print" layout={p.layout} values={{ ...values, title: pg ? `${values.title} — ${pg.name} (${pg.pageNo})` : values.title }} boxes={sheetBoxes}
           logoUrl={(id) => `/api/report-print?projectId=${projectId}&logo=${id}`} signatureUrl={(id) => `/api/signature?projectId=${projectId}&id=${id}`}>
-          {has("header") && <div className="sm" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+          {!v.may.fullRows && <p className="sm" data-row-restriction>{t("dr.scopedPrint")}</p>}
+          {v.may.fullRows && has("header") && <div className="sm" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
             <span>قرارداد: <b>{v.contract.contract_no}</b> — {v.contract.title}</span><span>ساعت: {h.startTime || "—"} تا {h.endTime || "—"}</span>
             <span>وضعیت روز: {v.labels?.dayStatus?.[h.dayStatus] || h.dayStatus || "—"}</span><span>دما: {h.tempMin ?? "—"} تا {h.tempMax ?? "—"} °C</span>
             <span>هوا: {v.labels?.weather?.[h.weather] || "—"}</span><span>رطوبت: {h.humidity ?? "—"}٪</span>

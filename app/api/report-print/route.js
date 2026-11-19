@@ -5,6 +5,7 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import * as pl from "../../../lib/db/repos/print-layout.mjs";
+import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
 import * as rp from "../../../lib/db/repos/reports.mjs";
 import * as forms from "../../../lib/db/repos/forms.mjs";
 import { columnTotals } from "../../../lib/reports/forms.mjs";
@@ -43,6 +44,8 @@ export async function GET(request) {
       const { rows: [proj] } = await db.query("SELECT code, name FROM project WHERE id = $1", [projectId]);
       const reportId = url.searchParams.get("reportId");
       if (reportId) {
+        const { rows: [target] } = await db.query("SELECT contract_id FROM report WHERE id = $1 AND project_id = $2", [reportId, projectId]);
+        if (target?.contract_id) await assertContractAccess(db, { projectId, contractId: target.contract_id, userId: user.id, role: membership.role });
         const v = await rp.reportView(db, { projectId, reportId, userId: user.id });
         const lay = await pl.currentLayout(db, { projectId, reportTypeId: v.report.report_type_id });
         // a handover form prints its own table: its definition travels with the report

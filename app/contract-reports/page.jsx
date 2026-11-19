@@ -164,12 +164,13 @@ function ReportView({ projectId, id, call, labels, users, close }) {
         <p className="sm">{t("dr.contract")} <b className="mono">{v.contract.contract_no}</b> — {v.contract.title} · {t("dr.workDate")} <b className="mono">{String(v.report.report_date).slice(0, 10)}</b>
           {" "}· {t("dr.createdAt")} {dateTime(v.report.created_at)} · {t("dr.versionN", { n: v.versionNo })} · <b>{L(`report.status.${v.report.status}`, v.report.status_fa)}</b>{v.report.status === "open" && <>{t("dr.currentStage")}<b>{v.report.stage_name}</b></>}</p>
         <Workflow v={v} />
-        <HeaderBox v={v} labels={labels} editable={editable} save={ops.header} first={first} />
+        {v.may.fullRows ? <HeaderBox v={v} labels={labels} editable={editable} save={ops.header} first={first} />
+          : <p className="sm muted" data-row-restriction>{t("dr.scopedView")}</p>}
       </div>
       <div className="ptabs no-print" role="tablist">
         {[["narrative", t("dr.tab.narrative")], ["problems", t("dr.tab.problems")], ["resources", t("dr.tab.resources")], ["activities", t("dr.tab.activities", { n: (v.lines.activities || []).length })],
           ["photos", t("dr.tab.photos", { n: v.files.filter((f) => f.kind === "photo" && !f.removed_at).length })],
-          ["files", t("dr.tab.files", { n: v.files.filter((f) => f.kind === "file" && !f.removed_at).length })], ["actions", t("dr.tab.actions")], ["history", t("dr.tab.history")]].map(([k, x]) => (
+          ["files", t("dr.tab.files", { n: v.files.filter((f) => f.kind === "file" && !f.removed_at).length })], ["actions", t("dr.tab.actions")], ["history", t("dr.tab.history")]].filter(([k]) => v.may.fullRows || !["photos", "files"].includes(k)).map(([k, x]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{x}</button>))}
       </div>
       {/* i18n: reads the server's Persian reason to show only the "signed, now read-only" one */}
@@ -195,7 +196,7 @@ function ReportView({ projectId, id, call, labels, users, close }) {
               })}</tbody></table></TableKit>)}
         </div>)}
       {tab === "resources" && <Resources v={v} projectId={projectId} call={call} labels={labels} editable={editable} first={first} ops={ops} />}
-      {(tab === "photos" || tab === "files") && <Files kind={tab === "photos" ? "photo" : "file"} v={v} projectId={projectId} editable={editable} post={post} setMsg={setMsg} reload={load} />}
+      {v.may.fullRows && (tab === "photos" || tab === "files") && <Files kind={tab === "photos" ? "photo" : "file"} v={v} projectId={projectId} editable={v.may.upload} post={post} setMsg={setMsg} reload={load} />}
       {tab === "actions" && <Actions v={v} users={users} post={post} />}
       {tab === "history" && <History v={v} />}
     </>
