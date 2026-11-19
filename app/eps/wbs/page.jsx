@@ -47,7 +47,7 @@ const positions = (roots) => {
 
 export default function WbsPage() {
   const { projectId, contractId, call } = usePlatform();
-  const { pmsId, picker, reloadBoard } = useVersion(contractId, { version: false });
+  const { pmsId, picker, reloadBoard } = useVersion(contractId, { version: false, form: "wbs" });
   const { data, error, reload } = useProjectData((id) => (pmsId ? `/api/eps?projectId=${id}&pmsId=${pmsId}` : null), [pmsId]);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);

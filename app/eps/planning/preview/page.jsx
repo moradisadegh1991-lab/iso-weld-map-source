@@ -34,10 +34,10 @@ function plannedOnly(roots) {
 export default function PlanningPreviewPage() {
   const { projectId, contractId, call } = usePlatform();
   const { t } = usePrefs();
-  const { pmsId, versionId, picker } = useVersion(contractId);
-  const tree = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}` : null), [versionId]);
+  const { pmsId, versionId, picker } = useVersion(contractId, { form: "planning" });
+  const tree = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&form=planning&versionId=${versionId}` : null), [versionId]);
   const [sel, setSel] = useState(null);
-  const detail = useProjectData((id) => (sel?.kind === "act" && versionId ? `/api/eps/activities?projectId=${id}&activityId=${sel.id}&versionId=${versionId}` : null), [sel?.id, versionId]);
+  const detail = useProjectData((id) => (sel?.kind === "act" && versionId ? `/api/eps/activities?projectId=${id}&form=planning&activityId=${sel.id}&versionId=${versionId}` : null), [sel?.id, versionId]);
   const sub = useProjectData((id) => (sel?.kind === "act" && versionId ? `/api/eps/planning?projectId=${id}&versionId=${versionId}&activityId=${sel.id}` : null), [sel?.id, versionId]);
   const [tab, setTab] = useState("detail");
   const [msg, setMsg] = useState(null);
@@ -110,7 +110,7 @@ export default function PlanningPreviewPage() {
     if (tab === "requirements") return <Requirements p={sub.data} a={a} acts={acts} may={sub.data.may.edit} post={postPlan} />;
     if (tab === "comments") return <Comments p={sub.data} a={a} may={sub.data.may.edit} post={postPlan} />;
     if (tab === "status") return <Status p={sub.data} a={a} />;
-    return <ActivityDetail d={detail.data} tab={tab} may={may} post={post} acts={acts} labels={data.labels} codes={data.codes} resources={data.resources}
+    return <ActivityDetail d={detail.data} tab={tab} may={may && detail.data.may.activity} post={post} acts={acts} labels={data.labels} codes={data.codes} resources={data.resources}
       companies={data.companies} projectId={projectId} history={tab === "reports"} planCosts />;
   };
   return (

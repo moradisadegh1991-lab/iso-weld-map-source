@@ -381,7 +381,30 @@ test("a scoped duty reaches only its PMS and descendants across EPS, Activity an
   await status(await epsApi.POST(req("", { kind: "node", pmsId: PM.id, name: "No root", wf: 0 })), 403);
   await status(await epsApi.POST(req("", { kind: "node", pmsId: PM.id, parentId: branch.desc.id, name: "Allowed child", wf: 100 })), 200);
   await status(await epsApi.POST(req("", { kind: "node", pmsId: PM.id, id: fx.nodeIn.id, name: "No edit", wf: 0 })), 403);
-  await inP(() => wfs.saveDuty(db, { ...fx.args, id: fx.duty.id, pmsScope: [PM.id] }));
+  // Each form can consume a different branch even though the forms share the PMS, trees and activity IDs.
+  const independent = { wbs: [branch.selected.id], activity: [fx.other.id], progress: [branch.selected.id], planning: [] };
+  await inP(async () => {
+    await throws(() => wfs.saveDuty(db, { ...fx.args, id: fx.duty.id, planningForms: { invalid: [] } }), "فرم‌های محدوده");
+    await wfs.saveDuty(db, { ...fx.args, id: fx.duty.id, planningForms: independent });
+    await wfs.saveDuty(db, { ...fx.args, id: fx.duty.id });
+    const saved = (await wfs.duties(db, { projectId: P })).find((d) => d.id === fx.duty.id);
+    for (const [key, ids] of Object.entries(independent)) equal(saved.planningForms[key], ids);
+  });
+  const choice = await status(await epsApi.GET(req(contract + "&form=planning")), 200);
+  assert(choice.pms.some((p) => p.id === PM.id) && choice.pms.some((p) => p.id === fx.other.id));
+  equal((await status(await epsApi.GET(req(contract + "&form=activity")), 200)).pms.map((p) => p.id), [fx.other.id]);
+  await status(await epsApi.GET(req(`&form=planning&pmsId=${fx.other.id}`)), 403, "a picker flag cannot authorize WBS detail");
+  await status(await activityApi.GET(req(version)), 403);
+  await status(await activityApi.GET(req(version + "&form=planning")), 200);
+  equal((await status(await activityApi.GET(req(version + "&form=planning&lines=1")), 200)).lines.map((l) => l.activityId), [branch.item.id]);
+  await status(await activityApi.GET(req(version + "&form=progress&unplanned=1&days=2026-09-02")), 403);
+  const preview = await status(await activityApi.GET(req(version + `&form=planning&activityId=${fx.actIn.id}`)), 200);
+  equal([preview.may.activity, preview.reports, preview.files], [false, [], []]);
+  await status(await epsApi.POST(req("", { kind: "activity", form: "planning", nodeId: branch.desc.id, id: branch.item.id, name: "No", wf: 100 })), 403);
+  equal((await status(await planningApi.GET(req(version)), 200)).rows.map((r) => r.activity_id).sort(), [branch.item.id, fx.actIn.id].sort());
+  await inP(() => wfs.saveDuty(db, { ...fx.args, id: fx.duty.id, planningForms: { planning: [] } }));
+  await status(await activityApi.GET(req(contract + "&day=2026-09-02&form=planning")), 403);
+  await inP(() => wfs.saveDuty(db, { ...fx.args, id: fx.duty.id, pmsScope: [PM.id], planningForms: {} }));
 
   await inP(() => db.query("UPDATE contract_member SET access = 'view' WHERE contract_id = $1 AND user_id = $2", [C.id, holder.id]));
   await status(await epsApi.GET(req(`&pmsId=${PM.id}`)), 200);

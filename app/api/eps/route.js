@@ -6,6 +6,7 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import { listCalendars, saveCalendar } from "../../../lib/db/repos/contract-calendars.mjs";
 import * as eps from "../../../lib/db/repos/eps.mjs";
+import { DUTY_PLANNING_FORMS } from "../../../lib/eps/duty-forms.mjs";
 import { pmsScopeOf, assertPmsTargets } from "../../../lib/db/repos/duty-pms-scope.mjs";
 import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
 import { BUDGET_MODES, SEPARATORS } from "../../../lib/eps/wbs.mjs";
@@ -99,9 +100,11 @@ export async function GET(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
     const mayTemplates = can(membership, ACTIONS.MANAGE_CONTRACTS) || can(membership, ACTIONS.MANAGE_CONTROLS);
     return await withProject(db, projectId, async () => {
-      const scope = await pmsScopeOf(db, { projectId, userId: user.id });
-      if (q("templates")) return Response.json({ templates: await eps.templatesWithActivities(db, { projectId }), may: { edit: mayTemplates && !scope } });
       const versionId = q("versionId"), pmsId = q("pmsId");
+      const pickerForm = q("form");
+      const form = !versionId && !pmsId && !q("templates") && DUTY_PLANNING_FORMS.includes(pickerForm) ? pickerForm : "wbs";
+      const scope = await pmsScopeOf(db, { projectId, userId: user.id, form });
+      if (q("templates")) return Response.json({ templates: await eps.templatesWithActivities(db, { projectId }), may: { edit: mayTemplates && !scope } });
       if (versionId || pmsId) {
         const contractId = await contractOf(db, projectId, { kind: "settings", versionId, pmsId });
         if (!contractId) throw notFound();
@@ -152,7 +155,8 @@ export async function POST(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
     return await withProject(db, projectId, async () => {
       const a = { ...b, projectId, userId: user.id };
-      const scope = await pmsScopeOf(db, a);
+      const form = ["activity", "activity-remove"].includes(kind) ? "activity" : "wbs";
+      const scope = await pmsScopeOf(db, { ...a, form });
       if (kind?.startsWith("template")) {
         await assertPmsTargets(db, projectId, scope, []);
         if (!can(membership, ACTIONS.MANAGE_CONTRACTS) && !can(membership, ACTIONS.MANAGE_CONTROLS)) {
