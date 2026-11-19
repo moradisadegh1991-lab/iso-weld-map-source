@@ -94,7 +94,7 @@ export default function EpsPage() {
   // a PMS ticked active is offered where a PMS is picked; one set aside is not (item 5)
   const columns = useMemo(() => [EPS_COLUMNS[0],
     { key: "active", title: "ep.bd.active", width: 60, get: (r) => (r.kind !== "node" ? "" : (
-      <input type="checkbox" aria-label={t("ep.bd.activeOf", { code: r.item.code })} checked={r.item.active !== false} disabled={!data?.may?.edit} data-pms-active={r.item.code}
+      <input type="checkbox" aria-label={t("ep.bd.activeOf", { code: r.item.code })} checked={r.item.active !== false} disabled={!data?.may?.edit || r.item.partialWbs} data-pms-active={r.item.code}
         onChange={(e) => post({ kind: "pms-active", id: r.item.id, active: e.target.checked }, () => t(e.target.checked ? "ep.bd.activeOn" : "ep.bd.activeOff", { code: r.item.code }))} />)) },
     { key: "calendarId", title: "ep.cal.title", width: 130, get: (r) => data?.calendars?.find((c) => c.id === r.item.effectiveCalendarId)?.name ?? t("ep.cal.allDays") },
     ...EPS_COLUMNS.slice(1)], [data?.may?.edit, data?.calendars, t]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -158,7 +158,7 @@ export default function EpsPage() {
   const may = data.may.edit;
   const toolbar = may && <>
     {data.may.contractWide && <button className="btn sm" type="button" data-new-pms onClick={() => { setAdding(true); setSel(null); }}>{t("ep.bd.newPms")}</button>}
-    {(data.may.contractWide || data.pms.some((p) => p.active !== false)) && <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.some((p) => p.active !== false) ? "replace" : "new", pmsId: data.pms.find((p) => p.active !== false)?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button>}</>;
+    {(data.may.contractWide || data.pms.some((p) => p.active !== false && !p.partialWbs)) && <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.some((p) => p.active !== false && !p.partialWbs) ? "replace" : "new", pmsId: data.pms.find((p) => p.active !== false && !p.partialWbs)?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button>}</>;
   const pickedPms = sel?.kind === "node" ? data.pms.find((p) => p.id === sel.id) : null;
   const pickedVer = sel?.kind === "act" ? data.pms.flatMap((p) => p.versions.map((v) => ({ v, p }))).find((x) => x.v.id === sel.id) : null;
   return (
@@ -182,8 +182,8 @@ export default function EpsPage() {
         {grip}</>}
       <div className="p6-detail" data-eps-detail>
         {adding ? <PmsForm init={{ ...BLANK_PMS }} calendars={data.calendars} labels={data.labels} post={post} close={() => setAdding(false)} />
-          : pickedPms ? <PmsForm key={`${pickedPms.id}|${pickedPms.title}|${pickedPms.budget_plan}`} p={pickedPms} calendars={data.calendars} labels={data.labels} post={post} may={may} askRemove={askRemovePms} />
-          : pickedVer ? <VersionForm key={pickedVer.v.id} v={pickedVer.v} p={pickedVer.p} calendars={data.calendars} post={post} may={may}
+          : pickedPms ? <PmsForm key={`${pickedPms.id}|${pickedPms.title}|${pickedPms.budget_plan}`} p={pickedPms} calendars={data.calendars} labels={data.labels} post={post} may={may && !pickedPms.partialWbs} askRemove={askRemovePms} />
+          : pickedVer ? <VersionForm key={pickedVer.v.id} v={pickedVer.v} p={pickedVer.p} calendars={data.calendars} post={post} may={may && !pickedVer.p.partialWbs}
             askRemove={async () => { const a = await askRemove([{ kind: "version", item: pickedVer.v }]); if (a) await removeNow([{ kind: "version", item: pickedVer.v }], a.all); }} />
           : data.pms.length > 0 && <p className="empty-note">{t("ep.bd.pick")}</p>}
       </div>
@@ -320,7 +320,7 @@ function ImportPlan({ data, imp, setImp, projectId, contractId, call, done, fail
         {imp.mode === "replace" ? (
           <div className="field"><label htmlFor="im-pms">{t("ep.im.replaceWhich")}</label>
             <select id="im-pms" value={imp.pmsId} onChange={(e) => setImp({ ...imp, pmsId: e.target.value })}>
-              {data.pms.filter((p) => p.active !== false || p.id === imp.pmsId).map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
+              {data.pms.filter((p) => !p.partialWbs && (p.active !== false || p.id === imp.pmsId)).map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select></div>
         ) : <>
           <div className="field"><label htmlFor="im-newcode">{t("ep.bd.pmsCode")}</label>
             <input id="im-newcode" dir="ltr" required value={imp.pmsCode} placeholder={`PM${String(data.pms.length + 1).padStart(2, "0")}`}

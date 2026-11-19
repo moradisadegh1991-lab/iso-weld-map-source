@@ -459,15 +459,12 @@ function GroupDuties({ g, wf, data, post, perm, tr, secName }) {
 
 function DutyPmsPicker({ data, roleId, value, onChange, tr }) {
   const contractId = data.roles.find((r) => r.id === roleId)?.contract_id;
-  const plans = (data.scope?.wbs || []).filter((row) => !row.parentId && row.contractId === contractId);
-  const stale = value.filter((id) => !plans.some((p) => p.id === id));
+  const nodes = (data.scope?.wbs || []).filter((row) => row.planningNode && row.contractId === contractId);
+  const stale = value.filter((id) => !nodes.some((row) => row.id === id));
   return <fieldset data-duty-pms>
     <legend>{tr("rs.dutyPms")}</legend>
     <p className="sm muted">{tr(contractId ? "rs.dutyPmsNote" : "rs.dutyPmsRole")}</p>
-    {plans.map((plan) => <label key={plan.id} style={{ display: "block" }}>
-      <input type="checkbox" checked={value.includes(plan.id)} onChange={(e) =>
-        onChange(e.target.checked ? [...value, plan.id] : value.filter((id) => id !== plan.id))} /> {plan.name}
-    </label>)}
+    {nodes.length > 0 && <ScopePicker trees={{ wbs: nodes }} value={value} on={onChange} tr={tr} />}
     {stale.length > 0 && <button type="button" className="btn ghost sm"
       onClick={() => onChange(value.filter((id) => !stale.includes(id)))}>{tr("rs.dutyPmsClear", { n: stale.length })}</button>}
   </fieldset>;

@@ -128,19 +128,19 @@ export default function PlanningPage() {
         </div>
         <p className="sm muted">{t("ep.pl.defaults")}</p>
         <div className="toolbar-left" data-plan-tools>
-          <span className="field"><label htmlFor="pl-copy" className="sm">{t("ep.pl.copyFrom")}</label>
+          {rows.data.may.fullPms && <><span className="field"><label htmlFor="pl-copy" className="sm">{t("ep.pl.copyFrom")}</label>
             <select id="pl-copy" value={copy.from} onChange={(e) => setCopy({ ...copy, from: e.target.value })}>
               <option value="">—</option>{others.map((v) => <option key={v.id} value={v.id}>{v.code} — {v.title}{v.master ? " (Master)" : ""}</option>)}</select></span>
           <label className="sm"><input type="checkbox" checked={copy.replace} onChange={(e) => setCopy({ ...copy, replace: e.target.checked })} /> {t("ep.pl.replace")}</label>
           <button className="btn ghost sm" type="button" disabled={busy || !copy.from} data-plan-copy
             onClick={() => { if (window.confirm(t("ep.pl.copyAsk", { from: others.find((v) => v.id === copy.from)?.code || "", to: rows.data.version.code })))
-              post({ kind: "plan-copy", fromVersionId: copy.from, toVersionId: versionId, replace: copy.replace }, (r) => t("ep.pl.copied", r.row)); }}>{t("ep.pl.copy")}</button>
+              post({ kind: "plan-copy", fromVersionId: copy.from, toVersionId: versionId, replace: copy.replace }, (r) => t("ep.pl.copied", r.row)); }}>{t("ep.pl.copy")}</button></>}
           <TemplateButton kind="planning" />
           <button className="btn ghost sm" type="button" onClick={exportSheet} data-plan-export>{t("ep.pl.export")}</button>
-          <CalendarSelect calendars={tree.data.version.calendars} value={importChoice?.versionId === versionId ? importChoice.id : tree.data.version.calendar?.id}
+          {rows.data.may.fullPms && <><CalendarSelect calendars={tree.data.version.calendars} value={importChoice?.versionId === versionId ? importChoice.id : tree.data.version.calendar?.id}
             onChange={(id) => setImportChoice({ versionId, id })} />
           <label className="btn ghost sm" style={{ cursor: "pointer" }}>{t("ep.pl.import")}
-            <input type="file" accept=".xlsx,.xls" hidden data-plan-import onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ""; if (x && window.confirm(t("ep.pl.importAsk", { name: x.name }))) importFile(x); }} /></label>
+            <input type="file" accept=".xlsx,.xls" hidden data-plan-import onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ""; if (x && window.confirm(t("ep.pl.importAsk", { name: x.name }))) importFile(x); }} /></label></>}
         </div>
       </>}
       <div style={{ height }}>
