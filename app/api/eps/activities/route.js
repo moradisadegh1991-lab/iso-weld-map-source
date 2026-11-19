@@ -93,7 +93,7 @@ export async function GET(request) {
       }
       if (versionId || pmsId) {
         const a = await access(versionId ? await one(VERSION, versionId) : await one(PMS, pmsId));
-        const at = { projectId, pmsId, versionId };
+        const at = { projectId, pmsId, versionId, userId: user.id };
         if (q("lines")) return Response.json({ lines: await act.versionLines(db, at) });
         if (q("unplanned")) return Response.json({ unplanned: await scope.unplanned(db, at), labels: LABELS });
         const autoApplied = a !== "view" ? (await scope.autoApply(db, { ...at, userId: user.id })).filter((x) => x.error || x.added || x.removed || x.changed || x.made || x.dropped) : [];

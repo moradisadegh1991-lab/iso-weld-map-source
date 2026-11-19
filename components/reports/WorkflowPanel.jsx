@@ -71,6 +71,7 @@ export function Actions({ v, users, post }) {
           {m.return && <button className="btn ghost" type="button" onClick={() => post({ kind: "return", comment }, () => t("wf.returned"))}>{t("wf.return")}</button>}
           {m.cancel && <button className="btn ghost" type="button" style={{ color: "var(--bad)" }} onClick={() => post({ kind: "cancel", comment }, () => t("wf.cancelled"))}>{t("wf.cancel")}</button>}
         </div>)}
+      {m.fullRows !== false && <>
       <h3 style={{ marginTop: 16 }}>{t("wf.send")}</h3>
       <div className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}>
         <div className="field"><label htmlFor="ac-to">{t("wf.to")}</label><select id="ac-to" multiple size={Math.min(6, users.length)} value={to} onChange={(e) => setTo([...e.target.selectedOptions].map((o) => o.value))}>
@@ -78,6 +79,7 @@ export function Actions({ v, users, post }) {
         <div className="field" style={{ flex: 1 }}><label htmlFor="ac-n">{t("wf.note")}</label><input id="ac-n" value={note} onChange={(e) => setNote(e.target.value)} /></div>
         <button className="btn" type="button" disabled={!to.length} onClick={async () => { if (await post({ kind: "send", userIds: to, note }, (r) => t("wf.sent", { n: r.row }))) setTo([]); }}>{t("wf.sendBtn")}</button>
       </div>
+      </>}
     </div>
   );
 }

@@ -55,7 +55,7 @@ export async function GET(request) {
       });
       const image = /^image\//.test(f.contentType);
       return new Response(f.bytes, { headers: { "Content-Type": image ? f.contentType : "application/octet-stream", "Content-Length": String(f.bytes.length),
-        "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox",
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox",
         "Content-Disposition": `${image ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(f.name)}` } });
     }
     return await withProject(db, projectId, async () => {
@@ -70,7 +70,7 @@ export async function GET(request) {
       const contractId = q("contractId");
       const access = contractId ? await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role }) : null;
       if (q("summary") && contractId) {
-        return Response.json(await cr.resourceSummaryRange(db, { projectId, contractId, from: q("from"), to: q("to"), kind: q("kind"), categoryId: q("categoryId"), name: q("name") }));
+        return Response.json(await cr.resourceSummaryRange(db, { projectId, contractId, from: q("from"), to: q("to"), userId: user.id, kind: q("kind"), categoryId: q("categoryId"), name: q("name") }));
       }
       const { rows: contracts } = await db.query("SELECT id, contract_no, title FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId]);
       const { rows: [type] } = await db.query("SELECT id FROM report_type WHERE project_id = $1 AND code = 'CR'", [projectId]);

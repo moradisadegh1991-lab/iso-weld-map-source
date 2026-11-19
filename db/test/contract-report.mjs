@@ -238,11 +238,11 @@ test("photos with caption and tags, files; removed, never deleted; only readers 
 });
 
 test("resources over a period, filtered by type, branch and name", async () => {
-  const all = await inP(() => cr.resourceSummaryRange(db, { projectId: P, contractId: C.id, from: yesterday, to: today }));
+  const all = await inP(() => cr.resourceSummaryRange(db, { projectId: P, contractId: C.id, userId: U.planner.id, from: yesterday, to: today }));
   equal([all.reports, all.summary.total, all.summary.byUnit["دستگاه"]], [2, 16, 2], "two days: 8 people a day, one crane a day");
-  const people = await inP(() => cr.resourceSummaryRange(db, { projectId: P, contractId: C.id, from: today, to: today, kind: "person" }));
+  const people = await inP(() => cr.resourceSummaryRange(db, { projectId: P, contractId: C.id, userId: U.planner.id, from: today, to: today, kind: "person" }));
   equal([people.reports, people.summary.total, people.byResource.length], [1, 8, 1]);
-  const byName = await inP(() => cr.resourceSummaryRange(db, { projectId: P, contractId: C.id, name: "جرثقیل" }));
+  const byName = await inP(() => cr.resourceSummaryRange(db, { projectId: P, contractId: C.id, userId: U.planner.id, name: "جرثقیل" }));
   equal(byName.summary.byUnit, { "دستگاه": 2 });
   const lists = await inP(() => cr.listContractReports(db, { projectId: P, contractId: C.id, userId: U.planner.id }));
   equal(lists.map((r) => r.title), ["گزارش روزانهٔ سیویل", "دیروز"]);
@@ -293,6 +293,58 @@ test("a duty reaches selected forms and descendants without borrowing access fro
     await change(saved);
     await cr.createContractReport(db, { ...arg, title: "کپی مجاز بتن", reportDate: today, userId, copyFromId: report.id });
     await rp.createReport(db, { projectId: P, reportTypeId: mirror.id, reportDate: today, userId });
+  });
+});
+
+test("scoped readers get filtered reports, versions and totals, and preserve hidden rows when saving", async () => {
+  await inP(async () => {
+    const arg = { projectId: P, contractId: C.id };
+    const { id: groupId } = (await rp.workflowOf(db, { projectId: P, reportTypeId: type.id }))[0].groups[0];
+    const permissions = ["view", "edit", "add_content", "delete_content"];
+    const duty = await wfs.saveDuty(db, { projectId: P, name: "بررسی بتن و جوشکار", permissions,
+      formRules: [{ formId: type.id, rows: [concrete.id, welder.id] }] });
+    const userId = U.reader.id;
+    await wfs.setGroupDuty(db, { projectId: P, groupId, dutyId: duty.id });
+    await wfs.setDutyMember(db, { projectId: P, dutyId: duty.id, userId });
+    const report = await cr.createContractReport(db, { ...arg, title: "گزارش محدود", reportDate: today,
+      header: { startTime: "06:30" }, userId: U.planner.id });
+    const admin = { projectId: P, reportId: report.id, userId: U.planner.id };
+    const scoped = { ...admin, userId };
+    const first = (await cr.contractReportView(db, admin)).content;
+    first.narrative = [{ id: "shown", base: { categoryId: concrete.id, title: "بتن" } },
+      { id: "hidden", base: { title: "ردیف خارج از شاخه" } }];
+    first.resources = [{ id: "people", base: { resourceId: welder.id, day: 2 } },
+      { id: "plant", base: { resourceId: crane.id, day: 5 } }];
+    await cr.editContractReport(db, { ...admin, content: first });
+    const file = await cr.addReportFile(db, { ...admin, kind: "file", name: "private.txt", bytes: Buffer.from("attachment"), store });
+    const seen = await cr.contractReportView(db, scoped);
+    equal([seen.content.narrative.map((r) => r.id), seen.content.resources.map((r) => r.id), seen.lines.resources.map((r) => r.id)], [["shown"], ["people"], ["people"]]);
+    equal([Object.keys(seen.content.header.base), seen.files.length, seen.may.fullRows], [[], 0, false]);
+    const old = await rp.reportVersion(db, { ...scoped, versionNo: seen.versionNo });
+    equal(old.content.resources.map((r) => r.id), ["people"]);
+    await throws(() => cr.readReportFile(db, { projectId: P, fileId: file.id, userId, store }), "دسترسی کامل");
+    await throws(() => rp.sendReport(db, { ...scoped, userIds: [U.site.id] }), "دسترسی کامل");
+    await rp.sendReport(db, { ...admin, userIds: [userId] });
+    equal((await cr.contractReportView(db, scoped)).content.resources.map((r) => r.id), ["people"], "being sent a report does not widen active duty scope");
+    const summary = await cr.resourceSummaryRange(db, { ...arg, userId });
+    assert(summary.byResource.some((r) => r.resourceId === welder.id));
+    assert(!summary.byResource.some((r) => r.resourceId === crane.id));
+    const modified = structuredClone(seen.content);
+    modified.resources[0].base.day = 3;
+    await cr.editContractReport(db, { ...scoped, content: modified });
+    const after = (await cr.contractReportView(db, admin)).content;
+    equal([after.header.base.startTime, after.resources.map((r) => r.base.day), after.narrative.map((r) => r.id)], ["06:30", [3, 5], ["shown", "hidden"]]);
+    await throws(() => cr.editContractReport(db, { ...scoped, content: { ...modified, narrative: after.narrative } }), "بیرون از صفحه");
+    await rp.signReport(db, admin);
+    await rp.signReport(db, { ...admin, userId: U.site.id });
+    await rp.approveStage(db, { ...admin, userId: U.site.id });
+    const review = { ...admin, userId: U.sup.id };
+    const changed = (await cr.contractReportView(db, review)).content;
+    changed.narrative.find((r) => r.id === "hidden").stages["2"] = { categoryId: concrete.id };
+    await cr.editContractReport(db, { ...review, content: changed });
+    equal((await cr.contractReportView(db, scoped)).content.narrative.map((r) => r.id), ["shown"],
+      "a row moved under the selected branch cannot expose earlier out-of-scope values");
+
   });
 });
 
