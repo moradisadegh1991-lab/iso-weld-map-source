@@ -420,7 +420,7 @@ export async function POST(req) {
       // read first so a too-large body says so; nobody is answered anything else before authentication
       try { await authenticate(req); } catch (e) { return errorResponse(e); }
       return Response.json(
-        { error: "بدنه درخواست خوانده نشد؛ احتمالاً از سقف ۴.۵ مگابایت Vercel رد شده." },
+        { error: "بدنهٔ درخواست خوانده نشد. قالب و حجم درخواست را بررسی کنید." },
         { status: 413 });
     }
 
@@ -457,7 +457,7 @@ export async function POST(req) {
     const bytes = list.reduce((a, i) => a + (i.data ? i.data.length : 0), 0);
     if (bytes > MAX_IMAGE_BYTES) {
       return Response.json(
-        { error: `حجم ارسالی ${(bytes / 1e6).toFixed(1)} MB و بیش از سقف Vercel است.` },
+        { error: `حجم ارسالی ${(bytes / 1e6).toFixed(1)} MB و از سقف درخواست استخراج بیشتر است.` },
         { status: 413 });
     }
 
@@ -468,9 +468,9 @@ export async function POST(req) {
     if (!client.configured) {
       return Response.json({
         error: client.id === "anthropic"
-          ? "Anthropic روی سرور تنظیم نشده: ANTHROPIC_RELAY_TOKEN (با رلهٔ Vercel) یا ANTHROPIC_API_KEY را در Environment Variables بگذارید."
+          ? "Anthropic روی سرور تنظیم نشده: ANTHROPIC_RELAY_TOKEN یا ANTHROPIC_API_KEY را در Environment Variables بگذارید."
           : client.id === "gemini"
-            ? "Gemini تنظیم نشده: GEMINI_RELAY_TOKEN (با رلهٔ Vercel) یا GEMINI_API_KEY را روی سرور بگذارید."
+            ? "Gemini تنظیم نشده: GEMINI_RELAY_TOKEN یا GEMINI_API_KEY را روی سرور بگذارید."
             : "سرویس سازگار با OpenAI تنظیم نشده: آدرس و کلید را در صفحهٔ ایزومتریک (ثبت کلید و آدرس سرور) ثبت کنید، یا LLM_BASE_URL را در Environment Variables بگذارید.",
         code: "LLM_NOT_CONFIGURED",
       }, { status: 400 });

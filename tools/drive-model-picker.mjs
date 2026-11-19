@@ -38,7 +38,7 @@ const claude = page.locator('.model-group[data-provider="anthropic"]').first();
 const gemini = page.locator('.model-group[data-provider="gemini"]').first();
 check(/پیکربندی نشده/.test(await claude.innerText()), "Claude's group says it is not set up on this server");
 check(await claude.locator("button").evaluateAll((bs) => bs.length > 0 && bs.every((x) => x.disabled)), "Claude's models cannot be picked");
-check(/رلهٔ Vercel/.test(await gemini.innerText()), "Gemini's group says it goes through the relay");
+check(/رله/.test(await gemini.innerText()), "Gemini's group says it goes through the relay");
 check(await gemini.locator("button").evaluateAll((bs) => bs.length === 3 && bs.every((x) => !x.disabled)), "Gemini's three models can be picked");
 const on = await page.locator(".models button.on").evaluateAll((bs) => bs.map((x) => x.dataset.model));
 check(on[0] === "gemini-3.8-flash" && on[1] === "gemini-4-argon", `a model that can run is preselected: ${on.join(", ")}`);

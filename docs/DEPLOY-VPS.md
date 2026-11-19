@@ -158,29 +158,18 @@ GEMINI_API_KEY=...
 برود. اگر هر دو کلید تنظیم باشد، `LLM_PROVIDER` فقط مدل پیش‌انتخاب را تعیین می‌کند
 (`LLM_PROVIDERS=gemini` فقط Gemini را نشان می‌دهد).
 
-**روی سرور ایران این معمولاً کار نمی‌کند** — نه Anthropic و نه Gemini از IP ایران سرویس
-نمی‌دهند (Gemini پاسخ «User location is not supported» می‌دهد و صفحه همان را نشان می‌دهد).
-برای Gemini **رلهٔ Vercel** آماده است (`deploy/gemini-relay`، راهنمای نصب در README همان
-پوشه): کلید Gemini روی Vercel می‌ماند و سرور فقط توکن رله را دارد:
+### رلهٔ مستقل مدل‌ها
 
-```
-LLM_PROVIDER=gemini
-GEMINI_BASE_URL=https://epc-gemini-relay.vercel.app/v1beta
-GEMINI_RELAY_TOKEN=...
-```
+اگر اتصال مستقیم از VPS در دسترس نیست، می‌توانید از [رلهٔ مستقل](../deploy/gemini-relay/README.md) روی یک سرور مجاز و دارای دسترسی به API استفاده کنید. نمونهٔ تنظیمات روی VPS پلتفرم:
 
-**Claude و Gemini هر دو از همان رله** (پروژهٔ `iso-weld-map-source-gemini-relay` روی Vercel، با
-`ANTHROPIC_API_KEY` و `GEMINI_API_KEY` و یک `RELAY_TOKEN` در Vercel) — در سرور فقط توکن و نشانی:
-
-```
-ANTHROPIC_BASE_URL=https://<رله>.vercel.app/v1
+```dotenv
+ANTHROPIC_BASE_URL=https://relay.example.com/v1
 ANTHROPIC_RELAY_TOKEN=<RELAY_TOKEN>
-GEMINI_BASE_URL=https://<رله>.vercel.app/v1beta
+GEMINI_BASE_URL=https://relay.example.com/v1beta
 GEMINI_RELAY_TOKEN=<RELAY_TOKEN>
 ```
 
-با توکن رله، کلید مستقیم (`ANTHROPIC_API_KEY` / `GEMINI_API_KEY`) روی سرور لازم نیست و به رله فرستاده
-نمی‌شود. راهنمای کامل: `deploy/gemini-relay/README.md`.
+برای انتقال از رلهٔ قبلی، نشانی‌ها و توکن‌های آن را از `/etc/epc/epc.env` و تنظیمات مدل در هر پروژه جایگزین یا پاک کنید. در اتصال مستقیم، نشانی و توکن رله را پاک کنید و کلید ارائه‌دهنده را روی سرور تنظیم کنید.
 
 ### حساب مصرف توکن
 

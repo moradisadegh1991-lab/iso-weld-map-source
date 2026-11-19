@@ -1,7 +1,5 @@
 /**
- * Gemini relay — a Vercel function between the platform's server and the
- * Gemini API, for a server that Google does not serve (Iran answers "User
- * location is not supported").
+ * Gemini relay between the application server and Google's API.
  *
  *   platform server ──(x-relay-token)──▶ this relay ──(x-goog-api-key)──▶ Google
  *
@@ -17,15 +15,14 @@
  * models further. The answer streams back as Google sends it; no request or
  * answer body is logged or kept.
  *
- * Environment (Vercel → Settings → Environment Variables, marked Sensitive):
+ * Relay process environment:
  *   GEMINI_API_KEY   the Google AI Studio key
  *   RELAY_TOKEN      a long random secret; the same value goes into the
  *                    platform server's GEMINI_RELAY_TOKEN
  *   ALLOWED_MODELS   optional, comma separated, e.g. gemini-3.8-flash,gemini-4-argon
  */
 import { timingSafeEqual } from "node:crypto";
-
-export const config = { maxDuration: 300 };
+import { isRetiredHostingEndpoint } from "../../../lib/llm/endpoints.mjs";
 
 // GEMINI_UPSTREAM exists for the platform's own end-to-end drive (a stand-in Gemini); leave it unset
 const upstreamBase = () => process.env.GEMINI_UPSTREAM || "https://generativelanguage.googleapis.com/v1beta";
@@ -42,7 +39,7 @@ function sameSecret(given, expected) {
 export async function POST(request) {
   const { GEMINI_API_KEY: key, RELAY_TOKEN: token, ALLOWED_MODELS: allowed } = process.env;
   // fails closed: a relay deployed without its two secrets opens for nobody
-  if (!key || !token) return fail(503, "relay not configured: set GEMINI_API_KEY and RELAY_TOKEN on Vercel");
+  if (!key || !token) return fail(503, "relay not configured: set GEMINI_API_KEY and RELAY_TOKEN in the relay environment");
   if (!sameSecret(request.headers.get("x-relay-token"), token)) return fail(401, "relay token missing or wrong");
 
   const url = new URL(request.url);
@@ -53,8 +50,10 @@ export async function POST(request) {
   if (list.length && !list.includes(m[1])) return fail(403, `model ${m[1]} is not allowed on this relay`);
 
   const qs = url.searchParams.get("alt") === "sse" ? "?alt=sse" : "";
-  const upstream = await fetch(`${upstreamBase()}/${path}${qs}`, {
-    method: "POST",
+  const base = upstreamBase();
+  if (isRetiredHostingEndpoint(base)) return fail(503, "retired relay upstream");
+  const upstream = await fetch(`${base}/${path}${qs}`, {
+    method: "POST", redirect: "error",
     headers: { "content-type": "application/json", "x-goog-api-key": key },
     body: request.body,
     duplex: "half",

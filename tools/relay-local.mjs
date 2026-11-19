@@ -1,7 +1,6 @@
 /**
- * Run deploy/gemini-relay on this machine the way Vercel serves it — the
- * vercel.json rewrite /v1beta/:path → /api/relay?path=:path, then the
- * function — for the end-to-end drive (tools/drive-llm-accounting.mjs).
+ * Run the Gemini and Anthropic relay handlers on a loopback HTTP server.
+ * A self-hosted HTTPS reverse proxy can route to this service.
  * With FAKE_GEMINI_PORT it also starts a stand-in Gemini that answers every
  * generateContent with an empty JSON object and a known token count.
  *   RELAY_TOKEN=... GEMINI_API_KEY=... PORT=8787 [FAKE_GEMINI_PORT=8788] node tools/relay-local.mjs

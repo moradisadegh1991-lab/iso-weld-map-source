@@ -51,9 +51,7 @@ LLM_PROVIDER=gemini             # + GEMINI_API_KEY=…
   3.5 Flash-Lite. خانوادهٔ 2.5 فقط برای کاربران قبلی است و 1.5 و 2.0 خاموش شده‌اند — مدل‌های
   اسکریپت‌های نمونه (`gemini-1.5-pro`، `gemini-2.0-flash`) دیگر پاسخ نمی‌دهند. `GEMINI_MODELS`
   فهرست را عوض می‌کند.
-- رله روی Vercel (`deploy/gemini-relay`): Gemini به همهٔ کشورها سرویس نمی‌دهد. با
-  `GEMINI_BASE_URL` (نشانی رله) و `GEMINI_RELAY_TOKEN` سرور فقط توکن رله را می‌فرستد و کلید
-  Gemini روی Vercel می‌ماند.
+- برای رلهٔ اختیاری روی میزبان مستقل، [راهنمای رله](../../deploy/gemini-relay/README.md) را ببینید. تنظیم `GEMINI_BASE_URL` و `GEMINI_RELAY_TOKEN` باعث می‌شود کلید Gemini روی میزبان رله بماند.
 
 ## حساب مصرف (`accounting.mjs`)
 

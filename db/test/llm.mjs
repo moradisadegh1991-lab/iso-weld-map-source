@@ -11,6 +11,7 @@ import { parseLoose, cleanJsonText } from "../../lib/llm/parse.mjs";
 import { createAnthropicProvider } from "../../lib/llm/anthropic.mjs";
 import { createOpenAiCompatProvider } from "../../lib/llm/openai-compat.mjs";
 import { createGeminiProvider } from "../../lib/llm/gemini.mjs";
+import { checkBaseUrl } from "../../lib/llm/endpoints.mjs";
 import { createLlmClient, createLlmRouter } from "../../lib/llm/index.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -561,7 +562,7 @@ test("a model whose provider is not set up is refused before any call, naming th
 
 test("relay mode: the server sends the relay token, never the Gemini key", async () => {
   const fetchImpl = fakeSse(geminiStream);
-  const p = createGeminiProvider({ apiKey: "real-key", relayToken: "relay-secret", baseUrl: "https://r.vercel.app/v1beta", fetchImpl });
+  const p = createGeminiProvider({ apiKey: "real-key", relayToken: "relay-secret", baseUrl: "https://relay.example.test/v1beta", fetchImpl });
   equal([p.configured, p.via], [true, "relay"]);
   await p.complete({ maxTokens: 10, prompt: "p" });
   const h = fetchImpl.calls[0].init.headers;
@@ -578,7 +579,7 @@ async function relayCall({ token = "relay-secret", path = "models/gemini-3.8-fla
   globalThis.fetch = async (url, init) => { seen.push({ url, init }); return upstream || new Response('data: {"candidates":[]}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } }); };
   try {
     const qs = new URLSearchParams({ path, ...(alt ? { alt } : {}) });
-    const res = await relay.POST(new Request(`https://r.vercel.app/api/relay?${qs}`, {
+    const res = await relay.POST(new Request(`https://relay.example.test/api/relay?${qs}`, {
       method: "POST", headers: token ? { "x-relay-token": token, "content-type": "application/json" } : { "content-type": "application/json" },
       body: '{"contents":[]}' }));
     return { res, seen };
@@ -619,10 +620,10 @@ test("anthropic relay mode: the server sends the relay token, never the Anthropi
   const fetchImpl = fakeSse([{ type: "message_start", message: { usage: { input_tokens: 5 } } },
     { type: "content_block_delta", delta: { type: "text_delta", text: "{}" } },
     { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 2 } }]);
-  const p = createAnthropicProvider({ apiKey: "sk-real", relayToken: "relay-secret", baseUrl: "https://r.vercel.app/v1", fetchImpl });
+  const p = createAnthropicProvider({ apiKey: "sk-real", relayToken: "relay-secret", baseUrl: "https://relay.example.test/v1", fetchImpl });
   equal([p.configured, p.via], [true, "relay"]);
   await p.complete({ maxTokens: 10, prompt: "p" });
-  equal(fetchImpl.calls[0].url, "https://r.vercel.app/v1/messages");
+  equal(fetchImpl.calls[0].url, "https://relay.example.test/v1/messages");
   const h = fetchImpl.calls[0].init.headers;
   equal(h["x-relay-token"], "relay-secret");
   assert(!("x-api-key" in h), "the key, if one is set here too, does not travel to the relay");
@@ -637,7 +638,7 @@ async function claudeRelayCall({ token = "relay-secret", path = "messages", env 
   const seen = [];
   globalThis.fetch = async (url, init) => { seen.push({ url, init }); return upstream || new Response("data: {}\n\n", { status: 200, headers: { "content-type": "text/event-stream" } }); };
   try {
-    const res = await claudeRelay.POST(new Request(`https://r.vercel.app/api/anthropic?path=${path}`, {
+    const res = await claudeRelay.POST(new Request(`https://relay.example.test/api/anthropic?path=${path}`, {
       method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-relay-token": token } : {}), ...headers },
       body: '{"model":"claude-sonnet-5"}' }));
     return { res, seen };
@@ -687,6 +688,21 @@ test("cloud OCR review makes one provider call, sends bounded OCR evidence and a
     const res = await extractRoute.POST(post({...body,ocrContext:{marks:[],bom:Array(501).fill({})}}));
     equal(res.status,400); equal(fake.calls.length,0);
   });
+});
+
+test("retired hosting endpoints are rejected in settings and by every provider before transport", async () => {
+  const fetchImpl = fakeSse([]);
+  const domains = ["https://old.vercel.app/v1", "https://VERCEL.COM./v1", "https://relay.vercel.sh/v1", "https://old.now.sh/v1"];
+  for (const baseUrl of domains) {
+    assert(checkBaseUrl(baseUrl).problem?.includes("Vercel"));
+    for (const make of [createOpenAiCompatProvider, createAnthropicProvider, createGeminiProvider]) {
+      const provider = make({ baseUrl, apiKey: "fixture-key", relayToken: "fixture-token", fetchImpl });
+      equal(provider.configured, false);
+      await throws(() => provider.complete({ prompt: "sample", maxTokens: 1 }), "Vercel");
+    }
+  }
+  equal(fetchImpl.calls.length, 0);
+  equal(checkBaseUrl("https://relay.example.test/v1").url, "https://relay.example.test/v1");
 });
 
 await run();

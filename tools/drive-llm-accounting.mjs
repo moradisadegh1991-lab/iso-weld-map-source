@@ -2,7 +2,7 @@
  * Model accounting end to end, in the browser: the piping page reads a
  * drawing with the model; the server (LLM_PROVIDER=gemini, through the
  * relay with its token, no Gemini key of its own) calls the relay
- * (tools/relay-local.mjs, the deploy/gemini-relay code as Vercel serves it),
+ * (tools/relay-local.mjs, the deploy/gemini-relay code served by a loopback process),
  * which adds the key and calls a stand-in Gemini that spends 1200 + 34
  * tokens a call. Then the users-and-access page's usage tab must show
  * exactly the calls made and their tokens, the relay, this month against

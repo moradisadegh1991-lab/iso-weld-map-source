@@ -1,5 +1,5 @@
 /**
- * Claude through the same Vercel relay as Gemini, in the browser: a server
+ * Claude through the same independently hosted relay as Gemini, in the browser: a server
  * with neither key of its own, ANTHROPIC_BASE_URL and GEMINI_BASE_URL at the
  * relay and one token for both. Both providers' models are enabled and
  * marked as going through the relay; a reading with Opus 5 reaches
@@ -32,7 +32,7 @@ await page.getByRole("button", { name: "خواندن مدل‌ها" }).click();
 await page.waitForSelector(".model-group");
 for (const id of ["anthropic", "gemini"]) {
   const g = page.locator(`.model-group[data-provider="${id}"]`).first();
-  check(/رلهٔ Vercel/.test(await g.innerText()) && !/پیکربندی نشده/.test(await g.innerText()), `${id}: set up, through the relay`);
+  check(/رله/.test(await g.innerText()) && !/پیکربندی نشده/.test(await g.innerText()), `${id}: set up, through the relay`);
   check(await g.locator("button").evaluateAll((bs) => bs.length > 0 && bs.every((x) => !x.disabled)), `${id}: its models can be picked`);
 }
 const claude = page.locator('.model-group[data-provider="anthropic"]').first();
