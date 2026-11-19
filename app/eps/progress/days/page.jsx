@@ -28,12 +28,12 @@ const PERIOD_COLS = [
 ];
 export default function DaysPage() {
   const { contractId } = usePlatform();
-  const { pmsId, versionId, plan, picker } = useVersion(contractId);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId, { form: "progress" });
   const [days, setDays] = useState([]);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(new Set());
   const [find, setFind] = useState("");
-  const { data, error } = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}&days=${days.join(",")}` : null), [plan, days.join(",")]);
+  const { data, error } = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&form=progress&${plan}&days=${days.join(",")}` : null), [plan, days.join(",")]);
   const [sel, setSel] = useState(null);
   const { t } = usePrefs();
   const { day } = useEpsFmt();

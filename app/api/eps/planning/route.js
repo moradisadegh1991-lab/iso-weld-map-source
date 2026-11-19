@@ -80,7 +80,7 @@ export async function GET(request) {
       if (!contractId) throw notFound();
       const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
       const activityId = url.searchParams.get("activityId");
-      const scope = await pmsScopeOf(db, { projectId, userId: user.id });
+      const scope = await pmsScopeOf(db, { projectId, userId: user.id, form: "planning" });
       const targets = await assertPmsTargets(db, projectId, scope, [["version", versionId], ["activity", activityId]]);
       if (activityId && url.searchParams.get("view") === "history") return Response.json(await plan.activityPlanningHistory(db, { projectId, versionId, activityId }));
       const may = { edit: access !== "view", contractWide: !scope && access !== "view",
@@ -113,7 +113,7 @@ export async function POST(request) {
       if (!contractId) throw notFound();
       await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: "edit" });
       const a = { ...b, projectId, contractId, userId: user.id };
-      await assertPmsTargets(db, projectId, await pmsScopeOf(db, a), writeTargets(b), { whole: kind === "plan-import" || kind === "plan-copy" });
+      await assertPmsTargets(db, projectId, await pmsScopeOf(db, { ...a, form: "planning" }), writeTargets(b), { whole: kind === "plan-import" || kind === "plan-copy" });
       const run = {
         "plan-add": () => plan.addToPlan(db, a),
         "plan-edit": () => plan.savePlanRow(db, a),

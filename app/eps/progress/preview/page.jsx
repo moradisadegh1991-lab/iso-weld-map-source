@@ -31,7 +31,7 @@ export default function DailyReportPreviewPage() {
   const { projectId, contractId, call } = usePlatform();
   const { t } = usePrefs();
   const { fmt, day, statusOf, w } = useEpsFmt();
-  const { pmsId, versionId, plan, picker } = useVersion(contractId);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId, { form: "progress" });
   const [d0, setDay] = useState(today());
   const [selectedDays, setSelectedDays] = useState([]);
   const [reportId, setReportId] = useState("");
@@ -51,11 +51,11 @@ export default function DailyReportPreviewPage() {
     setReportId((cur) => (dayReports.some((r) => r.id === cur) ? cur : dayReports[0]?.id || ""));
   }, [d0, all.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const tree = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}` : null), [plan]);
-  const lines = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}&lines=1` : null), [plan]);
+  const tree = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&form=progress&${plan}` : null), [plan]);
+  const lines = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&form=progress&${plan}&lines=1` : null), [plan]);
   const report = useProjectData((id) => (reportId ? `/api/contract-reports?projectId=${id}&id=${reportId}` : null), [reportId]);
   const [sel, setSel] = useState(null);
-  const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&activityId=${sel.id}${versionId ? `&versionId=${versionId}` : ""}` : null), [sel?.id, versionId]);
+  const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&form=progress&activityId=${sel.id}${versionId ? `&versionId=${versionId}` : ""}` : null), [sel?.id, versionId]);
   const sub = useProjectData((id) => (sel?.kind === "act" && versionId ? `/api/eps/planning?projectId=${id}&versionId=${versionId}&activityId=${sel.id}` : null), [sel?.id, versionId]);
   const [tab, setTab] = useState("lines");
   const [msg, setMsg] = useState(null);

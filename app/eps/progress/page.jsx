@@ -32,15 +32,15 @@ const flatActs = (roots) => { const out = []; const walk = (n) => { out.push(...
 
 export default function ProgressPage() {
   const { projectId, contractId, call } = usePlatform();
-  const { pmsId, versionId, plan, picker } = useVersion(contractId);
-  const { data, error, reload } = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}` : null), [plan]);
-  const lines = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&${plan}&lines=1` : null), [plan]);
+  const { pmsId, versionId, plan, picker } = useVersion(contractId, { form: "progress" });
+  const { data, error, reload } = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&form=progress&${plan}` : null), [plan]);
+  const lines = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&form=progress&${plan}&lines=1` : null), [plan]);
   const [sel, setSel] = useState(null);
-  const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&activityId=${sel.id}` : null), [sel?.id]);
+  const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&form=progress&activityId=${sel.id}` : null), [sel?.id]);
   const [visible, setVisible] = useState([]);
   const [tab, setTab] = useState("reports");
   const [f, setF] = useState({ mode: "number", value: "", day: today(), reportId: "", areaId: "", mark: "", notes: "" });
-  const reports = useProjectData((id) => (contractId && f.day ? `/api/eps/activities?projectId=${id}&contractId=${contractId}&day=${f.day}` : null), [contractId, f.day]);
+  const reports = useProjectData((id) => (contractId && f.day ? `/api/eps/activities?projectId=${id}&form=progress&contractId=${contractId}&day=${f.day}` : null), [contractId, f.day]);
   const allReports = useProjectData((id) => (contractId ? `/api/contract-reports?projectId=${id}&contractId=${contractId}` : null), [contractId]);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);

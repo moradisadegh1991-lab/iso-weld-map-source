@@ -71,13 +71,13 @@ export const wOut = (f) => (f === null || f === undefined || String(f).trim() ==
  * `plan` is the query the activity routes take (versionId=… or pmsId=…).
  * With `{ version: false }` only the PMS is picked (the WBS page).
  */
-export function useVersion(contractId, { version: withVersion = true } = {}) {
+export function useVersion(contractId, { version: withVersion = true, form = "activity" } = {}) {
   const { t } = usePrefs();
   const [pmsId, setPmsId] = useState(null);
   const [versionId, setVersionId] = useState(null);
   const [asked, setAsked] = useState(null);
   useEffect(() => { const q = new URLSearchParams(window.location.search); setAsked({ version: q.get("version"), pms: q.get("pms") }); }, []);
-  const board = useProjectData((id) => (contractId ? `/api/eps?projectId=${id}&contractId=${contractId}` : null), [contractId]);
+  const board = useProjectData((id) => (contractId ? `/api/eps?projectId=${id}&contractId=${contractId}&form=${form}` : null), [contractId, form]);
   // only the PMSs the contract uses now are offered (owner's requirements 2026-10-26, item 5)
   const pmsList = useMemo(() => (board.data?.pms || []).filter((p) => p.active !== false), [board.data]);
   const versions = pmsList.flatMap((p) => p.versions.map((v) => ({ ...v, pmsCode: p.code })));

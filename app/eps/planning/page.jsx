@@ -31,8 +31,8 @@ export default function PlanningPage() {
   const { projectId, contractId, call } = usePlatform();
   const { t } = usePrefs();
   const { fmt, day } = useEpsFmt();
-  const { pmsId, versionId, picker, pms, reloadBoard } = useVersion(contractId);
-  const tree = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&versionId=${versionId}` : null), [versionId]);
+  const { pmsId, versionId, picker, pms, reloadBoard } = useVersion(contractId, { form: "planning" });
+  const tree = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&form=planning&versionId=${versionId}` : null), [versionId]);
   const rows = useProjectData((id) => (versionId ? `/api/eps/planning?projectId=${id}&versionId=${versionId}` : null), [versionId]);
   const [sel, setSel] = useState(null);
   const selectedActivityId = sel?.kind === "act" ? sel.id : null;
