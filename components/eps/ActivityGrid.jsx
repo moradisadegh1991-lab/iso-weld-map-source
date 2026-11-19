@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FloatBox, rowEdgeDown, rowEdgeHover } from "../ui/float";
+import { useConfirm } from "../ui/ConfirmDialog";
 import { createPortal } from "react-dom";
 import { filterTree, splitHits } from "../../lib/eps/activities.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
@@ -94,6 +95,8 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [shut, setShut] = useState(new Set());
+  const [searchShut, setSearchShut] = useState(new Set());
+  const [confirm, confirmation] = useConfirm();
   const [cols, setCols] = useState(defaultCols);
   const [widths, setWidths] = useState({});
   const [leftW, setLeftW] = useState(760);
@@ -121,6 +124,7 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
     return ok;
   }, [all, keep]);
   const filt = useMemo(() => filterTree(all.map((r) => ({ id: r.id, parentId: r.parentId, text: `${r.item.code} ${r.item.name}` })), q), [all, q]);
+  const [closed, setClosed] = filt ? [searchShut, setSearchShut] : [shut, setShut];
   const rows = useMemo(() => {
     const hidden = new Set();
     const out = [];
@@ -129,10 +133,10 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
       if (kept && !kept.has(r.id)) { hidden.add(r.id); continue; }
       if (filt && !filt.visible.has(r.id)) { hidden.add(r.id); continue; }
       out.push(r);
-      if (!filt && shut.has(r.id)) hidden.add(r.id);
+      if (closed.has(r.id)) hidden.add(r.id);
     }
     return out;
-  }, [all, kept, filt, shut]);
+  }, [all, kept, filt, closed]);
   // a new row being typed sits first under its node
   const shownRows = useMemo(() => {
     if (!editing?.draftOf) return rows;
@@ -145,8 +149,8 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
   useEffect(() => { if (onVisible) onVisible(visibleActs); }, [visibleActs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const maxLevel = all.reduce((m, r) => Math.max(m, r.level), 1);
-  const openTo = (k) => setShut(new Set(all.filter((r) => r.kind === "node" && r.level >= k).map((r) => r.id)));
-  const flip = (id) => setShut((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const openTo = (k) => setClosed(new Set(all.filter((r) => r.kind === "node" && r.level >= k).map((r) => r.id)));
+  const flip = (id) => setClosed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const hasKids = useMemo(() => new Set(all.map((r) => r.parentId).filter(Boolean)), [all]);
 
   // ── picking, editing in place, the right-click menu (only with `ops`) ──
@@ -183,15 +187,16 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
   const open = (r) => guard(() => { onSelect && onSelect(r); edit(r); });
   const addUnder = (node) => guard(() => {
     if (!ops?.create) return;
-    setShut((s) => { const n = new Set(s); n.delete(node.id); return n; });
+    setClosed((s) => { const n = new Set(s); n.delete(node.id); return n; });
     const blank = Object.fromEntries((ops.fields({ kind: ops.draftKind || "act", item: {} }) || []).map((f) => [f.key, ""]));
     setEditing({ id: "__draft", draftOf: node, row: { kind: "draft", item: {} }, values: blank, orig: blank });
   });
   const run = async (fn) => { setBusy(true); try { return await fn(); } finally { setBusy(false); } };
   // owner's requirements 2026-10-22, item 7: a row is written only once the person says so
+  const confirmAction = (title) => confirm({ title, badge: "", confirmLabel: t("tk.yes"), cancelLabel: t("gr.cancel") });
   const save = async (ask = true) => {
     if (!editing) return true;
-    if (ask && !window.confirm(t(editing.draftOf ? "gr.addAsk" : "gr.saveAsk"))) return false;
+    if ((ask || editing.draftOf) && !(await confirmAction(t(editing.draftOf ? "gr.addAsk" : "gr.saveAsk")))) return false;
     const { values, orig } = editing;
     const own = Object.fromEntries(Object.entries(values).filter(([k]) => !k.startsWith("cf:")));
     const ownChanged = Object.keys(own).some((k) => own[k] !== orig[k]);
@@ -224,12 +229,43 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
     const inside = new Set(gone.flatMap((r) => (r.kind === "node" ? under(r.id).slice(1) : [])));
     for (const r of gone) inside.delete(r.id);
     // a page that puts its own question (ops.asks) is not asked twice
-    if (!ops.asks && !window.confirm(inside.size ? t("gr.deleteAskTree", { n: gone.length, k: inside.size }) : t("gr.deleteAsk", { n: gone.length }))) return;
+    if (!ops.asks && !(await confirmAction(inside.size ? t("gr.deleteAskTree", { n: gone.length, k: inside.size }) : t("gr.deleteAsk", { n: gone.length })))) return;
     if (await run(() => ops.remove(list))) { setPicked(new Set()); setEditing(null); }
   };
   const pasteInto = async (node) => {
-    if (!clip || !node || !ops?.paste) return;
+    if (!clip || !node || !ops?.paste || !(await confirmAction(t("tk.pasteAsk", { n: clip.rows.length })))) return;
     if (await run(() => ops.paste(node, clip.rows, clip.mode))) { if (clip.mode === "cut") setClip(null); setPicked(new Set()); }
+  };
+  const gridKeys = (e) => {
+    if (e.defaultPrevented || e.repeat || e.nativeEvent.isComposing || busy || confirmation || ask) return;
+    const row = e.target.closest("tr[data-row]");
+    if (!row) return;
+    const here = rows.findIndex((r) => r.id === row.dataset.rowId);
+    const current = rows[here];
+    if (!current) return;
+    const input = e.target.closest("input, textarea, select, [contenteditable=true]");
+    const control = e.ctrlKey || e.metaKey;
+    if (control && (e.key === "PageDown" || e.key === "PageUp")) {
+      e.preventDefault();
+      const next = rows[here + (e.key === "PageDown" ? 1 : -1)];
+      if (next) {
+        if (ops) open(next); else onSelect?.(next);
+        if (!dirty) row.parentElement.querySelector(`[data-row-id="${CSS.escape(next.id)}"]`)?.focus();
+      }
+      return;
+    }
+    if (control && ['"', "'"].includes(e.key) && editing?.id === current.id && e.target.dataset.field) {
+      const previous = rows[here - 1], key = e.target.dataset.field;
+      const value = previous && fieldsOf(previous).some((f) => f.key === key) ? ops.value?.(previous)?.[key] : undefined;
+      if (value !== undefined) { e.preventDefault(); setEditing({ ...editing, values: { ...editing.values, [key]: value } }); }
+      return;
+    }
+    if ((input && input.type !== "checkbox") || !ops || dirty) return;
+    const targets = pickedRows.length ? pickedRows : [current];
+    const key = e.key.toLowerCase();
+    if (!control && key === "delete" && ops.remove) { e.preventDefault(); removeRows(targets); }
+    else if (control && (key === "c" || (key === "x" && ops.paste))) { e.preventDefault(); copyOut(targets, key === "c" ? "copy" : "cut"); }
+    else if (control && key === "v" && clip && ops.paste) { e.preventDefault(); pasteInto(nodeOf(current)); }
   };
   const exportExcel = async () => {
     // the tree as it shows, each row with its parent's code in the column before its own
@@ -317,12 +353,13 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
   const tint = (c) => (c ? `${c}22` : undefined);
 
   return (
-    <div className="p6">
+    <div className="p6" onKeyDown={gridKeys}>
+      {confirmation}
       <div className="p6-bar" data-p6-bar>
-        <input className="p6-filter" type="search" placeholder={t("ep.g.filter")} aria-label={t("ep.g.filterLabel")} value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="p6-filter" type="search" placeholder={t("ep.g.filter")} aria-label={t("ep.g.filterLabel")} value={q} onChange={(e) => { setQ(e.target.value); setSearchShut(new Set()); }} />
         <span className="p6-levels" dir="ltr" aria-label={t("ep.g.levels")}>
           {Array.from({ length: maxLevel }, (_, i) => i + 1).map((k) => <button key={k} type="button" className="btn ghost sm" data-level={k} onClick={() => openTo(k)} title={t("ep.g.toLevel", { k })}>{k}</button>)}
-          <button type="button" className="btn ghost sm" onClick={() => setShut(new Set())} title={t("ep.g.openAll")}>⊞</button>
+          <button type="button" className="btn ghost sm" onClick={() => setClosed(new Set())} title={t("ep.g.openAll")}>⊞</button>
         </span>
         <span className="sm muted">{t("ep.g.count", { n: visibleActs.length })}</span>
         {gantt && <select aria-label={t("ep.g.zoom")} value={zoom} onChange={(e) => setZoom(e.target.value)}>
@@ -381,9 +418,9 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
               const fs = ed ? (r.kind === "draft" ? ops.fields({ kind: ops.draftKind || "act", item: {} }) : fieldsOf(r)) : [];
               const field = (key) => fs.find((f) => f.key === key);
               return (
-                <tr key={r.id} data-row={r.item.code || (r.kind === "draft" ? "__draft" : "")} data-kind={r.kind} className={[isSel ? "sel" : "", ed ? "p6-editing" : ""].join(" ").trim() || undefined}
+                <tr key={r.id} data-row={r.item.code || (r.kind === "draft" ? "__draft" : "")} data-kind={r.kind} data-row-id={r.id} tabIndex={r.kind === "draft" ? undefined : 0} className={[isSel ? "sel" : "", ed ? "p6-editing" : ""].join(" ").trim() || undefined}
                   {...dragProps(r, ed)}
-                  onClick={(e) => { if (e.target.closest("input,select,button,textarea")) return; if (r.kind === "draft" || ed) return; ops ? open(r) : onSelect && onSelect(r); }}
+                  onClick={(e) => { if (e.target.closest("input,select,button,textarea")) return; if (r.kind === "draft" || ed) return; e.currentTarget.focus(); ops ? open(r) : onSelect && onSelect(r); }}
                   onDoubleClick={onOpen ? (e) => { if (e.target.closest("input,select,button,textarea") || r.kind !== "act") return; onOpen(r); } : undefined}
                   onContextMenu={ops && r.kind !== "draft" ? (e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, row: r }); } : undefined}
                   style={{ height: ROW, background: r.kind === "node" ? tint(r.color) : undefined, fontWeight: r.kind === "node" ? 600 : undefined,
@@ -396,14 +433,14 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
                     <td key={c.key} className={c.mono ? "mono" : undefined} dir={c.dir || (c.mono ? "ltr" : "rtl")}
                       style={ci === 0 ? { paddingLeft: 4 + (r.level - 1) * 14, borderLeft: `3px solid ${r.color || "transparent"}` } : undefined}>
                       {ci === 0 && (r.kind === "node"
-                        ? <button type="button" className="p6-tog" aria-label={t(shut.has(r.id) ? "ep.g.open" : "ep.close")} onClick={(e) => { e.stopPropagation(); flip(r.id); }}
-                          style={{ visibility: hasKids.has(r.id) ? "visible" : "hidden" }}>{shut.has(r.id) && !filt ? "▸" : "▾"}</button>
+                        ? <button type="button" className="p6-tog" aria-label={t(closed.has(r.id) ? "ep.g.open" : "ep.close")} onClick={(e) => { e.stopPropagation(); flip(r.id); }}
+                          style={{ visibility: hasKids.has(r.id) ? "visible" : "hidden" }}>{closed.has(r.id) ? "▸" : "▾"}</button>
                         : <span className="p6-tog" aria-hidden="true">·</span>)}
                       {ed && field(c.key)?.type === "select" ? (
-                        <select className="p6-in" aria-label={t(c.title)} value={ed.values[c.key] ?? ""} onChange={(e) => setEditing({ ...ed, values: { ...ed.values, [c.key]: e.target.value } })}>
+                        <select className="p6-in" data-field={c.key} aria-label={t(c.title)} value={ed.values[c.key] ?? ""} onChange={(e) => setEditing({ ...ed, values: { ...ed.values, [c.key]: e.target.value } })}>
                           <option value="">—</option>{field(c.key).options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
                       ) : ed && field(c.key) ? (
-                        <input className="p6-in" aria-label={t(c.title)} type={field(c.key).type === "number" ? "number" : field(c.key).type === "date" ? "date" : "text"}
+                        <input className="p6-in" data-field={c.key} aria-label={t(c.title)} type={field(c.key).type === "number" ? "number" : field(c.key).type === "date" ? "date" : "text"}
                           step="any" dir={field(c.key).type === "text" ? "auto" : "ltr"} value={ed.values[c.key] ?? ""}
                           onChange={(e) => setEditing({ ...ed, values: { ...ed.values, [c.key]: e.target.value } })}
                           onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(null); }} />

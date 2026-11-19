@@ -46,6 +46,15 @@ test("work front: the plan spread over the planned days, the work done each day,
   equal([r["2026-03-07"].inPlan, r["2026-03-07"].plan, r["2026-03-07"].doneCum], [false, 0, 20]);
 });
 
+test("planned progress falls back to days when either activity volume is zero or missing", () => {
+  for (const [volumeActual, volumePlan] of [[0, 10], [10, null], [null, null], [10, 0]]) {
+    const a = { id: "a", wf: 100, plan_start: "2026-03-01", plan_end: "2026-03-05", volumeActual, volumePlan };
+    equal(ea.workFront(a).rows[3].planPct, 80);
+    const period = ea.periodColumns([{ id: "n", activities: [a] }], [], ["2026-03-04"]).get("a");
+    equal([period.TPP, period.CPP, period.LPP], [80, 20, 60]);
+  }
+});
+
 test("the planned curve of a WBS node: each activity's plan spread over its days, rolled up by W.F; nothing planned → unknown, not zero", async () => {
   const node = { activities: [{ wf: 60, plan_start: "2026-03-01", plan_end: "2026-03-10" }, { wf: 40, plan_start: "2026-03-06", plan_end: "2026-03-15" }] };
   equal([ea.plannedPctAt(node, "2026-02-28"), ea.plannedPctAt(node, "2026-03-05"), ea.plannedPctAt(node, "2026-03-10"), ea.plannedPctAt(node, "2026-03-20")],

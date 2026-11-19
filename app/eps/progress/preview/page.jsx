@@ -6,6 +6,7 @@ import ActivityGrid, { useSplit } from "../../../../components/eps/ActivityGrid"
 import ActivityDetail, { useEpsFmt } from "../../../../components/eps/ActivityDetail";
 import { Status } from "../../../../components/eps/PlanningSubforms";
 import { COLUMNS, useVersion } from "../../../../components/eps/shared";
+import { periodColumns } from "../../../../lib/eps/activities.mjs";
 import { effective } from "../../../../lib/reports/contract-daily.mjs";
 import { usePrefs } from "../../../../lib/client/prefs.mjs";
 import TableKit from "../../../../components/ui/TableKit";
@@ -32,6 +33,7 @@ export default function DailyReportPreviewPage() {
   const { fmt, day, statusOf, w } = useEpsFmt();
   const { pmsId, versionId, plan, picker } = useVersion(contractId);
   const [d0, setDay] = useState(today());
+  const [selectedDays, setSelectedDays] = useState([]);
   const [reportId, setReportId] = useState("");
   useEffect(() => { const r = new URLSearchParams(window.location.search).get("report"); if (r) setReportId(r); }, []);
   const all = useProjectData((id) => (contractId ? `/api/contract-reports?projectId=${id}&contractId=${contractId}` : null), [contractId]);
@@ -40,6 +42,8 @@ export default function DailyReportPreviewPage() {
     const r = (all.data?.reports || []).find((x) => x.id === reportId);
     if (r) setDay(String(r.report_date).slice(0, 10));
   }, [all.data, reportId]);
+  const appliedDays = selectedDays.length ? selectedDays : d0 ? [d0] : [];
+  const availableDays = [...new Set((all.data?.reports || []).filter((r) => r.status !== "cancelled").map((r) => String(r.report_date).slice(0, 10)))].sort().reverse();
   const dayReports = (all.data?.reports || []).filter((r) => String(r.report_date).slice(0, 10) === d0 && r.status !== "cancelled");
   // once the reports are known: keep the report asked for when it is the day's, else the day's first
   useEffect(() => {
@@ -69,31 +73,38 @@ export default function DailyReportPreviewPage() {
   // this report's lines, by activity
   const mine = useMemo(() => {
     const m = new Map();
-    for (const l of lines.data?.lines || []) if (l.reportId === reportId) (m.get(l.activityId) || m.set(l.activityId, []).get(l.activityId)).push(l);
+    for (const l of lines.data?.lines || []) if (selectedDays.length ? selectedDays.includes(l.date) : l.reportId === reportId) (m.get(l.activityId) || m.set(l.activityId, []).get(l.activityId)).push(l);
     return m;
-  }, [lines.data, reportId]);
+  }, [lines.data, reportId, selectedDays]);
   const data = useMemo(() => {
     if (!tree.data) return null;
     const cut = (n) => {
       const children = n.children.map(cut).filter(Boolean);
-      const activities = n.activities.filter((a) => mine.has(a.id));
+      const latest = (id) => mine.get(id).reduce((last, row) => row.date > last ? row.date : last, "");
+      const activities = n.activities.filter((a) => mine.has(a.id))
+        .sort((a, b) => latest(b.id).localeCompare(latest(a.id)) || a.code.localeCompare(b.code, undefined, { numeric: true }));
       return children.length || activities.length ? { ...n, children, activities } : null;
     };
     return { ...tree.data, roots: tree.data.roots.map(cut).filter(Boolean) };
   }, [tree.data, mine]);
   const acts = useMemo(() => { const out = []; const walk = (n) => { out.push(...n.activities); n.children.forEach(walk); }; (tree.data?.roots || []).forEach(walk); return out; }, [tree.data]);
   const one = (r) => (r.kind === "act" && mine.get(r.id)?.length === 1 ? mine.get(r.id)[0] : null);
+  const progress = useMemo(() => periodColumns(tree.data?.roots || [], lines.data?.lines || [], appliedDays), [tree.data, lines.data, d0, selectedDays]);
   const columns = useMemo(() => [...COLUMNS,
     { key: "dQty", title: t("ep.dp.qty"), width: 95, mono: true, get: (r, x) => { const l = mine.get(r.id); return l ? x.fmt(l.reduce((s, y) => s + Number(y.qty || 0), 0), 10) : ""; } },
     { key: "dMark", title: t("ep.dp.mark"), width: 90, get: (r) => (one(r)?.mark || (mine.get(r.id)?.length > 1 ? t("ep.dp.lines", { n: mine.get(r.id).length }) : "")) },
     { key: "dNotes", title: t("ep.dp.notes"), width: 160, get: (r) => one(r)?.notes || "" },
-  ], [mine, t]); // eslint-disable-line react-hooks/exhaustive-deps
+    ...[["TPP", "planTotal"], ["TPA", "actualTotal"], ["CPP", "planDay"], ["CPA", "actualDay"]].map(([key, label]) => ({
+      key, title: `ep.dp.${label}`, width: 130, mono: true,
+      get: (r, x) => progress.get(r.id)?.[key] == null ? "" : `${x.fmt(progress.get(r.id)[key])}%`,
+    })),
+  ], [mine, progress, t]); // eslint-disable-line react-hooks/exhaustive-deps
   const may = !!report.data?.may?.edit;
-  const ops = useMemo(() => (!may ? null : {
+  const ops = useMemo(() => (!may || selectedDays.length ? null : {
     fields: (row) => (one(row) ? [{ key: "dQty", type: "number" }, { key: "dMark", type: "text" }, { key: "dNotes", type: "text" }] : []),
     value: (row) => { const l = one(row); return { dQty: l.qty ?? "", dMark: l.mark || "", dNotes: l.notes || "" }; },
     save: async (row, v) => { const l = one(row); return !!(await post("/api/eps/activities", { kind: "progress-edit", reportId, rowId: l.rowId, qty: v.dQty, mark: v.dMark, notes: v.dNotes }, () => t("ep.rp.saved"))); },
-  }), [may, mine, reportId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [may, mine, reportId, selectedDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const head = (
     <div className="pagehead"><h1>{t("ep.dp.title")}</h1>
@@ -108,9 +119,15 @@ export default function DailyReportPreviewPage() {
         <select id="dp-rep" value={reportId} onChange={(e) => setReportId(e.target.value)}>
           {dayReports.length === 0 && <option value="">{t("pg.noReport")}</option>}
           {dayReports.map((r) => <option key={r.id} value={r.id}>{r.report_no} — {r.title || ""}</option>)}</select></span>
+      {availableDays.length > 0 && <details>
+        <summary>{t("ep.dp.reportDays")}</summary>
+        {availableDays.map((d) => <label key={d} style={{ display: "block" }}>
+          <input type="checkbox" checked={selectedDays.includes(d)} onChange={(e) => setSelectedDays((old) => e.target.checked ? [...old, d] : old.filter((x) => x !== d))} /> {day(d)}
+        </label>)}
+      </details>}
       {report.data && <span className="sm muted">{report.data.report?.stage_name || report.data.report?.status}{may ? "" : t("pg.viewOnly")}</span>}
     </div>);
-  if (!reportId) return <div className="page">{head}{bar}<p className="empty-note">{t("ep.dp.pickReport")}</p></div>;
+  if (!reportId && !selectedDays.length) return <div className="page">{head}{bar}<p className="empty-note">{t("ep.dp.pickReport")}</p></div>;
   if (!data || !lines.data) return <div className="page">{head}{bar}<p className="muted">{t("common.loading")}</p></div>;
 
   const a = sel?.kind === "act" ? acts.find((x) => x.id === sel.id) : null;
@@ -126,8 +143,8 @@ export default function DailyReportPreviewPage() {
     }
     if (detail.error) return <p className="err">{detail.error}</p>;
     if (!detail.data) return <p className="muted">{t("common.loading")}</p>;
-    const d = { ...detail.data, reports: detail.data.reports.filter((l) => l.reportId === reportId) };
-    return <ActivityDetail d={d} tab="reports" may={may} post={post} companies={tree.data.companies} projectId={projectId} acts={acts} reportList={all.data?.reports || []} />;
+    const d = { ...detail.data, reports: detail.data.reports.filter((l) => selectedDays.length ? selectedDays.includes(l.date) : l.reportId === reportId) };
+    return <ActivityDetail d={d} tab="reports" may={may} post={post} companies={tree.data.companies} projectId={projectId} acts={acts} reportRoots={tree.data.roots} reportList={all.data?.reports || []} />;
   };
   return (
     <div className="page">
@@ -137,7 +154,7 @@ export default function DailyReportPreviewPage() {
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.roots.length === 0 ? <p className="empty-note">{t("ep.dp.empty")}</p> : (
         <div style={{ height }}>
-          <ActivityGrid data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "start", "finish", "dQty", "dMark", "dNotes"]}
+          <ActivityGrid data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "start", "finish", "dQty", "dMark", "dNotes", "TPP", "TPA", "CPP", "CPA"]}
             storeKey="p6-report-preview" selected={sel?.id} onSelect={(r) => setSel(r)} ops={ops} />
         </div>)}
       {grip}

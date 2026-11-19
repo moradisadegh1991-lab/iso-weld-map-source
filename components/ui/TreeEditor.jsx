@@ -19,6 +19,8 @@ export default function TreeEditor({ nodes, onMove, render, actions, editable = 
   const [drag, setDrag] = useState(null);
   const [over, setOver] = useState(null);
   const [q, setQ] = useState("");
+  const [closed, setClosed] = useState(new Set());
+  const flip = (id) => setClosed((old) => { const next = new Set(old); if (!next.delete(id)) next.add(id); return next; });
   const flat = useMemo(() => { const out = []; const walk = (ns, pid) => ns.forEach((n) => { out.push({ id: n.id, parentId: pid, text: n.name }); walk(n.children || [], n.id); }); walk(nodes, null); return out; }, [nodes]);
   const hit = useMemo(() => filterTree(flat, q), [flat, q]);
   const drop = (parentId) => (e) => {
@@ -30,10 +32,10 @@ export default function TreeEditor({ nodes, onMove, render, actions, editable = 
   // One context object, so each node stays the same component across renders: a node
   // defined inside this function would be a new component on every hover, and React
   // would remount the very element being dragged — which ends the browser's drag.
-  const ctx = { drag, setDrag, over, setOver, drop, render, actions, editable, hit, q };
+  const ctx = { drag, setDrag, over, setOver, drop, render, actions, editable, hit, q, t, closed, flip };
   return (
     <div>
-      {flat.length > 3 && <input type="search" className="tree-q" aria-label={t("ui.tree.find")} placeholder={t("ui.tree.find")} value={q} onChange={(e) => setQ(e.target.value)} />}
+      {flat.length > 3 && <input type="search" className="tree-q" aria-label={t("ui.tree.find")} placeholder={t("ui.tree.find")} value={q} onChange={(e) => { setQ(e.target.value); setClosed(new Set()); }} />}
       {editable && (
         <div onDragOver={(e) => { e.preventDefault(); setOver("root"); }} onDragLeave={() => setOver(null)} onDrop={drop(null)} data-drop-root=""
           className="sm muted" style={{ padding: 6, marginBottom: 4, borderRadius: 6, border: `1px dashed ${over === "root" ? "var(--cy, #1b7f99)" : "var(--line, #ccd)"}` }}>
@@ -46,7 +48,7 @@ export default function TreeEditor({ nodes, onMove, render, actions, editable = 
 }
 
 function TreeNode({ n, depth, ctx }) {
-  const { drag, setDrag, over, setOver, drop, render, actions, editable, hit, q } = ctx;
+  const { drag, setDrag, over, setOver, drop, render, actions, editable, hit, q, t, closed, flip } = ctx;
   if (hit && !hit.visible.has(n.id)) return null;
   return (
     <li style={{ listStyle: "none" }}>
@@ -60,11 +62,11 @@ function TreeNode({ n, depth, ctx }) {
           border: `1px dashed ${over === n.id ? "var(--cy, #1b7f99)" : "transparent"}`, background: drag === n.id ? "var(--hl, #eef6f8)" : undefined,
           cursor: editable ? "grab" : undefined }}>
         {editable && <span aria-hidden="true" className="muted">⠿</span>}
-        <span>{n.children?.length ? "▾" : "•"}</span>
+        {n.children?.length ? <button type="button" className="p6-tog" aria-expanded={!closed.has(n.id)} aria-label={t(closed.has(n.id) ? "ep.g.open" : "ep.close")} onClick={() => flip(n.id)}>{closed.has(n.id) ? "▸" : "▾"}</button> : <span>•</span>}
         <span style={{ flex: 1 }}>{render ? render(n) : hit ? splitHits(n.name, q).map((p, i) => (p.hit ? <mark key={i} style={{ background: "#ffe14d", color: "#111", padding: 0 }}>{p.text}</mark> : <span key={i}>{p.text}</span>)) : n.name}</span>
         {actions && actions(n)}
       </div>
-      {n.children?.length > 0 && <ul style={{ margin: 0, padding: 0 }}>{n.children.map((c) => <TreeNode key={c.id} n={c} depth={depth + 1} ctx={ctx} />)}</ul>}
+      {n.children?.length > 0 && !closed.has(n.id) && <ul style={{ margin: 0, padding: 0 }}>{n.children.map((c) => <TreeNode key={c.id} n={c} depth={depth + 1} ctx={ctx} />)}</ul>}
     </li>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import { ROLES, ACTIONS, can } from "../../lib/authz.mjs";
 import { AREAS } from "../../lib/platform/areas.mjs";
+import ReportSetup from "../../components/workflow/ReportSetup";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 
@@ -77,7 +78,7 @@ export default function AdminPage() {
       {msg && <p className="err" role="alert">{msg}</p>}
       {link && <LinkBox link={link} onClose={() => setLink(null)} />}
 
-      {tab === "roles" ? <Roles role={role} /> : tab === "usage" ? (may ? <Usage projectId={projectId} call={call} /> : <p className="muted">حساب مصرف مدل با مدیر پروژه است.</p>) : !may ? (
+      {tab === "roles" ? <><Roles role={role} />{may && <ReportSetup rolesOnly key={projectId} />}</> : tab === "usage" ? (may ? <Usage projectId={projectId} call={call} /> : <p className="muted">حساب مصرف مدل با مدیر پروژه است.</p>) : !may ? (
         <p className="muted">مدیریت کاربران با مدیر پروژه است.</p>
       ) : err ? <p className="err">{err}</p> : !data ? <p className="muted">در حال بارگذاری…</p> : tab === "contracts" ? <ContractMembers data={data} post={post} /> : <>
         <div className="kpis">

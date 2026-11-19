@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useConfirm } from "./ConfirmDialog";
 import { createPortal } from "react-dom";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 import { usePlatformMaybe } from "../../lib/client/platform.mjs";
@@ -106,6 +107,8 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   const [menu, setMenu] = useState(null);                 // a column's menu: { key, rect }
   const [chooser, setChooser] = useState(null);           // the columns panel: { rect }
   const [sel, setSel] = useState(null);                   // { row, key } — the selected main row
+  const [confirm, confirmation] = useConfirm();
+  const confirmAction = (title) => confirm({ title, badge: "", confirmLabel: t("tk.yes"), cancelLabel: t("common.cancel") });
   const [dialog, setDialog] = useState(null);             // "view" | "delete"
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -455,6 +458,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     row.dataset.tkSel = "";
     st.current.selRow = row;
     setSel({ row, key: row.dataset.key || null });
+    if (e.type === "click") box.current?.closest(".tk")?.focus({ preventScroll: true });
     setErr("");
     if (e.type === "dblclick") setDialog("view");
   }
@@ -499,7 +503,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     if (!onDelete || !keyed.length) return false;
     const refused = keyed.map((r) => [r, canDelete ? canDelete(r.dataset.key) : true]).filter(([, v]) => !(v === true || v === undefined || v === null));
     if (refused.length) { setErr(`${deleteLabel}: ${String(refused[0][1] || t("tk.notOpen"))}`); return false; }
-    if (ask && !window.confirm(t("tk.deleteMany", { n: num(keyed.length) }))) return false;
+    if (ask && !(await confirmAction(t("tk.deleteMany", { n: num(keyed.length) })))) return false;
     setBusy(true); setErr("");
     try { for (const r of keyed) { if (await onDelete(r.dataset.key) === false) throw new Error(t("tk.deleteFailed")); } clearPicks(); return true; }
     catch (e) { setErr(e?.message || t("tk.deleteError")); return false; }
@@ -524,7 +528,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     return [f.name, v];
   }));
   async function pasteAsNew(data) {
-    if (!window.confirm(t("tk.pasteAsk", { n: num(data.length) }))) return false;
+    if (!(await confirmAction(t("tk.pasteAsk", { n: num(data.length) })))) return false;
     setBusy(true); setErr("");
     try {
       for (let k = 0; k < data.length; k++) {
@@ -567,7 +571,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   // owner's requirements 2026-10-22, item 7: a row is written only once the person says so
   async function saveEdit(ask = true) {
     if (!ed) return true;
-    if (ask && !window.confirm(t(ed.row ? "tk.saveAsk" : "tk.addAsk"))) return false;
+    if ((ask || !ed.row) && !(await confirmAction(t(ed.row ? "tk.saveAsk" : "tk.addAsk")))) return false;
     setBusy(true); setErr("");
     try {
       const ok = ed.row ? await rowEdit.onSave(ed.key, ed.values) : await rowEdit.onAdd(ed.values);
@@ -580,14 +584,14 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   useEffect(() => {
     if (!ed) return undefined;
     const away = (e) => {
-      if (!edDirty || e.target.closest?.(".tk-edit, .tk-leave, .tk-rowmenu")) return;
+      if (confirmation || !edDirty || e.target.closest?.(".tk-edit, .tk-leave, .tk-rowmenu, [data-confirm]")) return;
       if (box.current?.contains(e.target) && e.target.closest("tbody tr")) return;   // another row: the row click asks
       e.preventDefault(); e.stopPropagation();
       setLeave({ next: () => {} });
     };
     document.addEventListener("pointerdown", away, true);
     return () => document.removeEventListener("pointerdown", away, true);
-  }, [ed, edDirty]);
+  }, [ed, edDirty, confirmation]);
 
   useEffect(() => {
     // A row React replaced takes the selection with it.
@@ -662,10 +666,23 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   const showBar = meta.total >= min || (meta.total > 0 && !!(onEdit || onDelete)) || filtering;
   const cells = sel ? [...sel.row.cells].map((c, i) => [heads[i]?.label || "", cellText(c)]).filter(([h, v]) => h || v) : [];
   const title = cells.find(([, v]) => v)?.[1] || t("tk.row");
+  const tableKeys = (e) => {
+    if (e.defaultPrevented || e.repeat || e.nativeEvent.isComposing || busy || confirmation || dialog || leave) return;
+    if (e.target.closest("input, textarea, select, [contenteditable=true]") || edDirty) return;
+    const targets = picked();
+    if (!targets.length && sel?.row && mainRows().includes(sel.row)) targets.push(sel.row);
+    const control = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    if (!control && key === "delete" && onDelete && targets.length) { e.preventDefault(); deleteRows(targets); }
+    else if (control && key === "c" && targets.length && !window.getSelection()?.toString()) { e.preventDefault(); copyRows(targets); }
+    else if (control && key === "x" && onDelete && targets.length) { e.preventDefault(); cutRows(targets); }
+    else if (control && key === "v" && paste && clip?.length) { e.preventDefault(); paste(clip); }
+  };
   const css = useMemo(() => layoutCss(`.tk[data-tk-id="${uid}"]`, mode, heads, disp, lay, pinOff, live), [uid, mode, heads, disp, lay, pinOff, live]);
   const MODES = [["table", "☰"], ["grid", "▦"], ["cards", "▣"]];
   return (
-    <div className="tk" data-tk-id={uid} data-tk-mode={mode}>
+    <div className="tk" data-tk-id={uid} data-tk-mode={mode} tabIndex={0} onKeyDown={tableKeys}>
+      {confirmation}
       {css && <style>{css}</style>}
       {showBar && (
         <div className="tk-bar no-print">
