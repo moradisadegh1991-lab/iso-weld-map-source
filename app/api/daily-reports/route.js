@@ -28,6 +28,13 @@ async function dailyType(db, projectId) {
   return t || null;
 }
 
+async function requireDailyReport(db, projectId, reportId) {
+  const { rows: [r] } = await db.query(
+    `SELECT 1 FROM report r JOIN report_type t ON t.id = r.report_type_id
+      WHERE r.id = $1 AND r.project_id = $2 AND r.contract_id IS NULL AND t.code = $3`, [reportId, projectId, CODE]);
+  if (!r) throw Object.assign(new Error("report not found"), { status: 404 });
+}
+
 export async function GET(request) {
   try {
     const url = new URL(request.url);
@@ -41,6 +48,7 @@ export async function GET(request) {
       if (prefill) return Response.json(await dailyPrefill(db, { projectId, date: prefill }));
       const id = url.searchParams.get("id");
       if (id) {
+        await requireDailyReport(db, projectId, id);
         const v = await rp.reportView(db, { projectId, reportId: id, userId: user.id });
         return Response.json({ ...v, totals: dailyTotals(v.content), labels: { SOURCE, SHIFT, WEATHER } });
       }
@@ -94,6 +102,7 @@ export async function POST(request) {
         send: () => rp.sendReport(db, { ...a, userIds: body.userIds || [], note: body.note }),
       }[kind];
       if (!run) return Response.json({ error: `unknown kind: ${kind}` }, { status: 400 });
+      if (kind !== "create") await requireDailyReport(db, projectId, body.reportId);
       return Response.json({ ok: true, row: (await run()) ?? null });
     });
   } catch (e) { return errorResponse(e); }

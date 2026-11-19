@@ -110,6 +110,7 @@ const { withProject } = await import("../../lib/db/scope.mjs");
 const projects = await import("../../lib/db/repos/projects.mjs");
 const rp = await import("../../lib/db/repos/reports.mjs");
 const cr = await import("../../lib/db/repos/contract-reports.mjs");
+const wfs = await import("../../lib/db/repos/workflows.mjs");
 const org = await import("../../lib/db/repos/org.mjs");
 const res = await import("../../lib/db/repos/resources.mjs");
 const ctr = await import("../../lib/db/repos/contracts.mjs");
@@ -245,6 +246,54 @@ test("resources over a period, filtered by type, branch and name", async () => {
   equal(byName.summary.byUnit, { "دستگاه": 2 });
   const lists = await inP(() => cr.listContractReports(db, { projectId: P, contractId: C.id, userId: U.planner.id }));
   equal(lists.map((r) => r.title), ["گزارش روزانهٔ سیویل", "دیروز"]);
+});
+
+test("a duty reaches selected forms and descendants without borrowing access from a read-only grant", async () => {
+  await inP(async () => {
+    const arg = { projectId: P, contractId: C.id };
+    const child = await org.addCategory(db, { ...arg, tree: "narrative", parentId: concrete.id, name: "بتن‌ریزی" });
+    const outside = await org.addCategory(db, { ...arg, tree: "narrative", name: "نصب" });
+    const role = await wfs.saveRole(db, { ...arg, name: "پیمانکار بتن" });
+    const { id: groupId } = (await rp.workflowOf(db, { projectId: P, reportTypeId: type.id }))[0].groups[0];
+    const mirror = await rp.upsertReportType(db, { projectId: P, code: "MIRROR", name: "فرم دیگر گزارش" });
+    await wfs.attachWorkflow(db, { projectId: P, reportTypeId: mirror.id, workflowId: (await rp.reportTypes(db, { projectId: P })).find((t) => t.id === type.id).workflow_id });
+    const permissions = ["view", "create", "add_content", "edit", "delete_content"];
+    const setup = { projectId: P, roleId: role.id, name: "ثبت بتن", permissions };
+    await throws(() => wfs.saveDuty(db, { ...setup, formRules: [{ formId: type.id, rows: [other.id] }] }), "قرارداد همان نقش");
+    const duty = await wfs.saveDuty(db, { ...setup, formRules: [{ formId: type.id, rows: [concrete.id] }] });
+    await wfs.saveDuty(db, { ...setup, id: duty.id, name: "ثبت کار بتن" });
+    const rules = (await wfs.duties(db, { projectId: P })).find((d) => d.id === duty.id).formRules;
+    equal(rules.map((rule) => [rule.formId, rule.rows]), [[type.id, [concrete.id]]]);
+    await wfs.setGroupDuty(db, { projectId: P, groupId, dutyId: duty.id });
+    const scopedUser = await projects.ensureUser(db, { subject: "kc|scoped-clerk", displayName: "Scoped clerk" });
+    await projects.addMember(db, { projectId: P, userId: scopedUser.id, role: "engineer" });
+    const userId = scopedUser.id;
+    await wfs.setDutyMember(db, { projectId: P, dutyId: duty.id, userId });
+    await throws(() => rp.createReport(db, { projectId: P, reportTypeId: mirror.id, reportDate: today, userId }), "حق ایجاد");
+
+    const report = await cr.createContractReport(db, { ...arg, title: "گزارش بتن", reportDate: today, userId });
+    const change = (content) => cr.editContractReport(db, { projectId: P, reportId: report.id, userId, content });
+    const content = structuredClone((await cr.contractReportView(db, { projectId: P, reportId: report.id, userId })).content);
+    content.narrative.push({ base: { categoryId: child.id, title: "بتن‌ریزی", unit: "m³", qty: 1 } });
+    await change(content);
+
+    const blocked = { base: { categoryId: outside.id, title: "نصب", unit: "m³", qty: 3 } };
+    const saved = (await cr.contractReportView(db, { projectId: P, reportId: report.id, userId })).content;
+    await rp.setGroupMember(db, { projectId: P, groupId, userId, permissions: ["view"] });
+    await throws(() => change({ ...saved, narrative: [...saved.narrative, blocked] }), "بیرون از صفحه");
+    await rp.setGroupMember(db, { projectId: P, groupId, userId, permissions: ["view", "add_content"] });
+    const moved = structuredClone(saved);
+    moved.narrative[0].base.categoryId = outside.id;
+    await throws(() => change(moved), "بیرون از صفحه", "the right to add outside the branch cannot authorize an edit there");
+    await cr.editContractReport(db, { projectId: P, reportId: report.id, userId: U.planner.id, content: moved });
+    await throws(() => change(saved), "بیرون از صفحه", "moving a row into the allowed branch still needs access to its previous path");
+    await throws(() => cr.createContractReport(db, { ...arg, title: "کپی بتن", reportDate: today, userId, copyFromId: report.id }), "خارج از محدوده");
+
+    await wfs.saveDuty(db, { ...setup, id: duty.id, formRules: [{ formId: type.id, rows: [] }, { formId: mirror.id, rows: [] }] });
+    await change(saved);
+    await cr.createContractReport(db, { ...arg, title: "کپی مجاز بتن", reportDate: today, userId, copyFromId: report.id });
+    await rp.createReport(db, { projectId: P, reportTypeId: mirror.id, reportDate: today, userId });
+  });
 });
 
 await run();
