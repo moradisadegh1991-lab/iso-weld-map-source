@@ -6,6 +6,7 @@ import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import { listCalendars, saveCalendar } from "../../../lib/db/repos/contract-calendars.mjs";
 import * as eps from "../../../lib/db/repos/eps.mjs";
+import { pmsScopeOf, assertPmsTargets } from "../../../lib/db/repos/duty-pms-scope.mjs";
 import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
 import { BUDGET_MODES, SEPARATORS } from "../../../lib/eps/wbs.mjs";
 import { PMS_TYPES } from "../../../lib/db/repos/eps.mjs";
@@ -58,6 +59,25 @@ async function contractOf(db, projectId, b) {
   }
 }
 
+function writeTargets(b) {
+  const plan = [["pms", b.pmsId], ["version", b.versionId]];
+  switch (b.kind) {
+    case "pms": case "pms-budget": case "pms-active": return [["pms", b.id]];
+    case "version": return [["version", b.id], ["pms", b.pmsId]];
+    case "version-master": return [["version", b.id]];
+    case "eps-move": return b.epsKind === "version"
+      ? [["version", b.id], ["pms", b.pmsId], ["version", b.beforeId], ["version", b.afterId]] : [];
+    case "eps-remove": return [[b.epsKind === "version" ? "version" : "pms", b.id]];
+    case "import-plan": return b.mode === "new" ? [] : [["pms", b.pmsId]];
+    case "wf-fit": case "settings": case "refresh-weights": return [...plan, ["node", b.nodeId]];
+    case "node": case "node-move": case "node-copy": case "node-remove":
+      return [...plan, ["node", b.id], ["node", b.parentId], ["node", b.beforeId], ["node", b.afterId]];
+    case "attach": case "activity": return [["node", b.nodeId], ["activity", b.id]];
+    case "activity-remove": return [["activity", b.id]];
+    default: return [];
+  }
+}
+
 export async function GET(request) {
   try {
     const url = new URL(request.url);
@@ -69,12 +89,14 @@ export async function GET(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
     const mayTemplates = can(membership, ACTIONS.MANAGE_CONTRACTS) || can(membership, ACTIONS.MANAGE_CONTROLS);
     return await withProject(db, projectId, async () => {
-      if (q("templates")) return Response.json({ templates: await eps.templatesWithActivities(db, { projectId }), may: { edit: mayTemplates } });
+      const scope = await pmsScopeOf(db, { projectId, userId: user.id });
+      if (q("templates")) return Response.json({ templates: await eps.templatesWithActivities(db, { projectId }), may: { edit: mayTemplates && !scope } });
       const versionId = q("versionId"), pmsId = q("pmsId");
       if (versionId || pmsId) {
         const contractId = await contractOf(db, projectId, { kind: "settings", versionId, pmsId });
         if (!contractId) throw notFound();
         const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
+        await assertPmsTargets(db, projectId, scope, [["pms", pmsId], ["version", versionId], ["node", q("parentId")]]);
         if (q("suggest")) return Response.json({ code: await eps.suggestNodeCode(db, { projectId, pmsId, versionId, parentId: q("parentId") }) });
         // what deleting (or replacing) the PMS takes with it, and what stops it — asked before the question is put
         if (q("contents")) return Response.json(await eps.pmsContents(db, { projectId, id: pmsId }));
@@ -83,8 +105,8 @@ export async function GET(request) {
       const contractId = q("contractId");
       if (!contractId) return Response.json({ error: "contractId is required" }, { status: 400 });
       const access = await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role });
-      return Response.json({ calendars: await listCalendars(db, { projectId, contractId }), pms: await eps.epsBoard(db, { projectId, contractId }), labels: LABELS, may: { edit: access !== "view" },
-        legacy: await legacyImports(db, { projectId }) });
+      return Response.json({ calendars: await listCalendars(db, { projectId, contractId }), pms: await eps.epsBoard(db, { projectId, contractId, pmsIds: scope ? [...scope] : null }), labels: LABELS, may: { edit: access !== "view", contractWide: !scope && access !== "view" },
+        legacy: scope ? { schedules: [], pms: [] } : await legacyImports(db, { projectId }) });
     });
   } catch (e) { return errorResponse(e); }
 }
@@ -111,7 +133,9 @@ export async function POST(request) {
     assertCan(membership, ACTIONS.VIEW_PROJECT);
     return await withProject(db, projectId, async () => {
       const a = { ...b, projectId, userId: user.id };
-      if (kind.startsWith("template")) {
+      const scope = await pmsScopeOf(db, a);
+      if (kind?.startsWith("template")) {
+        await assertPmsTargets(db, projectId, scope, []);
         if (!can(membership, ACTIONS.MANAGE_CONTRACTS) && !can(membership, ACTIONS.MANAGE_CONTROLS)) {
           throw Object.assign(new Error("الگوهای فعالیت را امور قراردادها یا کنترل پروژه نگه می‌دارد."), { status: 403, code: "FORBIDDEN" });
         }
@@ -119,6 +143,7 @@ export async function POST(request) {
         const contractId = await contractOf(db, projectId, b);
         if (!contractId) throw notFound();
         await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: "edit" });
+        await assertPmsTargets(db, projectId, scope, writeTargets(b));
         a.contractId = contractId;
       }
       const run = {

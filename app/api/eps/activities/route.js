@@ -7,6 +7,7 @@ import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 import * as act from "../../../../lib/db/repos/eps-activities.mjs";
 import * as scope from "../../../../lib/db/repos/eps-scope.mjs";
 import { DISCIPLINES, MEASURES, MODES } from "../../../../lib/eps/scope.mjs";
+import { pmsScopeOf, assertPmsTargets, progressActivityOf } from "../../../../lib/db/repos/duty-pms-scope.mjs";
 import { assertContractAccess } from "../../../../lib/db/repos/users.mjs";
 import { REL_TYPES, BUDGET_UNITS, ROLE_STATUS, QTY_MODES } from "../../../../lib/eps/activities.mjs";
 import { fromDailySheet } from "../../../../lib/eps/daily-sheet.mjs";
@@ -71,6 +72,24 @@ async function contractOf(db, projectId, b) {
   }
 }
 
+async function writeTargets(db, projectId, b) {
+  switch (b.kind) {
+    case "relation": return [["relation", b.id], ["activity", b.predId], ["activity", b.succId]];
+    case "relation-remove": return [["relation", b.id]];
+    case "code-assign": case "progress-add":
+      return (Array.isArray(b.activityIds) ? b.activityIds : []).map((id) => ["activity", id]);
+    case "role": case "delay": return [[b.kind, b.id], ["activity", b.activityId]];
+    case "role-remove": return [["role", b.id]];
+    case "delay-remove": return [["delay", b.id]];
+    case "progress-edit": return [["activity", await progressActivityOf(db, { projectId, reportId: b.reportId, rowId: b.rowId })],
+      ["activity", b.activityId]];
+    case "scope-rule": return [["rule", b.id], ["node", b.nodeId], ["activity", b.activityId]];
+    case "scope-rule-remove": return [["rule", b.id]];
+    case "scope-apply": return [["rule", b.ruleId]];
+    default: return [];
+  }
+}
+
 export async function GET(request) {
   try {
     const url = new URL(request.url);
@@ -87,26 +106,29 @@ export async function GET(request) {
       };
       const one = async (sql, id) => (await db.query(sql, [id, projectId])).rows[0]?.contract_id ?? null;
       const versionId = q("versionId"), pmsId = q("pmsId"), activityId = q("activityId"), contractId = q("contractId");
+      const scopeIds = await pmsScopeOf(db, { projectId, userId: user.id });
       if (activityId) {
         const a = await access(await one(ACTIVITY, activityId));
-        return Response.json({ ...(await act.activityDetail(db, { projectId, activityId, versionId, userId: user.id })), labels: LABELS, may: { edit: a !== "view" } });
+        await assertPmsTargets(db, projectId, scopeIds, [["activity", activityId], ["version", versionId], ["pms", pmsId]]);
+        return Response.json({ ...(await act.activityDetail(db, { projectId, activityId, versionId, userId: user.id })), labels: LABELS, may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });
       }
       if (versionId || pmsId) {
         const a = await access(versionId ? await one(VERSION, versionId) : await one(PMS, pmsId));
+        await assertPmsTargets(db, projectId, scopeIds, [["pms", pmsId], ["version", versionId]]);
         const at = { projectId, pmsId, versionId, userId: user.id };
         if (q("lines")) return Response.json({ lines: await act.versionLines(db, at) });
         if (q("unplanned")) return Response.json({ unplanned: await scope.unplanned(db, at), labels: LABELS });
         const autoApplied = a !== "view" ? (await scope.autoApply(db, { ...at, userId: user.id })).filter((x) => x.error || x.added || x.removed || x.changed || x.made || x.dropped) : [];
         if (q("days") !== null || url.searchParams.has("days")) {
           const days = String(q("days") || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 62);
-          return Response.json({ ...(await act.daysView(db, { ...at, days })), labels: LABELS, may: { edit: a !== "view" } });
+          return Response.json({ ...(await act.daysView(db, { ...at, days })), labels: LABELS, may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });
         }
-        return Response.json({ ...(await act.activityView(db, at)), autoApplied, labels: LABELS, may: { edit: a !== "view" } });
+        return Response.json({ ...(await act.activityView(db, at)), autoApplied, labels: LABELS, may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });
       }
       if (contractId) {
         const a = await access(contractId);
         if (q("day")) return Response.json({ reports: await act.reportsOn(db, { projectId, contractId, day: q("day"), userId: user.id }) });
-        return Response.json({ codes: await act.codesOf(db, { projectId, contractId }), may: { edit: a !== "view" } });
+        return Response.json({ codes: await act.codesOf(db, { projectId, contractId }), may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });
       }
       return Response.json({ error: "versionId, activityId or contractId is required" }, { status: 400 });
     });
@@ -135,6 +157,8 @@ export async function POST(request) {
       if (!contractId) throw notFound();
       await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: "edit" });
       const a = { ...b, projectId, contractId, userId: user.id };
+      const scopeIds = await pmsScopeOf(db, a);
+      if (scopeIds) await assertPmsTargets(db, projectId, scopeIds, await writeTargets(db, projectId, b));
       const run = {
         relation: () => act.saveRelation(db, a),
         "relation-remove": () => act.removeRelation(db, a),

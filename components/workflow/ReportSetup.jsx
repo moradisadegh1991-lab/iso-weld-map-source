@@ -22,7 +22,7 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  * only says who holds them. A form's designer sees only the workflows their
  * forms follow; the forms, the duties and the tree are the project manager's.
  */
-const blankDuty = { id: null, code: "", name: "", description: "", permissions: ["view"], roleId: null, active: true, formRules: [] };
+const blankDuty = { id: null, code: "", name: "", description: "", permissions: ["view"], roleId: null, active: true, formRules: [], pmsScope: [] };
 
 export default function ReportSetup({ rolesOnly = false }) {
   const { projectId, call } = usePlatform();
@@ -94,7 +94,7 @@ export default function ReportSetup({ rolesOnly = false }) {
                   <td>{d.members.length}</td>
                   <td className="sm">{d.usedIn.join(" · ") || "—"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <button className="btn ghost sm" type="button" onClick={() => setNd({ id: d.id, code: d.code || "", name: d.name, description: d.description || "", permissions: d.permissions, roleId: d.roleId || "", active: d.active, formRules: d.formRules || [] })}>{tr("dr.edit")}</button>
+                    <button className="btn ghost sm" type="button" onClick={() => setNd({ id: d.id, code: d.code || "", name: d.name, description: d.description || "", permissions: d.permissions, roleId: d.roleId || "", active: d.active, formRules: d.formRules || [], pmsScope: d.pmsScope || [] })}>{tr("dr.edit")}</button>
                     <button className="btn ghost sm" type="button" onClick={async () => { if (await ask(tr("tk.deleteMany", { n: 1 }))) await post({ kind: "duty-remove", id: d.id }); }}>{tr("dr.remove")}</button></td>
                 </tr>))}</tbody></table></TableKit>)}
           <Fold title={nd.id ? tr("rs.editDuty", { name: nd.name }) : tr("rs.newDuty")} open={nd.id ? true : undefined} onClose={() => setNd(blankDuty)}>
@@ -115,6 +115,8 @@ export default function ReportSetup({ rolesOnly = false }) {
               <label>{tr("rs.active")} <select value={String(nd.active)} onChange={(e) => setNd({ ...nd, active: e.target.value === "true" })}><option value="true">{tr("tk.yes")}</option><option value="false">{tr("tk.no")}</option></select></label>
               <Rights value={nd.permissions} on={(p) => setNd({ ...nd, permissions: p })} data={data} perm={perm} tr={tr} label={tr("rs.dutyRights")} />
               <DutyForms key={nd.id || "new"} data={data} roleId={nd.roleId ?? roleId} value={nd.formRules} onChange={(formRules) => setNd({ ...nd, formRules })} tr={tr} />
+              <DutyPmsPicker data={data} roleId={nd.roleId ?? roleId} value={nd.pmsScope}
+                onChange={(pmsScope) => setNd({ ...nd, pmsScope })} tr={tr} />
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button className="btn" type="submit">{tr("rs.saveDuty")}</button>
                 {nd.id && <button className="btn ghost" type="button" onClick={() => setNd(blankDuty)}>{tr("common.cancel")}</button>}</div>
@@ -453,6 +455,22 @@ function GroupDuties({ g, wf, data, post, perm, tr, secName }) {
       </details>
     </div>
   );
+}
+
+function DutyPmsPicker({ data, roleId, value, onChange, tr }) {
+  const contractId = data.roles.find((r) => r.id === roleId)?.contract_id;
+  const plans = (data.scope?.wbs || []).filter((row) => !row.parentId && row.contractId === contractId);
+  const stale = value.filter((id) => !plans.some((p) => p.id === id));
+  return <fieldset data-duty-pms>
+    <legend>{tr("rs.dutyPms")}</legend>
+    <p className="sm muted">{tr(contractId ? "rs.dutyPmsNote" : "rs.dutyPmsRole")}</p>
+    {plans.map((plan) => <label key={plan.id} style={{ display: "block" }}>
+      <input type="checkbox" checked={value.includes(plan.id)} onChange={(e) =>
+        onChange(e.target.checked ? [...value, plan.id] : value.filter((id) => id !== plan.id))} /> {plan.name}
+    </label>)}
+    {stale.length > 0 && <button type="button" className="btn ghost sm"
+      onClick={() => onChange(value.filter((id) => !stale.includes(id)))}>{tr("rs.dutyPmsClear", { n: stale.length })}</button>}
+  </fieldset>;
 }
 
 function DutyForms({ data, roleId, value, onChange, tr }) {
