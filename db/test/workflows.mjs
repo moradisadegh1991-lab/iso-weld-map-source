@@ -183,6 +183,28 @@ test("roles under a contract gather its duties; a role with duties is not remove
   });
 });
 
+test("contract role branches move without changing their duties; cycles and foreign parents are refused", async () => {
+  const ctr = await import("../../lib/db/repos/contracts.mjs");
+  await as(async () => {
+    const save = (v) => wfs.saveRole(db, { projectId: P, contractId: K.id, ...v });
+    const lead = await save({ name: "سرپرست" });
+    const child = await save({ name: "کارشناس", parentId: lead.id });
+    const leaf = await save({ name: "دستیار", parentId: child.id });
+    await throws(() => save({ id: lead.id, parentId: leaf.id }), "زیر خودش");
+    await throws(() => save({ id: child.id, parentId: child.id }), "زیر خودش");
+    await throws(() => wfs.removeRole(db, { projectId: P, id: lead.id }), "زیرمجموعه");
+    const foreign = await ctr.upsertContract(db, { projectId: P, contractNo: "WF-C2", title: "Foreign", kind: "main", counterparty: "KPC", currency: "IRR", userId: pm.id });
+    const target = await save({ name: "نقش دیگر", contractId: foreign.id });
+    await throws(() => save({ id: child.id, parentId: target.id }), "همین قرارداد");
+    await save({ id: role.id, parentId: child.id });
+    const moved = await save({ id: child.id, parentId: null });
+    equal([moved.parent_id, moved.name], [null, child.name]);
+    const tree = await wfs.roles(db, { projectId: P });
+    equal([tree.find((x) => x.id === leaf.id).parent_id, tree.find((x) => x.id === role.id).parent_id], [child.id, child.id]);
+    equal((await wfs.duties(db, { projectId: P })).find((x) => x.id === site.id).roleId, role.id);
+  });
+});
+
 test("a holder's own access level: of the duty's rights in the group, only theirs; unknown rights refused; cleared, all of the duty's again", async () => {
   await as(async () => {
     const ali1 = async () => (await rp.workflowOf(db, { projectId: P, workflowId: flow.id }))[0].groups[0].members.find((m) => m.userId === ali.id);
