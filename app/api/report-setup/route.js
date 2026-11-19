@@ -38,38 +38,13 @@ export async function GET(request) {
       const tree = (await wfs.workflowTree(db, { projectId })).filter((w) => admin || mine.has(w.id));
       const workflows = await Promise.all(tree.map(async (w) => ({ ...w,
         stageList: await rp.workflowOf(db, { projectId, workflowId: w.id }), pages: await rp.pagesOf(db, { workflowId: w.id }) })));
-      const scope = url.searchParams.get("trees") ? await scopeTrees(db, projectId) : null;
+      const scope = url.searchParams.get("trees") ? await wfs.scopeTrees(db, { projectId }) : null;
       const contracts = admin ? (await db.query("SELECT id, contract_no, title FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId])).rows : [];
-      return Response.json({ types, users, permissions: PERMISSIONS, workflows, duties: admin ? await wfs.duties(db, { projectId }) : (await wfs.duties(db, { projectId })).map((d) => ({ ...d, members: [] })),
+      return Response.json({ types, users, permissions: PERMISSIONS, workflows, duties: admin ? await wfs.duties(db, { projectId }) : (await wfs.duties(db, { projectId })).map((d) => ({ ...d, members: [], formRules: [] })),
         roles: admin ? await wfs.roles(db, { projectId }) : [], contracts,
         sections: wfs.FORM_PARTS, scope, may: { types: admin, tree: admin, duties: admin } });
     });
   } catch (e) { return errorResponse(e); }
-}
-
-/**
- * The tree rows a duty's reach is picked from: every contract's narrative
- * branches, resource categories and resources, and work groups, and the
- * WBS nodes of every master plan — each with its parent, so a pick reaches
- * everything under it.
- */
-async function scopeTrees(db, projectId) {
-  const { rows: cats } = await db.query(
-    `SELECT c.id, c.parent_id, c.tree, c.name, k.contract_no FROM contract_category c JOIN contract k ON k.id = c.contract_id
-      WHERE k.project_id = $1 ORDER BY k.contract_no, c.tree, c.name`, [projectId]);
-  const { rows: res } = await db.query(
-    `SELECT r.id, r.category_id AS parent_id, r.name, k.contract_no FROM contract_resource r JOIN contract k ON k.id = r.contract_id
-      WHERE k.project_id = $1 ORDER BY k.contract_no, r.name`, [projectId]);
-  const { rows: wbs } = await db.query(
-    `SELECT n.id, n.parent_id, n.code, n.name, k.contract_no FROM wbs_node n JOIN eps_pms p ON p.id = n.pms_id
-       LEFT JOIN contract k ON k.id = p.contract_id WHERE p.project_id = $1 AND EXISTS (SELECT 1 FROM eps_version v WHERE v.pms_id = p.id AND v.master) ORDER BY n.code`, [projectId]);
-  return {
-    narrative: cats.filter((c) => c.tree === "narrative").map((c) => ({ id: c.id, parentId: c.parent_id, name: c.name, group: c.contract_no })),
-    resource: [...cats.filter((c) => c.tree === "resource").map((c) => ({ id: c.id, parentId: c.parent_id, name: c.name, group: c.contract_no })),
-      ...res.map((x) => ({ id: x.id, parentId: x.parent_id, name: x.name, group: x.contract_no, leaf: true }))],
-    work_group: cats.filter((c) => c.tree === "work_group").map((c) => ({ id: c.id, parentId: c.parent_id, name: c.name, group: c.contract_no })),
-    wbs: wbs.map((n) => ({ id: n.id, parentId: n.parent_id, name: `${n.code} ${n.name}`, group: n.contract_no || "" })),
-  };
 }
 
 const LABEL = {

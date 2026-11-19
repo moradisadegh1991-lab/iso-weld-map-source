@@ -22,7 +22,7 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  * only says who holds them. A form's designer sees only the workflows their
  * forms follow; the forms, the duties and the tree are the project manager's.
  */
-const blankDuty = { id: null, code: "", name: "", description: "", permissions: ["view"], roleId: null, active: true };
+const blankDuty = { id: null, code: "", name: "", description: "", permissions: ["view"], roleId: null, active: true, formRules: [] };
 
 export default function ReportSetup({ rolesOnly = false }) {
   const { projectId, call } = usePlatform();
@@ -94,7 +94,7 @@ export default function ReportSetup({ rolesOnly = false }) {
                   <td>{d.members.length}</td>
                   <td className="sm">{d.usedIn.join(" · ") || "—"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <button className="btn ghost sm" type="button" onClick={() => setNd({ id: d.id, code: d.code || "", name: d.name, description: d.description || "", permissions: d.permissions, roleId: d.roleId || "", active: d.active })}>{tr("dr.edit")}</button>
+                    <button className="btn ghost sm" type="button" onClick={() => setNd({ id: d.id, code: d.code || "", name: d.name, description: d.description || "", permissions: d.permissions, roleId: d.roleId || "", active: d.active, formRules: d.formRules || [] })}>{tr("dr.edit")}</button>
                     <button className="btn ghost sm" type="button" onClick={async () => { if (await ask(tr("tk.deleteMany", { n: 1 }))) await post({ kind: "duty-remove", id: d.id }); }}>{tr("dr.remove")}</button></td>
                 </tr>))}</tbody></table></TableKit>)}
           <Fold title={nd.id ? tr("rs.editDuty", { name: nd.name }) : tr("rs.newDuty")} open={nd.id ? true : undefined} onClose={() => setNd(blankDuty)}>
@@ -114,6 +114,7 @@ export default function ReportSetup({ rolesOnly = false }) {
               </div>
               <label>{tr("rs.active")} <select value={String(nd.active)} onChange={(e) => setNd({ ...nd, active: e.target.value === "true" })}><option value="true">{tr("tk.yes")}</option><option value="false">{tr("tk.no")}</option></select></label>
               <Rights value={nd.permissions} on={(p) => setNd({ ...nd, permissions: p })} data={data} perm={perm} tr={tr} label={tr("rs.dutyRights")} />
+              <DutyForms key={nd.id || "new"} data={data} roleId={nd.roleId ?? roleId} value={nd.formRules} onChange={(formRules) => setNd({ ...nd, formRules })} tr={tr} />
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button className="btn" type="submit">{tr("rs.saveDuty")}</button>
                 {nd.id && <button className="btn ghost" type="button" onClick={() => setNd(blankDuty)}>{tr("common.cancel")}</button>}</div>
@@ -451,6 +452,46 @@ function GroupDuties({ g, wf, data, post, perm, tr, secName }) {
           </form>)}
       </details>
     </div>
+  );
+}
+
+function DutyForms({ data, roleId, value, onChange, tr }) {
+  const [formId, setFormId] = useState("");
+  const contractId = data.roles.find((r) => r.id === roleId)?.contract_id;
+  const trees = Object.fromEntries(Object.entries(data.scope || {}).map(([key, rows]) =>
+    [key, rows.filter((n) => !contractId || n.contractId === contractId)]));
+  const available = data.types.filter((t) => !value.some((r) => r.formId === t.id));
+  const rowIds = new Set(Object.values(trees).flat().map((n) => n.id));
+  return (
+    <fieldset data-duty-forms>
+      <legend>{tr("rs.dutyForms")}</legend>
+      <p className="sm muted">{tr("rs.dutyFormsNote")}</p>
+      {value.map((rule) => {
+        const form = data.types.find((t) => t.id === rule.formId);
+        const missing = rule.rows.filter((id) => !rowIds.has(id));
+        return <div key={rule.formId}>
+          <span>{form ? `${form.code} · ${form.name}` : tr("rs.dutyMissingForm")}</span>
+          <button className="btn ghost sm" type="button" onClick={() => onChange(value.filter((r) => r !== rule))}>{tr("dr.remove")}</button>
+          {form?.code === "CR" && <ScopePicker value={rule.rows} trees={trees} tr={tr} on={(rows) =>
+            onChange(value.map((r) => r === rule ? { ...r, rows } : r))} />}
+          {missing.length > 0 && <div>
+            <span className="sm">{tr("rs.dutyMissingRows", { n: missing.length })}</span>
+            <button className="btn ghost sm" type="button" onClick={() => onChange(value.map((r) =>
+              r === rule ? { ...r, rows: r.rows.filter((id) => rowIds.has(id)) } : r))}>{tr("dr.remove")}</button>
+          </div>}
+        </div>;
+      })}
+      {available.length > 0 && <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <select aria-label={tr("rs.dutyPickForm")} value={formId} onChange={(e) => setFormId(e.target.value)}>
+          <option value="">{tr("rs.dutyPickForm")}</option>
+          {available.map((f) => <option key={f.id} value={f.id}>{f.code} · {f.name}</option>)}
+        </select>
+        <button type="button" className="btn ghost sm" disabled={!formId} onClick={() => {
+          onChange([...value, { formId, rows: [] }]);
+          setFormId("");
+        }}>{tr("rs.dutyAddForm")}</button>
+      </div>}
+    </fieldset>
   );
 }
 
