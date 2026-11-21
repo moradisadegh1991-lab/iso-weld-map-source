@@ -5,7 +5,8 @@ CREATE INDEX report_type_form_contract ON report_type(form_contract_id) WHERE fo
 -- Published definitions are intentionally readable across projects. Reports,
 -- membership, and workflow assignments stay in the consuming project.
 CREATE TABLE published_form (
-  type_id uuid PRIMARY KEY REFERENCES report_type(id) ON DELETE CASCADE,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type_id uuid NOT NULL UNIQUE REFERENCES report_type(id) ON DELETE CASCADE,
   project_id uuid NOT NULL REFERENCES project(id) ON DELETE CASCADE,
   code text NOT NULL UNIQUE,
   name text NOT NULL,
