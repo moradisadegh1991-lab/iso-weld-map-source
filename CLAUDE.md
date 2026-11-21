@@ -8,6 +8,8 @@ The engine rules and what counts as proof are in `.claude/skills/epc-platform/SK
 - Mark a PR ready and squash-merge **only when the owner says «مرج کن»**. Tell the owner what was and was not verified.
 - Schema changes are **additive migrations only** (`db/migrations/NNN_*.sql`). A new migration must be run on the server: say so in the PR.
 
+- Deploy the platform on the VPS. Keep application deployment, previews, and model relays independent of Vercel.
+
 ## Before opening a PR (`/verify` runs these)
 1. `npm run tiles:map` — whenever a page's API calls change (a hook does this after edits under `app/`, `components/`). `db:test` fails with «tile-apis.mjs is out of date» otherwise.
 2. `npx next build`

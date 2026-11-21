@@ -231,7 +231,7 @@ export default function Page() {
 
   /* One serverless invocation per pass. Passes run in parallel so total wall
      time is the slower of the two, not their sum — that is what keeps each
-     invocation inside Vercel's function duration limit. */
+     invocation inside the configured request deadline. */
   async function callPass(pass, images, attempt = 0, extra = {}, overrideModel) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 115000);
@@ -781,7 +781,7 @@ export default function Page() {
           </details>
 
           <ol className="how">
-            <li>تصویر در مرورگر به <b>یک نمای کامل + چهار کاشی هم‌پوشان</b> تقسیم می‌شود تا متن ریز BOM خوانده شود و حجم زیر سقف Vercel بماند.</li>
+            <li>تصویر در مرورگر به <b>یک نمای کامل + چهار کاشی هم‌پوشان</b> تقسیم می‌شود تا متن ریز BOM خوانده شود و حجم زیر سقف درخواست استخراج بماند.</li>
             <li>مدل فقط <b>داده خام</b> برمی‌گرداند: title block، BOM، و مختصات گره‌ها.</li>
             <li>موتور قطعی، take-out استاندارد B16.9 را اعمال و <b>سرجوش‌گذاری</b> را تولید می‌کند — نه مدل زبانی.</li>
             <li>سه چک متقاطع اجرا می‌شود؛ اگر نخواند، هشدار می‌بینید و می‌توانید JSON را اصلاح کنید.</li>

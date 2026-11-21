@@ -1,6 +1,5 @@
 /**
- * Anthropic relay — the same Vercel project as the Gemini relay, a second
- * function: the platform's server cannot reach api.anthropic.com from Iran.
+ * Anthropic relay between the application server and Anthropic's API.
  *
  *   platform server ──(x-relay-token)──▶ this relay ──(x-api-key)──▶ Anthropic
  *
@@ -13,13 +12,12 @@
  * nothing else of the Anthropic API (no batches, no files, no admin keys).
  * No request or answer body is logged or kept.
  *
- * Environment (Vercel → Settings → Environment Variables, marked Sensitive):
+ * Relay process environment:
  *   ANTHROPIC_API_KEY  the key from console.anthropic.com
  *   RELAY_TOKEN        shared with the Gemini relay and the platform server
  */
 import { timingSafeEqual } from "node:crypto";
-
-export const config = { maxDuration: 300 };
+import { isRetiredHostingEndpoint } from "../../../lib/llm/endpoints.mjs";
 
 // ANTHROPIC_UPSTREAM exists for the platform's own end-to-end drive (a stand-in); leave it unset
 const upstreamBase = () => process.env.ANTHROPIC_UPSTREAM || "https://api.anthropic.com/v1";
@@ -36,7 +34,7 @@ function sameSecret(given, expected) {
 export async function POST(request) {
   const { ANTHROPIC_API_KEY: key, RELAY_TOKEN: token } = process.env;
   // fails closed: a relay deployed without its two secrets opens for nobody
-  if (!key || !token) return fail(503, "relay not configured: set ANTHROPIC_API_KEY and RELAY_TOKEN on Vercel");
+  if (!key || !token) return fail(503, "relay not configured: set ANTHROPIC_API_KEY and RELAY_TOKEN in the relay environment");
   if (!sameSecret(request.headers.get("x-relay-token"), token)) return fail(401, "relay token missing or wrong");
 
   const path = new URL(request.url).searchParams.get("path") || "";
@@ -50,8 +48,10 @@ export async function POST(request) {
   const beta = request.headers.get("anthropic-beta");
   if (beta) headers["anthropic-beta"] = beta;
 
-  const upstream = await fetch(`${upstreamBase()}/messages`, {
-    method: "POST", headers, body: request.body, duplex: "half",
+  const base = upstreamBase();
+  if (isRetiredHostingEndpoint(base)) return fail(503, "retired relay upstream");
+  const upstream = await fetch(`${base}/messages`, {
+    method: "POST", redirect: "error", headers, body: request.body, duplex: "half",
   });
   // passed through as it comes, streamed; Anthropic's own status and error body included
   return new Response(upstream.body, {

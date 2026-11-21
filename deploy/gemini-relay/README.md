@@ -1,91 +1,22 @@
-# رلهٔ Gemini روی Vercel
+# رلهٔ مستقل Gemini و Anthropic
 
-سرور پلتفرم (مثلاً VPS در ایران) مستقیم به Gemini نمی‌رسد — گوگل می‌گوید «User location is not
-supported». این رله یک تابع Vercel است بین سرور و گوگل:
+رله روی سروری اجرا می‌شود که دسترسی مجاز به API ارائه‌دهنده دارد. کلید API روی همان میزبان نگهداری می‌شود. برنامهٔ اصلی تنها توکن رله را در هدر `x-relay-token` می‌فرستد.
 
-```
-سرور پلتفرم ──(x-relay-token)──▶ رله روی Vercel ──(x-goog-api-key)──▶ Gemini
-```
-
-- **کلید Gemini فقط روی Vercel است.** سرور پلتفرم فقط «توکن رله» را دارد که فقط همین رله را باز
-  می‌کند.
-- **(Gemini) فقط دو فراخوان رد می‌شود:** `models/<مدل>:generateContent` و `:streamGenerateContent` — نه
-  بارگذاری فایل، نه مدیریت کلید، نه چیز دیگری از API گوگل. با `ALLOWED_MODELS` مدل‌ها را هم محدود
-  کنید.
-- **بی‌تنظیم، بسته:** بدون `GEMINI_API_KEY` و `RELAY_TOKEN` به همه پاسخ ۵۰۳ می‌دهد؛ توکن غلط ۴۰۱.
-- بدنهٔ درخواست و پاسخ ذخیره یا لاگ نمی‌شود؛ پاسخ گوگل همان‌طور که می‌آید stream می‌شود.
-- حساب توکن روی سرور پلتفرم نگه داشته می‌شود (جدول `llm_usage`)، نه اینجا.
-
-## Claude از همین رله (Anthropic)
-
-Anthropic هم از IP ایران سرویس نمی‌دهد. همین پروژهٔ Vercel یک تابع دوم دارد (`api/anthropic.js`):
-`/v1/messages` را با کلید Anthropic که فقط روی Vercel است به `api.anthropic.com` می‌فرستد. فقط همین
-یک مسیر رد می‌شود (نه batch، نه files، نه کلیدها). **توکن همان `RELAY_TOKEN` است** — یک توکن برای هر
-دو رله.
-
-روی Vercel یک متغیر اضافه کنید (Settings → Environment Variables، Sensitive، همهٔ محیط‌ها):
-`ANTHROPIC_API_KEY` = کلید از console.anthropic.com. بعد Redeploy (یا با merge به master اگر پروژه به
-Git وصل است خودکار دوباره ساخته می‌شود). در سرور:
-
-```
-ANTHROPIC_BASE_URL=https://<رله>.vercel.app/v1
-ANTHROPIC_RELAY_TOKEN=<همان RELAY_TOKEN>
-```
-
-آزمون:
+روی میزبان رله، `RELAY_TOKEN` و دست‌کم یکی از `GEMINI_API_KEY` و `ANTHROPIC_API_KEY` را در محیط سرویس تعریف کنید. از ریشهٔ مخزن با Node.js 22 اجرا کنید.
 
 ```bash
-curl -s -X POST -H "content-type: application/json" -H "x-relay-token: <RELAY_TOKEN>" \
-  -H "anthropic-version: 2023-06-01" "https://<رله>.vercel.app/v1/messages" \
-  -d '{"model":"claude-haiku-4-5-20251001","max_tokens":16,"messages":[{"role":"user","content":"say ok"}]}'
+PORT=8787 node tools/relay-local.mjs
 ```
 
-## نصب (یک بار، از داشبورد Vercel)
+سرویس روی `127.0.0.1:8787` گوش می‌دهد. روی میزبان رله، پراکسی HTTPS مانند Caddy را به این پورت متصل کنید. مسیرهای لازم `/v1beta/*` برای Gemini و `/v1/messages` برای Anthropic هستند.
 
-1. Vercel → **Add New… → Project** → مخزن `iso-weld-map-source` را Import کنید.
-2. **Root Directory** را `deploy/gemini-relay` بگذارید؛ Framework Preset: **Other**. دکمهٔ Build را
-   دست نزنید (ساختنی ندارد).
-3. **Environment Variables** (نوع Sensitive):
-   - `GEMINI_API_KEY` — کلید Google AI Studio
-   - `RELAY_TOKEN` — یک رشتهٔ تصادفی بلند؛ مثلاً خروجی `openssl rand -hex 32`
-   - `ALLOWED_MODELS` (اختیاری) — مثلاً `gemini-3.8-flash,gemini-4-argon,gemini-3.5-flash-lite`
-4. **Deploy**. نشانی پروژه را بردارید، مثلاً `https://epc-gemini-relay.vercel.app`.
-5. اگر Deployment Protection روشن است، برای این پروژه خاموشش کنید (Settings → Deployment
-   Protection) — رله خودش با توکن قفل است، و سرور نمی‌تواند از صفحهٔ ورود Vercel رد شود.
+در VPS پلتفرم:
 
-بی‌Vercel CLI هم می‌شود: `npx vercel deploy --prod` داخل همین پوشه.
-
-## روی سرور پلتفرم (`/etc/epc/epc.env`)
-
-```
-LLM_PROVIDER=gemini
-GEMINI_BASE_URL=https://epc-gemini-relay.vercel.app/v1beta
-GEMINI_RELAY_TOKEN=<همان RELAY_TOKEN>
+```dotenv
+GEMINI_BASE_URL=https://relay.example.com/v1beta
+GEMINI_RELAY_TOKEN=<RELAY_TOKEN>
+ANTHROPIC_BASE_URL=https://relay.example.com/v1
+ANTHROPIC_RELAY_TOKEN=<RELAY_TOKEN>
 ```
 
-`GEMINI_API_KEY` اینجا لازم نیست (و اگر باشد، به رله فرستاده نمی‌شود). سپس `sudo epc restart` و
-`sudo epc doctor`.
-
-آزمون سریع از خود سرور:
-
-```bash
-curl -s -X POST -H "content-type: application/json" -H "x-relay-token: <RELAY_TOKEN>" \
-  "https://epc-gemini-relay.vercel.app/v1beta/models/gemini-3.8-flash:generateContent" \
-  -d '{"contents":[{"role":"user","parts":[{"text":"say ok"}]}]}'
-```
-
-## محدودیت‌ها
-
-- **حجم درخواست:** سقف بدنهٔ تابع Vercel ۴٫۵ مگابایت است؛ پلتفرم تصویرهای هر پاس را به ۴ مگابایت
-  محدود کرده (`MAX_IMAGE_BYTES` در `app/api/extract`)، پس از سقف رد نمی‌شود.
-- **زمان:** `maxDuration` ۳۰۰ ثانیه است (طرح Hobby با Fluid compute همین را می‌دهد).
-- **دسترسی از ایران:** دامنهٔ `*.vercel.app` گاهی از داخل ایران فیلتر است. اگر سرور به رله نرسید،
-  یک دامنهٔ اختصاصی به همین پروژه وصل کنید و همان را در `GEMINI_BASE_URL` بگذارید.
-- **منطقه:** `iad1` (آمریکا) — گوگل آنجا سرویس می‌دهد.
-
-## آزمون
-
-`db/test/llm.mjs`: رلهٔ بی‌کلید یا بی‌توکن ۵۰۳؛ توکن غلط یا بی‌توکن ۴۰۱ و گوگل صدا زده نمی‌شود؛
-هر مسیری جز generateContent ۴۰۴؛ مدل خارج از `ALLOWED_MODELS` ۴۰۳؛ درخواست درست با کلید گوگل و
-`alt=sse` می‌رود، توکن رله جلوتر نمی‌رود، و پاسخ و خطای گوگل عیناً برمی‌گردد. حذف بررسی توکن
-آزمون را قرمز کرد.
+فقط متغیرهای سرویس‌هایی را که به آن‌ها نیاز دارید تنظیم کنید. نام دامنهٔ نمونه را با نشانی واقعی رله جایگزین کنید.
