@@ -5,7 +5,8 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import * as pl from "../../../lib/db/repos/print-layout.mjs";
-import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
+import { assertContractAccess, visibleContracts } from "../../../lib/db/repos/users.mjs";
+import { formAllowed } from "../../../lib/platform/tiles.mjs";
 import * as rp from "../../../lib/db/repos/reports.mjs";
 import * as forms from "../../../lib/db/repos/forms.mjs";
 import { columnTotals } from "../../../lib/reports/forms.mjs";
@@ -44,7 +45,9 @@ export async function GET(request) {
       const { rows: [proj] } = await db.query("SELECT code, name FROM project WHERE id = $1", [projectId]);
       const reportId = url.searchParams.get("reportId");
       if (reportId) {
-        const { rows: [target] } = await db.query("SELECT contract_id FROM report WHERE id = $1 AND project_id = $2", [reportId, projectId]);
+        const { rows: [target] } = await db.query(`SELECT COALESCE(r.contract_id, t.form_contract_id) AS contract_id, t.code, t.form IS NOT NULL AS designed
+            FROM report r JOIN report_type t ON t.id = r.report_type_id WHERE r.id = $1 AND r.project_id = $2`, [reportId, projectId]);
+        if (target?.designed && !formAllowed(membership, target.code)) return Response.json({ error: "not found" }, { status: 404 });
         if (target?.contract_id) await assertContractAccess(db, { projectId, contractId: target.contract_id, userId: user.id, role: membership.role });
         const v = await rp.reportView(db, { projectId, reportId, userId: user.id });
         const lay = await pl.currentLayout(db, { projectId, reportTypeId: v.report.report_type_id });
@@ -54,8 +57,12 @@ export async function GET(request) {
           layout: lay.layout, layoutVersion: lay.version });
       }
       const code = url.searchParams.get("typeCode") || "DR";
-      const { rows: [type] } = await db.query("SELECT id, code, name, form, section FROM report_type WHERE project_id = $1 AND code = $2", [projectId, code]);
-      const { rows: types } = await db.query("SELECT code, name FROM report_type WHERE project_id = $1 AND active ORDER BY form IS NOT NULL, code", [projectId]);
+      const { rows: [type] } = await db.query("SELECT id, code, name, form, section, form_contract_id FROM report_type WHERE project_id = $1 AND code = $2", [projectId, code]);
+      const contracts = await visibleContracts(db, { projectId, userId: user.id, role: membership.role });
+      const ids = contracts.map((contract) => contract.id);
+      const { rows: types } = await db.query(`SELECT code, name FROM report_type WHERE project_id = $1 AND active
+          AND (form_contract_id IS NULL OR form_contract_id = ANY($2::uuid[])) ORDER BY form IS NOT NULL, code`, [projectId, ids]);
+      if (type?.form_contract_id && !ids.includes(type.form_contract_id)) return Response.json({ error: "not found" }, { status: 404 });
       if (!type) return Response.json({ type: null, types, choices: CHOICES });
       const lay = await pl.currentLayout(db, { projectId, reportTypeId: type.id });
       const { rows: [last] } = await db.query(
@@ -88,6 +95,7 @@ export async function POST(request) {
         // a form's designer lays out their own form's print
         const t = await forms.typeOf(db, { projectId, reportTypeId: body.reportTypeId });
         if (!t?.form || !forms.mayDesign(membership, t.section)) assertCan(membership, ACTIONS.MANAGE_MEMBERS);
+        if (t?.form_contract_id) await assertContractAccess(db, { projectId, contractId: t.form_contract_id, userId: user.id, role: membership.role, need: "manage" });
       }
       if (kind === "logo") return Response.json({ ok: true, logo: await pl.saveLogo(db, { projectId, name: body.name, bytes: file, store, userId: user.id }) });
       if (kind === "layout") return Response.json({ ok: true, ...(await pl.saveLayout(db, { projectId, reportTypeId: body.reportTypeId, layout: body.layout, userId: user.id })) });

@@ -85,7 +85,7 @@ import { useCustomColumns, CustomColumns, showCustom } from "./customColumns";
  * dialog opens. Leaving it changed asks whether to save or discard. With
  * `onAdd`, a «+» under the last row opens a new row the same way.
  */
-export default function TableKit({ children, name = "table", min = 1, onEdit, onDelete, canEdit, canDelete, checkDelete, view, editLabel, deleteLabel, onPaste, rowEdit }) {
+export default function TableKit({ children, name = "table", min = 1, onEdit, onDelete, canEdit, canDelete, checkDelete, view, editLabel, deleteLabel, onPaste, rowEdit, onRowNavigate }) {
   const { t, num, prefs, dir } = usePrefs();
   editLabel = editLabel || t("tk.edit");
   deleteLabel = deleteLabel || t("tk.delete");
@@ -687,6 +687,25 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   const title = cells.find(([, v]) => v)?.[1] || t("tk.row");
   const tableKeys = (e) => {
     if (e.defaultPrevented || e.repeat || e.nativeEvent.isComposing || busy || confirmation || dialog || leave) return;
+    if ((e.ctrlKey || e.metaKey) && ["PageUp", "PageDown"].includes(e.key)) {
+      const rows = [...(box.current?.querySelector("table")?.tBodies[0]?.rows || [])]
+        .filter((r) => !r.hidden && !r.classList.contains("tk-grp") && !r.classList.contains("tk-edit") && !isDetail(r) && r.getClientRects().length);
+      const current = e.target.closest("tbody tr:not(.tk-edit)") || sel?.row;
+      const index = rows.indexOf(current);
+      e.preventDefault();
+      const next = rows[index + (e.key === "PageDown" ? 1 : -1)];
+      if (index !== -1 && next) guard(() => {
+        if (st.current.selRow) delete st.current.selRow.dataset.tkSel;
+        next.dataset.tkSel = "";
+        st.current.selRow = next;
+        setSel({ row: next, key: next.dataset.key || null });
+        if (rowEdit && mayEditRow(next)) openEdit(next);
+        onRowNavigate?.(next.dataset.key);
+        box.current?.closest(".tk")?.focus({ preventScroll: true });
+        next.scrollIntoView({ block: "nearest" });
+      });
+      return;
+    }
     if (e.target.closest("input, textarea, select, [contenteditable=true]") || edDirty) return;
     const targets = picked();
     if (!targets.length && sel?.row && mainRows().includes(sel.row)) targets.push(sel.row);

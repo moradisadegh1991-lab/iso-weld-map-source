@@ -143,4 +143,21 @@ test("through the routes: the desk is one's own; a viewer replies; a notificatio
   equal((await route.GET(req("viewer", `/api/notifications?projectId=${P}&file=${fid}`))).status, 200);
 });
 
+test("the desk exposes the request workflow and editors receive an alert when editing first opens", async () => {
+  await as(async () => {
+    const [site, review] = await rp.workflowOf(db, { projectId: P, reportTypeId: T.id });
+    await rp.setGroupMember(db, { projectId: P, groupId: review.groups[0].id, userId: U.other.id, permissions: ["view", "edit"] });
+    const report = await rp.createReport(db, { projectId: P, reportTypeId: T.id, reportDate: day(1), userId: U.maker.id });
+    await rp.signReport(db, { projectId: P, reportId: report.id, groupId: site.groups[0].id, userId: U.maker.id });
+    await rp.approveStage(db, { projectId: P, reportId: report.id, userId: U.maker.id });
+    const deskModule = await import("../../lib/db/repos/desk.mjs");
+    const requests = await deskModule.deskOf(db, { projectId: P, userId: U.other.id });
+    const editable = requests.active.find((row) => row.id === report.id);
+    assert(editable.editable && !editable.acted);
+    assert(requests.types.some((node) => node.children.some((child) => child.code === T.code)));
+    const notification = (await nt.notificationsOf(db, { projectId: P, userId: U.other.id })).inbox;
+    assert(notification.some((row) => row.title.includes(report.report_no)));
+  });
+});
+
 await run();

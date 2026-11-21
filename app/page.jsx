@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../lib/client/platform.mjs";
-import { navigationFor, narrowed } from "../lib/platform/navigation.mjs";
+import { navigationFor, narrowed, formsForContract } from "../lib/platform/navigation.mjs";
 import { can } from "../lib/authz.mjs";
 import { usePrefs } from "../lib/client/prefs.mjs";
 import { localizeNav } from "../lib/i18n/nav.mjs";
@@ -17,10 +17,10 @@ import { localizeNav } from "../lib/i18n/nav.mjs";
  * Thursday, and each one is a link to the page that explains it.
  */
 export default function Home() {
-  const { project, role, projectId } = usePlatform();
+  const { project, role, projectId, contractId } = usePlatform();
   const membership = { role, areas: project?.areas || [], tiles: project?.tiles || [], party: project?.inspection_party || null };
   const { lang } = usePrefs();
-  const nav = localizeNav(navigationFor(membership, can, { forms: project?.forms || [] }), lang);
+  const nav = localizeNav(navigationFor(membership, can, { forms: formsForContract(project?.forms, contractId) }), lang);
   // a member narrowed to tiles sees their tiles, not the project's numbers
   const mine = narrowed(membership);
 

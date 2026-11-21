@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authenticate, errorResponse } from "../../../../lib/server/session.mjs";
-import { listProjectsForUser } from "../../../../lib/db/repos/projects.mjs";
+import { listProjectsForUser, effectiveTiles } from "../../../../lib/db/repos/projects.mjs";
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { visibleContracts } from "../../../../lib/db/repos/users.mjs";
 import { formTypes } from "../../../../lib/db/repos/forms.mjs";
@@ -19,9 +19,12 @@ export async function GET(request) {
     const projects = await listProjectsForUser(db, user.id);
     for (const p of projects) {
       await withProject(db, p.id, async () => {
+        p.tiles = await effectiveTiles(db, { projectId: p.id, userId: user.id, role: p.role, tiles: p.tiles });
         p.contracts = await visibleContracts(db, { projectId: p.id, userId: user.id, role: p.role });
         // the project's handover forms: each a tile of the menu and the launchpad
-        p.forms = (await formTypes(db, { projectId: p.id })).filter((f) => f.active).map((f) => ({ code: f.code, name: f.name, section: f.section }));
+        p.forms = (await formTypes(db, { projectId: p.id, published: true }))
+          .filter((f) => f.active && (!f.form_contract_id || p.contracts.some((c) => c.id === f.form_contract_id)))
+          .map((f) => ({ code: f.code, name: f.name, section: f.section, form_contract_id: f.form_contract_id, form_navigation: f.form_navigation }));
       });
     }
     // the person's own settings (078): the header login path does not load them with the user

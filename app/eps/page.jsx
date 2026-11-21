@@ -158,7 +158,7 @@ export default function EpsPage() {
   const may = data.may.edit;
   const toolbar = may && <>
     {data.may.contractWide && <button className="btn sm" type="button" data-new-pms onClick={() => { setAdding(true); setSel(null); }}>{t("ep.bd.newPms")}</button>}
-    {(data.may.contractWide || data.pms.some((p) => p.active !== false && !p.partialWbs)) && <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.some((p) => p.active !== false && !p.partialWbs) ? "replace" : "new", pmsId: data.pms.find((p) => p.active !== false && !p.partialWbs)?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button>}</>;
+    {data.may.import !== false && (data.may.contractWide || data.pms.some((p) => p.active !== false && !p.partialWbs)) && <button className="btn ghost sm" type="button" data-import-open onClick={() => setImp({ mode: data.pms.some((p) => p.active !== false && !p.partialWbs) ? "replace" : "new", pmsId: data.pms.find((p) => p.active !== false && !p.partialWbs)?.id || "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button>}</>;
   const pickedPms = sel?.kind === "node" ? data.pms.find((p) => p.id === sel.id) : null;
   const pickedVer = sel?.kind === "act" ? data.pms.flatMap((p) => p.versions.map((v) => ({ v, p }))).find((x) => x.v.id === sel.id) : null;
   return (
@@ -174,7 +174,7 @@ export default function EpsPage() {
         <ul className="sm" style={{ maxHeight: 220, overflowY: "auto" }}>{notes.map((x, i) => <li key={i} dir="auto">{x}</li>)}</ul>
         <button type="button" className="btn ghost sm" onClick={() => setNotes([])}>{t("ep.close")}</button></div>}
       {data.pms.length === 0 && !adding ? <div className="card"><p className="empty-note">{t("ep.bd.none")}</p>{data.may.contractWide && <p className="row" style={{ gap: 6 }}><button className="btn" type="button" data-new-pms onClick={() => setAdding(true)}>{t("ep.bd.newPms")}</button>
-        <button className="btn ghost" type="button" data-import-open onClick={() => setImp({ mode: "new", pmsId: "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button></p>}</div> : <>
+        {data.may.import !== false && <button className="btn ghost" type="button" data-import-open onClick={() => setImp({ mode: "new", pmsId: "", pmsCode: "", title: "", versionCode: "", fileKind: "mspdi", file: null })}>{t("ep.bd.importOpen")}</button>}</p>}</div> : <>
         <div style={{ height }} data-eps-tree>
           <ActivityGrid data={tree} columns={columns} defaultCols={DEFAULT_COLS} storeKey="p6-eps" customKey="eps-board" selected={sel?.id}
             onSelect={(r) => { setSel(r); setAdding(false); }} toolbar={toolbar} ops={ops} />

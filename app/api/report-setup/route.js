@@ -1,6 +1,9 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { tileCatalog, cleanTiles } from "../../../lib/platform/tiles.mjs";
+import { SECTIONS } from "../../../lib/platform/navigation.mjs";
+import { contractAccess } from "../../../lib/db/repos/users.mjs";
 import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
@@ -24,14 +27,16 @@ export async function GET(request) {
     const url = new URL(request.url);
     const projectId = url.searchParams.get("projectId");
     if (!projectId) return Response.json({ error: "projectId is required" }, { status: 400 });
-    const { db, membership } = await authenticate(request, { projectId });
+    const { db, user, membership } = await authenticate(request, { projectId });
     if (!membership) return Response.json({ error: "not found" }, { status: 404 });
     const admin = can(membership, ACTIONS.MANAGE_MEMBERS);
     return await withProject(db, projectId, async () => {
       const users = (await listProjectUsers(db, { projectId }))
         .map((u) => ({ id: u.user_id, name: u.display_name || u.email, email: u.email, party: u.inspection_party, role: u.role, active: u.is_active }));
       const all = await rp.reportTypes(db, { projectId });
-      const types = all.filter((t) => admin || (t.form && forms.mayDesign(membership, t.section)));
+      const designable = await Promise.all(all.map(async (t) => admin || (t.form && forms.mayDesign(membership, t.section)
+        && (!t.form_contract_id || await contractAccess(db, { projectId, contractId: t.form_contract_id, userId: user.id, role: membership.role })))));
+      const types = all.filter((_, index) => designable[index]);
       if (!admin && !types.length) throw forbidden();
       // the workflow tree: an admin sees it whole; a form's designer, the workflows their forms follow
       const mine = new Set(types.map((t) => t.workflow_id).filter(Boolean));
@@ -41,6 +46,7 @@ export async function GET(request) {
       const scope = url.searchParams.get("trees") ? await wfs.scopeTrees(db, { projectId }) : null;
       const contracts = admin ? (await db.query("SELECT id, contract_no, title FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId])).rows : [];
       return Response.json({ types, users, permissions: PERMISSIONS, workflows, duties: admin ? await wfs.duties(db, { projectId }) : (await wfs.duties(db, { projectId })).map((d) => ({ ...d, members: [], formRules: [], pmsScope: [], planningForms: {} })),
+        tileCatalog: admin ? tileCatalog(SECTIONS, (await forms.formTypes(db, { projectId, published: true })).filter((form) => form.active)) : [],
         roles: admin ? await wfs.roles(db, { projectId }) : [], contracts,
         sections: wfs.FORM_PARTS, scope, may: { types: admin, tree: admin, duties: admin } });
     });
@@ -76,8 +82,16 @@ export async function POST(request) {
         const ts = await forms.typesOf(db, { projectId, reportTypeId: body.reportTypeId || null, workflowId: body.workflowId || null,
           stageId: body.stageId || null, groupId: body.groupId || null, pageId: kind === "page-remove" ? body.id : null });
         if (!ts.length || !ts.every((t) => t.form && forms.mayDesign(membership, t.section))) throw forbidden();
+        for (const t of ts) {
+          if (t.form_contract_id && !await contractAccess(db, { projectId, contractId: t.form_contract_id, userId: user.id, role: membership.role })) throw forbidden();
+        }
       }
       const a = { ...body, projectId };
+      if (kind === "duty" && body.tiles !== undefined) {
+        const found = cleanTiles(body.tiles, (await forms.formTypes(db, { projectId, published: true })).filter((form) => form.active));
+        if (found.unknown.length) return Response.json({ error: "تایل ناشناخته است." }, { status: 400 });
+        a.tiles = found.tiles;
+      }
       const row = await {
         type: () => rp.upsertReportType(db, a),
         template: async () => (await rp.applyDailyTemplate(db, a)).type,

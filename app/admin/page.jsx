@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import { ROLES, ACTIONS, can } from "../../lib/authz.mjs";
 import { AREAS } from "../../lib/platform/areas.mjs";
-import ReportSetup from "../../components/workflow/ReportSetup";
+import ReportSetup, { UserDuties } from "../../components/workflow/ReportSetup";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 
@@ -245,43 +245,6 @@ function ContractMembers({ data, post }) {
   );
 }
 
-/**
- * The tiles a member is given, as on the launchpad: grouped, one per page or
- * form. None ticked: the member's role decides, as before. Some ticked: the
- * member sees only those tiles, and the server answers only what those pages
- * call — reading included.
- */
-function TilePicker({ m, catalog = [], post }) {
-  const [tiles, setTiles] = useState(m.tiles || []);
-  const flip = (h) => setTiles(tiles.includes(h) ? tiles.filter((x) => x !== h) : [...tiles, h]);
-  const changed = JSON.stringify([...tiles].sort()) !== JSON.stringify([...(m.tiles || [])].sort());
-  return (
-    <fieldset style={{ border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 12px", margin: 0 }} data-tile-picker={m.user_id}>
-      <legend className="sm muted" style={{ padding: "0 6px" }}>تایل‌های دسترسی ({tiles.length ? `${tiles.length} تایل` : "همهٔ صفحه‌های نقش"})</legend>
-      {m.role === "admin" ? <p className="sm muted">مدیر پروژه به همهٔ تایل‌ها دسترسی دارد و محدود نمی‌شود.</p> : <>
-        <p className="sm muted">هیچ تایلی انتخاب نشود: نقش کاربر تعیین می‌کند. با انتخاب تایل‌ها، کاربر فقط همان‌ها را می‌بیند و سرور هم به چیزی بیرون از آن‌ها (حتی خواندن) پاسخ نمی‌دهد.
-          میز کار، امضای من و تغییر رمز همیشه می‌ماند.</p>
-        {catalog.map((g) => (
-          <details key={g.group} className="inlinefold" open={g.sections.some((sec) => sec.tiles.some((t) => tiles.includes(t.href)))}>
-            <summary>{g.group} <span className="muted sm">({g.sections.flatMap((x) => x.tiles).filter((t) => tiles.includes(t.href)).length})</span></summary>
-            {g.sections.map((sec) => (
-              <div key={sec.key} style={{ margin: "4px 0 8px" }}>
-                <b className="sm">{sec.icon} {sec.title}</b>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {sec.tiles.map((t) => (
-                    <label key={t.href} className="sm" style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                      <input type="checkbox" checked={tiles.includes(t.href)} onChange={() => flip(t.href)} data-tile={t.href} />{t.form ? "⇄ " : ""}{t.title}</label>))}
-                </div>
-              </div>))}
-          </details>))}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" type="button" disabled={!changed} onClick={() => post({ kind: "tiles", userId: m.user_id, tiles })}>ذخیرهٔ تایل‌ها</button>
-          {tiles.length > 0 && <button className="btn ghost" type="button" onClick={() => setTiles([])}>برداشتن همهٔ محدودیت‌ها</button>}
-        </div></>}
-    </fieldset>
-  );
-}
-
 function MemberPanel({ m, data, me, post, setLink, onClose }) {
   const [f, setF] = useState({ role: m.role, areas: m.areas, party: m.inspection_party || "" });
   const dev = data.iAmDeveloper;
@@ -294,7 +257,7 @@ function MemberPanel({ m, data, me, post, setLink, onClose }) {
         <PartySelect id={`p-${m.user_id}`} value={f.party} on={(party) => setF({ ...f, party })} />
       </div>
       <AreaPicker value={f.areas} on={(areas) => setF({ ...f, areas })} disabled={f.role === "admin"} />
-      <TilePicker m={m} catalog={data.tileCatalog} post={post} />
+      <UserDuties key={m.user_id} userId={m.user_id} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button className="btn" onClick={() => post({ kind: "update", userId: m.user_id, ...f, party: f.party || null }, onClose)}>ذخیرهٔ تغییرات</button>
         {m.is_active && (

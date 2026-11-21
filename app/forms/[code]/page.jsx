@@ -26,8 +26,8 @@ function Input({ f, value, on, id }) {
 
 export default function FormReportsPage() {
   const { code } = useParams();
-  const { projectId, call } = usePlatform();
-  const { data, error, reload } = useProjectData((id) => `/api/forms?projectId=${id}&code=${encodeURIComponent(code)}`, [code]);
+  const { projectId, contractId, call, reload: reloadShell } = usePlatform();
+  const { data, error, reload } = useProjectData((id) => `/api/forms?projectId=${id}&code=${encodeURIComponent(code)}&contractId=${contractId}`, [code, contractId]);
   const [openId, setOpenId] = useState(null);
   // a request named in the link (the desk's «open», owner's requirements 2026-10-22, item 14) opens at once
   useEffect(() => { const r = new URLSearchParams(window.location.search).get("report"); if (r) setOpenId(r); }, []);
@@ -36,7 +36,7 @@ export default function FormReportsPage() {
   useEffect(() => { const id = new URLSearchParams(window.location.search).get("id"); if (id) setOpenId(id); }, []);
   async function post(body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call("/api/forms", { method: "POST", body: JSON.stringify({ projectId, code, ...body }) }); reload(); if (done) setOk(done(r)); return r; }
+    try { const r = await call("/api/forms", { method: "POST", body: JSON.stringify({ projectId, contractId, code, ...body }) }); reload(); if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; }
   }
   if (error) return <p className="err">{error}</p>;
@@ -48,9 +48,12 @@ export default function FormReportsPage() {
         <span className="sub"><span className="mono">{T.code}</span> · {data.labels.sections[T.section]} · گردش کار: {data.stages.map((s) => s.name).join(" ← ")}</span></div>
       {!openId && msg && <p className="err" role="alert">{msg}</p>}
       {!openId && ok && <p className="okmsg" role="status">{ok}</p>}
-      {openId ? <ReportView projectId={projectId} id={openId} call={call} users={data.users} close={() => { setOpenId(null); reload(); }} />
+      {openId ? <ReportView key={`${contractId}:${openId}`} projectId={projectId} contractId={contractId} id={openId} call={call} users={data.users} close={() => { setOpenId(null); reload(); }} />
         : <>
-          {data.may.create ? <NewReport T={T} projectId={projectId} code={code} call={call} post={post} open={setOpenId} />
+          {T.template && data.may.install && <button className="btn" type="button" onClick={async () => {
+            if (await post({ kind: "install-type" }, () => "فرم در این پروژه فعال شد. گردش کار و اعضا را در همین پروژه تعیین کنید.")) reloadShell();
+          }}>فعال‌سازی فرم سراسری در این پروژه</button>}
+          {data.may.create ? <NewReport T={T} projectId={projectId} contractId={contractId} code={code} call={call} post={post} open={setOpenId} />
             : <p className="sm muted">ساخت گزارش این فرم با اعضای مرحلهٔ اول گردش کار آن است که حق «ایجاد گزارش» دارند.</p>}
           <div className="card">
             <h2>گزارش‌ها</h2>
@@ -67,14 +70,14 @@ export default function FormReportsPage() {
   );
 }
 
-function NewReport({ T, projectId, code, call, post, open }) {
+function NewReport({ T, projectId, contractId, code, call, post, open }) {
   const def = T.form;
   const [f, setF] = useState({ reportDate: localToday(), title: "", header: {}, fromWork: def.source === "claims" });
   const [work, setWork] = useState(null);
   useEffect(() => {
     if (!f.fromWork || !f.reportDate) { setWork(null); return; }
-    call(`/api/forms?projectId=${projectId}&code=${encodeURIComponent(code)}&work=${f.reportDate}`).then((r) => setWork(r.work)).catch(() => setWork(null));
-  }, [f.fromWork, f.reportDate, projectId, code, call]);
+    call(`/api/forms?projectId=${projectId}&code=${encodeURIComponent(code)}&contractId=${contractId}&work=${f.reportDate}`).then((r) => setWork(r.work)).catch(() => setWork(null));
+  }, [f.fromWork, f.reportDate, projectId, contractId, code, call]);
   return (
     <form className="card" onSubmit={async (e) => {
       e.preventDefault();
@@ -99,18 +102,18 @@ function NewReport({ T, projectId, code, call, post, open }) {
   );
 }
 
-function ReportView({ projectId, id, call, users, close }) {
+function ReportView({ projectId, contractId, id, call, users, close }) {
   const [v, setV] = useState(null);
   const [err, setErr] = useState(null);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const [draft, setDraft] = useState(null);
   const [tab, setTab] = useState("content");
-  const load = () => call(`/api/forms?projectId=${projectId}&id=${id}`).then((x) => { setV(x); setDraft(null); }).catch((e) => setErr(e.message));
+  const load = () => call(`/api/forms?projectId=${projectId}&id=${id}&contractId=${contractId}`).then((x) => { setV(x); setDraft(null); }).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   async function post(body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call("/api/forms", { method: "POST", body: JSON.stringify({ projectId, reportId: id, ...body }) }); await load(); if (done) setOk(done(r)); return r; }
+    try { const r = await call("/api/forms", { method: "POST", body: JSON.stringify({ projectId, contractId, reportId: id, ...body }) }); await load(); if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; }
   }
   if (err) return <p className="err">{err}</p>;
