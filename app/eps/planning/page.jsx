@@ -48,7 +48,9 @@ export default function PlanningPage() {
 
   async function post(body, done, url = "/api/eps/planning") {
     setMsg(null); setOk(null); setBusy(true);
-    try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, ...body }) }); tree.reload(); rows.reload(); history.reload(); reloadBoard(); if (done) setOk(done(r)); return r; }
+    try { const r = await call(url, { method: "POST", body: JSON.stringify({ projectId, ...body }) }); tree.reload(); rows.reload(); history.reload();
+      if (body.kind !== "plan-edit") reloadBoard();
+      if (done) setOk(done(r)); return r; }
     catch (e) { setMsg(e.message); return null; } finally { setBusy(false); }
   }
   const add = (ids) => post({ kind: "plan-add", versionId, activityIds: ids, ...f },
