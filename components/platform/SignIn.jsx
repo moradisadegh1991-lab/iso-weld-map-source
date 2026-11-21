@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
+import styles from "./SignIn.module.css";
 import { LANGS } from "../../lib/i18n/index.mjs";
 
 /**
@@ -17,6 +18,7 @@ export default function SignIn() {
   const { t, lang, setPref } = usePrefs();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(false);
@@ -41,6 +43,7 @@ export default function SignIn() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || t("signin.status", { n: res.status }));
       await reload();
+      setBusy(false);
     } catch (e2) {
       setErr(e2.message);
       setBusy(false);
@@ -60,68 +63,58 @@ export default function SignIn() {
     setBusy(false);
   }
 
-  if (forgot) {
-    return (
-      <div className="signin">
-        <form onSubmit={askReset}>
-          <div className="mark">EPC&nbsp;PLATFORM</div>
-          <LangPick lang={lang} setPref={setPref} />
-          <h1>{t("signin.forgotTitle")}</h1>
-          <p className="muted sm">{t(via === "email" ? "signin.forgotHelpMail" : "signin.forgotHelp")}</p>
-          <div className="field">
-            <label htmlFor="forgot-login">{t("signin.login")}</label>
-            <input id="forgot-login" type="text" autoComplete="username" required value={email} onChange={(e) => { setEmail(e.target.value); setSent(null); }} dir="ltr" />
-          </div>
-          {err && <p className="err" role="alert">{err}</p>}
-          {sent && <p className="okmsg" role="status">{sent}</p>}
-          <button className="btn" type="submit" disabled={busy || !email || !!sent}>{busy ? t("signin.sending") : t("signin.sendReset")}</button>
-          <button className="btn ghost" type="button" onClick={() => { setForgot(false); setErr(null); setSent(null); }}>{t("signin.back")}</button>
-        </form>
-      </div>
-    );
-  }
-
   return (
-    <div className="signin">
-      <form onSubmit={submit}>
-        <div className="mark">EPC&nbsp;PLATFORM</div>
-        <LangPick lang={lang} setPref={setPref} />
-        <h1>{t("signin.title")}</h1>
-
-        <div className="field">
-          <label htmlFor="email">{t("signin.login")}</label>
-          <input id="email" type="text" autoComplete="username" required
-                 value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" />
+    <main className={styles.screen}>
+      <section className={styles.panel} aria-labelledby="signin-title">
+        <header className={styles.top}>
+          <div className={styles.brand}><img src="/icons/icon-192.png" alt="" width="36" height="36" /><b dir="ltr">EPC Platform</b></div>
+          <LangPick lang={lang} setPref={setPref} />
+        </header>
+        <div className={styles.content}>
+          <h1 id="signin-title">{t(forgot ? "signin.forgotTitle" : "signin.title")}</h1>
+          <p className={styles.intro}>{t(forgot ? (via === "email" ? "signin.forgotHelpMail" : "signin.forgotHelp") : "signin.intro")}</p>
+          <form className={styles.form} onSubmit={forgot ? askReset : submit} aria-busy={busy}>
+            <div className="field">
+              <label htmlFor={forgot ? "forgot-login" : "email"}>{t("signin.login")}</label>
+              <input key={forgot ? "reset" : "signin"} id={forgot ? "forgot-login" : "email"} type="text"
+                autoComplete="username" autoCapitalize="none" spellCheck={false} required value={email} dir="ltr"
+                onChange={(e) => { setEmail(e.target.value); setSent(null); }} />
+            </div>
+            {!forgot && <div className="field">
+              <label htmlFor="password">{t("signin.password")}</label>
+              <div className={styles.password}>
+                <input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password"
+                  required value={password} onChange={(e) => setPassword(e.target.value)} dir="ltr" />
+                <button type="button" className={styles.visibility} onClick={() => setShowPassword((v) => !v)}>
+                  {t(showPassword ? "signin.hidePassword" : "signin.showPassword")}
+                </button>
+              </div>
+            </div>}
+            {err && <p className={styles.error} role="alert">{err}</p>}
+            {sent && <p className={styles.status} role="status">{sent}</p>}
+            <button className={styles.submit} type="submit" disabled={busy || !email.trim() || (forgot ? !!sent : !password)}>
+              {t(forgot ? (busy ? "signin.sending" : "signin.sendReset") : (busy ? "signin.submitting" : "signin.submit"))}
+            </button>
+            <button className={styles.secondary} type="button" disabled={busy} onClick={() => {
+              setForgot(!forgot); setErr(null); setSent(null); setShowPassword(false);
+            }}>{t(forgot ? "signin.back" : "signin.forgot")}</button>
+          </form>
         </div>
-
-        <div className="field">
-          <label htmlFor="password">{t("signin.password")}</label>
-          <input id="password" type="password" autoComplete="current-password" required
-                 value={password} onChange={(e) => setPassword(e.target.value)} dir="ltr" />
-        </div>
-
-        {err && <p className="err" role="alert">{err}</p>}
-
-        <button className="btn" type="submit" disabled={busy || !email || !password}>
-          {busy ? t("signin.submitting") : t("signin.submit")}
-        </button>
-
-        <button className="btn ghost" type="button" onClick={() => { setForgot(true); setErr(null); setSent(null); setBusy(false); }}>{t("signin.forgot")}</button>
-
-        <p className="muted sm">
-          {t("signin.noAccount", { cmd: "\u2068npm run auth:admin\u2069" })}
-        </p>
-      </form>
-    </div>
+      </section>
+      <aside className={styles.visual} aria-label={t("signin.visualTitle")}>
+        <img src="/signin-refinery.webp" alt="" width="1120" height="1400" fetchPriority="high" />
+        <div className={styles.caption}><strong>{t("signin.visualTitle")}</strong></div>
+      </aside>
+    </main>
   );
 }
 
 /** The language, before signing in: a visitor who does not read Persian can still find the way in. */
 function LangPick({ lang, setPref }) {
   return (
-    <div className="lang-pick" role="group" aria-label="Language / زبان / اللغة">   // i18n: the picker's name in all three languages
+    <div className={styles.languages} role="group" aria-label="Language / زبان / اللغة">   // i18n: the picker's name in all three languages
       {Object.entries(LANGS).map(([k, l]) => (
-        <button key={k} type="button" lang={k} className={k === lang ? "on" : ""} aria-pressed={k === lang} onClick={() => setPref("lang", k)}>{l.name}</button>
+        <button key={k} type="button" lang={k} aria-pressed={k === lang} onClick={() => setPref("lang", k)}>{l.name}</button>
       ))}
     </div>
   );

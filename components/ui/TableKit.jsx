@@ -176,6 +176,13 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
       for (const g of groups) [...g.main.cells].forEach((c, k) => { const l = hs[k]?.label || ""; if (c.dataset.tkLabel !== l) c.dataset.tkLabel = l; });
     }
 
+    // Read each requested cell at most once per pass. In particular, sorting
+    // must not query the DOM or parse the same value for every comparison.
+    const textFor = (group, i) => {
+      const cells = group.text ??= [];
+      return cells[i] ??= cellOf(group.main, i);
+    };
+
     // Filter: the search, the quick column filter, and each column's own.
     const needle = norm(q);
     const ci = col === "" ? -1 : Number(col);
@@ -183,27 +190,35 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     let shown = 0;
     for (const g of groups) {
       const ok = (!needle || norm([...g.main.cells].map(cellText).join(" ")).includes(needle))
-        && (ci < 0 || val === "" || cellOf(g.main, ci) === val)
-        && fl.every(([i, f]) => passes(cellOf(g.main, i), f));
+        && (ci < 0 || val === "" || textFor(g, ci) === val)
+        && fl.every(([i, f]) => passes(textFor(g, i), f));
       g.ok = ok;
-      g.main.hidden = !ok;
-      for (const r of g.rest) r.hidden = !ok;
+      if (g.main.hidden === ok) g.main.hidden = !ok;
+      for (const r of g.rest) if (r.hidden === ok) r.hidden = !ok;
       if (ok) shown++;
     }
 
     // Order: React's, or sorted on one or more columns — groups move whole.
     const sorts = (lay.sort || []).map((x) => ({ i: idx.get(x.k), dir: x.dir })).filter((x) => x.i !== undefined);
-    const ordered = sorts.length ? [...groups].sort((a, b) => {
-      for (const x of sorts) { const c = compare(cellOf(a.main, x.i), cellOf(b.main, x.i)); if (c) return x.dir * c; }
-      return 0;
-    }) : groups;
+    let ordered = groups;
+    if (sorts.length) {
+      const prepared = groups.map((g) => ({ g, keys: sorts.map(({ i }) => sortKey(textFor(g, i))) }));
+      prepared.sort((a, b) => {
+        for (let i = 0; i < sorts.length; i++) {
+          const c = compareKeys(a.keys[i], b.keys[i]);
+          if (c) return sorts[i].dir * c;
+        }
+        return 0;
+      });
+      ordered = prepared.map(({ g }) => g);
+    }
 
     // Groups by a column's value (grid and cards).
     const gi = rich && lay.group ? idx.get(lay.group) : undefined;
     let buckets;
     if (gi !== undefined) {
       const m = new Map();
-      for (const g of ordered) { const v = cellOf(g.main, gi); (m.get(v) || m.set(v, []).get(v)).push(g); }
+      for (const g of ordered) { const v = textFor(g, gi); (m.get(v) || m.set(v, []).get(v)).push(g); }
       const gdir = sorts[0]?.i === gi ? sorts[0].dir : 1;
       buckets = [...m.entries()].sort((a, b) => gdir * compare(a[0], b[0])).map(([v, gs]) => ({ v, gs }));
     } else buckets = [{ v: null, gs: ordered }];
@@ -222,7 +237,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
 
     // Totals: each column's chosen figure over the filtered rows.
     const aggs = rich ? Object.entries(lay.aggs || {}).filter(([k, f]) => idx.has(k) && f && f !== "none") : [];
-    const figure = (rows, i, f) => aggregate(rows.map((g) => cellOf(g.main, i)), f, (v) => num(v, { maximumFractionDigits: 2 }));
+    const figure = (rows, i, f) => aggregate(rows.map((g) => textFor(g, i)), f, (v) => num(v, { maximumFractionDigits: 2 }));
     const firstShown = order[0] !== undefined ? idx.get(order[0]) : 0;
 
     const want = [];
@@ -249,7 +264,11 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     }
     if (s.editTr && !s.editFor) want.push(s.editTr);           // a new row: last
     for (const [v, tr] of s.grp) if (!keepGrp.has(tr)) { tr.remove(); s.grp.delete(v); }
-    if (want.length !== tbody.rows.length || want.some((r, k) => tbody.rows[k] !== r)) for (const r of want) tbody.appendChild(r);
+    let anchor = tbody.firstElementChild;
+    for (const row of want) {
+      if (row === anchor) anchor = anchor.nextElementSibling;
+      else tbody.insertBefore(row, anchor);
+    }
 
     if (aggs.length) {
       const foot = footRow(s, table, hs.length);
@@ -276,7 +295,7 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
       if (th.draggable !== drag) th.draggable = drag;
     });
     const values = ci >= 0
-      ? [...new Set(groups.map((g) => cellOf(g.main, ci)).filter(Boolean))].sort((a, b) => compare(a, b)).slice(0, 80)
+      ? [...new Set(groups.map((g) => textFor(g, ci)).filter(Boolean))].sort((a, b) => compare(a, b)).slice(0, 80)
       : [];
     setMeta((m) => (m.total === groups.length && m.shown === shown && m.pages === pages && m.pg === pg
       && m.heads.map((h) => h.key).join("|") === hs.map((h) => h.key).join("|") && m.values.join("|") === values.join("|")
@@ -1038,13 +1057,13 @@ function layoutCss(sel, mode, heads, disp, lay, pinOff, live) {
 function absorb(s, records) {
   for (const rec of records) {
     if (rec.type !== "childList" || rec.target !== s.tbody) continue;
-    for (const n of rec.removedNodes) s.orig = s.orig.filter((r) => r !== n);
     const added = [...rec.addedNodes].filter((n) => n.nodeName === "TR" && own(n));
+    const replaced = new Set([...rec.removedNodes, ...added]);
+    if (replaced.size) s.orig = s.orig.filter((r) => !replaced.has(r));
     if (!added.length) continue;
     const at = rec.nextSibling ? s.orig.indexOf(rec.nextSibling) : -1;
-    for (const n of added) s.orig = s.orig.filter((r) => r !== n);
     if (at < 0) s.orig.push(...added);
-    else s.orig.splice(s.orig.indexOf(rec.nextSibling), 0, ...added);
+    else s.orig.splice(at, 0, ...added);
   }
 }
 
@@ -1096,16 +1115,23 @@ function norm(t) {
   return latin(t).replace(/ي/g, "ی").replace(/ك/g, "ک").replace(/[‌‏‎]/g, "").replace(/\s+/g, " ").toLowerCase().trim();   // i18n: letters and digits the search and sort normalise, not text shown
 }
 const isBlank = (t) => /^[—–\-]?$/.test(String(t).trim());
+const sortLocale = new Intl.Collator("fa", { numeric: true });
+
+function sortKey(value) {
+  const clean = latin(value).replace(/[,٬]/g, "");   // i18n: normalise the thousands separator for sorting
+  const text = isBlank(clean) ? "" : clean;
+  const number = /^-?\d+(\.\d+)?%?$/.test(text.trim()) ? parseFloat(text) : NaN;
+  return { text, number };
+}
+
+function compareKeys(a, b) {
+  if (Number.isFinite(a.number) && Number.isFinite(b.number)) return a.number - b.number;
+  if (!a.text || !b.text) return Number(!a.text) - Number(!b.text);
+  return sortLocale.compare(a.text, b.text);
+}
+
 function compare(a, b) {
-  // "—" and "-" are how the pages print "nothing": they sort with the empties, last.
-  const blank = (t) => (isBlank(t) ? "" : t);
-  const x = blank(latin(a).replace(/[,٬]/g, "")), y = blank(latin(b).replace(/[,٬]/g, ""));   // i18n: letters and digits the search and sort normalise, not text shown
-  const nx = /^-?\d+(\.\d+)?%?$/.test(x.trim()) ? parseFloat(x) : NaN;
-  const ny = /^-?\d+(\.\d+)?%?$/.test(y.trim()) ? parseFloat(y) : NaN;
-  if (Number.isFinite(nx) && Number.isFinite(ny)) return nx - ny;
-  if (!x && y) return 1;
-  if (x && !y) return -1;
-  return x.localeCompare(y, "fa", { numeric: true });
+  return compareKeys(sortKey(a), sortKey(b));
 }
 /** A cell as a number, when it is one ("1,234.5", "۱۲٫۵", "40%"); otherwise NaN. */
 function toNum(v) {
@@ -1153,7 +1179,9 @@ function download(blob, file) {
  */
 function syncCustom(table, s) {
   const c = s.custom;
-  const want = c && c.fields.length && s.orig.some((r) => r.dataset.key) ? c.fields : [];
+  if (!c?.fields.length && !s.hasCustomCells) return;
+  const want = c?.fields.length && s.orig.some((r) => r.dataset.key) ? c.fields : [];
+  s.hasCustomCells = want.length > 0;
   const place = (row, make, fill) => {
     for (const x of [...row.cells]) if (x.dataset.tkCustom && !want.some((f) => f.id === x.dataset.tkCustom)) x.remove();
     const cells = want.map((f) => {
