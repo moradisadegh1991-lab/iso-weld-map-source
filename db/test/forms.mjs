@@ -209,4 +209,43 @@ test("through the routes: a designer sets their form's workflow only; a narrowed
   equal((await out(await formsRoute.GET(req(`/api/forms?projectId=${P}`, "other")))).body.types.map((t) => t.code), ["HO-ELE"]);
 });
 
+test("contract forms are scoped, global definitions can be installed without sharing workflows, and duty tiles reach authentication", async () => {
+  const { upsertContract } = await import("../../lib/db/repos/contracts.mjs");
+  const { saveDuty, setDutyMember } = await import("../../lib/db/repos/workflows.mjs");
+  const { authenticate } = await import("../../lib/server/session.mjs");
+  const route = await import("../../app/api/forms/route.js");
+  const admin = await M("admin");
+  const supervisor = await M("sup");
+  const otherProject = (await projects.createProject(db, { code: "FK2", name: "Consumer", ownerUserId: U.admin.id })).id;
+  let contract;
+  await inP(async () => {
+    contract = await upsertContract(db, { projectId: P, contractNo: "K-F1", title: "Contract", kind: "main", counterparty: "Client", currency: "USD", userId: U.admin.id });
+    const definition = { columns: [{ label: "Change" }] };
+    await forms.saveFormType(db, { projectId: P, code: "SCOPED", name: "Scoped form", section: "controls", definition,
+      membership: admin, visibility: "contract", formContractId: contract.id, navigation: "controls", userId: U.admin.id });
+    await forms.saveFormType(db, { projectId: P, code: "SHARED", name: "Shared form", section: "controls", definition,
+      membership: admin, visibility: "global", navigation: "controls", userId: U.admin.id });
+    await throws(() => forms.saveFormType(db, { projectId: P, code: "NO-GLOBAL", name: "No global", section: "electrical", definition,
+      membership: supervisor, visibility: "global", userId: U.sup.id }), "مدیر پروژه");
+    const duty = await saveDuty(db, { projectId: P, name: "Scoped tiles", permissions: ["view", "import", "export"], tiles: ["/eps/planning"] });
+    await setDutyMember(db, { projectId: P, dutyId: duty.id, userId: U.other.id, permissions: ["import"] });
+  });
+  const req = (who, path) => new Request(`http://x${path}`, { headers: { authorization: `Bearer kc|f-${who}` } });
+  equal((await route.GET(req("admin", `/api/forms?projectId=${P}&code=SCOPED`))).status, 404);
+  equal((await route.GET(req("admin", `/api/forms?projectId=${P}&code=SCOPED&contractId=${contract.id}`))).status, 200);
+  const { membership } = await authenticate(req("other", "/api/eps/planning"), { projectId: P });
+  assert(membership.tiles.includes("/eps/planning") && !membership.tiles.includes("/eps/progress"));
+  const { transferRights } = await import("../../lib/db/repos/duty-pms-scope.mjs");
+  equal(await inP(() => transferRights(db, { projectId: P, contractId: contract.id, userId: U.other.id, role: membership.role, form: "planning" })), { import: true, export: false });
+
+  await withProject(db, otherProject, async () => {
+    const visible = await forms.formTypes(db, { projectId: otherProject, published: true });
+    equal(visible.map((type) => [type.code, type.template]), [["SHARED", true]]);
+    const installed = await forms.installFormType(db, { projectId: otherProject, code: "SHARED", membership: admin, userId: U.admin.id });
+    equal(installed.project_id, otherProject);
+    const stages = await rp.workflowOf(db, { projectId: otherProject, reportTypeId: installed.id });
+    assert(stages.every((stage) => stage.groups.every((group) => group.members.length === 0)));
+  });
+});
+
 await run();

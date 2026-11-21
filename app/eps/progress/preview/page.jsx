@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../../lib/client/platform.mjs";
+import { ReportDays, reportsInPms } from "../../../../components/eps/ReportFilters";
 import ActivityGrid, { useSplit } from "../../../../components/eps/ActivityGrid";
 import ActivityDetail, { useEpsFmt } from "../../../../components/eps/ActivityDetail";
 import { Status } from "../../../../components/eps/PlanningSubforms";
@@ -25,14 +26,13 @@ import TableKit from "../../../../components/ui/TableKit";
  *   narrative  the report's narrative rows (image 10)
  */
 const TABS = ["lines", "pms", "status", "narrative"];
-const today = () => new Date().toISOString().slice(0, 10);
 
 export default function DailyReportPreviewPage() {
   const { projectId, contractId, call } = usePlatform();
   const { t } = usePrefs();
   const { fmt, day, statusOf, w } = useEpsFmt();
   const { pmsId, versionId, plan, picker } = useVersion(contractId, { form: "progress" });
-  const [d0, setDay] = useState(today());
+  const [d0, setDay] = useState("");
   const [selectedDays, setSelectedDays] = useState([]);
   const [reportId, setReportId] = useState("");
   useEffect(() => { const r = new URLSearchParams(window.location.search).get("report"); if (r) setReportId(r); }, []);
@@ -43,16 +43,20 @@ export default function DailyReportPreviewPage() {
     if (r) setDay(String(r.report_date).slice(0, 10));
   }, [all.data, reportId]);
   const appliedDays = selectedDays.length ? selectedDays : d0 ? [d0] : [];
-  const availableDays = [...new Set((all.data?.reports || []).filter((r) => r.status !== "cancelled").map((r) => String(r.report_date).slice(0, 10)))].sort().reverse();
+
   const dayReports = (all.data?.reports || []).filter((r) => String(r.report_date).slice(0, 10) === d0 && r.status !== "cancelled");
   // once the reports are known: keep the report asked for when it is the day's, else the day's first
   useEffect(() => {
-    if (!all.data) return;
+    if (!all.data || !d0) return;
     setReportId((cur) => (dayReports.some((r) => r.id === cur) ? cur : dayReports[0]?.id || ""));
   }, [d0, all.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tree = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&form=progress&${plan}` : null), [plan]);
   const lines = useProjectData((id) => (plan ? `/api/eps/activities?projectId=${id}&form=progress&${plan}&lines=1` : null), [plan]);
+  const pmsReports = useMemo(() => reportsInPms(all.data?.reports || [], lines.data?.lines || []), [all.data, lines.data]);
+  const availableDays = useMemo(() => [...new Set((lines.data?.lines || []).map((line) => line.date))].filter(Boolean).sort().reverse(), [lines.data]);
+  useEffect(() => { setSelectedDays([]); }, [pmsId, versionId]);
+  useEffect(() => { if (!d0 && !reportId && availableDays[0]) setDay(availableDays[0]); }, [availableDays, d0, reportId]);
   const report = useProjectData((id) => (reportId ? `/api/contract-reports?projectId=${id}&id=${reportId}` : null), [reportId]);
   const [sel, setSel] = useState(null);
   const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&form=progress&activityId=${sel.id}${versionId ? `&versionId=${versionId}` : ""}` : null), [sel?.id, versionId]);
@@ -119,12 +123,7 @@ export default function DailyReportPreviewPage() {
         <select id="dp-rep" value={reportId} onChange={(e) => setReportId(e.target.value)}>
           {dayReports.length === 0 && <option value="">{t("pg.noReport")}</option>}
           {dayReports.map((r) => <option key={r.id} value={r.id}>{r.report_no} — {r.title || ""}</option>)}</select></span>
-      {availableDays.length > 0 && <details>
-        <summary>{t("ep.dp.reportDays")}</summary>
-        {availableDays.map((d) => <label key={d} style={{ display: "block" }}>
-          <input type="checkbox" checked={selectedDays.includes(d)} onChange={(e) => setSelectedDays((old) => e.target.checked ? [...old, d] : old.filter((x) => x !== d))} /> {day(d)}
-        </label>)}
-      </details>}
+      <ReportDays days={availableDays} selected={selectedDays} onChange={setSelectedDays} />
       {report.data && <span className="sm muted">{report.data.report?.stage_name || report.data.report?.status}{may ? "" : t("pg.viewOnly")}</span>}
     </div>);
   if (!reportId && !selectedDays.length) return <div className="page">{head}{bar}<p className="empty-note">{t("ep.dp.pickReport")}</p></div>;
@@ -144,7 +143,7 @@ export default function DailyReportPreviewPage() {
     if (detail.error) return <p className="err">{detail.error}</p>;
     if (!detail.data) return <p className="muted">{t("common.loading")}</p>;
     const d = { ...detail.data, reports: detail.data.reports.filter((l) => selectedDays.length ? selectedDays.includes(l.date) : l.reportId === reportId) };
-    return <ActivityDetail d={d} tab="reports" may={may} post={post} companies={tree.data.companies} projectId={projectId} acts={acts} reportRoots={tree.data.roots} reportList={all.data?.reports || []} />;
+    return <ActivityDetail d={d} tab="reports" may={may} post={post} companies={tree.data.companies} projectId={projectId} acts={acts} reportRoots={tree.data.roots} reportList={pmsReports} reportAreas={(lines.data.lines || []).map((line) => line.areaText)} />;
   };
   return (
     <div className="page">

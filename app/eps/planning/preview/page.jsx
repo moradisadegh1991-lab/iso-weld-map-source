@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../../lib/client/platform.mjs";
+import { ReportDays, reportsInPms } from "../../../../components/eps/ReportFilters";
 import ActivityGrid, { useSplit } from "../../../../components/eps/ActivityGrid";
 import ActivityDetail from "../../../../components/eps/ActivityDetail";
 import { Requirements, Comments, Status } from "../../../../components/eps/PlanningSubforms";
@@ -40,16 +41,20 @@ export default function PlanningPreviewPage() {
   const detail = useProjectData((id) => (sel?.kind === "act" && versionId ? `/api/eps/activities?projectId=${id}&form=planning&activityId=${sel.id}&versionId=${versionId}` : null), [sel?.id, versionId]);
   const sub = useProjectData((id) => (sel?.kind === "act" && versionId ? `/api/eps/planning?projectId=${id}&versionId=${versionId}&activityId=${sel.id}` : null), [sel?.id, versionId]);
   const [tab, setTab] = useState("detail");
+  const [selectedDays, setSelectedDays] = useState([]);
+  const reportLines = useProjectData((id) => (tab === "reports" && versionId ? `/api/eps/activities?projectId=${id}&form=progress&versionId=${versionId}&lines=1` : null), [tab, versionId]);
+  const reportList = useProjectData((id) => (tab === "reports" && contractId ? `/api/contract-reports?projectId=${id}&contractId=${contractId}` : null), [tab, contractId]);
+  const availableDays = useMemo(() => [...new Set((reportLines.data?.lines || []).map((line) => line.date))].filter(Boolean).sort().reverse(), [reportLines.data]);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
   const { height, grip } = useSplit("p6-plan-preview", 380);
   const data = useMemo(() => (tree.data ? { ...tree.data, roots: plannedOnly(tree.data.roots) } : null), [tree.data]);
   const acts = useMemo(() => { const out = []; const walk = (n) => { out.push(...n.activities); n.children.forEach(walk); }; (tree.data?.roots || []).forEach(walk); return out; }, [tree.data]);
-  useEffect(() => { setSel(null); }, [versionId]);
+  useEffect(() => { setSel(null); setSelectedDays([]); }, [versionId]);
 
   // the loaders of this render: a save from a row the grid kept open must reload the activity selected now, not the one of its render
   const live = useRef({});
-  live.current = { tree, detail, sub };
+  live.current = { tree, detail, sub, reportLines, reportList };
   async function send(url, body, done) {
     setMsg(null); setOk(null);
     try {
@@ -110,12 +115,19 @@ export default function PlanningPreviewPage() {
     if (tab === "requirements") return <Requirements p={sub.data} a={a} acts={acts} may={sub.data.may.edit} post={postPlan} />;
     if (tab === "comments") return <Comments p={sub.data} a={a} may={sub.data.may.edit} post={postPlan} />;
     if (tab === "status") return <Status p={sub.data} a={a} />;
+    if (tab === "reports") {
+      const reports = selectedDays.length ? detail.data.reports.filter((line) => selectedDays.includes(line.date)) : detail.data.reports;
+      return <ActivityDetail d={{ ...detail.data, reports }} tab={tab} post={post} acts={acts} reportRoots={tree.data.roots}
+        reportList={reportsInPms(reportList.data?.reports || [], reportLines.data?.lines || [])}
+        reportAreas={(reportLines.data?.lines || []).map((line) => line.areaText)} />;
+    }
     return <ActivityDetail d={detail.data} tab={tab} may={may && detail.data.may.activity} post={post} acts={acts} labels={data.labels} codes={data.codes} resources={data.resources}
       companies={data.companies} projectId={projectId} history={tab === "reports"} planCosts />;
   };
   return (
     <div className="page">
       {head}
+      {tab === "reports" && <ReportDays days={availableDays} selected={selectedDays} onChange={setSelectedDays} />}
       {msg && <p className="err" role="alert">{msg}</p>}
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.roots.length === 0 ? <p className="empty-note">{t("ep.pl.empty")}</p> : (

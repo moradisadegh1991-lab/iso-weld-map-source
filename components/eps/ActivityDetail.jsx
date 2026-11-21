@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
+import { AreaInput } from "./ReportFilters";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ScopeTab } from "./ScopePanel";
 import { usePrefs } from "../../lib/client/prefs.mjs";
@@ -59,7 +60,7 @@ export function useAskFirst(post) {
   return (url, body, done) => (window.confirm(t(REMOVAL.test(body.kind || "") || body.remove ? "ep.d.removeAsk" : "ep.d.saveAsk")) ? post(url, body, done) : Promise.resolve(null));
 }
 
-export default function ActivityDetail({ d, tab, may, post: send, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null, history = false, reportList = [], planCosts = false, reportRoots = [] }) {
+export default function ActivityDetail({ d, tab, may, post: send, acts = [], codes = [], resources = [], companies = [], projectId, readOnly = false, labels = null, history = false, reportList = [], planCosts = false, reportRoots = [], reportAreas = [] }) {
   const a = d.activity;
   const post = useAskFirst(send);
   switch (tab) {
@@ -69,7 +70,7 @@ export default function ActivityDetail({ d, tab, may, post: send, acts = [], cod
     case "relations": return <Relations d={d} may={may && !readOnly} post={post} acts={acts} />;
     case "progress": return <Progress a={a} codes={d.codes} />;
     case "roles": return <Roles d={d} may={may && !readOnly} post={post} resources={resources} />;
-    case "reports": return <Reports d={d} post={post} send={send} companies={companies} readOnly={history} acts={acts} reportList={reportList} roots={reportRoots} />;
+    case "reports": return <Reports d={d} send={send} post={post} readOnly={history} acts={acts} reportList={reportList} roots={reportRoots} areas={reportAreas} />;
     case "codes": return <Codes d={d} may={may && !readOnly} post={post} codes={codes} />;
     case "overall": return <Overall d={d} may={may && !readOnly} post={post} />;
     case "docs": return <Docs d={d} projectId={projectId} />;
@@ -303,24 +304,35 @@ function Roles({ d, may, post, resources }) {
  * the activity code (only activities are offered; owner's requirements
  * 2026-10-22, item 29).
  */
-function Reports({ d, post, send, companies, readOnly = false, acts = [], reportList = [], roots = [] }) {
+function Reports({ d, post, send, readOnly = false, acts = [], reportList = [], roots = [], areas = [] }) {
   const { t } = usePrefs();
   const { fmt, day } = useEpsFmt();
   const [edit, setEdit] = useState(null);
   const [picker, setPicker] = useState(null);
   const [approve, setApprove] = useState(false);
+  const [query, setQuery] = useState("");
+  const [failed, setFailed] = useState(false);
+  const pick = (key, id, line) => { setQuery(""); setFailed(false); setPicker({ key, id, line }); };
   const activityTree = (nodes) => nodes.map((n) => ({ id: n.id, name: `${n.code} — ${n.name}`, children: [
     ...activityTree(n.children || []), ...(n.activities || []).map((a) => ({ id: a.id, name: `${a.code} — ${a.name}`, activity: true }))
   ] }));
   const ask = (id) => { setPicker((p) => ({ ...p, id })); setApprove(true); };
   const [changing, setChanging] = useState(false);
+  const dialog = useRef(null);
+  useEffect(() => {
+    if (!dialog.current) return;
+    const previous = document.activeElement;
+    (dialog.current.querySelector("input[type=search]") || dialog.current).focus();
+    return () => previous?.focus?.({ preventScroll: true });
+  }, [picker?.key]);
   const apply = async () => {
-    if (changing || !edit) return;
+    if (changing || !picker) return;
+    setFailed(false);
     setChanging(true);
     try {
-      const saved = await send("/api/eps/activities", { kind: "progress-edit", reportId: edit.reportId, rowId: edit.rowId, [picker.key]: picker.id }, () => t("ep.rp.saved"));
+      const saved = await send("/api/eps/activities", { kind: "progress-edit", reportId: picker.line.reportId, rowId: picker.line.rowId, [picker.key]: picker.id }, () => t("ep.rp.saved"));
       if (saved) { setApprove(false); setPicker(null); setEdit(null); }
-      else setApprove(false);
+      else { setApprove(false); setFailed(true); }
     } finally { setChanging(false); }
   };
   const a = d.activity;
@@ -332,25 +344,25 @@ function Reports({ d, post, send, companies, readOnly = false, acts = [], report
         // the daily report's history on the planning preview is read only (owner's requirements 2026-10-22, item 13)
         const m = readOnly ? null : d.reportMay?.[l.reportId];
         const mine = edit && edit.rowId === l.rowId && edit.reportId === l.reportId;
+        const beginEdit = () => setEdit({ reportId: l.reportId, rowId: l.rowId, qty: String(l.qty), areaText: l.areaName || "", mark: l.mark || "" });
         return (
           <tr key={`${l.reportId}-${l.rowId}`} data-line={`${l.reportNo}`}>
-            <td className="sm">{mine && acts.length ? <button type="button" className="btn ghost sm" onClick={() => setPicker({ key: "activityId", id: edit.activityId })}>
-              {acts.find((x) => x.id === edit.activityId)?.code || a.code}</button> : <><span className="mono" dir="ltr">{a.code}</span> {a.name}</>}</td>
-            <td>{mine ? <select aria-label={t("ep.rp.areaShort")} value={edit.areaId || ""} onChange={(e) => setEdit({ ...edit, areaId: e.target.value })}><option value="">—</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select> : l.areaName || "—"}</td>
+            <td className="sm">{m?.edit && acts.length ? <button type="button" className="btn ghost sm" onClick={() => pick("activityId", a.id, l)}>
+              {a.code}</button> : <><span className="mono" dir="ltr">{a.code}</span> {a.name}</>}</td>
+            <td>{mine ? <AreaInput value={edit.areaText} suggestions={areas}
+              onChange={(areaText) => setEdit({ ...edit, areaText })} /> : m?.edit
+              ? <button type="button" className="btn ghost sm" onClick={beginEdit}>{l.areaName || "—"}</button> : l.areaName || "—"}</td>
             <td>{mine ? <input aria-label="Mark" value={edit.mark || ""} onChange={(e) => setEdit({ ...edit, mark: e.target.value })} style={{ width: 80 }} /> : l.mark || "—"}</td>
             <td>{a.unit || "—"}</td>
             <td className="mono">{mine ? <input aria-label={t("ep.qty")} dir="ltr" value={edit.qty} onChange={(e) => setEdit({ ...edit, qty: e.target.value })} style={{ width: 90 }} /> : <b>{fmt(l.qty, 4)}</b>}</td>
-            <td className="mono">{mine && reportList.length ? <button type="button" className="btn ghost sm" onClick={() => setPicker({ key: "toReportId", id: edit.toReportId })}>
-              {reportList.find((x) => x.id === edit.toReportId)?.report_no || l.reportNo}</button>
+            <td className="mono">{m?.edit && reportList.length ? <button type="button" className="btn ghost sm" onClick={() => pick("toReportId", l.reportId, l)}>
+              {l.reportNo}</button>
               : <Link href={`/contract-reports?id=${l.reportId}`}>{l.reportNo}</Link>}</td><td className="mono">{day(l.date)}</td>
             <td className="sm">{l.status === "approved" ? t("ep.rp.approved") : l.stageName || "—"}</td><td className="sm">{l.notes || ""}</td>
             <td style={{ whiteSpace: "nowrap" }}>{m?.edit ? (mine ? <>
-              <button className="btn sm" type="button" data-line-save onClick={async () => { if (await post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, qty: edit.qty, areaId: edit.areaId, mark: edit.mark,
-                activityId: edit.activityId !== a.id ? edit.activityId : undefined, toReportId: edit.toReportId !== l.reportId ? edit.toReportId : undefined }, () => t("ep.rp.saved"))) setEdit(null); }}>{t("ep.save")}</button>
+              <button className="btn sm" type="button" data-line-save onClick={async () => { if (await post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, qty: edit.qty, areaText: edit.areaText !== (l.areaName || "") ? edit.areaText : undefined, mark: edit.mark }, () => t("ep.rp.saved"))) setEdit(null); }}>{t("ep.save")}</button>
               <button className="btn ghost sm" type="button" onClick={() => setEdit(null)}>{t("ep.cancel")}</button></> : <>
-              <button className="btn ghost sm" type="button" data-line-edit onClick={() => setEdit({ reportId: l.reportId, rowId: l.rowId, qty: String(l.qty), areaId: l.areaId || "", mark: l.mark || "",
-                activityId: a.id, toReportId: l.reportId })}>{t("ep.edit")}</button>
+              <button className="btn ghost sm" type="button" data-line-edit onClick={beginEdit}>{t("ep.edit")}</button>
               <button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "progress-edit", reportId: l.reportId, rowId: l.rowId, remove: true }, () => t("ep.rp.rowRemoved"))}>{t("ep.remove")}</button></>)
               : <span className="sm muted" title={m?.why || ""}>{t("ep.viewOnly")}</span>}</td>
           </tr>);
@@ -359,18 +371,24 @@ function Reports({ d, post, send, companies, readOnly = false, acts = [], report
       {picker && createPortal(<div className="tk-view mk-form-back" onKeyDown={(e) => {
         if (!changing && e.key === "Escape") { if (approve) setApprove(false); else setPicker(null); }
       }}>
-        <section className="mk-form" role="dialog" aria-modal="true" aria-label={t(picker.key === "activityId" ? "ep.rp.activityCode" : "ep.rp.reportNo")}>
+        <section className="mk-form report-picker" ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label={t(picker.key === "activityId" ? "ep.rp.activityCode" : "ep.rp.reportNo")}>
           <header><b>{t(picker.key === "activityId" ? "ep.rp.activityCode" : "ep.rp.reportNo")}</b></header>
           <div className="mk-form-body" style={{ maxHeight: "60vh", overflow: "auto" }}>
-            {picker.key === "activityId" ? <TreeEditor editable={false}
+            {picker.key === "activityId" ? <TreeEditor editable={false} searchable
               nodes={roots.length ? activityTree(roots) : acts.map((x) => ({ id: x.id, name: `${x.code} — ${x.name}`, activity: true }))}
               render={(n) => n.activity ? <button type="button" className="btn ghost sm" disabled={approve} aria-pressed={n.id === picker.id}
                 onClick={() => setPicker({ ...picker, id: n.id })} onDoubleClick={() => ask(n.id)}>{n.name}</button> : n.name} />
-              : <table className="dtable"><thead><tr><th>{t("ep.rp.reportNo")}</th><th>{t("ep.title")}</th><th>{t("ep.date")}</th></tr></thead>
-                <tbody>{reportList.filter((r) => r.status !== "cancelled").map((r) => <tr key={r.id} onDoubleClick={() => { if (!approve) ask(r.id); }}>
+              : <><input type="search" aria-label={t("tk.search")} placeholder={t("tk.search")} value={query}
+                onChange={(event) => setQuery(event.target.value)} />
+                <table className="dtable"><thead><tr><th>{t("ep.rp.reportNo")}</th><th>{t("ep.title")}</th><th>{t("ep.date")}</th></tr></thead>
+                <tbody>{reportList.filter((r) => r.status !== "cancelled" &&
+                  `${r.report_no} ${r.title || ""} ${r.report_date} ${day(String(r.report_date).slice(0, 10))}`.toLowerCase().includes(query.trim().toLowerCase()))
+                  .map((r) => <tr key={r.id} aria-selected={picker.id === r.id}
+                    onClick={() => { if (!approve) setPicker({ ...picker, id: r.id }); }} onDoubleClick={() => { if (!approve) ask(r.id); }}>
                   <td><button type="button" disabled={approve} aria-pressed={r.id === picker.id} className="btn ghost sm"
-                    onClick={() => setPicker({ ...picker, id: r.id })}>{r.report_no}</button></td>
-                  <td>{r.title || "—"}</td><td>{day(String(r.report_date).slice(0, 10))}</td></tr>)}</tbody></table>}
+                    >{r.report_no}</button></td>
+                  <td>{r.title || "—"}</td><td>{day(String(r.report_date).slice(0, 10))}</td></tr>)}</tbody></table></>}
+            {failed && <p className="err" role="alert">{t("ep.rp.changeFailed")}</p>}
             {approve && <div role="alertdialog" aria-label={t("ep.rp.changeConfirm")} className="card">
               <b>{t("ep.rp.changeConfirm")}</b>
               <button type="button" className="btn sm" disabled={changing} onClick={apply}>{t("tk.yes")}</button>
@@ -378,7 +396,7 @@ function Reports({ d, post, send, companies, readOnly = false, acts = [], report
             </div>}
           </div>
           <footer className="mk-form-actions">
-            <button type="button" className="btn sm" disabled={approve || !picker.id} onClick={() => ask(picker.id)}>{t("ep.rp.applyChange")}</button>
+            <button type="button" className="btn sm" disabled={approve || !picker.id || picker.id === (picker.key === "activityId" ? a.id : picker.line.reportId)} onClick={() => ask(picker.id)}>{t("ep.rp.applyChange")}</button>
             <button type="button" className="btn ghost sm" disabled={changing} onClick={() => { setApprove(false); setPicker(null); }}>{t("ep.cancel")}</button>
           </footer>
         </section>

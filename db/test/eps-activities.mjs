@@ -338,7 +338,7 @@ test("a line edited where it stands names another activity, or moves to another 
     const line = (await rp.snapshotOf(db, { projectId: P, reportId: R2.id })).content.activities[0];
     const doneOf = async (x) => flat(await view()).find((y) => y.id === x.id).done;
     const [b0, c0] = [await doneOf(b), await doneOf(c)];
-    await act.editProgress(db, { projectId: P, reportId: R2.id, rowId: line.id, activityId: b.id, userId: U.planner.id });
+    await act.editProgress(db, { projectId: P, reportId: R2.id, rowId: line.id, activityId: b.id, areaText: "  Fabrication Area 7  ", userId: U.planner.id });
     equal([await doneOf(b), await doneOf(c)], [b0 + 3, c0 - 3], "the line now counts for the other activity");
     await throws(() => act.editProgress(db, { projectId: P, reportId: R2.id, rowId: line.id, activityId: a.id, qty: 50, userId: U.planner.id }), "بیش از حجم",
       "a line moved onto an activity it would take past its volume is refused");
@@ -347,8 +347,8 @@ test("a line edited where it stands names another activity, or moves to another 
     equal((await rp.snapshotOf(db, { projectId: P, reportId: R2.id })).content.activities.length, 1, "nothing was removed from the first report");
     const R3 = await cr.createContractReport(db, { projectId: P, contractId: C.id, reportDate: today, title: "سوم", userId: U.planner.id });
     await act.editProgress(db, { projectId: P, reportId: R2.id, rowId: line.id, toReportId: R3.id, userId: U.planner.id });
-    equal([(await rp.snapshotOf(db, { projectId: P, reportId: R2.id })).content.activities.length, cd.activityLines((await rp.snapshotOf(db, { projectId: P, reportId: R3.id })).content).map((l) => [l.activityId, l.qty])],
-      [0, [[b.id, 3]]], "moved: gone from the one, in the other");
+    equal([(await rp.snapshotOf(db, { projectId: P, reportId: R2.id })).content.activities.length, cd.activityLines((await rp.snapshotOf(db, { projectId: P, reportId: R3.id })).content).map((l) => [l.activityId, l.qty, l.areaText])],
+      [0, [[b.id, 3, "Fabrication Area 7"]]], "moved: gone from the one, in the other");
     equal(await doneOf(b), b0 + 3, "and counted once");
   });
 });

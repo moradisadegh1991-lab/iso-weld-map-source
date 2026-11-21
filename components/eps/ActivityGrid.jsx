@@ -389,7 +389,7 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
                 <button type="button" className="btn sm" onClick={() => setChooser(false)}>{t("ep.close")}</button></p>
             </FloatBox>)}
         </span>
-        <button type="button" className="btn ghost sm" data-excel onClick={exportExcel}>{t("gr.excel")}</button>
+        {data.may?.export !== false && <button type="button" className="btn ghost sm" data-excel onClick={exportExcel}>{t("gr.excel")}</button>}
         {customKey && cc.custom?.may?.define && <button type="button" className="btn ghost sm" data-tk-addcol onClick={() => setColDlg(colDlg ? null : { label: "", dataType: "text", options: "" })}>{t("tk.addColumn")}</button>}
         {ops && picked.size > 0 && (
           <span className="p6-bulk" data-bulk>

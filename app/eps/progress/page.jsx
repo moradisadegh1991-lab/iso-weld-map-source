@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
+import { AreaInput, reportsInPms } from "../../../components/eps/ReportFilters";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
 import ActivityDetail, { useEpsFmt } from "../../../components/eps/ActivityDetail";
 import { COLUMNS, useVersion } from "../../../components/eps/shared";
@@ -39,7 +40,7 @@ export default function ProgressPage() {
   const detail = useProjectData((id) => (sel?.kind === "act" ? `/api/eps/activities?projectId=${id}&form=progress&activityId=${sel.id}` : null), [sel?.id]);
   const [visible, setVisible] = useState([]);
   const [tab, setTab] = useState("reports");
-  const [f, setF] = useState({ mode: "number", value: "", day: today(), reportId: "", areaId: "", mark: "", notes: "" });
+  const [f, setF] = useState({ mode: "number", value: "", day: today(), reportId: "", areaText: "", mark: "", notes: "" });
   const reports = useProjectData((id) => (contractId && f.day ? `/api/eps/activities?projectId=${id}&form=progress&contractId=${contractId}&day=${f.day}` : null), [contractId, f.day]);
   const allReports = useProjectData((id) => (contractId ? `/api/contract-reports?projectId=${id}&contractId=${contractId}` : null), [contractId]);
   const [msg, setMsg] = useState(null);
@@ -67,7 +68,7 @@ export default function ProgressPage() {
       setOk(t("ep.pg.imported", { n: b.row.added, reports: b.row.reports.join(", ") }));
     } catch (e) { setMsg(e.message); }
   }
-  const add = (ids) => post("/api/eps/activities", { kind: "progress-add", reportId: f.reportId, activityIds: ids, mode: f.mode, value: f.value, areaId: f.areaId || null, mark: f.mark, notes: f.notes },
+  const add = (ids) => post("/api/eps/activities", { kind: "progress-add", reportId: f.reportId, activityIds: ids, mode: f.mode, value: f.value, areaText: f.areaText, mark: f.mark, notes: f.notes },
     () => t("ep.pg.added", { n: ids.length, no: (reports.data?.reports || []).find((r) => r.id === f.reportId)?.report_no || "" }));
   const summary = useMemo(() => (data && lines.data ? codeSummary(data.codes, visible, lines.data.lines) : []), [data, lines.data, visible]);
   // planned and actual progress up to the chosen day, from the volumes recorded so far (owner's requirements 2026-10-18, item 5)
@@ -107,7 +108,7 @@ export default function ProgressPage() {
         <button className="btn" type="button" disabled={!canAdd || visible.length === 0} data-add="multi"
           onClick={() => { if (window.confirm(t("pg.addMultiAsk", { n: visible.length }))) add(visible.map((a) => a.id)); }}>{t("pg.addMulti", { n: visible.length })}</button>
         <TemplateButton kind="daily" />
-        {data.may.contractWide && <label className="btn ghost sm" style={{ cursor: "pointer" }}>{t("ep.pl.import")}
+        {data.may.contractWide && data.may.import !== false && <label className="btn ghost sm" style={{ cursor: "pointer" }}>{t("ep.pl.import")}
           <input type="file" accept=".xlsx,.xls" hidden data-progress-import onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ""; if (x && window.confirm(t("ep.pg.importAsk", { name: x.name }))) importFile(x); }} /></label>}
         <span className="sm" data-day-progress>{t("pg.dayProgress", { day: f.day, plan: num(toDay.get("__all")?.TPP ?? null, { maximumFractionDigits: 2 }), actual: num(toDay.get("__all")?.TPA ?? null, { maximumFractionDigits: 2 }) })}</span>
       </div>
@@ -122,8 +123,8 @@ export default function ProgressPage() {
         </fieldset>
         <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "6px 8px", alignItems: "center" }}>
           <label htmlFor="pg-area" className="sm">{t("ep.rp.area")}</label>
-          <select id="pg-area" value={f.areaId} onChange={(e) => setF({ ...f, areaId: e.target.value })}><option value="">—</option>
-            {data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+          <AreaInput id="pg-area" value={f.areaText} onChange={(areaText) => setF({ ...f, areaText })}
+            suggestions={(lines.data?.lines || []).map((line) => line.areaText)} />
           <label htmlFor="pg-mark" className="sm">{t("ep.pg.markNote")}</label>
           <span className="row" style={{ gap: 4 }}><input id="pg-mark" style={{ width: 90 }} value={f.mark} onChange={(e) => setF({ ...f, mark: e.target.value })} placeholder="Mark" />
             <input aria-label={t("ep.remark")} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder={t("ep.remark")} /></span>
@@ -157,14 +158,15 @@ export default function ProgressPage() {
               <h3 className="sm">{t("ep.pg.byArea")}{picked ? ` — ${picked.code}` : ""}</h3>
               {!picked ? <p className="sm muted">{t("ep.pg.pickCode")}</p> : (
                 <TableKit name="eps-progress-2"><table className="dtable"><thead><tr><th>Area / Contract name</th><th>Work weight</th></tr></thead>
-                  <tbody>{Object.entries(picked.byArea).map(([k, v]) => <tr key={k}><td>{k ? companyName.get(k) || "—" : t("ep.pg.noArea")}</td><td className="mono">{fmt(v)}</td></tr>)}
+                  <tbody>{Object.entries(picked.byArea).map(([k, v]) => <tr key={k}><td>{k ? (k.startsWith("text:") ? k.slice(5) : companyName.get(k) || "—") : t("ep.pg.noArea")}</td><td className="mono">{fmt(v)}</td></tr>)}
                     <tr><td><b>{t("ep.total")}</b></td><td className="mono"><b>{fmt(picked.done)}</b></td></tr></tbody></table></TableKit>)}
             </div>
           </div>
         ) : sel?.kind !== "act" ? <p className="empty-note">{t("ep.pickActivity")}</p>
           : detail.error ? <p className="err">{detail.error}</p> : !detail.data ? <p className="muted">{t("common.loading")}</p>
             : <ActivityDetail d={detail.data} tab={tab === "detail" ? "detail" : tab} may={false} readOnly post={post} companies={data.companies} projectId={projectId}
-              acts={flatActs(data.roots)} reportList={allReports.data?.reports || []} />}
+              acts={flatActs(data.roots)} reportRoots={data.roots} reportAreas={(lines.data?.lines || []).map((line) => line.areaText)}
+              reportList={reportsInPms(allReports.data?.reports || [], lines.data?.lines || [])} />}
       </div>
     </div>
   );

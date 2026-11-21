@@ -23,10 +23,10 @@ import { usePrefs } from "../../lib/client/prefs.mjs";
  * only says who holds them. A form's designer sees only the workflows their
  * forms follow; the forms, the duties and the tree are the project manager's.
  */
-const blankDuty = { id: null, code: "", name: "", description: "", permissions: ["view"], roleId: null, active: true, formRules: [], pmsScope: [], planningForms: {} };
+const blankDuty = { id: null, code: "", name: "", description: "", permissions: ["view"], roleId: null, active: true, formRules: [], pmsScope: [], planningForms: {}, tiles: [] };
 
 export default function ReportSetup({ rolesOnly = false }) {
-  const { projectId, call } = usePlatform();
+  const { projectId, call, reload: reloadShell } = usePlatform();
   const { t: tr, L } = usePrefs();
   const { data, error, reload } = useProjectData((id) => `/api/report-setup?projectId=${id}&trees=1`, []);
   const [msg, setMsg] = useState(null);
@@ -35,7 +35,7 @@ export default function ReportSetup({ rolesOnly = false }) {
   const [typeId] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("type")) || null);
   const [wfId, setWfId] = useState(null);
   const [nt, setNt] = useState({ code: "", name: "", description: "" });
-  const [nw, setNw] = useState({ name: "", code: "", parentId: "" });
+  const [nw, setNw] = useState({ name: "", code: "", parentId: "", description: "" });
   const [nd, setNd] = useState(blankDuty);
   const [roleId, setRoleId] = useState(null);
   const [dutyId, setDutyId] = useState(null);
@@ -44,7 +44,7 @@ export default function ReportSetup({ rolesOnly = false }) {
 
   async function post(body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call("/api/report-setup", { method: "POST", body: JSON.stringify({ projectId, ...body }) }); reload(); if (done) setOk(done); return r || true; }
+    try { const r = await call("/api/report-setup", { method: "POST", body: JSON.stringify({ projectId, ...body }) }); reload(); if (["duty", "duty-remove", "duty-member", "duty-member-remove"].includes(body.kind)) reloadShell(); if (done) setOk(done); return r || true; }
     catch (e) { setMsg(e.message); return null; }
   }
   const perm = (k) => L(`report.perm.${k}`, data.permissions[k]);
@@ -65,6 +65,12 @@ export default function ReportSetup({ rolesOnly = false }) {
     if (!may.duties) return null;
     const roleDuties = data.duties.filter((d) => (d.roleId || null) === roleId);
     const currentDuty = roleDuties.find((d) => d.id === dutyId);
+    const chooseDuty = (d) => {
+      setDutyId(d.id);
+      setNd({ id: d.id, code: d.code || "", name: d.name, description: d.description || "", permissions: d.permissions,
+        roleId: d.roleId || "", active: d.active, formRules: d.formRules || [], pmsScope: d.pmsScope || [],
+        planningForms: d.planningForms || {}, tiles: d.tiles || [] });
+    };
     return <section>
       {confirmation}
       {msg && <p className="err" role="alert">{msg}</p>}
@@ -79,23 +85,26 @@ export default function ReportSetup({ rolesOnly = false }) {
             <TableKit key={roleId || "unassigned"} name="report-setup-duties"
               onDelete={(id) => post({ kind: "duty-remove", id })}
               rowEdit={{
-                fields: [{ col: tr("rs.code"), name: "code", type: "text" }, { col: tr("rs.duty"), name: "name", type: "text" }, { col: tr("rs.active"), name: "active", type: "select", options: [["true", tr("tk.yes")], ["false", tr("tk.no")]] }],
-                value: (id) => { const d = data.duties.find((x) => x.id === id); return { code: d?.code || "", name: d?.name || "", active: String(d?.active !== false) }; },
-                onSave: (id, v) => { const d = data.duties.find((x) => x.id === id); return post({ kind: "duty", id, code: v.code, name: v.name, description: d.description, permissions: d.permissions, roleId: d.roleId, active: v.active === "true" }, tr("rs.dutySaved")); },
-                onAdd: (v) => post({ kind: "duty", code: v.code, name: v.name, permissions: ["view"], roleId: roleId || null, active: v.active !== "false" }, tr("rs.dutySaved")),
+                fields: [{ col: tr("rs.code"), name: "code", type: "text" }, { col: tr("rs.duty"), name: "name", type: "text" },
+                  { col: tr("rs.desc"), name: "description", type: "text" },
+                  { col: tr("rs.active"), name: "active", type: "select", options: [["true", tr("tk.yes")], ["false", tr("tk.no")]] }],
+                value: (id) => { const d = data.duties.find((x) => x.id === id); return { code: d?.code || "", name: d?.name || "", description: d?.description || "", active: String(d?.active !== false) }; },
+                onSave: (id, v) => { const d = data.duties.find((x) => x.id === id); return post({ kind: "duty", id, code: v.code, name: v.name, description: v.description, permissions: d.permissions, roleId: d.roleId, active: v.active === "true" }, tr("rs.dutySaved")); },
+                onAdd: (v) => post({ kind: "duty", code: v.code, name: v.name, description: v.description, permissions: ["view"], roleId: roleId || null, active: v.active !== "false" }, tr("rs.dutySaved")),
               }}><table className="dtable">
-              <thead><tr><th>{tr("rs.code")}</th><th>{tr("rs.duty")}</th><th>{tr("rs.active")}</th><th>{tr("rs.role")}</th><th>{tr("rs.h.rights")}</th><th>{tr("rs.holders")}</th><th>{tr("rs.usedIn")}</th><th /></tr></thead>
+              <thead><tr><th>{tr("rs.code")}</th><th>{tr("rs.duty")}</th><th>{tr("rs.desc")}</th><th>{tr("rs.active")}</th><th>{tr("rs.role")}</th><th>{tr("rs.h.rights")}</th><th>{tr("rs.holders")}</th><th>{tr("rs.usedIn")}</th><th /></tr></thead>
               <tbody>{roleDuties.map((d) => (
-                <tr key={d.id} data-key={d.id} data-duty={d.code || d.name}>
+                <tr key={d.id} data-key={d.id} data-duty={d.code || d.name} onClick={(event) => { if (!event.target.closest("button, input, select, a")) chooseDuty(d); }}>
                   <td className="mono">{d.code || "—"}</td><td><button type="button" className="btn ghost sm" aria-pressed={currentDuty?.id === d.id}
-                    onClick={() => setDutyId(d.id)}>{d.name}</button></td>
+                    onClick={() => chooseDuty(d)}>{d.name}</button></td>
+                  <td>{d.description || "—"}</td>
                   <td>{tr(d.active ? "tk.yes" : "tk.no")}</td>
                   <td className="sm">{d.roleName ? `${d.contractNo} › ${d.roleName}` : "—"}</td>
                   <td className="sm">{d.permissions.map(perm).join(tr("c.sep"))}</td>
                   <td>{d.members.length}</td>
                   <td className="sm">{d.usedIn.join(" · ") || "—"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <button className="btn ghost sm" type="button" onClick={() => setNd({ id: d.id, code: d.code || "", name: d.name, description: d.description || "", permissions: d.permissions, roleId: d.roleId || "", active: d.active, formRules: d.formRules || [], pmsScope: d.pmsScope || [], planningForms: d.planningForms || {} })}>{tr("dr.edit")}</button>
+                    <button className="btn ghost sm" type="button" onClick={() => chooseDuty(d)}>{tr("dr.edit")}</button>
                     <button className="btn ghost sm" type="button" onClick={async () => { if (await ask(tr("tk.deleteMany", { n: 1 }))) await post({ kind: "duty-remove", id: d.id }); }}>{tr("dr.remove")}</button></td>
                 </tr>))}</tbody></table></TableKit>)}
           <Fold title={nd.id ? tr("rs.editDuty", { name: nd.name }) : tr("rs.newDuty")} open={nd.id ? true : undefined} onClose={() => setNd(blankDuty)}>
@@ -115,6 +124,7 @@ export default function ReportSetup({ rolesOnly = false }) {
               </div>
               <label>{tr("rs.active")} <select value={String(nd.active)} onChange={(e) => setNd({ ...nd, active: e.target.value === "true" })}><option value="true">{tr("tk.yes")}</option><option value="false">{tr("tk.no")}</option></select></label>
               <Rights value={nd.permissions} on={(p) => setNd({ ...nd, permissions: p })} data={data} perm={perm} tr={tr} label={tr("rs.dutyRights")} />
+              <DutyTiles catalog={data.tileCatalog} value={nd.tiles} onChange={(tiles) => setNd({ ...nd, tiles })} tr={tr} />
               <DutyForms key={nd.id || "new"} data={data} roleId={nd.roleId ?? roleId} value={nd.formRules} onChange={(formRules) => setNd({ ...nd, formRules })} tr={tr} />
               <DutyPlanningForms data={data} roleId={nd.roleId ?? roleId} value={nd.planningForms}
                 onChange={(planningForms) => setNd({ ...nd, planningForms })} tr={tr} />
@@ -181,7 +191,7 @@ export default function ReportSetup({ rolesOnly = false }) {
       <div className="card" data-workflow-tree>
         <h2>{tr("rs.tree")}</h2>
         <p className="sm muted">{tr("rs.treeNote")}</p>
-        <TreeEditor nodes={tree} editable={!!may.tree} label={tr("rs.workflow")}
+        <TreeEditor nodes={tree} searchable editable={!!may.tree} label={tr("rs.workflow")}
           onMove={(id, parentId) => { const w = data.workflows.find((x) => x.id === id); post({ kind: "workflow", id, parentId, name: w.name, code: w.code, description: w.description, seq: w.seq }); }}
           render={(n) => (
             <button type="button" className={`linkbtn${wf?.id === n.id ? " on" : ""}`} data-wf={n.code || n.name} onClick={() => setWfId(n.id)}
@@ -189,16 +199,21 @@ export default function ReportSetup({ rolesOnly = false }) {
               {n.code && <span className="mono sm">{n.code} </span>}{n.name}
               <span className="sm muted"> {n.stages ? tr("rs.nodeStages", { n: n.stages }) : tr("rs.folder")}{n.forms.length ? ` · ${n.forms.map((f) => f.code).join(tr("c.sep"))}` : ""}</span>
             </button>)}
-          actions={may.tree ? (n) => <button className="btn ghost sm" type="button" onClick={() => post({ kind: "workflow-remove", id: n.id })}>{tr("dr.remove")}</button> : null} />
+          actions={may.tree ? (n) => <span className="row">
+            <button className="btn ghost sm" type="button" onClick={() => setNw({ id: n.id, name: n.name, code: n.code || "", parentId: n.parentId || "", description: n.description || "", seq: n.seq })}>{tr("dr.edit")}</button>
+            <button className="btn ghost sm" type="button" onClick={async () => { if (await ask(tr("tk.deleteMany", { n: 1 }))) post({ kind: "workflow-remove", id: n.id }); }}>{tr("dr.remove")}</button>
+          </span> : null} />
         {may.tree && (
-          <Fold title={tr("rs.newNode")}>
-            <form onSubmit={async (e) => { e.preventDefault(); const r = await post({ kind: "workflow", ...nw, parentId: nw.parentId || null }); if (r?.row) { setWfId(r.row.id); setNw({ name: "", code: "", parentId: "" }); } }}>
+          <Fold title={nw.id ? tr("dr.edit") : tr("rs.newNode")} open={nw.id ? true : undefined}
+            onClose={() => setNw({ name: "", code: "", parentId: "", description: "" })}>
+            <form onSubmit={async (e) => { e.preventDefault(); const r = await post({ kind: "workflow", ...nw, parentId: nw.parentId || null }); if (r?.row) { setWfId(r.row.id); setNw({ name: "", code: "", parentId: "", description: "" }); } }}>
               <div className="grid2">
                 <div className="field"><label htmlFor="wf-name">{tr("rs.name")}</label><input id="wf-name" required value={nw.name} onChange={(e) => setNw({ ...nw, name: e.target.value })} /></div>
                 <div className="field"><label htmlFor="wf-code">{tr("rs.code")}</label><input id="wf-code" dir="ltr" value={nw.code} onChange={(e) => setNw({ ...nw, code: e.target.value })} /></div>
+                <div className="field"><label htmlFor="wf-desc">{tr("rs.desc")}</label><input id="wf-desc" value={nw.description} onChange={(e) => setNw({ ...nw, description: e.target.value })} /></div>
                 <div className="field"><label htmlFor="wf-parent">{tr("rs.parent")}</label>
                   <select id="wf-parent" value={nw.parentId} onChange={(e) => setNw({ ...nw, parentId: e.target.value })}>
-                    <option value="">{tr("rs.root")}</option>{data.workflows.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
+                    <option value="">{tr("rs.root")}</option>{data.workflows.filter((w) => w.id !== nw.id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
               </div>
               <button className="btn" type="submit">{tr("rs.saveNode")}</button>
             </form>
@@ -216,16 +231,17 @@ export default function ReportSetup({ rolesOnly = false }) {
  * item 1). A holder's level is a choice among the duty's rights; none ticked:
  * all of the duty's.
  */
-function Holders({ duty, users, post, ask }) {
+function Holders({ duty, users, post, ask, onlyUser }) {
   const { t: tr, L } = usePrefs();
   const blank = { userId: "", active: true, own: false, permissions: [...duty.permissions], temporary: false, startsOn: "", endsOn: "" };
   const [f, setF] = useState(null);
   const perm = (k) => L(`report.perm.${k}`, k);
+  const members = onlyUser ? duty.members.filter((member) => member.userId === onlyUser) : duty.members;
   const edit = (m) => setF({ userId: m.userId, active: m.active, own: !!m.permissions, permissions: m.permissions || [...duty.permissions], temporary: m.temporary, startsOn: m.startsOn || "", endsOn: m.endsOn || "" });
   return (
     <div data-holders={duty.code || duty.name}>
-      {duty.members.length === 0 && <span className="sm muted">—</span>}
-      {duty.members.map((m) => (
+      {members.length === 0 && <span className="sm muted">—</span>}
+      {members.map((m) => (
         <div key={m.userId} className="sm" data-holder={m.name}>
           <b>{m.name}</b>{!m.active && <span className="pill sm">{tr("rs.inactive")}</span>}
           {m.permissions && <span className="muted"> · {m.permissions.map(perm).join(tr("c.sep"))}</span>}
@@ -233,7 +249,7 @@ function Holders({ duty, users, post, ask }) {
           {" "}<button className="btn ghost sm" type="button" onClick={() => edit(m)}>{tr("dr.edit")}</button>
           <button className="btn ghost sm" type="button" onClick={async () => { if (await ask(tr("rs.holderRemoveAsk", { name: m.name }))) post({ kind: "duty-member-remove", dutyId: duty.id, userId: m.userId }); }}>{tr("dr.remove")}</button>
         </div>))}
-      {!f && <button className="btn ghost sm" type="button" data-holder-add onClick={() => setF(blank)}>{tr("rs.holderAdd")}</button>}
+      {!onlyUser && !f && <button className="btn ghost sm" type="button" data-holder-add onClick={() => setF(blank)}>{tr("rs.holderAdd")}</button>}
       {f && (
         <form className="permgrid" style={{ marginTop: 6 }} aria-label={tr("rs.holdersOf", { name: duty.name })} onSubmit={async (e) => {
           e.preventDefault();
@@ -241,7 +257,7 @@ function Holders({ duty, users, post, ask }) {
           if (await post({ kind: "duty-member", dutyId: duty.id, userId: f.userId, active: f.active, permissions: f.own ? f.permissions : null, temporary: f.temporary,
             startsOn: f.temporary ? f.startsOn : null, endsOn: f.temporary ? f.endsOn : null }, tr("rs.holderSaved"))) setF(null);
         }}>
-          <select aria-label={tr("rs.user")} required value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })} data-holder-user>
+          <select aria-label={tr("rs.user")} required value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })} data-holder-user disabled={!!onlyUser}>
             <option value="">—</option>{users.filter((u) => u.active).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
           <label>{tr("rs.active")} <select value={String(f.active)} onChange={(e) => setF({ ...f, active: e.target.value === "true" })}><option value="true">{tr("tk.yes")}</option><option value="false">{tr("tk.no")}</option></select></label>
           <label><input type="checkbox" checked={f.own} onChange={(e) => setF({ ...f, own: e.target.checked })} data-holder-own /> {tr("rs.ownLevel")}</label>
@@ -257,6 +273,52 @@ function Holders({ duty, users, post, ask }) {
         </form>)}
     </div>
   );
+}
+
+export function UserDuties({ userId }) {
+  const { call, reload: reloadShell } = usePlatform();
+  const { t } = usePrefs();
+  const { data, error, reload } = useProjectData((id) => `/api/report-setup?projectId=${id}`);
+  const { projectId } = usePlatform();
+  const [message, setMessage] = useState(null);
+  const [confirm, confirmation] = useConfirm();
+  const ask = (title) => confirm({ title, confirmLabel: t("tk.yes"), cancelLabel: t("common.cancel") });
+  async function post(body) {
+    setMessage(null);
+    try {
+      await call("/api/report-setup", { method: "POST", body: JSON.stringify({ projectId, ...body }) });
+      await Promise.all([reload(), reloadShell()]);
+      return true;
+    } catch (failure) { setMessage(failure.message); return false; }
+  }
+  const duties = data?.duties.filter((duty) => duty.members.some((member) => member.userId === userId)) || [];
+  return <section>
+    <h3>{t("rs.duties")}</h3>
+    {confirmation}
+    {(error || message) && <p className="err" role="alert">{error || message}</p>}
+    {!data && !error && <p>{t("common.loading")}</p>}
+    {data && !duties.length && <p>{t("rs.noDuties")}</p>}
+    {duties.map((duty) => <details key={duty.id} className="card">
+      <summary>{duty.code ? `${duty.code} — ` : ""}{duty.name}{duty.roleName ? ` · ${duty.roleName}` : ""}</summary>
+      <Holders duty={duty} users={data.users} onlyUser={userId} post={post} ask={ask} />
+    </details>)}
+  </section>;
+}
+
+function DutyTiles({ catalog, value, onChange, tr }) {
+  const selected = new Set(value);
+  return <fieldset><legend>{tr("rs.dutyTiles")}</legend>
+    {catalog.map((group) => <details key={group.group}>
+      <summary>{group.group}</summary>
+      {group.sections.map((section) => <details key={section.key} style={{ marginInlineStart: 14 }}>
+        <summary>{section.title}</summary>
+        <div className="permgrid">{section.tiles.map((tile) => <label key={tile.href}>
+          <input type="checkbox" checked={selected.has(tile.href)} onChange={(event) =>
+            onChange(event.target.checked ? [...value, tile.href] : value.filter((href) => href !== tile.href))} /> {tile.title}
+        </label>)}</div>
+      </details>)}
+    </details>)}
+  </fieldset>;
 }
 
 function Rights({ value, on, data, perm, tr, label }) {
@@ -503,7 +565,7 @@ function DutyForms({ data, roleId, value, onChange, tr }) {
   const contractId = data.roles.find((r) => r.id === roleId)?.contract_id;
   const trees = Object.fromEntries(Object.entries(data.scope || {}).map(([key, rows]) =>
     [key, rows.filter((n) => !contractId || n.contractId === contractId)]));
-  const available = data.types.filter((t) => !value.some((r) => r.formId === t.id));
+  const available = data.types.filter((t) => t.active && (!t.form_contract_id || t.form_contract_id === contractId) && !value.some((r) => r.formId === t.id));
   const rowIds = new Set(Object.values(trees).flat().map((n) => n.id));
   return (
     <fieldset data-duty-forms>

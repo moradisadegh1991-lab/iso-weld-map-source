@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 import { PREFS } from "../../lib/prefs.mjs";
@@ -8,25 +9,46 @@ import { LANGS } from "../../lib/i18n/index.mjs";
 /**
  * The signed-in person's own settings: how the platform looks (colour mode,
  * accent, density, text size, the default table view), its language, and
- * their password. Appearance and language are applied at once and kept on
- * the account (078), so they follow the person to every device.
+ * their password. Appearance and language are saved together on the account.
  *
  * The password: the current one is asked for; the new one ends every other
  * session (another phone, another computer), and this one stays signed in.
  */
 export default function AccountPage() {
   const { user } = usePlatform();
-  const { t } = usePrefs();
+  const { prefs, t, saveSettings, saveError } = usePrefs();
+  const router = useRouter();
+  const [draft, setDraft] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const pick = (key) => (value) => setDraft((previous) => ({ ...previous, [key]: value }));
+  const choices = { ...prefs, ...draft };
+
+  async function submit(event) {
+    event.preventDefault();
+    if (busy) return;
+    setAttempted(true);
+    setBusy(true);
+    try {
+      if (await saveSettings(draft)) router.push("/desk");
+    } finally { setBusy(false); }
+  }
+
   return (
     <div className="page settings-page">
       <div className="pagehead"><h1>{t("settings.title")}</h1>
         <span className="sub">{user?.displayName || ""} · <bdi dir="ltr">{user?.email}</bdi> — {t("settings.sub")}</span></div>
       <div className="settings-grid">
-        <Appearance />
-        <div className="settings-col">
-          <Language />
-          <Password />
-        </div>
+        <form onSubmit={submit}>
+          <Appearance prefs={choices} pick={pick} t={t} />
+          <Language prefs={choices} pick={pick} t={t} />
+          {attempted && saveError && <p className="err" role="alert">{saveError}</p>}
+          <div className="row" style={{ gap: 8, marginTop: 12 }}>
+            <button type="submit" className="btn" disabled={busy}>{t("common.save")}</button>
+            <button type="button" className="btn ghost" disabled={busy} onClick={() => router.push("/desk")}>{t("common.cancel")}</button>
+          </div>
+        </form>
+        <Password />
       </div>
     </div>
   );
@@ -47,20 +69,7 @@ function Choice({ name, label, value, options, onPick, render }) {
   );
 }
 
-function useSave() {
-  const { setPref } = usePrefs();
-  const [note, setNote] = useState(null);
-  const pick = (key) => async (v) => {
-    setNote(null);
-    const ok = await setPref(key, v);
-    setNote(ok ? { ok: true } : null);
-  };
-  return [pick, note];
-}
-
-function Appearance() {
-  const { prefs, t, saveError } = usePrefs();
-  const [pick, note] = useSave();
+function Appearance({ prefs, pick, t }) {
   return (
     <section className="card settings-card" aria-labelledby="set-appearance">
       <h2 id="set-appearance">{t("settings.appearance")}</h2>
@@ -77,20 +86,17 @@ function Appearance() {
       <div className="settings-preview" aria-label={t("settings.preview")}>
         <span className="sm muted">{t("settings.preview")}</span>
         <div className="pv-row">
-          <button type="button" className="btn">{t("common.save")}</button>
-          <button type="button" className="btn ghost">{t("common.cancel")}</button>
+          <span className="btn" aria-hidden>{t("common.save")}</span>
+          <span className="btn ghost" aria-hidden>{t("common.cancel")}</span>
           <span className="pill ok">OK</span><span className="pill warn">!</span><span className="pill bad">×</span>
         </div>
         <input type="text" readOnly value={t("tk.search")} aria-label={t("tk.search")} />
       </div>
-      <Saved note={note} err={saveError} />
     </section>
   );
 }
 
-function Language() {
-  const { prefs, t, saveError } = usePrefs();
-  const [pick, note] = useSave();
+function Language({ prefs, pick, t }) {
   return (
     <section className="card settings-card" aria-labelledby="set-language">
       <h2 id="set-language">{t("settings.language")}</h2>
@@ -99,15 +105,8 @@ function Language() {
       <p className="sm muted">{t("settings.languageHint")}</p>
       <Choice name="calendar" label={t("settings.calendar")} value={prefs.calendar} options={PREFS.calendar} onPick={pick("calendar")}
               render={(o) => t(`settings.calendar.${o}`)} />
-      <Saved note={note} err={saveError} />
     </section>
   );
-}
-
-function Saved({ note, err }) {
-  const { t } = usePrefs();
-  if (err) return <p className="err sm" role="alert">{t("settings.savedLocal", { err })}</p>;
-  return note ? <p className="okmsg sm" role="status">{t("settings.saved")}</p> : null;
 }
 
 function Password() {

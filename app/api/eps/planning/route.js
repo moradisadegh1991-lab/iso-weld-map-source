@@ -5,7 +5,7 @@ import { authenticate, errorResponse } from "../../../../lib/server/session.mjs"
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 import * as plan from "../../../../lib/db/repos/planning.mjs";
-import { pmsScopeOf, assertPmsTargets } from "../../../../lib/db/repos/duty-pms-scope.mjs";
+import { transferRights, assertImport, pmsScopeOf, assertPmsTargets } from "../../../../lib/db/repos/duty-pms-scope.mjs";
 import { assertContractAccess } from "../../../../lib/db/repos/users.mjs";
 
 /**
@@ -83,7 +83,7 @@ export async function GET(request) {
       const scope = await pmsScopeOf(db, { projectId, userId: user.id, form: "planning" });
       const targets = await assertPmsTargets(db, projectId, scope, [["version", versionId], ["activity", activityId]]);
       if (activityId && url.searchParams.get("view") === "history") return Response.json(await plan.activityPlanningHistory(db, { projectId, versionId, activityId }));
-      const may = { edit: access !== "view", contractWide: !scope && access !== "view",
+      const may = { ...(await transferRights(db, { projectId, userId: user.id, contractId, form: "planning", role: membership.role })), edit: access !== "view", contractWide: !scope && access !== "view",
         fullPms: !scope || [...targets].every((id) => scope.whole.has(id)) };
       if (activityId) return Response.json({ ...(await plan.previewDetail(db, { projectId, versionId, activityId, dutyScope: scope })), may });
       return Response.json({ ...(await plan.planRows(db, { projectId, versionId, dutyScope: scope })), may });
@@ -114,6 +114,7 @@ export async function POST(request) {
       await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: "edit" });
       const a = { ...b, projectId, contractId, userId: user.id };
       await assertPmsTargets(db, projectId, await pmsScopeOf(db, { ...a, form: "planning" }), writeTargets(b), { whole: kind === "plan-import" || kind === "plan-copy" });
+      if (kind === "plan-import") await assertImport(db, { ...a, form: "planning", role: membership.role });
       const run = {
         "plan-add": () => plan.addToPlan(db, a),
         "plan-edit": () => plan.savePlanRow(db, a),

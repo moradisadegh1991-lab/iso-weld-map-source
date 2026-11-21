@@ -7,7 +7,7 @@ import { assertCan, ACTIONS } from "../../../../lib/authz.mjs";
 import * as act from "../../../../lib/db/repos/eps-activities.mjs";
 import * as scope from "../../../../lib/db/repos/eps-scope.mjs";
 import { DISCIPLINES, MEASURES, MODES } from "../../../../lib/eps/scope.mjs";
-import { pmsScopeOf, assertPmsTargets, assertPmsContractScope, visibleActivity, progressActivityOf } from "../../../../lib/db/repos/duty-pms-scope.mjs";
+import { transferRights, assertImport, pmsScopeOf, assertPmsTargets, assertPmsContractScope, visibleActivity, progressActivityOf } from "../../../../lib/db/repos/duty-pms-scope.mjs";
 import { assertContractAccess } from "../../../../lib/db/repos/users.mjs";
 import { REL_TYPES, BUDGET_UNITS, ROLE_STATUS, QTY_MODES } from "../../../../lib/eps/activities.mjs";
 import { fromDailySheet } from "../../../../lib/eps/daily-sheet.mjs";
@@ -146,18 +146,21 @@ export async function GET(request) {
           contractWide: !scopeIds && a !== "view" } });
       }
       if (versionId || pmsId) {
-        const a = await access(versionId ? await one(VERSION, versionId) : await one(PMS, pmsId));
+        const contract = versionId ? await one(VERSION, versionId) : await one(PMS, pmsId);
+        const a = await access(contract);
         const targets = await assertPmsTargets(db, projectId, scopeIds, [["pms", pmsId], ["version", versionId]], { whole: !!q("unplanned") });
         const fullPms = !scopeIds || [...targets].every((id) => scopeIds.whole.has(id));
         const at = { projectId, pmsId, versionId, userId: user.id, dutyScope: scopeIds };
         if (q("lines")) return Response.json({ lines: await act.versionLines(db, at) });
         if (q("unplanned")) return Response.json({ unplanned: await scope.unplanned(db, at), labels: LABELS });
+        const transfers = await transferRights(db, { projectId, userId: user.id, contractId: contract, form, role: membership.role });
+        const may = { ...transfers, edit: a !== "view", contractWide: !scopeIds && a !== "view", fullPms };
         const autoApplied = form === "activity" && fullPms && a !== "view" ? (await scope.autoApply(db, { ...at, userId: user.id })).filter((x) => x.error || x.added || x.removed || x.changed || x.made || x.dropped) : [];
         if (q("days") !== null || url.searchParams.has("days")) {
           const days = String(q("days") || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 62);
-          return Response.json({ ...(await act.daysView(db, { ...at, days })), labels: LABELS, may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });
+          return Response.json({ ...(await act.daysView(db, { ...at, days })), labels: LABELS, may });
         }
-        return Response.json({ ...(await act.activityView(db, at)), autoApplied, labels: LABELS, may: { edit: a !== "view", contractWide: !scopeIds && a !== "view" } });
+        return Response.json({ ...(await act.activityView(db, at)), autoApplied, labels: LABELS, may });
       }
       if (contractId) {
         const a = await access(contractId);
@@ -194,6 +197,7 @@ export async function POST(request) {
       const a = { ...b, projectId, contractId, userId: user.id };
       const form = kind?.startsWith("progress-") ? "progress" : "activity";
       const scopeIds = await pmsScopeOf(db, { ...a, form });
+      if (kind === "progress-import") await assertImport(db, { ...a, form, role: membership.role });
       if (scopeIds) await assertPmsTargets(db, projectId, scopeIds, await writeTargets(db, projectId, b));
       const run = {
         relation: () => act.saveRelation(db, a),
@@ -209,6 +213,9 @@ export async function POST(request) {
         "progress-edit": async () => {
           // a line moved to another report: that report's contract must be the caller's too (the repository checks it is the same contract)
           if (b.toReportId) await assertContractAccess(db, { projectId, contractId: await contractOf(db, projectId, { kind: "progress-add", reportId: b.toReportId }) ?? "", userId: user.id, role: membership.role, need: "edit" });
+          if (b.toReportId && b.toReportId !== b.reportId && db.transaction && !db.inTransaction) {
+            return db.transaction((tx) => act.editProgress(tx, a));
+          }
           return act.editProgress(db, a);
         },
         "progress-import": () => {

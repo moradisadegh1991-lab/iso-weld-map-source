@@ -411,7 +411,7 @@ test("a work calendar counts scheduled weekdays and explicit date exceptions", (
 });
 
 test("contract calendars have one default and inherit to PMS and versions with independent activity overrides", async () => {
-  const { saveCalendar, listCalendars } = await import("../../lib/db/repos/contract-calendars.mjs");
+  const { saveCalendar, listCalendars, removeCalendar } = await import("../../lib/db/repos/contract-calendars.mjs");
   const { importPlan } = await import("../../lib/db/repos/eps-import.mjs");
   await inP(async () => {
     const ctx = { projectId: P, contractId: C.id };
@@ -461,6 +461,12 @@ test("contract calendars have one default and inherit to PMS and versions with i
     const uploaded = await importPlan(db, { ...ctx, mode: "new", pmsCode: "IMP-CAL", title: "Uploaded", kind: "sheet", sourceName: "eps.xlsx",
       content: XLSX.write(wb, { type: "buffer", bookType: "xlsx" }), calendarId: week.id, userId: U.id });
     equal(uploaded.pms.calendar_id, week.id);
+    await throws(() => removeCalendar(db, { ...ctx, id: week.id }), "استفاده می‌شود");
+    await throws(() => removeCalendar(db, { ...ctx, id: all.id }), "پیش‌فرض");
+    const unused = await saveCalendar(db, { ...ctx, name: "Unused", weekdays: [0] });
+    await removeCalendar(db, { ...ctx, id: unused.id });
+    assert(!(await listCalendars(db, ctx)).some((calendar) => calendar.id === unused.id));
+
   });
 });
 

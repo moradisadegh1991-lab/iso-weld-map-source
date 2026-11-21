@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
-import { navigationFor, activeTab } from "../../lib/platform/navigation.mjs";
+import { navigationFor, formsForContract, activeTab } from "../../lib/platform/navigation.mjs";
 import { AREAS } from "../../lib/platform/areas.mjs";
 import { can } from "../../lib/authz.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
@@ -68,12 +68,14 @@ export default function Shell({ children }) {
 
 function Frame({ p, pathname, children }) {
   const router = useRouter();
-  const { t, lang, locale } = usePrefs();
+  const { t, lang, locale, setPref } = usePrefs();
   const [theme, toggleTheme] = useTheme();
   const roleName = (r) => (r ? t(`role.${r}`) : "—");
   const [rail, setRail] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [closed, setClosed] = useState([]);
+  const [openSections, setOpenSections] = useState({});
+  const activeRow = useRef(null);
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState(false);
   const search = useRef(null);
@@ -95,9 +97,10 @@ function Frame({ p, pathname, children }) {
     return () => window.removeEventListener("keydown", k);
   }, [rail]);
 
+  const planningHeader = /^\/eps\/(wbs|activities|planning(?:\/preview)?|progress(?:\/(?:preview|days))?)\/?$/.test(pathname);
   const membership = { role: p.role, areas: p.project?.areas || [], tiles: p.project?.tiles || [], party: p.project?.inspection_party || null };
   const forms = p.project?.forms || [];
-  const nav = localizeNav(navigationFor(membership, can, { forms }), lang);
+  const nav = localizeNav(navigationFor(membership, can, { forms: formsForContract(forms, p.contractId) }), lang);
   const tab = activeTab(pathname, forms);
   const here = tab && { ...tab, title: nav.flatMap((g) => g.items.flatMap((s) => s.tabs)).find((x) => x.href === tab.href)?.title || tab.title };
   const section = nav.flatMap((g) => g.items).find((s) => s.key === here?.section) || null;
@@ -131,8 +134,13 @@ function Frame({ p, pathname, children }) {
       <header className="topbar">
         <button className="hamb" aria-label={t("shell.menu")} onClick={() => setDrawer(!drawer)}>☰</button>
         <span className="brand"><span className="logo">EPC</span><span className="t">EPC&nbsp;PLATFORM</span></span>
+        {planningHeader && <div className="pms-languages" dir="ltr">
+          {["fa", "en", "ar"].map((code) => <button type="button" key={code} lang={code}
+            aria-pressed={lang === code} onClick={() => setPref("lang", code)}>{code}</button>)}
+        </div>}
         {p.projects.length > 0 ? <ContractPicker p={p} /> : <span className="crumb">{t("shell.noProjects")}</span>}
-        {section && <span className="crumb">{groupOf ? `${groupOf.label} ›` : ""} {section.tabs.length > 1 ? `${section.title} ›` : ""} <b style={{ color: "var(--ink)", fontWeight: 500 }}>{here.title}</b></span>}
+        {planningHeader && <div id="pms-header-selectors" />}
+        {section && !planningHeader && <span className="crumb">{groupOf ? `${groupOf.label} ›` : ""} {section.tabs.length > 1 ? `${section.title} ›` : ""} <b style={{ color: "var(--ink)", fontWeight: 500 }}>{here.title}</b></span>}
         <span className="grow" />
         <button className="iconbtn" onClick={toggleTheme} title={theme === "light" ? t("shell.themeDark") : t("shell.themeLight")} aria-label={t("shell.toggleTheme")}>
           {theme === "light" ? "☾" : "☀"}
@@ -184,15 +192,29 @@ function Frame({ p, pathname, children }) {
             found.length ? found.map((i) => <NavLink key={i.href} i={i} on={here?.href === i.href} onClick={() => setQ("")} />)
               : <p className="nav-empty">{t("shell.noSection", { q })}</p>
           ) : nav.map((g) => {
-            const hasHere = g.items.some((i) => i.key === here?.section);
-            const isClosed = closed.includes(g.group) && !hasHere;
+            const isClosed = closed.includes(g.group);
             return (
               <div key={g.group} className={`nav-grp ${isClosed ? "closed" : ""}`}>
                 <button className="grp" onClick={() => toggleGroup(g.group)} aria-expanded={!isClosed}>
                   <span>{g.label}</span><span className="chev" aria-hidden>▾</span>
                 </button>
                 <div className="items">
-                  {g.items.map((i) => <NavLink key={i.key} i={i} on={i.key === here?.section} />)}
+                  {g.items.map((i) => {
+                    const on = i.key === here?.section;
+                    const expanded = openSections[i.key] ?? false;
+                    return <div key={i.key} className="nav-section">
+                      {rail ? <NavLink i={i} on={on} /> : <>
+                        <button type="button" className={on ? "on" : ""} aria-expanded={expanded}
+                          onClick={() => setOpenSections((previous) => ({ ...previous, [i.key]: !expanded }))}>
+                          <span className="ic" aria-hidden>{i.icon}</span><span>{i.title}</span>
+                          <span className="nav-section-arrow" aria-hidden>{expanded ? "▾" : "▸"}</span>
+                        </button>
+                        {expanded && <div className="nav-section-tiles">
+                          {i.tabs.map((x) => <NavLink key={x.href} i={{ ...x, status: "live" }} on={x.href === here?.href} />)}
+                        </div>}
+                      </>}
+                    </div>;
+                  })}
                 </div>
               </div>
             );
@@ -205,12 +227,45 @@ function Frame({ p, pathname, children }) {
         </div>
       </nav>
 
-      <main className="body">
+      <main className="body"
+        onClick={(e) => {
+          const row = e.target.closest("tbody tr");
+          if (row && !row.closest(".tk, .p6") && plainRow(row)) {
+            deleteRowSelection(activeRow.current);
+            activeRow.current = row;
+            row.dataset.shortcutRow = "";
+            if (!e.target.closest("a, button, input, select, textarea, label, [contenteditable=true]")) {
+              row.tabIndex = -1;
+              row.focus({ preventScroll: true });
+            }
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.defaultPrevented || e.nativeEvent.isComposing || !(e.ctrlKey || e.metaKey)
+            || !["PageUp", "PageDown"].includes(e.key) || e.target.closest(".tk, .p6")) return;
+          const current = e.target.closest("tbody tr") || activeRow.current;
+          if (!current?.isConnected || !plainRow(current)) return;
+          const rows = [...current.parentElement.rows].filter(plainRow);
+          const next = rows[rows.indexOf(current) + (e.key === "PageDown" ? 1 : -1)];
+          e.preventDefault();
+          if (next) {
+            next.click();
+            next.scrollIntoView({ block: "nearest" });
+          }
+        }}>
         {section && section.tabs.length > 1 && <SectionTabs section={section} here={here} />}
         {children}
       </main>
     </div>
   );
+}
+
+function plainRow(row) {
+  return !row.hidden && row.getClientRects().length && [...row.cells].every((cell) => cell.colSpan === 1);
+}
+
+function deleteRowSelection(row) {
+  if (row) delete row.dataset.shortcutRow;
 }
 
 /**

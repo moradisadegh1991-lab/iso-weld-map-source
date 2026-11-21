@@ -191,7 +191,7 @@ function ReportView({ projectId, id, call, labels, users, close }) {
                 const e = l.effective || {}, a = v.activityInfo?.[e.activityId] || {};
                 return (
                   <tr key={l.id} style={{ textDecoration: e.removed ? "line-through" : undefined }}><td>{i + 1}</td><td><span className="mono" dir="ltr">{a.code || "—"}</span> {a.name || ""}</td>
-                    <td>{v.companies?.find((c) => c.id === e.areaId)?.name || "—"}</td><td>{e.mark || "—"}</td><td className="mono">{e.qty ?? "—"}</td><td>{a.unit || "—"}</td><td className="sm">{e.notes || ""}</td>
+                    <td>{e.areaText || v.companies?.find((c) => c.id === e.areaId)?.name || "—"}</td><td>{e.mark || "—"}</td><td className="mono">{e.qty ?? "—"}</td><td>{a.unit || "—"}</td><td className="sm">{e.notes || ""}</td>
                     <td className="sm">{l.lines.map((x) => <div key={x.seq} style={{ color: x.color || undefined }}>{x.stage}: {x.removed ? t("dr.removedWord") : x.values.qty}</div>)}</td></tr>);
               })}</tbody></table></TableKit>)}
         </div>)}

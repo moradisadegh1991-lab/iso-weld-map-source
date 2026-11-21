@@ -7,8 +7,8 @@ export function CalendarSelect({ calendars = [], value, onChange, inherited, req
   const id = useId();
   return <div className="field">
     <label htmlFor={id}>{t("ep.cal.title")}</label>
-    <select id={id} value={value || ""} onChange={(e) => onChange(e.target.value)} required={required && calendars.length > 0} disabled={disabled}>
-      <option value="">{inherited ? t("ep.cal.inheritName", { name: inherited }) : t("ep.cal.allDays")}</option>
+    <select id={id} value={value || ""} onChange={(e) => onChange(e.target.value)} required={required} disabled={disabled}>
+      <option value="">{required ? t(calendars.length ? "ep.cal.pick" : "ep.cal.defineFirst") : inherited ? t("ep.cal.inheritName", { name: inherited }) : t("ep.cal.allDays")}</option>
       {calendars.map((c) => <option key={c.id} value={c.id}>{c.name}{c.is_default ? ` · ${t("ep.g.default")}` : ""}</option>)}
     </select>
   </div>;
@@ -19,10 +19,21 @@ export default function WorkCalendar({ calendars, post, may }) {
   const { t, lang } = usePrefs();
   const [draft, setDraft] = useState(null);
   const [date, setDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [working, setWorking] = useState(false);
   const [busy, setBusy] = useState(false);
   const weekday = new Intl.DateTimeFormat(lang, { weekday: "long", timeZone: "UTC" });
-  const choose = (c) => { setDraft(c ? { ...c, isDefault: c.is_default } : empty()); setDate(""); setWorking(false); };
+  const choose = (c) => { setDraft(c ? { ...c, isDefault: c.is_default } : empty()); setDate(""); setEndDate(""); setWorking(false); };
+  const dates = date ? Math.round((Date.parse(endDate || date) - Date.parse(date)) / 86400000) + 1 : 0;
+  function addException() {
+    if (dates < 1 || dates > 366) return;
+    const start = Date.parse(date);
+    const values = Object.fromEntries(Array.from({ length: dates }, (_, i) =>
+      [new Date(start + i * 86400000).toISOString().slice(0, 10), working]));
+    setDraft({ ...draft, exceptions: { ...draft.exceptions, ...values } });
+    setDate(""); setEndDate("");
+  }
+
   async function save(e) {
     e.preventDefault();
     if (busy) return;
@@ -34,7 +45,16 @@ export default function WorkCalendar({ calendars, post, may }) {
     <summary>{t("ep.cal.list")}</summary>
     <ul>{calendars.map((c) => <li key={c.id}>
       {c.name} {c.is_default && <span className="pill sm">{t("ep.g.default")}</span>}
-      {may && <button className="btn ghost sm" type="button" disabled={busy} onClick={() => choose(c)}>{t("ep.edit")}</button>}
+      {may && <>
+        <button className="btn ghost sm" type="button" disabled={busy} onClick={() => choose(c)}>{t("ep.edit")}</button>
+        <button className="btn ghost sm" type="button" disabled={busy} onClick={() => choose({ ...c, id: null, name: "", is_default: false })}>{t("ep.cal.copy")}</button>
+        {!c.is_default && <button className="btn ghost sm" type="button" disabled={busy} onClick={async () => {
+          if (!window.confirm(t("ep.cal.removeAsk", { name: c.name }))) return;
+          setBusy(true);
+          try { if (await post({ kind: "calendar-remove", id: c.id }, () => t("ep.cal.removed")) && draft?.id === c.id) setDraft(null); }
+          finally { setBusy(false); }
+        }}>{t("ep.remove")}</button>}
+      </>}
     </li>)}</ul>
     {may && !draft && <button className="btn sm" type="button" onClick={() => choose(null)}>+ {t("ep.cal.new")}</button>}
     {may && draft && <form onSubmit={save}>
@@ -47,10 +67,11 @@ export default function WorkCalendar({ calendars, post, may }) {
       </fieldset>
       <fieldset><legend>{t("ep.cal.exceptions")}</legend>
         <label>{t("ep.date")} <input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+        <label>{t("ep.cal.until")} <input type="date" min={date || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)} /></label>
         <select aria-label={t("ep.cal.exceptions")} value={String(working)} onChange={(e) => setWorking(e.target.value === "true")}>
           <option value="false">{t("ep.cal.off")}</option><option value="true">{t("ep.cal.on")}</option>
         </select>
-        <button className="btn ghost sm" type="button" disabled={!date} onClick={() => { setDraft({ ...draft, exceptions: { ...draft.exceptions, [date]: working } }); setDate(""); }}>{t("ep.cal.addException")}</button>
+        <button className="btn ghost sm" type="button" disabled={dates < 1 || dates > 366} onClick={addException}>{t("ep.cal.addException")}</button>
         <ul>{Object.entries(draft.exceptions).sort().map(([d, on]) => <li key={d}>
           <bdi>{d}</bdi> · {t(on ? "ep.cal.on" : "ep.cal.off")}
           <button className="btn ghost sm" type="button" onClick={() => setDraft({ ...draft, exceptions: Object.fromEntries(Object.entries(draft.exceptions).filter(([key]) => key !== d)) })}>{t("ep.remove")}</button>

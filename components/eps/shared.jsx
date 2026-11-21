@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useProjectData } from "../../lib/client/platform.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 import { COST_FIELDS } from "../../lib/eps/costs.mjs";
@@ -76,6 +77,8 @@ export function useVersion(contractId, { version: withVersion = true, form = "ac
   const [pmsId, setPmsId] = useState(null);
   const [versionId, setVersionId] = useState(null);
   const [asked, setAsked] = useState(null);
+  const [header, setHeader] = useState(null);
+  useEffect(() => { setHeader(document.getElementById("pms-header-selectors")); }, []);
   useEffect(() => { const q = new URLSearchParams(window.location.search); setAsked({ version: q.get("version"), pms: q.get("pms") }); }, []);
   const board = useProjectData((id) => (contractId ? `/api/eps?projectId=${id}&contractId=${contractId}&form=${form}` : null), [contractId, form]);
   // only the PMSs the contract uses now are offered (owner's requirements 2026-10-26, item 5)
@@ -94,9 +97,9 @@ export function useVersion(contractId, { version: withVersion = true, form = "ac
     pick(pmsList.find((p) => p.id === asked.pms) || pmsList.find((p) => p.versions.some((v) => v.master)) || pmsList[0]);
   }, [asked, pmsList.length, contractId]); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = pmsList.find((p) => p.id === pmsId);
-  const picker = (
-    <span className="row" style={{ gap: 4, display: "inline-flex" }} data-plan-picker>
-      <select aria-label="PMS" value={pmsId || ""} onChange={(e) => pick(pmsList.find((p) => p.id === e.target.value))} data-pick="pms">
+  const controls = (
+    <span className="row pms-header-picker" data-plan-picker>
+      <select aria-label="PMS" title={t("ep.pmsList")} value={pmsId || ""} onChange={(e) => pick(pmsList.find((p) => p.id === e.target.value))} data-pick="pms">
         {pmsList.length === 0 && <option value="">{t("ep.noVersion")}</option>}
         {pmsList.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.title}</option>)}</select>
       {withVersion && <select aria-label={t("ep.version")} value={versionId || ""} onChange={(e) => setVersionId(e.target.value || null)} data-pick="version">
@@ -104,5 +107,5 @@ export function useVersion(contractId, { version: withVersion = true, form = "ac
         {(cur?.versions || []).map((v) => <option key={v.id} value={v.id}>{v.code} — {v.title}{v.master ? " (Master)" : ""}</option>)}</select>}
     </span>);
   const plan = versionId ? `versionId=${versionId}` : pmsId ? `pmsId=${pmsId}` : null;
-  return { pmsId, versionId, plan, picker, versions, pms: cur || null, reloadBoard: board.reload };
+  return { pmsId, versionId, plan, picker: header ? createPortal(controls, header) : controls, versions, pms: cur || null, reloadBoard: board.reload };
 }

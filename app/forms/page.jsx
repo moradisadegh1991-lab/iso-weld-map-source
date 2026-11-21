@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import TreeEditor from "../../components/ui/TreeEditor";
+import { SECTIONS } from "../../lib/platform/navigation.mjs";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 
 /**
@@ -11,7 +13,7 @@ import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
  * layout. Each form is a tile of its own, given to people one by one.
  */
 const BLANK_FIELD = { label: "", key: "", type: "text", required: false, options: "", bind: "" };
-const BLANK = { id: null, code: "", name: "", description: "", section: "", source: "", header: [], columns: [] };
+const BLANK = { id: null, code: "", name: "", description: "", section: "", source: "", visibility: "project", navigation: "handover", header: [], columns: [] };
 // a starting point for a form whose rows are the day's accepted work: every column bound to what that work carries
 const WORK_COLUMNS = [
   { label: "آیتم", type: "text", bind: "item" }, { label: "مرحلهٔ کار", type: "text", bind: "step" },
@@ -20,7 +22,11 @@ const WORK_COLUMNS = [
   { label: "ملاحظات", type: "text" },
 ].map((c) => ({ ...BLANK_FIELD, ...c }));
 
-const toForm = (t) => ({ id: t.id, code: t.code, name: t.name, description: t.description || "", section: t.section, source: t.form.source || "",
+const SCOPES = { contract: "قرارداد جاری", project: "پروژه جاری", global: "سراسری" };
+const PARENTS = SECTIONS.flatMap((group) => group.items);
+const scopeOf = (form) => form.published ? "global" : form.form_contract_id ? "contract" : "project";
+
+const toForm = (t) => ({ id: t.id, visibility: scopeOf(t), navigation: t.form_navigation || "handover", code: t.code, name: t.name, description: t.description || "", section: t.section, source: t.form.source || "",
   header: t.form.header.map((f) => ({ ...BLANK_FIELD, ...f, options: (f.options || []).join("، ") })),
   columns: t.form.columns.map((f) => ({ ...BLANK_FIELD, ...f, options: (f.options || []).join("، "), bind: f.bind || "" })) });
 const toDefinition = (f) => ({ source: f.source || null,
@@ -28,22 +34,45 @@ const toDefinition = (f) => ({ source: f.source || null,
   columns: f.columns.map((x) => ({ ...x, bind: f.source ? x.bind || null : null })) });
 
 export default function FormsPage() {
-  const { projectId, call, reload: reloadShell } = usePlatform();
-  const { data, error, reload } = useProjectData((id) => `/api/forms?projectId=${id}`, []);
+  const { projectId, contractId, role, call, reload: reloadShell } = usePlatform();
+  const { data, error, reload } = useProjectData((id) => `/api/forms?projectId=${id}&contractId=${contractId}`, [contractId]);
   const [f, setF] = useState(null);
   const [msg, setMsg] = useState(null);
   const [ok, setOk] = useState(null);
+  const [busy, setBusy] = useState(false);
   if (error) return <p className="err">{error}</p>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
   const L = data.labels;
-  async function save(e) {
-    e.preventDefault(); setMsg(null); setOk(null);
+  const admin = ["admin", "developer"].includes(role);
+  const editable = (form) => !form.template && (!form.published || admin) && data.designable.includes(form.section);
+  const tree = PARENTS.map((parent) => ({
+    id: parent.key, name: parent.title,
+    children: data.types.filter((type) => type.form_navigation === parent.key).map((type) => ({
+      id: type.id || `shared-${type.code}`, name: `${type.code} — ${type.name}`, type,
+    })),
+  }));
+  const newForm = (navigation = "handover") => setF({ ...BLANK, navigation, section: data.designable[0], columns: [{ ...BLANK_FIELD }] });
+  async function send(kind, body, success) {
+    if (busy) return false;
+    setMsg(null); setOk(null); setBusy(true);
     try {
-      const r = await call("/api/forms", { method: "POST", body: JSON.stringify({ projectId, kind: "save-type", id: f.id, code: f.code, name: f.name,
-        description: f.description, section: f.section, definition: toDefinition(f) }) });
-      setOk(`فرم ${r.row.code} ذخیره شد.${f.id ? "" : " گردش کار پیش‌فرض (پیمانکار ← نظارت کارفرما) ساخته شد؛ امضاکنندگان را تعیین کنید."}`);
-      setF(null); reload(); reloadShell();          // a new form is a new tile in the menu
-    } catch (e2) { setMsg(e2.message); }
+      await call("/api/forms", { method: "POST", body: JSON.stringify({ projectId, contractId: contractId || null, kind, ...body }) });
+      setOk(success); await Promise.all([reload(), reloadShell()]); return true;
+    } catch (error) { setMsg(error.message); return false; }
+    finally { setBusy(false); }
+  }
+  function saveForm(form) {
+    return send("save-type", { id: form.id, code: form.code, name: form.name, description: form.description,
+      section: form.section, definition: toDefinition(form), navigation: form.navigation, visibility: form.visibility }, `فرم ${form.code} ذخیره شد.`);
+  }
+  async function save(event) {
+    event.preventDefault();
+    if (await saveForm(f)) setF(null);
+  }
+  async function move(id, parentId) {
+    const form = data.types.find((type) => type.id === id);
+    if (!form || !editable(form) || !PARENTS.some((parent) => parent.key === parentId) || form.form_navigation === parentId) return;
+    if (await saveForm({ ...toForm(form), navigation: parentId })) setF(null);
   }
   return (
     <div className="page">
@@ -53,26 +82,30 @@ export default function FormsPage() {
       {ok && <p className="okmsg" role="status">{ok}</p>}
       <div className="card">
         <h2>فرم‌ها</h2>
-        {data.types.length === 0 ? <p className="empty-note">هنوز فرمی طراحی نشده است.</p> : (
-          <div className="tiles">{data.types.map((t) => (
-            <div key={t.id} className="tile" style={{ cursor: "default" }} data-form={t.code}>
-              <span className="ic">⇄</span>
-              <span className="t">{t.name}</span>
-              <span className="d"><span className="mono">{t.code}</span> · {L.sections[t.section]} · {t.form.columns.length} ستون · {t.reports} گزارش
-                {t.form.source && " · ردیف‌ها از کار تحویل‌گرفته"}</span>
-              <span style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                <Link className="btn sm" href={`/forms/${t.code}`}>گزارش‌ها</Link>
-                {data.designable.includes(t.section) && <>
-                  <button className="btn ghost sm" type="button" onClick={() => { setF(toForm(t)); setOk(null); }}>ویرایش طراحی</button>
-                  <Link className="btn ghost sm" href={`/report-setup?type=${t.id}`}>گردش کار و امضاکنندگان</Link>
-                  <Link className="btn ghost sm" href={`/report-print-setup?type=${t.code}`}>قالب چاپ</Link></>}
-              </span>
-            </div>))}</div>)}
+        <div className="form-tree-head"><b>فرم و کد</b><b>دسترسی</b></div>
+        <TreeEditor nodes={tree} searchable editable={data.designable.length > 0} onMove={move}
+          canDrag={(node) => !!node.type && editable(node.type)} canDrop={(node) => !!node && !node.type}
+          render={(node) => !node.type ? node.name : <span className="form-tree-row">
+            <Link href={`/forms/${node.type.code}`}>{node.name}</Link><span>{SCOPES[scopeOf(node.type)]}</span>
+          </span>}
+          actions={(node) => {
+            const form = node.type;
+            if (!form) return data.designable.length > 0 && <button className="btn ghost sm" type="button" disabled={busy} onClick={() => newForm(node.id)}>+ فرم</button>;
+            if (!editable(form)) return null;
+            return <span className="row" style={{ gap: 5 }}>
+              <button className="btn ghost sm" type="button" disabled={busy} onClick={() => { setF(toForm(form)); setOk(null); }}>ویرایش</button>
+              <button className="btn ghost sm" type="button" disabled={busy} onClick={async () => {
+                if (window.confirm(`فرم «${form.name}» حذف شود؟`) && await send("remove-type", { id: form.id }, "فرم از فهرست حذف شد.") && f?.id === form.id) setF(null);
+              }}>حذف</button>
+              <Link className="btn ghost sm" href={`/report-setup?type=${form.id}`}>گردش کار</Link>
+              <Link className="btn ghost sm" href={`/report-print-setup?type=${form.code}`}>قالب چاپ</Link>
+            </span>;
+          }} />
       </div>
       {data.designable.length > 0 && !f && (
-        <p><button className="btn" type="button" onClick={() => setF({ ...BLANK, section: data.designable[0], columns: [{ ...BLANK_FIELD }] })}>+ طراحی فرم تازه</button></p>)}
+        <p><button className="btn" type="button" onClick={() => newForm()}>+ طراحی فرم تازه</button></p>)}
       {data.designable.length === 0 && <p className="sm muted">طراحی فرم با مدیر پروژه، یا با عضوی است که «طرف بازرسی: کارفرما» دارد و در آن بخش کار می‌کند.</p>}
-      {f && <Designer f={f} setF={setF} L={L} sections={data.designable} save={save} />}
+      {f && <Designer f={f} setF={setF} L={L} sections={data.designable} save={save} busy={busy} admin={admin} contractId={contractId} />}
     </div>
   );
 }
@@ -104,7 +137,7 @@ function FieldRows({ list, set, L, kind, source }) {
   );
 }
 
-function Designer({ f, setF, L, sections, save }) {
+function Designer({ f, setF, L, sections, save, busy, admin, contractId }) {
   return (
     <form className="card" onSubmit={save}>
       <h2>{f.id ? `ویرایش طراحی ${f.code}` : "فرم تازه"}</h2>
@@ -116,10 +149,19 @@ function Designer({ f, setF, L, sections, save }) {
           onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
         <div className="field"><label htmlFor="fd-sec">بخش</label><select id="fd-sec" value={f.section} onChange={(e) => setF({ ...f, section: e.target.value })}>
           {sections.map((s) => <option key={s} value={s}>{L.sections[s]}</option>)}</select></div>
+        <div className="field"><label htmlFor="fd-parent">فرم والد</label>
+          <select id="fd-parent" value={f.navigation} onChange={(e) => setF({ ...f, navigation: e.target.value })}>
+            {PARENTS.map((parent) => <option key={parent.key} value={parent.key}>{parent.title}</option>)}
+          </select></div>
+        <div className="field"><label htmlFor="fd-visibility">دسترسی</label>
+          <select id="fd-visibility" value={f.visibility} onChange={(e) => setF({ ...f, visibility: e.target.value, source: e.target.value === "contract" ? "" : f.source })}>
+            {Object.entries(SCOPES).map(([key, label]) => <option key={key} value={key}
+              disabled={key === "contract" && !contractId || key === "global" && !admin}>{label}</option>)}
+          </select></div>
         <div className="field"><label htmlFor="fd-desc">توضیح</label><input id="fd-desc" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
       </div>
       <label className="sm" style={{ display: "flex", gap: 6, alignItems: "center", margin: "8px 0" }}>
-        <input id="fd-src" type="checkbox" checked={f.source === "claims"} onChange={(e) => setF({ ...f, source: e.target.checked ? "claims" : "" })} />
+        <input id="fd-src" type="checkbox" checked={f.source === "claims"} disabled={f.visibility === "contract"} onChange={(e) => setF({ ...f, source: e.target.checked ? "claims" : "" })} />
         {L.sources.claims} — ردیف‌های گزارش هر روز از کارهایی پر می‌شود که نمایندهٔ کارفرما همان روز در این بخش تأیید کرده است</label>
       {f.source === "claims" && f.columns.every((c) => !c.bind) && (
         <p><button className="btn ghost sm" type="button" onClick={() => setF({ ...f, columns: WORK_COLUMNS })}>ستون‌های پیشنهادی برای کار تحویل‌گرفته</button></p>)}
@@ -128,7 +170,7 @@ function Designer({ f, setF, L, sections, save }) {
       <h3 style={{ marginTop: 12 }}>ستون‌های جدول <span className="sm muted">(هر ردیف یک کار تحویل‌شده)</span></h3>
       <FieldRows list={f.columns} set={(columns) => setF({ ...f, columns })} L={L} kind="column" source={f.source === "claims"} />
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button className="btn" type="submit">{f.id ? "ذخیرهٔ طراحی" : "ساخت فرم"}</button>
+        <button className="btn" type="submit" disabled={busy}>{f.id ? "ذخیرهٔ طراحی" : "ساخت فرم"}</button>
         <button className="btn ghost" type="button" onClick={() => setF(null)}>انصراف</button>
       </div>
     </form>
