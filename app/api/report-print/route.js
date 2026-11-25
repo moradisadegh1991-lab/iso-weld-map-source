@@ -45,8 +45,9 @@ export async function GET(request) {
       const { rows: [proj] } = await db.query("SELECT code, name FROM project WHERE id = $1", [projectId]);
       const reportId = url.searchParams.get("reportId");
       if (reportId) {
-        const { rows: [target] } = await db.query(`SELECT COALESCE(r.contract_id, t.form_contract_id) AS contract_id, t.code, t.form IS NOT NULL AS designed
+        const { rows: [target] } = await db.query(`SELECT COALESCE(r.contract_id, t.form_contract_id) AS contract_id, t.form_company_id, t.code, t.form IS NOT NULL AS designed
             FROM report r JOIN report_type t ON t.id = r.report_type_id WHERE r.id = $1 AND r.project_id = $2`, [reportId, projectId]);
+        if (!forms.companyFormAllowed(membership,target?.form_company_id)) return Response.json({ error: "not found" }, { status: 404 });
         if (target?.designed && !formAllowed(membership, target.code)) return Response.json({ error: "not found" }, { status: 404 });
         if (target?.contract_id) await assertContractAccess(db, { projectId, contractId: target.contract_id, userId: user.id, role: membership.role });
         const v = await rp.reportView(db, { projectId, reportId, userId: user.id });
@@ -57,11 +58,13 @@ export async function GET(request) {
           layout: lay.layout, layoutVersion: lay.version });
       }
       const code = url.searchParams.get("typeCode") || "DR";
-      const { rows: [type] } = await db.query("SELECT id, code, name, form, section, form_contract_id FROM report_type WHERE project_id = $1 AND code = $2", [projectId, code]);
+      const { rows: [type] } = await db.query("SELECT id, code, name, form, section, form_company_id, form_contract_id FROM report_type WHERE project_id = $1 AND code = $2", [projectId, code]);
       const contracts = await visibleContracts(db, { projectId, userId: user.id, role: membership.role });
       const ids = contracts.map((contract) => contract.id);
-      const { rows: types } = await db.query(`SELECT code, name FROM report_type WHERE project_id = $1 AND active
+      const { rows: candidates } = await db.query(`SELECT code, name, form_company_id FROM report_type WHERE project_id = $1 AND active
           AND (form_contract_id IS NULL OR form_contract_id = ANY($2::uuid[])) ORDER BY form IS NOT NULL, code`, [projectId, ids]);
+      const types = candidates.filter((t) => forms.companyFormAllowed(membership,t.form_company_id));
+      if (!forms.companyFormAllowed(membership,type?.form_company_id)) return Response.json({ error: "not found" }, {status:404});
       if (type?.form_contract_id && !ids.includes(type.form_contract_id)) return Response.json({ error: "not found" }, { status: 404 });
       if (!type) return Response.json({ type: null, types, choices: CHOICES });
       const lay = await pl.currentLayout(db, { projectId, reportTypeId: type.id });
@@ -94,6 +97,7 @@ export async function POST(request) {
       if (kind === "layout" && !can(membership, ACTIONS.MANAGE_MEMBERS)) {
         // a form's designer lays out their own form's print
         const t = await forms.typeOf(db, { projectId, reportTypeId: body.reportTypeId });
+        if (!forms.companyFormAllowed(membership,t?.form_company_id)) throw Object.assign(new Error("not found"), { status:404 });
         if (!t?.form || !forms.mayDesign(membership, t.section)) assertCan(membership, ACTIONS.MANAGE_MEMBERS);
         if (t?.form_contract_id) await assertContractAccess(db, { projectId, contractId: t.form_contract_id, userId: user.id, role: membership.role, need: "manage" });
       }

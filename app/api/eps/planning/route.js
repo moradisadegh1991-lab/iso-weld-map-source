@@ -36,7 +36,7 @@ async function contractOf(db, projectId, b) {
     case "comment-remove": return q(COMMENT, b.id);
     case "req-type": return b.id ? q(TYPE, b.id) : b.contractId || null;
     case "req-type-remove": return q(TYPE, b.id);
-    case "plan-edit": return q(ROW, b.id);
+    case "plan-identifiers": case "plan-edit": return q(ROW, b.id);
     case "plan-remove": {
       // every row named must be of one contract
       const ids = Array.isArray(b.ids) ? b.ids : [];
@@ -56,7 +56,7 @@ function writeTargets(b) {
   switch (b.kind) {
     case "plan-add": return [["version", b.versionId], ...(Array.isArray(b.activityIds) ? b.activityIds : []).map((id) => ["activity", id])];
     case "plan-import": return [["version", b.versionId]];
-    case "plan-edit": return [["plan", b.id]];
+    case "plan-identifiers": case "plan-edit": return [["plan", b.id]];
     case "plan-remove": return (Array.isArray(b.ids) ? b.ids : []).map((id) => ["plan", id]);
     case "plan-copy": return [["version", b.fromVersionId], ["version", b.toVersionId]];
     case "req": return [["requirement", b.id], ["version", b.versionId], ["activity", b.activityId], ["activity", b.predActivityId]];
@@ -117,6 +117,7 @@ export async function POST(request) {
       if (kind === "plan-import") await assertImport(db, { ...a, form: "planning", role: membership.role });
       const run = {
         "plan-add": () => plan.addToPlan(db, a),
+        "plan-identifiers": () => plan.changePlanIdentifiers(db, a),
         "plan-edit": () => plan.savePlanRow(db, a),
         "plan-remove": () => plan.removePlanRows(db, a),
         "plan-copy": () => plan.copyPlan(db, { ...a, replace: b.replace === true || b.replace === "true" }),

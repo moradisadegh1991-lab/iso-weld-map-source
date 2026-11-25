@@ -5,6 +5,7 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import { CONTRACT_MANAGER_ROLES, contractAccess, visibleContracts } from "../../../lib/db/repos/users.mjs";
+import { companyFormAllowed } from "../../../lib/db/repos/forms.mjs";
 import { formAllowed } from "../../../lib/platform/tiles.mjs";
 import * as reports from "../../../lib/db/repos/reports.mjs";
 import { groupsOf } from "../../../lib/reports/workflow.mjs";
@@ -43,7 +44,7 @@ export async function GET(request) {
       const contracts = await visibleContracts(db, context);
       const contractId = contracts.find((contract) => contract.id === params.get("contractId"))?.id || null;
       const desk = await deskOf(db, { ...context, contractId, contractIds: contracts.map((contract) => contract.id),
-        allowType: (type) => !type.form || formAllowed(membership, type.code) });
+        allowType: (type) => !type.form || companyFormAllowed(membership,type.form_company_id) && formAllowed(membership, type.code) });
       const n = await notificationsOf(db, { projectId, userId: user.id });
       return Response.json({ ...desk, notifications: { unread: n.unread, awaitingReply: n.awaitingReply } });
     });
@@ -54,9 +55,9 @@ export async function GET(request) {
 async function allowedRequest(db, context, id) {
   const { projectId, membership } = context;
   const { rows: [row] } = await db.query(
-    `SELECT COALESCE(r.contract_id, t.form_contract_id) AS contract_id, t.code, t.form IS NOT NULL AS designed
+    `SELECT COALESCE(r.contract_id, t.form_contract_id) AS contract_id, t.form_company_id, t.code, t.form IS NOT NULL AS designed
        FROM report r JOIN report_type t ON t.id = r.report_type_id WHERE r.project_id = $1 AND r.id = $2`, [projectId, id]);
-  if (!row || row.designed && !formAllowed(membership, row.code)
+  if (!row || !companyFormAllowed(membership,row.form_company_id) || row.designed && !formAllowed(membership, row.code)
     || row.contract_id && !await contractAccess(db, { ...context, contractId: row.contract_id })) {
     throw Object.assign(new Error("not found"), { status: 404 });
   }

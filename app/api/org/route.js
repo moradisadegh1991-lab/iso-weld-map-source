@@ -5,6 +5,7 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import { getStore } from "../../../lib/storage/index.mjs";
+import { shareState, saveShare, inheritedStructure } from "../../../lib/db/repos/structure-sharing.mjs";
 import * as org from "../../../lib/db/repos/org.mjs";
 import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
 
@@ -40,6 +41,15 @@ export async function GET(request) {
     const contractId = url.searchParams.get("contractId");
     return await withProject(db, projectId, async () => {
       const access = contractId ? await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role }) : null;
+      if (url.searchParams.has("inherited")) {
+        if (!contractId || access !== "manage") return Response.json({rows:[]});
+        return Response.json({rows:await inheritedStructure(db,{projectId,contractId,category:url.searchParams.get("inherited")})});
+      }
+      if (url.searchParams.has("share")) {
+        if (access !== "manage") return Response.json({error:"forbidden"},{status:403});
+        return Response.json(await shareState(db,{projectId,contractId,stakeholderId:url.searchParams.get("share"),
+          sourceId:url.searchParams.has("source") ? url.searchParams.get("source") : undefined}));
+      }
       const { rows: contracts } = await db.query(
         "SELECT id, contract_no, title, currency, start_on, end_on, status FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId]);
       return Response.json({
@@ -83,6 +93,7 @@ export async function POST(request) {
       }
       const ok = (x) => Response.json({ ok: true, ...x });
       switch (kind) {
+        case "share-base": case "share-selection": return ok({ row:await saveShare(db,body) });
         case "company": return ok({ company: await org.upsertCompany(db, { ...body, userId }) });
         case "logo": return ok({ logo: await org.addCompanyLogo(db, { companyId: body.companyId, name: body.name, bytes: file, store, userId }) });
         case "logo-active": return ok({ logo: await org.setCompanyLogoActive(db, { logoId: body.id, active: body.active }) });

@@ -266,18 +266,18 @@ function Roles({ d, may, post, resources }) {
   return (
     <div>
       <div className="tablewrap"><TableKit name="eps-activitydetail-5" min={8}><table className="dtable">
-        <thead><tr><th>Activity No.</th><th>{t("ep.ro.role")}</th><th>{t("ep.category")}</th><th>{t("ep.start")}</th><th>{t("ep.dur")}</th><th>{t("ep.finish")}</th><th>{t("ep.cal.title")}</th><th>{t("ep.ro.budgetUnit")}</th><th>{t("ep.ro.perDay")}</th><th>{t("ep.ro.rate")}</th>
+        <thead><tr><th>Activity No.</th><th>{t("ep.ro.role")}</th><th>{t("ep.category")}</th><th>{t("ep.start")}</th><th>{t("ep.dur")}</th><th>{t("ep.finish")}</th><th>{t("ep.cal.title")}</th><th>ساعت کاری تقویم</th><th>{t("ep.ro.budgetUnit")}</th><th>{t("ep.ro.perDay")}</th><th>{t("ep.ro.rate")}</th>
           <th>{t("ep.ro.totalTime")}</th><th>{t("ep.ro.totalPrice")}</th><th>{t("ep.ro.actualTime")}</th><th>{t("ep.ro.actualPrice")}</th><th>{t("ep.status")}</th><th>{t("ep.remark")}</th>{may && <th />}</tr></thead>
         <tbody>{d.roles.map((r) => (
           <tr key={r.id} data-role={r.resource_name}><td className="mono" dir="ltr">{a.code}</td><td>{r.resource_name}</td><td className="sm">{r.category || "—"}</td>
             <td className="mono">{day(a.plan_start)}</td><td className="mono">{fmt(r.planDays)}</td><td className="mono">{day(a.plan_end)}</td>
-            <td>{r.calendarName ?? t("ep.cal.allDays")}</td><td>{L(`eps.budgetUnit.${r.budget_unit}`, BUDGET_FA[r.budget_unit])}</td><td className="mono">{fmt(r.per_day)}</td><td className="mono">{fmt(r.rate)}</td>
+            <td>{r.calendarName ?? t("ep.cal.allDays")}</td><td>{fmt(r.calendarHours)}</td><td>{L(`eps.budgetUnit.${r.budget_unit}`, BUDGET_FA[r.budget_unit])}</td><td className="mono">{fmt(r.per_day)}</td><td className="mono">{fmt(r.rate)}</td>
             <td className="mono">{fmt(r.totalTime)}</td><td className="mono"><b>{fmt(r.totalPrice)}</b></td><td className="mono">{fmt(r.actualTime)}</td><td className="mono">{fmt(r.actualPrice)}</td>
             <td>{L(`eps.roleStatus.${r.status}`, ROLE_FA[r.status])}</td><td className="sm">{r.remark || ""}</td>
             {may && <td style={{ whiteSpace: "nowrap" }}><button className="btn ghost sm" type="button" onClick={() => setF({ id: r.id, calendarId: r.calendar_id || "", resourceId: r.resource_id, budgetUnit: r.budget_unit, perDay: r.per_day ?? "",
               rate: r.rate ?? "", actualTime: r.actual_time ?? "", status: r.status, remark: r.remark || "" })}>{t("ep.edit")}</button>
               <button className="btn ghost sm" type="button" onClick={() => post("/api/eps/activities", { kind: "role-remove", id: r.id }, () => t("ep.removed"))}>{t("ep.remove")}</button></td>}</tr>))}
-          {d.roles.length > 0 && <tr><td colSpan={11}><b>{t("ep.ro.total")}</b></td><td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.totalPrice || 0), 0))}</b></td><td />
+          {d.roles.length > 0 && <tr><td colSpan={12}><b>{t("ep.ro.total")}</b></td><td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.totalPrice || 0), 0))}</b></td><td />
             <td className="mono"><b>{fmt(d.roles.reduce((s, r) => s + (r.actualPrice || 0), 0))}</b></td><td colSpan={may ? 3 : 2} /></tr>}</tbody></table></TableKit></div>
       {may && (
         <form className="row" style={{ gap: 6, alignItems: "end", flexWrap: "wrap", marginTop: 8 }}

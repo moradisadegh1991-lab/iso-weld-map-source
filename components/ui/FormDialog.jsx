@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
  * The first field takes the focus when it opens.
  */
 export default function FormDialog({ title, subtitle = "", mode = "view", dirty = false, canEdit = true, saving = false, error = "",
-  onSave, onEdit, onClose, children, width = 680, ...rest }) {
+  saveLabel, onSave, onEdit, onClose, children, width = 680, ...rest }) {
   const box = useRef(null);
   const close = () => { if (dirty && mode !== "view" && !window.confirm("تغییرهای این فرم ذخیره نشده — بسته شود؟")) return; onClose?.(); };
   useEffect(() => {
@@ -41,7 +41,7 @@ export default function FormDialog({ title, subtitle = "", mode = "view", dirty 
               {canEdit && onEdit && <button key="edit" type="button" data-form-edit onClick={onEdit}>ویرایش</button>}
               <button key="close" type="button" className="ghost" data-form-close onClick={close}>بستن</button>
             </>) : (<>
-              <button key="save" type="submit" data-form-save disabled={saving}>{mode === "create" ? "افزودن" : "ذخیره"}</button>
+              <button key="save" type="submit" data-form-save disabled={saving}>{saveLabel || (mode === "create" ? "افزودن" : "ذخیره")}</button>
               <button key="cancel" type="button" className="ghost" data-form-cancel onClick={close}>انصراف</button>
               {dirty && <span className="pill warn sm" data-form-dirty>تغییرات ذخیره‌نشده</span>}
             </>)}

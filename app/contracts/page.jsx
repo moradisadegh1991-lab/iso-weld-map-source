@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { usePlatform, useProjectData } from "../../lib/client/platform.mjs";
 import { can, ACTIONS } from "../../lib/authz.mjs";
+import ContractParties from "../../components/contracts/ContractParties";
 import TableKit from "../../components/ui/TableKit";
 import Fold from "../../components/ui/Fold";
 import EntityLog from "../../components/ui/EntityLog";
@@ -122,8 +123,25 @@ export default function ContractsPage() {
       </div>
 
       {c && <ContractDetail c={c} data={data} may={may} post={post} onEdit={() => edit(c)} />}
+      {c && <Stakeholders key={c.id} contractId={c.id} refresh={reload} />}
     </div>
   );
+}
+
+function Stakeholders({ contractId, refresh }) {
+  const { projectId, call } = usePlatform();
+  const { data, error, reload } = useProjectData((id) => `/api/org?projectId=${id}&contractId=${contractId}`, [contractId]);
+  const [message, setMessage] = useState("");
+  async function post(body) {
+    setMessage("");
+    try {
+      const result = await call("/api/org", { method: "POST", body: JSON.stringify({ ...body, projectId, contractId }) });
+      await Promise.all([reload(), refresh()]);
+      return result;
+    } catch (e) { setMessage(e.message); return null; }
+  }
+  return <>{(message || error) && <p role="alert" className="err">{message || error}</p>}
+    {data?.contract && <ContractParties data={data} C={data.contract} may={data.may.contract} post={post} />}</>;
 }
 
 function ContractDetail({ c, data, may, post, onEdit }) {

@@ -152,6 +152,7 @@ export default function ProjectPage() {
     } finally { setSaving(false); }
   }
 
+  if (!projectId) return <div className="page"><NewProject /></div>;
   if (error) return <p className="err">{error}</p>;
   if (!form) return <p className="muted">در حال بارگذاری…</p>;
 
@@ -167,6 +168,7 @@ export default function ProjectPage() {
         </span>
       </div>
 
+      <NewProject />
       {!editable && (
         <p className="muted sm">
           شما دسترسی ویرایش ندارید. مشخصات پروژه را فقط مدیر پروژه تغییر می‌دهد.
@@ -589,4 +591,32 @@ function Parties({ parties }) {
       </tbody></table>
     </div>
   );
+}
+
+function NewProject() {
+  const { call, reload, setProjectId } = usePlatform();
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  return <details className="card"><summary>تعریف پروژهٔ جدید</summary>
+    <form className="row" onSubmit={async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const values = new FormData(form);
+      setSaving(true); setError("");
+      try {
+        const { project } = await call("/api/projects", { method: "POST", body: JSON.stringify({
+          code: values.get("code").trim(), name: values.get("name").trim(),
+        }) });
+        setProjectId(project.id);
+        await reload();
+        form.reset();
+        const panel = form.closest("details");
+        if (panel) panel.open = false;
+      } catch (e) { setError(e.message); } finally { setSaving(false); }
+    }}>
+      <label>کد پروژه <input name="code" dir="ltr" required /></label>
+      <label>نام پروژه <input name="name" required /></label>
+      <button className="btn" disabled={saving}>ایجاد پروژه</button>
+      {error && <span role="alert" className="err">{error}</span>}
+    </form></details>;
 }

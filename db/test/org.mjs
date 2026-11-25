@@ -329,4 +329,25 @@ test("a contract's resources sit in its resource tree, move between branches, an
   });
 });
 
+test("company-role sharing resolves live source rows across project scopes and blocks a chained base", async () => {
+  const {saveShare,shareState} = await import("../../lib/db/repos/structure-sharing.mjs");
+  const {saveRole} = await import("../../lib/db/repos/workflows.mjs");
+  const register = (projectId,contractId) => inP(() => org.addContractStakeholder(db,{projectId,contractId,companyId:kavian.id,role:"inspector"}),projectId);
+  const origin = await register(P,contract.id);
+  const source = {projectId:P,contractId:contract.id,stakeholderId:origin.id};
+  await inP(() => saveShare(db,{...source,kind:"share-base",enabled:true}));
+  const remote = await inP(() => ctr.upsertContract(db,{projectId:P2,contractNo:"REMOTE",title:"Remote",kind:"subcontract",contractorCompanyId:kavian.id,currency:"USD"}),P2);
+  const receiver = await register(P2,remote.id);
+  const target = {projectId:P2,contractId:remote.id,stakeholderId:receiver.id};
+  const role = await inP(() => saveRole(db,{...source,stakeholderId:origin.id,name:"Technical lead"}));
+  const read = () => inP(() => shareState(db,target),P2);
+  const {sources:[base]} = await read();
+  assert(base);
+  await inP(() => saveShare(db,{...target,kind:"share-selection",sourceId:base.id,selection:{roles:[role.id,"invalid"]}}),P2);
+  equal((await read()).selection,{roles:[role.id]});
+  await inP(() => saveRole(db,{...source,id:role.id,name:"Lead inspector"}));
+  equal((await read()).tree.roles[0].label,"Lead inspector");
+  await throws(() => inP(() => saveShare(db,{...target,kind:"share-base",enabled:true,sourceId:""}),P2),"استفاده‌کننده");
+});
+
 await run();

@@ -1,4 +1,5 @@
 "use client";
+import InheritedStructure from "../../components/contracts/InheritedStructure";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../lib/client/platform.mjs";
 import { ROLES, ACTIONS, can } from "../../lib/authz.mjs";
@@ -41,7 +42,7 @@ const ACTION_FA = {
 };
 
 export default function AdminPage() {
-  const { project, role, projectId, call, user } = usePlatform();
+  const { project, role, contractId, projectId, call, user } = usePlatform();
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -78,9 +79,9 @@ export default function AdminPage() {
       {msg && <p className="err" role="alert">{msg}</p>}
       {link && <LinkBox link={link} onClose={() => setLink(null)} />}
 
-      {tab === "roles" ? <><Roles role={role} />{may && <ReportSetup rolesOnly key={projectId} />}</> : tab === "usage" ? (may ? <Usage projectId={projectId} call={call} /> : <p className="muted">حساب مصرف مدل با مدیر پروژه است.</p>) : !may ? (
+      {tab === "roles" ? <>{may && <ReportSetup rolesOnly key={contractId || projectId} />}</> : tab === "usage" ? (may ? <Usage projectId={projectId} call={call} /> : <p className="muted">حساب مصرف مدل با مدیر پروژه است.</p>) : !may ? (
         <p className="muted">مدیریت کاربران با مدیر پروژه است.</p>
-      ) : err ? <p className="err">{err}</p> : !data ? <p className="muted">در حال بارگذاری…</p> : tab === "contracts" ? <ContractMembers data={data} post={post} /> : <>
+      ) : err ? <p className="err">{err}</p> : !data ? <p className="muted">در حال بارگذاری…</p> : tab === "contracts" ? <ContractMembers key={contractId || projectId} contractId={contractId} data={data} post={post} /> : <>
         <div className="kpis">
           <Kpi v={data.members.length} l="عضو پروژه" />
           <Kpi v={data.members.filter((m) => m.status === "active").length} l="فعال" tone="ok" />
@@ -126,6 +127,7 @@ export default function AdminPage() {
           </TableKit>
         </div>
 
+        <Roles role={role} />
         <div className="card">
           <h2>توسعه‌دهندگان سامانه</h2>
           <p className="muted sm">به همهٔ پروژه‌ها و همهٔ اختیارات دسترسی دارند. این نقش از این صفحه فقط توسط یک توسعه‌دهنده داده می‌شود؛ اولین توسعه‌دهنده با
@@ -208,9 +210,12 @@ function Profile({ m, data, post }) {
   );
 }
 
-function ContractMembers({ data, post }) {
-  const BLANK = { contractId: "", userId: "", position: "", access: "edit" };
+function ContractMembers({ data, post, contractId }) {
+  const BLANK = { contractId, userId: "", position: "", access: "edit", decree: "", personnel: "", status: "active", startsOn: "", endsOn: "" };
   const [f, setF] = useState(BLANK);
+  const [selected, select] = useState("");
+  const members = data.contractMembers.filter((m) => m.contract_id === contractId);
+  const current = members.find((m) => m.id === selected);
   const contract = data.contracts.find((c) => c.id === f.contractId);
   // Only people of the contract's stakeholder companies are assigned to it.
   const eligible = contract ? data.members.filter((m) => m.company_id && (contract.companies || []).includes(m.company_id)) : [];
@@ -219,28 +224,33 @@ function ContractMembers({ data, post }) {
       <h2>تخصیص کاربر به قرارداد</h2>
       <p className="sm muted">فقط کاربرانی که «شرکت شاغل» آن‌ها در ذی‌نفعان قرارداد است (تعریف قرارداد ◄ ذی‌نفعان) به قرارداد تخصیص داده می‌شوند و فقط همان قراردادها را در بالای صفحه می‌بینند.
         هر کاربر در هر قرارداد یک سمت و یک سطح دسترسی دارد: «مشاهده» فقط می‌بیند و امضا می‌کند، «ثبت و ویرایش» گزارش و محتوا ثبت می‌کند، «مدیریت قرارداد» تعریف و منابع قرارداد را هم تغییر می‌دهد. دسترسی دقیق در گزارش‌ها (ایجاد، افزودن، ویرایش و حذف محتوا، امضا، برگشت، تأیید نهایی) از گروه‌های گردش کار گزارش می‌آید.</p>
-      {data.contracts.length === 0 ? <p className="empty-note">قراردادی تعریف نشده.</p> : (
+      {!contract ? <p className="empty-note">قرارداد جاری را در بالای صفحه انتخاب کنید.</p> : (
         <form className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}
           onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "contract-member", ...f })) setF(BLANK); }}>
-          <div className="field"><label htmlFor="cm-c">قرارداد</label><select id="cm-c" required value={f.contractId} onChange={(e) => setF({ ...f, contractId: e.target.value, userId: "" })}>
-            <option value="">—</option>{data.contracts.map((c) => <option key={c.id} value={c.id}>{c.contract_no} — {c.title}</option>)}</select></div>
           <div className="field"><label htmlFor="cm-u">کاربر</label><select id="cm-u" required value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
             <option value="">{contract && !eligible.length ? "— کاربری از شرکت‌های ذی‌نفع نیست —" : "—"}</option>
             {eligible.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name || m.email}{m.company_code ? ` (${m.company_code})` : ""}</option>)}</select></div>
           <div className="field"><label htmlFor="cm-p">سمت در قرارداد</label><input id="cm-p" required value={f.position} onChange={(e) => setF({ ...f, position: e.target.value })} /></div>
+          {[["decree","شماره حکم کارگزینی","text"], ["personnel","شماره پرسنلی","text"], ["startsOn","تاریخ شروع","date"], ["endsOn","تاریخ پایان","date"]].map(([key,label,type]) =>
+            <label key={key}>{label}<input type={type} required={key === "decree"} value={f[key]} min={key === "endsOn" ? f.startsOn : undefined}
+              onChange={(e) => setF({ ...f, [key]: e.target.value })} /></label>)}
+          <label>وضعیت <select value={f.status} onChange={(e) => setF({ ...f, status:e.target.value })}>
+            <option value="active">فعال</option><option value="inactive">غیرفعال</option></select></label>
           <div className="field"><label htmlFor="cm-a">سطح دسترسی</label><select id="cm-a" value={f.access} onChange={(e) => setF({ ...f, access: e.target.value })}>
             {Object.entries(data.contractAccess).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
           <button className="btn" type="submit">ثبت</button>
           {f.contractId && f.userId && data.contractMembers.some((x) => x.contract_id === f.contractId && x.user_id === f.userId) &&
             <span className="sm muted">این کاربر در این قرارداد هست؛ ثبت، سمت و دسترسی او را ویرایش می‌کند.</span>}
         </form>)}
-      {data.contractMembers.length === 0 ? <p className="empty-note">هنوز کسی به قراردادی تخصیص داده نشده.</p> : (
-        <table className="dtable"><thead><tr><th>قرارداد</th><th>کاربر</th><th>سمت</th><th>دسترسی</th><th /></tr></thead>
-          <tbody>{data.contractMembers.map((x) => (
-            <tr key={x.id}><td><span className="mono">{x.contract_no}</span> — {x.contract_title}</td><td>{x.display_name || x.email}</td><td>{x.position}</td>
+      {members.length === 0 ? <p className="empty-note">هنوز کسی به قراردادی تخصیص داده نشده.</p> : (
+        <table className="dtable"><thead><tr><th>قرارداد</th><th>کاربر</th><th>سمت</th><th>شماره حکم</th><th>شماره پرسنلی</th><th>وضعیت</th><th>شروع</th><th>پایان</th><th>دسترسی</th><th /></tr></thead>
+          <tbody>{members.map((x) => (
+            <tr key={x.id} className={selected === x.id ? "sel" : ""} onClick={() => select(x.id)}><td><span className="mono">{x.contract_no}</span> — {x.contract_title}</td><td>{x.display_name || x.email}</td><td>{x.position}</td><td>{x.decree}</td><td>{x.personnel}</td><td>{x.status === "active" ? "فعال" : "غیرفعال"}</td><td>{x.starts_on?.slice(0,10)}</td><td>{x.ends_on?.slice(0,10)}</td>
               <td>{data.contractAccess[x.access]}</td><td>
-                <button className="btn ghost sm" type="button" onClick={() => setF({ contractId: x.contract_id, userId: x.user_id, position: x.position, access: x.access })}>ویرایش</button>
+                <button className="btn ghost sm" type="button" onClick={() => setF({ contractId: x.contract_id, userId: x.user_id, position: x.position, access: x.access, decree: x.decree, personnel: x.personnel || "", status: x.status, startsOn: x.starts_on?.slice(0,10) || "", endsOn: x.ends_on?.slice(0,10) || "" })}>ویرایش</button>
                 <button className="btn ghost sm" type="button" onClick={() => post({ kind: "contract-member-remove", id: x.id })}>حذف</button></td></tr>))}</tbody></table>)}
+      <InheritedStructure category="users" title="کاربران مشترک قرارداد" />
+      {current && <section><h2>وظایف کاربر · {current.display_name || current.email} · {current.decree}</h2><UserDuties key={current.id} userId={current.user_id} contractId={contractId} /></section>}
     </div>
   );
 }

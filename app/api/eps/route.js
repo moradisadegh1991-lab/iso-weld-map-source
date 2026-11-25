@@ -168,6 +168,11 @@ export async function POST(request) {
         await assertContractAccess(db, { projectId, contractId, userId: user.id, role: membership.role, need: "edit" });
         await assertPmsTargets(db, projectId, scope, writeTargets(b), { whole: writesWholePms(b) });
         a.contractId = contractId;
+        if ((["pms","version"].includes(kind) && !b.id || ["import-plan","convert-legacy"].includes(kind)) && !a.calendarId) {
+          const calendars = await listCalendars(db,{projectId,contractId});
+          a.calendarId = calendars.find(c=>c.is_default)?.id;
+          if (!a.calendarId) return Response.json({error:"ابتدا تقویم پیش‌فرض قرارداد را تعریف کنید."},{status:400});
+        }
         if (["import-plan", "convert-legacy"].includes(kind)) await assertImport(db, { ...a, form, role: membership.role });
       }
       const run = {

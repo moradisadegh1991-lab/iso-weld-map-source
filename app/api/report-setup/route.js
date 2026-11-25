@@ -10,7 +10,7 @@ import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import * as forms from "../../../lib/db/repos/forms.mjs";
 import * as rp from "../../../lib/db/repos/reports.mjs";
 import * as wfs from "../../../lib/db/repos/workflows.mjs";
-import { listProjectUsers } from "../../../lib/db/repos/users.mjs";
+import { contractMembers, listProjectUsers } from "../../../lib/db/repos/users.mjs";
 import { logEvent } from "../../../lib/db/repos/log.mjs";
 import { PERMISSIONS } from "../../../lib/reports/workflow.mjs";
 
@@ -34,7 +34,7 @@ export async function GET(request) {
       const users = (await listProjectUsers(db, { projectId }))
         .map((u) => ({ id: u.user_id, name: u.display_name || u.email, email: u.email, party: u.inspection_party, role: u.role, active: u.is_active }));
       const all = await rp.reportTypes(db, { projectId });
-      const designable = await Promise.all(all.map(async (t) => admin || (t.form && forms.mayDesign(membership, t.section)
+      const designable = await Promise.all(all.map(async (t) => admin || (t.form && forms.companyFormAllowed(membership,t.form_company_id) && forms.mayDesign(membership, t.section)
         && (!t.form_contract_id || await contractAccess(db, { projectId, contractId: t.form_contract_id, userId: user.id, role: membership.role })))));
       const types = all.filter((_, index) => designable[index]);
       if (!admin && !types.length) throw forbidden();
@@ -47,6 +47,8 @@ export async function GET(request) {
       const contracts = admin ? (await db.query("SELECT id, contract_no, title FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId])).rows : [];
       return Response.json({ types, users, permissions: PERMISSIONS, workflows, duties: admin ? await wfs.duties(db, { projectId }) : (await wfs.duties(db, { projectId })).map((d) => ({ ...d, members: [], formRules: [], pmsScope: [], planningForms: {} })),
         tileCatalog: admin ? tileCatalog(SECTIONS, (await forms.formTypes(db, { projectId, published: true })).filter((form) => form.active)) : [],
+        appointments: admin ? await contractMembers(db,{projectId}) : [],
+        stakeholders: admin ? (await db.query("SELECT s.id,s.contract_id,s.company_id,s.role,c.name FROM contract_stakeholder s JOIN company c ON c.id=s.company_id WHERE s.project_id=$1 ORDER BY c.name,s.role",[projectId])).rows : [],
         roles: admin ? await wfs.roles(db, { projectId }) : [], contracts,
         sections: wfs.FORM_PARTS, scope, may: { types: admin, tree: admin, duties: admin } });
     });
@@ -54,6 +56,7 @@ export async function GET(request) {
 }
 
 const LABEL = {
+  "rename-stage": (b) => `ویرایش نام مرحله به ${b.name}`, "rename-group": (b) => `ویرایش نام گروه به ${b.name}`,
   type: (b) => `نوع ${b.code}`, stage: (b) => `مرحلهٔ ${b.seq} «${b.name}»`, group: (b) => `گروه «${b.name}»`,
   template: () => "الگوی گزارش روزانه", approver: () => "تأییدکنندهٔ نهایی و جانشین مرحله", "stage-color": () => "رنگ تغییرات مرحله", member: () => "عضو گروه", "member-remove": () => "حذف عضو", "stage-remove": () => "حذف مرحله", "group-remove": () => "حذف گروه",
   duty: (b) => `وظیفهٔ «${b.name}»`, "duty-remove": () => "حذف وظیفه", "duty-members": () => "دارندگان وظیفه",
@@ -79,9 +82,10 @@ export async function POST(request) {
       if (!admin) {
         // a form's designer: only a workflow every form of which is one of a section they design
         if (ADMIN_ONLY.includes(kind)) throw forbidden();
-        const ts = await forms.typesOf(db, { projectId, reportTypeId: body.reportTypeId || null, workflowId: body.workflowId || null,
+        const ts = await forms.typesOf(db, kind === "rename-stage" ? { projectId, stageId: body.id }
+          : kind === "rename-group" ? { projectId, groupId: body.id } : { projectId, reportTypeId: body.reportTypeId || null, workflowId: body.workflowId || null,
           stageId: body.stageId || null, groupId: body.groupId || null, pageId: kind === "page-remove" ? body.id : null });
-        if (!ts.length || !ts.every((t) => t.form && forms.mayDesign(membership, t.section))) throw forbidden();
+        if (!ts.length || !ts.every((t) => t.form && forms.companyFormAllowed(membership,t.form_company_id) && forms.mayDesign(membership, t.section))) throw forbidden();
         for (const t of ts) {
           if (t.form_contract_id && !await contractAccess(db, { projectId, contractId: t.form_contract_id, userId: user.id, role: membership.role })) throw forbidden();
         }
@@ -95,6 +99,8 @@ export async function POST(request) {
       const row = await {
         type: () => rp.upsertReportType(db, a),
         template: async () => (await rp.applyDailyTemplate(db, a)).type,
+        "rename-stage": () => rp.renameWorkflowNode(db, { projectId, kind: "stage", id: body.id, name: body.name }),
+        "rename-group": () => rp.renameWorkflowNode(db, { projectId, kind: "group", id: body.id, name: body.name }),
         stage: () => rp.upsertStage(db, { ...a, seq: Number(body.seq) }),
         group: () => rp.upsertGroup(db, { ...a, seq: Number(body.seq) }),
         member: () => rp.setGroupMember(db, a),
