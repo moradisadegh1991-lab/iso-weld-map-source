@@ -114,6 +114,11 @@ const INSTRUMENTS = [
 ];
 
 export default function ProjectPage() {
+  const {projectId} = usePlatform();
+  return <ProjectDetails key={projectId} />;
+}
+
+function ProjectDetails() {
   const { projectId, role, call, reload: reloadPlatform } = usePlatform();
   const { data, error, reload } = useProjectData((id) => `/api/project?projectId=${id}`, []);
   const [form, setForm] = useState(null);
@@ -154,7 +159,7 @@ export default function ProjectPage() {
 
   if (!projectId) return <div className="page"><NewProject /></div>;
   if (error) return <p className="err">{error}</p>;
-  if (!form) return <p className="muted">در حال بارگذاری…</p>;
+  if (!form || !data?.project) return <p className="muted">در حال بارگذاری…</p>;
 
   const p = data.project;
   return (

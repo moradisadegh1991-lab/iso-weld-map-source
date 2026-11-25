@@ -470,4 +470,14 @@ test("contract calendars have one default and inherit to PMS and versions with i
   });
 });
 
+test("shift hours respect split periods, holiday exceptions and exceptional shifts", async () => {
+  const {workingHours,shiftMinutes}=await import("../../lib/eps/calendar.mjs");
+  const shifts={1:[["08:00","12:00"],["13:00","17:00"]],2:[["08:00","12:00"]],"2026-11-29":[["20:00","24:00"]]};
+  const calendar={weekdays:[1,2],shifts,exceptions:{"2026-11-24":false,"2026-11-29":true}};
+  equal(workingHours("2026-11-23","2026-11-29",calendar),12);
+  equal(workingHours("2026-11-23","2026-12-01",calendar),24);
+  equal(shiftMinutes([["08:00","12:00"],["11:00","13:00"]]),null);
+  equal(workingHours("2026-11-23","2026-11-24",{...calendar,shifts:{}}),null);
+});
+
 await run();
