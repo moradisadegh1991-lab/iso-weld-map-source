@@ -36,6 +36,7 @@ export default function PlanningPage() {
   const tree = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&form=planning&versionId=${versionId}` : null), [versionId]);
   const rows = useProjectData((id) => (versionId ? `/api/eps/planning?projectId=${id}&versionId=${versionId}` : null), [versionId]);
   const [sel, setSel] = useState(null);
+  const [identifierEdit, setIdentifierEdit] = useState(null);
   const selectedActivityId = sel?.kind === "act" ? sel.id : null;
   const history = useProjectData((id) => (versionId && selectedActivityId ? `/api/eps/planning?projectId=${id}&versionId=${versionId}&activityId=${selectedActivityId}&view=history` : null), [versionId, selectedActivityId]);
   const [visible, setVisible] = useState([]);
@@ -158,9 +159,12 @@ export default function PlanningPage() {
         {selectedActivityId && plan.get(selectedActivityId) && <CalendarSelect calendars={tree.data.version.calendars}
           value={plan.get(selectedActivityId).calendar_id} inherited={tree.data.version.calendar?.name}
           disabled={!may || busy} onChange={(calendarId) => post({ kind: "plan-edit", id: plan.get(selectedActivityId).id, calendarId }, () => t("ep.cal.saved"))} />}
-        {may && selectedActivityId && plan.has(selectedActivityId) &&
-          <PlanIdentifiers key={selectedActivityId} activity={plan.get(selectedActivityId)} planId={plan.get(selectedActivityId).id} save={post} />}
-        <PlanningActivityHistory data={history.data} selected={sel} loading={history.busy} error={history.error} />
+        <PlanningActivityHistory data={history.data} selected={sel} loading={history.busy} error={history.error}
+          onEditIdentifiers={may && selectedActivityId && plan.has(selectedActivityId) ? () => {
+            setIdentifierEdit({ versionId, activity: plan.get(selectedActivityId), planId: plan.get(selectedActivityId).id });
+          } : undefined} />
+        {identifierEdit?.versionId === versionId && <PlanIdentifiers key={identifierEdit.planId} {...identifierEdit}
+          save={post} onClose={() => setIdentifierEdit(null)} />}
       </div>
     </div>
   );

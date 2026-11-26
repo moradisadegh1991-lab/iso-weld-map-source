@@ -100,7 +100,7 @@ function Companies({ data, may, post, projectId, setMsg, setOk, reload }) {
 }
 
 function Stakeholders({ data, may, post }) {
-  const BLANK = { id: null, companyId: "", role: "owner", note: "" };
+  const BLANK = { id: null, companyId: "", role: "", note: "" };
   const [f, setF] = useState(BLANK);
   return (
     <div className="card">
@@ -110,7 +110,9 @@ function Stakeholders({ data, may, post }) {
           onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "stakeholder", ...f }, () => (f.id ? "ذی‌نفع ویرایش شد." : "ذی‌نفع اضافه شد."))) setF(BLANK); }}>
           <div className="field"><label htmlFor="sh-co">شرکت</label><select id="sh-co" required value={f.companyId} onChange={(e) => setF({ ...f, companyId: e.target.value })}>
             <option value="">—</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}</select></div>
-          <div className="field"><label htmlFor="sh-role">نقش</label><select id="sh-role" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
+          <div className="field"><label htmlFor="sh-role">نقش</label><select id="sh-role" required value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
+            <option value="">انتخاب نقش</option>
+            {f.id && !data.roles[f.role] && <option value={f.role}>{data.roleCatalog.find((r) => r.code === f.role)?.name || f.role}</option>}
             {Object.entries(data.roles).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
           <div className="field"><label htmlFor="sh-note">توضیح</label><input id="sh-note" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
           <button className="btn" type="submit">{f.id ? "ذخیرهٔ تغییرات" : "افزودن"}</button>
@@ -119,7 +121,7 @@ function Stakeholders({ data, may, post }) {
       {data.stakeholders.length === 0 ? <p className="empty-note">هنوز ذی‌نفعی ثبت نشده.</p> : (
         <TableKit name="organization-2"><table className="dtable"><thead><tr><th>نقش</th><th>شرکت</th><th>توضیح</th>{may && <th />}</tr></thead>
           <tbody>{data.stakeholders.map((s) => (
-            <tr key={s.id}><td>{data.roles[s.role]}</td><td><span className="mono">{s.code}</span> — {s.name}</td><td className="sm">{s.note || "—"}</td>
+            <tr key={s.id}><td>{data.roleCatalog.find((r) => r.code === s.role)?.name || s.role}</td><td><span className="mono">{s.code}</span> — {s.name}</td><td className="sm">{s.note || "—"}</td>
               {may && <td><button className="btn ghost sm" type="button" onClick={() => setF({ id: s.id, companyId: s.company_id, role: s.role, note: s.note || "" })}>ویرایش</button>
                 <button className="btn ghost sm" type="button" onClick={() => post({ kind: "stakeholder-remove", id: s.id })}>حذف</button></td>}</tr>
           ))}</tbody></table></TableKit>)}

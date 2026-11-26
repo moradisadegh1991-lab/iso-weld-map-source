@@ -46,6 +46,7 @@ export default function FormReportsPage() {
     <div className="page">
       <div className="pagehead"><h1>{T.name}</h1>
         <span className="sub"><span className="mono">{T.code}</span> · {data.labels.sections[T.section]} · گردش کار: {data.stages.map((s) => s.name).join(" ← ")}</span></div>
+      {data.may.hasWorkflowAccess === false && <p className="sm muted" role="status">سطح دسترسی به این فرم برای شما تعریف نشده است</p>}
       {!openId && msg && <p className="err" role="alert">{msg}</p>}
       {!openId && ok && <p className="okmsg" role="status">{ok}</p>}
       {openId ? <ReportView key={`${contractId}:${openId}`} projectId={projectId} contractId={contractId} id={openId} call={call} users={data.users} close={() => { setOpenId(null); reload(); }} />

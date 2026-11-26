@@ -1,4 +1,5 @@
 "use client";
+import { rowNavigation } from "../../lib/client/row-navigation.mjs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FloatBox, rowEdgeDown, rowEdgeHover } from "../ui/float";
 import { useConfirm } from "../ui/ConfirmDialog";
@@ -74,7 +75,7 @@ export function Hl({ text, q }) {
   return <>{splitHits(text, q).map((p, i) => (p.hit ? <mark key={i} style={{ background: "#ffe14d", color: "#111", padding: 0 }}>{p.text}</mark> : <span key={i}>{p.text}</span>))}</>;
 }
 
-export default function ActivityGrid({ data, columns: own, defaultCols, storeKey, selected, onSelect, onOpen = null, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null, customKey = null, planningDates = false }) {
+export default function ActivityGrid({ data, columns: own, defaultCols, storeKey, selected, onSelect, onOpen = null, keep = null, onVisible = null, gantt = true, toolbar = null, persist = true, ops = null, customKey = null, planningDates = false, onEditIdentifiers }) {
   const all = useMemo(() => flatRows(data.roots), [data]);
   const { t, locale } = usePrefs();
   // the project's own columns (owner's requirements 2026-10-22, item 7): shown after the page's, unless unticked; a row's value kept by its id
@@ -245,12 +246,16 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
     if (!current) return;
     const input = e.target.closest("input, textarea, select, [contenteditable=true]");
     const control = e.ctrlKey || e.metaKey;
-    if (control && (e.key === "PageDown" || e.key === "PageUp")) {
+    const direction = rowNavigation(e);
+    if (direction) {
       e.preventDefault();
-      const next = rows[here + (e.key === "PageDown" ? 1 : -1)];
+      const next = rows[here + direction];
       if (next) {
-        if (ops) open(next); else onSelect?.(next);
-        if (!dirty) row.parentElement.querySelector(`[data-row-id="${CSS.escape(next.id)}"]`)?.focus();
+        guard(() => {
+          onSelect?.(next);
+          if (ops) edit(next);
+          row.parentElement.querySelector(`[data-row-id="${CSS.escape(next.id)}"]`)?.focus();
+        });
       }
       return;
     }
@@ -350,6 +355,12 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
     if (c.hits && typeof v === "string") return c.key === "name" ? <bdi><Hl text={v} q={q} /></bdi> : <Hl text={v} q={q} />;
     return v;
   };
+  const displayCell = (r, c) => {
+    const value = cell(r, c);
+    if (!onEditIdentifiers || r.kind !== "act" || !r.item.plan || !["code", "activityNo"].includes(c.key)) return value;
+    return <button type="button" className="link" aria-label={`${t(c.title)} · ${r.item.code}`}
+      onClick={() => guard(() => { onSelect?.(r); setEditing(null); onEditIdentifiers(r); })}>{value || "—"}</button>;
+  };
   const tint = (c) => (c ? `${c}22` : undefined);
 
   return (
@@ -444,7 +455,7 @@ export default function ActivityGrid({ data, columns: own, defaultCols, storeKey
                           step="any" dir={field(c.key).type === "text" ? "auto" : "ltr"} value={ed.values[c.key] ?? ""}
                           onChange={(e) => setEditing({ ...ed, values: { ...ed.values, [c.key]: e.target.value } })}
                           onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(null); }} />
-                      ) : r.kind === "draft" ? (ci === 0 ? <span className="muted">{t("gr.newRow")}</span> : null) : cell(r, c)}
+                      ) : r.kind === "draft" ? (ci === 0 ? <span className="muted">{t("gr.newRow")}</span> : null) : displayCell(r, c)}
                       {ed && ci === 0 && (
                         <span className="p6-edbtns">
                           <button type="button" className="btn sm" disabled={busy} data-row-save onClick={save}>{t("gr.save")}</button>

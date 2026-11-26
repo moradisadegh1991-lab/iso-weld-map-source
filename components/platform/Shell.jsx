@@ -1,4 +1,5 @@
 "use client";
+import { rowNavigation } from "../../lib/client/row-navigation.mjs";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -237,12 +238,13 @@ function Frame({ p, pathname, children }) {
           }
         }}
         onKeyDown={(e) => {
-          if (e.defaultPrevented || e.nativeEvent.isComposing || !(e.ctrlKey || e.metaKey)
-            || !["PageUp", "PageDown"].includes(e.key) || e.target.closest(".tk, .p6")) return;
+          const direction = rowNavigation(e);
+          if (!direction || e.defaultPrevented || e.nativeEvent.isComposing
+            || e.target.closest(".tk, .p6, [role=dialog]")) return;
           const current = e.target.closest("tbody tr") || activeRow.current;
           if (!current?.isConnected || !plainRow(current)) return;
           const rows = [...current.parentElement.rows].filter(plainRow);
-          const next = rows[rows.indexOf(current) + (e.key === "PageDown" ? 1 : -1)];
+          const next = rows[rows.indexOf(current) + direction];
           e.preventDefault();
           if (next) {
             next.click();
