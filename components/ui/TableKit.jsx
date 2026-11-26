@@ -703,8 +703,9 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
     const direction = rowNavigation(e);
     if (direction) {
       const rows = [...(box.current?.querySelector("table")?.tBodies[0]?.rows || [])]
-        .filter((r) => !r.hidden && !r.classList.contains("tk-grp") && !r.classList.contains("tk-edit") && !isDetail(r) && r.getClientRects().length);
-      const current = e.target.closest("tbody tr:not(.tk-edit)") || sel?.row;
+        .filter((r) => !r.hidden && !r.classList.contains("tk-grp") && !r.classList.contains("tk-edit") && !isDetail(r) &&
+          (r === ed?.row ? ed.tr : r).getClientRects().length);
+      const current = e.target.closest("tbody tr:not(.tk-edit)") || ed?.row || sel?.row;
       const index = rows.indexOf(current);
       if (index === -1) return;
       e.preventDefault();
