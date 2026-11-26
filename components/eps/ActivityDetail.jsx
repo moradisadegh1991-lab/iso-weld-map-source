@@ -266,7 +266,7 @@ function Roles({ d, may, post, resources }) {
   return (
     <div>
       <div className="tablewrap"><TableKit name="eps-activitydetail-5" min={8}><table className="dtable">
-        <thead><tr><th>Activity No.</th><th>{t("ep.ro.role")}</th><th>{t("ep.category")}</th><th>{t("ep.start")}</th><th>{t("ep.dur")}</th><th>{t("ep.finish")}</th><th>{t("ep.cal.title")}</th><th>ساعت کاری تقویم</th><th>{t("ep.ro.budgetUnit")}</th><th>{t("ep.ro.perDay")}</th><th>{t("ep.ro.rate")}</th>
+        <thead><tr><th>Activity No.</th><th>{t("ep.ro.role")}</th><th>{t("ep.category")}</th><th>{t("ep.start")}</th><th>{t("ep.dur")}</th><th>{t("ep.finish")}</th><th>{t("ep.cal.title")}</th><th>{t("ep.cal.hours")}</th><th>{t("ep.ro.budgetUnit")}</th><th>{t("ep.ro.perDay")}</th><th>{t("ep.ro.rate")}</th>
           <th>{t("ep.ro.totalTime")}</th><th>{t("ep.ro.totalPrice")}</th><th>{t("ep.ro.actualTime")}</th><th>{t("ep.ro.actualPrice")}</th><th>{t("ep.status")}</th><th>{t("ep.remark")}</th>{may && <th />}</tr></thead>
         <tbody>{d.roles.map((r) => (
           <tr key={r.id} data-role={r.resource_name}><td className="mono" dir="ltr">{a.code}</td><td>{r.resource_name}</td><td className="sm">{r.category || "—"}</td>

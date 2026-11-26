@@ -330,7 +330,7 @@ test("a contract's resources sit in its resource tree, move between branches, an
 });
 
 test("company-role sharing resolves live source rows across project scopes and blocks a chained base", async () => {
-  const {saveShare,shareState} = await import("../../lib/db/repos/structure-sharing.mjs");
+  const {saveShare,shareState,editExtension,inheritedStructure} = await import("../../lib/db/repos/structure-sharing.mjs");
   const {saveRole} = await import("../../lib/db/repos/workflows.mjs");
   const register = (projectId,contractId) => inP(() => org.addContractStakeholder(db,{projectId,contractId,companyId:kavian.id,role:"inspector"}),projectId);
   const origin = await register(P,contract.id);
@@ -347,6 +347,18 @@ test("company-role sharing resolves live source rows across project scopes and b
   equal((await read()).selection,{roles:[role.id]});
   await inP(() => saveRole(db,{...source,id:role.id,name:"Lead inspector"}));
   equal((await read()).tree.roles[0].label,"Lead inspector");
+  const local = await inP(() => saveRole(db,{...target,name:"Local reviewer"}),P2);
+  const child = {...target,category:"roles",parentKey:role.id,localKey:local.id};
+  const inherited = () => inP(() => inheritedStructure(db,child),P2);
+  await inP(() => editExtension(db,child),P2);
+  const [linked] = (await inherited())[0].children[0].children;
+  equal(linked.label,"Local reviewer");
+  await inP(() => saveRole(db,{...target,id:local.id,name:"Local lead reviewer"}),P2);
+  equal((await inherited())[0].children[0].children[0].label,"Local lead reviewer");
+  await throws(() => inP(() => editExtension(db,{...child,localKey:role.id}),P2),"سازگار");
+  await inP(() => editExtension(db,{...child,removeId:linked.localId}),P2);
+  equal((await inherited())[0].children[0].children,[]);
+
   await throws(() => inP(() => saveShare(db,{...target,kind:"share-base",enabled:true,sourceId:""}),P2),"استفاده‌کننده");
 });
 
