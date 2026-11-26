@@ -5,7 +5,7 @@ import { authenticate, errorResponse } from "../../../lib/server/session.mjs";
 import { withProject } from "../../../lib/db/scope.mjs";
 import { assertCan, can, ACTIONS } from "../../../lib/authz.mjs";
 import { getStore } from "../../../lib/storage/index.mjs";
-import { shareState, saveShare, editExtension, inheritedStructure } from "../../../lib/db/repos/structure-sharing.mjs";
+import { shareState, saveShare, decideSharedSigner, editExtension, inheritedStructure } from "../../../lib/db/repos/structure-sharing.mjs";
 import * as org from "../../../lib/db/repos/org.mjs";
 import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
 
@@ -93,6 +93,7 @@ export async function POST(request) {
       }
       const ok = (x) => Response.json({ ok: true, ...x });
       switch (kind) {
+        case "share-signer": await decideSharedSigner(db,body,userId); return ok({});
         case "share-extension": await editExtension(db,body); return ok({});
         case "share-base": case "share-selection": return ok({ row:await saveShare(db,body) });
         case "company": return ok({ company: await org.upsertCompany(db, { ...body, userId }) });

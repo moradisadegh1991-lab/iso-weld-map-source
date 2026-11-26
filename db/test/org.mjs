@@ -359,6 +359,47 @@ test("company-role sharing resolves live source rows across project scopes and b
   await inP(() => editExtension(db,{...child,removeId:linked.localId}),P2);
   equal((await inherited())[0].children[0].children,[]);
 
+  const reports = await import("../../lib/db/repos/reports.mjs");
+  const {decideSharedSigner} = await import("../../lib/db/repos/structure-sharing.mjs");
+  const signer = await projects.ensureUser(db,{subject:"shared-signer"});
+  for (const pid of [P,P2]) await projects.addMember(db,{projectId:pid,userId:signer.id,role:"viewer"});
+  await db.query("UPDATE app_user SET company_id=$2 WHERE id=$1",[signer.id,kavian.id]);
+  const appoint = (ctx,decree) => inP(async()=> (await db.query(`INSERT INTO contract_member(project_id,contract_id,user_id,position,access,decree)
+    VALUES($1,$2,$3,'Inspector','view',$4) RETURNING id`,[ctx.projectId,ctx.contractId,signer.id,decree])).rows[0],ctx.projectId);
+  const originAppointment = await appoint(source,"SOURCE-10");
+  const destinationAppointment = await appoint(target,"DEST-20");
+  const subscribe = users => inP(()=>saveShare(db,{...target,kind:"share-selection",sourceId:base.id,selection:{users}}),P2);
+  await subscribe([signer.id]);
+  const type = await inP(()=>reports.upsertReportType(db,{projectId:P2,code:"SIG",name:"Shared signing"}),P2);
+  await inP(()=>db.query("UPDATE report_type SET form_contract_id=$2 WHERE id=$1",[type.id,remote.id]),P2);
+  const stage = await inP(()=>reports.upsertStage(db,{projectId:P2,reportTypeId:type.id,seq:1,name:"Inspect"}),P2);
+  const group = await inP(()=>reports.upsertGroup(db,{projectId:P2,stageId:stage.id,seq:1,name:"Inspector"}),P2);
+  const effective = async()=> (await inP(()=>reports.workflowOf(db,{projectId:P2,reportTypeId:type.id}),P2))[0].groups[0].members;
+  const authorGroup = await inP(()=>reports.upsertGroup(db,{projectId:P2,stageId:stage.id,seq:2,name:"Authors"}),P2);
+  await inP(()=>reports.setGroupMember(db,{projectId:P2,groupId:authorGroup.id,userId:alice.id,permissions:["create","view"]}),P2);
+  const newReport = () => inP(()=>reports.createReport(db,{projectId:P2,reportTypeId:type.id,userId:alice.id,reportDate:"2025-01-01"}),P2);
+  const firstReport = await newReport();
+  const sign = report => inP(()=>reports.signReport(db,{projectId:P2,reportId:report.id,userId:signer.id,groupId:group.id}),P2);
+  await throws(()=>sign(firstReport),"حق امضا ندارید");
+  const approve = { ...target,sourceId:base.id,appointmentId:destinationAppointment.id,sourceDecree:"SOURCE-10",destinationDecree:"DEST-20",typeId:type.id,groupId:group.id };
+  const decide = body=>inP(()=>decideSharedSigner(db,body,alice.id),P2);
+  equal(await effective(),[]);
+  await throws(()=>decide({...approve,destinationDecree:"stale"}),"حکم فعال");
+  await decide(approve);
+  await sign(firstReport);
+  equal((await effective()).map(m=>[m.userId,m.permissions]),[[signer.id,["view","sign"]]]);
+  await inP(()=>db.query("UPDATE contract_member SET status='inactive' WHERE id=$1",[originAppointment.id]));
+  equal(await effective(),[]);
+  await inP(()=>db.query("UPDATE contract_member SET status='active' WHERE id=$1",[originAppointment.id]));
+  const approval=(await read()).signing.approvals[0];
+  await decide({...target,sourceId:base.id,revokeId:approval.id});
+  const secondReport = await newReport();
+  await throws(()=>sign(secondReport),"حق امضا ندارید");
+  equal(await effective(),[]);
+  await decide(approve);
+  await subscribe([]);
+  await subscribe([signer.id]);
+  equal(await effective(),[]);
   await throws(() => inP(() => saveShare(db,{...target,kind:"share-base",enabled:true,sourceId:""}),P2),"استفاده‌کننده");
 });
 

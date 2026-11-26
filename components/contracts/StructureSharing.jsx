@@ -45,6 +45,7 @@ function Subscription({party,contractId,role}) {
           update={next=>setDraft(selectedStructure(data.tree,next))}/>)}</>}
       <button type="button" className="btn" onClick={()=>save({kind:"share-selection",sourceId:data.sourceId,selection})}>ذخیرهٔ اشتراک</button>
     </>}
+    {data.signing && !draft && source===undefined && <SignerApproval key={data.sourceId} data={data} save={save} />}
     {message && <p role="status">{message}</p>}
   </fieldset>;
 }
@@ -76,4 +77,26 @@ function Branch({category,nodes,selection,update}) {
     <button type="button" className="btn ghost sm" onClick={()=>{const next={...selection};delete next[category];update(next);}}>حذف بخش</button>
     <ul>{nodes.map(n=>item(n))}</ul>
   </details>;
+}
+
+function SignerApproval({data,save}) {
+  const [appointmentId,setAppointment] = useState("");
+  const [groupKey,setGroup] = useState("");
+  const {appointments,groups,approvals} = data.signing;
+  const appointment = appointments.find(a=>a.id===appointmentId);
+  const person = data.tree.users.find(u=>u.key===appointment?.user_id);
+  const group = groups.find(g=>g.type_id+"/"+g.group_id===groupKey);
+  return <section><h4>تأیید حکم و اختیار امضا در قرارداد مقصد</h4>
+    {appointments.length && groups.length ? <>
+      <label>کاربر و حکم مقصد <select value={appointmentId} onChange={e=>setAppointment(e.target.value)}>
+        <option value="">انتخاب حکم</option>{appointments.map(a=><option key={a.id} value={a.id}>{a.display_name} · {a.decree}</option>)}</select></label>
+      {person && <p>حکم مبنا: {person.decree || "ثبت نشده"}</p>}
+      <label>محل امضا <select value={groupKey} onChange={e=>setGroup(e.target.value)}>
+        <option value="">انتخاب فرم، مرحله و گروه</option>{groups.map(g=><option key={g.type_id+"/"+g.group_id} value={g.type_id+"/"+g.group_id}>{g.form} · {g.stage} · {g.name}</option>)}</select></label>
+      <button type="button" disabled={!group || !person?.decree} onClick={()=>save({kind:"share-signer",sourceId:data.sourceId,
+        appointmentId,destinationDecree:appointment.decree,sourceDecree:person.decree,groupId:group.group_id,typeId:group.type_id})}>تأیید حکم و اجازهٔ امضا</button>
+    </> : <p>برای تأیید، کاربر اشتراکی باید عضو پروژه و دارای حکم فعال در قرارداد مقصد باشد و فرم قراردادی مقصد گروه گردش کار داشته باشد.</p>}
+    {approvals.map(a=><p key={a.id}>{a.display_name} · {a.destination_decree} · {a.form} · {a.name}
+      <button type="button" onClick={()=>save({kind:"share-signer",sourceId:data.sourceId,revokeId:a.id})}>لغو اختیار امضا</button></p>)}
+  </section>;
 }
