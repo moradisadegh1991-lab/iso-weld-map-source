@@ -20,7 +20,7 @@ import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
  *   POST {kind: contract-currency | contract-parties | contract-stakeholder | contract-stakeholder-remove | amendment |
  *         category | category-move | category-rename | category-remove} — contract managers
  */
-const PROJECT_KINDS = new Set(["company", "logo", "logo-active", "logo-rename", "stakeholder", "stakeholder-remove", "currency", "budget", "budget-remove"]);
+const PROJECT_KINDS = new Set(["company", "logo", "logo-active", "logo-rename", "stakeholder", "stakeholder-remove", "stakeholder-role", "stakeholder-role-remove", "currency", "budget", "budget-remove"]);
 
 export async function GET(request) {
   try {
@@ -52,10 +52,11 @@ export async function GET(request) {
       }
       const { rows: contracts } = await db.query(
         "SELECT id, contract_no, title, currency, start_on, end_on, status FROM contract WHERE project_id = $1 ORDER BY contract_no", [projectId]);
+      const setup = await org.projectSetup(db, { projectId });
       return Response.json({
-        ...(await org.projectSetup(db, { projectId })), contracts,
+        ...setup, contracts,
         contract: contractId ? await org.contractSetup(db, { projectId, contractId }) : null,
-        labels: { contractRoles: org.CONTRACT_ROLES, amendmentKinds: org.AMENDMENT_KINDS, trees: org.TREES },
+        labels: { contractRoles: org.roleOptions(setup.roleCatalog, "contract"), amendmentKinds: org.AMENDMENT_KINDS, trees: org.TREES },
         may: { project: can(membership, ACTIONS.MANAGE_MEMBERS), contract: access === "manage" },
       });
     });
@@ -100,6 +101,8 @@ export async function POST(request) {
         case "logo": return ok({ logo: await org.addCompanyLogo(db, { companyId: body.companyId, name: body.name, bytes: file, store, userId }) });
         case "logo-active": return ok({ logo: await org.setCompanyLogoActive(db, { logoId: body.id, active: body.active }) });
         case "logo-rename": return ok({ logo: await org.renameCompanyLogo(db, { logoId: body.id, name: body.name }) });
+        case "stakeholder-role": return ok({ row: await org.saveStakeholderRole(db, { ...body, projectId }) });
+        case "stakeholder-role-remove": await org.removeStakeholderRole(db, { projectId, code: body.code }); return ok();
         case "stakeholder": return ok({ row: await org.addProjectStakeholder(db, { projectId, id: body.id || null, companyId: body.companyId, role: body.role, note: body.note }) });
         case "stakeholder-remove": await org.removeProjectStakeholder(db, { projectId, id: body.id }); return ok({});
         case "currency": return ok({ row: await org.upsertCurrency(db, { projectId, code: body.code, name: body.name, rate: body.rate }) });

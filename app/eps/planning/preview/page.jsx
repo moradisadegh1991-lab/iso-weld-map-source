@@ -39,6 +39,7 @@ export default function PlanningPreviewPage() {
   const { pmsId, versionId, picker } = useVersion(contractId, { form: "planning" });
   const tree = useProjectData((id) => (versionId ? `/api/eps/activities?projectId=${id}&form=planning&versionId=${versionId}` : null), [versionId]);
   const [sel, setSel] = useState(null);
+  const [identifierEdit, setIdentifierEdit] = useState(null);
   const detail = useProjectData((id) => (sel?.kind === "act" && versionId ? `/api/eps/activities?projectId=${id}&form=planning&activityId=${sel.id}&versionId=${versionId}` : null), [sel?.id, versionId]);
   const sub = useProjectData((id) => (sel?.kind === "act" && versionId ? `/api/eps/planning?projectId=${id}&versionId=${versionId}&activityId=${sel.id}` : null), [sel?.id, versionId]);
   const [tab, setTab] = useState("detail");
@@ -51,7 +52,7 @@ export default function PlanningPreviewPage() {
   const { height, grip } = useSplit("p6-plan-preview", 380);
   const data = useMemo(() => (tree.data ? { ...tree.data, roots: plannedOnly(tree.data.roots) } : null), [tree.data]);
   const acts = useMemo(() => { const out = []; const walk = (n) => { out.push(...n.activities); n.children.forEach(walk); }; (tree.data?.roots || []).forEach(walk); return out; }, [tree.data]);
-  useEffect(() => { setSel(null); setSelectedDays([]); }, [versionId]);
+  useEffect(() => { setSel(null); setIdentifierEdit(null); setSelectedDays([]); }, [versionId]);
 
   // the loaders of this render: a save from a row the grid kept open must reload the activity selected now, not the one of its render
   const live = useRef({});
@@ -133,10 +134,11 @@ export default function PlanningPreviewPage() {
       {ok && <p className="okmsg toast" role="status">{ok}</p>}
       {data.roots.length === 0 ? <p className="empty-note">{t("ep.pl.empty")}</p> : (
         <div style={{ height }}>
-          <ActivityGrid toolbar={may && sel?.kind === "act" && acts.find((a) => a.id === sel.id)?.plan &&
-            <PlanIdentifiers key={sel.id} activity={acts.find((a) => a.id === sel.id)} planId={acts.find((a) => a.id === sel.id).plan.id} save={postPlan} />} planningDates data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "pStart", "pDays", "pFinish", "pBefore", "pPlanned", "pDesc", ...PLAN_COST_COLUMNS.map((c) => c.key)]}
+          <ActivityGrid onEditIdentifiers={may ? (row) => setIdentifierEdit(row.item) : undefined} planningDates data={data} columns={columns} defaultCols={["code", "activityNo", "name", "unit", "volActual", "done", "pct", "pStart", "pDays", "pFinish", "pBefore", "pPlanned", "pDesc", ...PLAN_COST_COLUMNS.map((c) => c.key)]}
             storeKey="p6-plan-preview" selected={sel?.id} onSelect={(r) => setSel(r)} ops={ops} />
         </div>)}
+      {identifierEdit && <PlanIdentifiers key={identifierEdit.id} activity={identifierEdit} planId={identifierEdit.plan.id}
+        save={postPlan} onClose={() => setIdentifierEdit(null)} />}
       {grip}
       <div className="p6-detail" data-preview-tabs>
         <div className="p6-tabs" role="tablist">{TABS.map((k) => <button key={k} type="button" role="tab" data-tab={k} aria-selected={tab === k} className={tab === k ? "on" : undefined}

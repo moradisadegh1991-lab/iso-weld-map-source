@@ -165,6 +165,52 @@ test("a user's profile: username to sign in with, job title, expertise, company;
   });
 });
 
+test("multiple appointments keep individual IDs and only confirmed replacement deactivates others", async () => {
+  const users = await import("../../lib/db/repos/users.mjs");
+  const bob = (await db.query("SELECT id FROM app_user WHERE email = 'bob@x.test'")).rows[0];
+  await inP(async () => {
+    const base = { projectId: P, contractId: contract.id, userId: bob.id, position: "سرپرست", status: "active" };
+    const first = await users.setContractMember(db, { ...base, access: "manage", decree: "TEST-HR-101" });
+    const second = await users.setContractMember(db, { ...base, access: "view", decree: "TEST-HR-102" });
+    assert(first.id !== second.id);
+    equal((await users.visibleContracts(db, { ...base, role: "engineer" })).map((c) => c.access), ["manage"]);
+    await throws(() => users.setContractMember(db, { ...base, access: "edit", decree: first.decree, deactivateOthers: true }), "قبلاً ثبت شده");
+    equal((await users.contractMembers(db, base)).filter((r) => r.decree && r.status === "active").length, 2);
+    const replacement = await users.setContractMember(db, { ...base, access: "edit", decree: "TEST-HR-103", deactivateOthers: true });
+    equal((await users.contractMembers(db, base)).filter((r) => r.status === "active").map((r) => r.id), [replacement.id]);
+    const edited = await users.setContractMember(db, { ...base, id: replacement.id, access: "view", decree: "TEST-HR-104" });
+    equal([edited.id, edited.decree, await users.contractAccess(db, { ...base, role: "engineer" })], [replacement.id, "TEST-HR-104", "view"]);
+  });
+});
+
+test("project code edits preserve identity and enforce uniqueness", async () => {
+  const other = await projects.createProject(db, { code: "ROLE-TEST-OTHER", name: "Other project" });
+  const before = await projects.getProjectProfile(db, { projectId: P });
+  await inP(async () => {
+    const renamed = await projects.updateProjectProfile(db, { projectId: P, patch: { code: " PROJECT-UPDATED " } });
+    equal([renamed.id, renamed.code], [P, "PROJECT-UPDATED"]);
+    await throws(() => projects.updateProjectProfile(db, { projectId: P, patch: { code: other.code } }), "پروژهٔ دیگری");
+    await projects.updateProjectProfile(db, { projectId: P, patch: { code: before.code } });
+  });
+});
+
+test("the same catalog supplies both stakeholder pickers and protects roles already assigned", async () => {
+  await inP(async () => {
+    const role = await org.saveStakeholderRole(db, { projectId: P, name: "هماهنگ‌کننده آزمایشی", scope: "both", seq: 0, active: true, note: "شرح" });
+    const projectParty = await org.addProjectStakeholder(db, { projectId: P, companyId: kavian.id, role: role.code });
+    const contractParty = await org.addContractStakeholder(db, { projectId: P, contractId: contract.id, companyId: kavian.id, role: role.code });
+    await throws(() => org.removeStakeholderRole(db, { projectId: P, code: role.code }), "تخصیص دارد");
+    await org.saveStakeholderRole(db, { projectId: P, code: role.code, name: "هماهنگ‌کننده", scope: "both", seq: 1, active: false });
+    equal(org.roleOptions(await org.stakeholderRoleCatalog(db, { projectId: P }), "contract")[role.code], undefined);
+    await throws(() => org.addProjectStakeholder(db, { projectId: P, companyId: epc.id, role: role.code }), "نقش فعال");
+    await org.addProjectStakeholder(db, { projectId: P, id: projectParty.id, companyId: kavian.id, role: role.code, note: "ویرایش" });
+    await org.removeProjectStakeholder(db, { projectId: P, id: projectParty.id });
+    await org.removeContractStakeholder(db, { projectId: P, id: contractParty.id });
+    await org.removeStakeholderRole(db, { projectId: P, code: role.code });
+    assert(!(await org.stakeholderRoleCatalog(db, { projectId: P })).some((r) => r.code === role.code));
+  });
+});
+
 // ── the owner's review (2026-10-15) ──────────────────────────────────────
 
 test("every form edits: company tax code, stakeholders, budgets, amendments, the contract's employer and contractor from the companies", async () => {

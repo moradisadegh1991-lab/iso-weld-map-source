@@ -5,7 +5,7 @@ import { useEpsFmt } from "./ActivityDetail";
 /** The bottom panel shows only the selected activity's history, not all
  * planning rows. Derived quantities are read-only and computed server-side.
  */
-export default function PlanningActivityHistory({ data, selected, loading, error }) {
+export default function PlanningActivityHistory({ data, selected, loading, error, onEditIdentifiers }) {
   const { t } = usePrefs();
   const { fmt, day } = useEpsFmt();
   if (!selected || selected.kind !== "act") {
@@ -45,7 +45,9 @@ export default function PlanningActivityHistory({ data, selected, loading, error
   };
   return <section data-plan-history>
     <p className="sm muted">{t("ep.historyCaption")} <strong dir="ltr">{data.activity?.code || selected.item?.code}</strong> — {data.activity?.name || selected.item?.name || ""}
-      {" · "}{t("ep.historyReadOnly")}</p>
+      {" · "}{t("ep.historyReadOnly")}
+      {onEditIdentifiers && <button type="button" className="btn ghost sm" onClick={onEditIdentifiers}>{t("ep.identifiers.edit")}</button>}
+    </p>
     <p className="sm muted">{t("ep.historyLiveActuals")}</p>
     {!data.rows?.length ? <p className="empty-note">{t("ep.historyEmpty")}</p> :
       <div className="tablewrap" style={{ overflowX: "auto" }}>

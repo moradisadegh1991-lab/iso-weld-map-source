@@ -7,7 +7,7 @@ import { assertCan, ACTIONS } from "../../../lib/authz.mjs";
 import * as rp from "../../../lib/db/repos/reports.mjs";
 import * as forms from "../../../lib/db/repos/forms.mjs";
 import { FIELD_TYPES, SOURCES, CLAIM_FIELDS } from "../../../lib/reports/forms.mjs";
-import { checkCreate } from "../../../lib/reports/workflow.mjs";
+import { canView, checkCreate } from "../../../lib/reports/workflow.mjs";
 import { AREAS } from "../../../lib/platform/areas.mjs";
 import { formAllowed } from "../../../lib/platform/tiles.mjs";
 import { assertContractAccess } from "../../../lib/db/repos/users.mjs";
@@ -55,7 +55,7 @@ export async function GET(request) {
         if (!t || !forms.companyFormAllowed(membership, t.form_company_id) || !formAllowed(membership, code) && !(forms.mayDesign(membership, t.section)
           && (!narrowed(membership) || membership.tiles.includes("/forms")))) throw notFound();
         if (t.template) return Response.json({ type: t, stages: [], reports: [], users: [], labels,
-          may: { create: false, install: forms.mayDesign(membership, t.section) } });
+          may: { create: false, hasWorkflowAccess: false, install: forms.mayDesign(membership, t.section) } });
         if (q("work")) return Response.json({ work: await forms.acceptedWork(db, { projectId, section: t.section, date: q("work") }) });
         const stages = await rp.workflowOf(db, { projectId, reportTypeId: t.id });
         const { rows: users } = await db.query(
@@ -64,7 +64,7 @@ export async function GET(request) {
         return Response.json({ type: { id: t.id, code: t.code, name: t.name, description: t.description, section: t.section, form: t.form },
           stages: stages.map((s) => ({ seq: s.seq, name: s.name, groups: s.groups.map((g) => ({ name: g.name, members: g.members.length })) })),
           reports: await rp.listReports(db, { projectId, reportTypeId: t.id, userId: user.id }), users, labels,
-          may: { create: checkCreate(stages, user.id).ok, design: forms.mayDesign(membership, t.section) } });
+          may: { create: checkCreate(stages, user.id).ok, hasWorkflowAccess: canView(stages, user.id), design: forms.mayDesign(membership, t.section) } });
       }
       const all = (await forms.formTypes(db, { projectId, contractId, published: true })).filter((form) => form.active && forms.companyFormAllowed(membership, form.form_company_id));
       const sections = forms.designableSections(membership);

@@ -5,6 +5,7 @@ import { can, ACTIONS } from "../../lib/authz.mjs";
 import { ERECTION_STANDARDS } from "../../lib/structural/steel.mjs";
 import TableKit from "../../components/ui/TableKit";
 import Tabs from "../../components/ui/Tabs";
+import StakeholderRoles from "../../components/contracts/StakeholderRoles";
 
 /**
  * The project's particulars.
@@ -132,7 +133,7 @@ function ProjectDetails() {
     if (!data?.project) return;
     const p = data.project;
     setForm(Object.fromEntries([...FIELDS, ...SITING, ...CONCRETE].map(([k]) => [k, p[k] ?? ""])
-      .concat([["description", p.description ?? ""],
+      .concat([["code", p.code], ["description", p.description ?? ""],
                ["steel_erection_standard", p.steel_erection_standard ?? ""],
                ["weld_symbol_shop", p.weld_symbol_shop ?? ""], ["weld_symbol_field", p.weld_symbol_field ?? ""],
                ["weld_thd_labelled", Boolean(p.weld_thd_labelled)],
@@ -184,6 +185,8 @@ function ProjectDetails() {
       <form className="card" data-tab="spec" data-tab-title="مشخصات و قواعد پروژه" onSubmit={save}>
         <h2>پروژه</h2>
         <div className="grid2">
+          <label>کد پروژه <input name="project-code" dir="ltr" required disabled={!editable}
+            value={form.code} onChange={(e) => set("code", e.target.value)} /></label>
           {FIELDS.map(([k, label, type]) => (
             <div className="field" key={k}>
               <label htmlFor={k}>{label}</label>
@@ -376,13 +379,7 @@ function ProjectDetails() {
 
       <FormCodesCard projectId={projectId} call={call} editable={editable} />
 
-      <div className="card" data-keep>
-        <h2>کد پروژه</h2>
-        <p className="muted sm">
-          کد <b className="mono">{p.code}</b> پس از ساخت پروژه تغییر نمی‌کند — هر
-          مدرک، رجیستر و گزارشی که تا امروز صادر شده به آن ارجاع می‌دهد.
-        </p>
-      </div>
+      <StakeholderRoles data-tab="stakeholder-roles" data-tab-title="تعریف نقش ذی‌نفعان" />
       </Tabs>
     </div>
   );

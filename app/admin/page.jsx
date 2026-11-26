@@ -64,6 +64,9 @@ export default function AdminPage() {
     } catch (e) { setMsg(e.message); return null; }
   }
 
+  const assignedIds = new Set(data?.contractMembers.filter((m) => m.contract_id === contractId).map((m) => m.user_id));
+  const shownMembers = (data?.members || []).filter((m) => !contractId || assignedIds.has(m.user_id));
+
   return (
     <div className="page">
       <div className="pagehead">
@@ -83,10 +86,10 @@ export default function AdminPage() {
         <p className="muted">مدیریت کاربران با مدیر پروژه است.</p>
       ) : err ? <p className="err">{err}</p> : !data ? <p className="muted">در حال بارگذاری…</p> : tab === "contracts" ? <ContractMembers key={contractId || projectId} contractId={contractId} data={data} post={post} /> : <>
         <div className="kpis">
-          <Kpi v={data.members.length} l="عضو پروژه" />
-          <Kpi v={data.members.filter((m) => m.status === "active").length} l="فعال" tone="ok" />
-          <Kpi v={data.members.filter((m) => ["invited", "no_password"].includes(m.status)).length} l="منتظر تنظیم رمز" tone="warn" />
-          <Kpi v={data.members.filter((m) => ["inactive", "locked"].includes(m.status)).length} l="غیرفعال یا قفل" tone="bad" />
+          <Kpi v={shownMembers.length} l={contractId ? "کاربر قرارداد جاری" : "عضو پروژه"} />
+          <Kpi v={shownMembers.filter((m) => m.status === "active").length} l="فعال" tone="ok" />
+          <Kpi v={shownMembers.filter((m) => ["invited", "no_password"].includes(m.status)).length} l="منتظر تنظیم رمز" tone="warn" />
+          <Kpi v={shownMembers.filter((m) => ["inactive", "locked"].includes(m.status)).length} l="غیرفعال یا قفل" tone="bad" />
         </div>
 
         {data.resetRequests?.length > 0 && <ResetRequests data={data} post={post} setLink={setLink} />}
@@ -102,7 +105,7 @@ export default function AdminPage() {
           <TableKit name="users">
             <table className="dtable">
               <thead><tr><th>نام</th><th>ایمیل / نام کاربری</th><th>نقش</th><th>حوزه‌های کاری</th><th>طرف بازرسی</th><th>وضعیت</th><th>آخرین ورود</th><th /></tr></thead>
-              <tbody>{data.members.map((m) => {
+              <tbody>{shownMembers.map((m) => {
                 const [tone, label] = STATUS[m.status];
                 return [
                   <tr key={m.user_id}>
@@ -211,46 +214,74 @@ function Profile({ m, data, post }) {
 }
 
 function ContractMembers({ data, post, contractId }) {
-  const BLANK = { contractId, userId: "", position: "", access: "edit", decree: "", personnel: "", status: "active", startsOn: "", endsOn: "" };
-  const [f, setF] = useState(BLANK);
+  const blank = { userId: "", position: "", access: "edit", decree: "", personnel: "", status: "active", startsOn: "", endsOn: "" };
+  const [f, setF] = useState(blank);
   const [selected, select] = useState("");
   const members = data.contractMembers.filter((m) => m.contract_id === contractId);
   const current = members.find((m) => m.id === selected);
-  const contract = data.contracts.find((c) => c.id === f.contractId);
-  // Only people of the contract's stakeholder companies are assigned to it.
+  const contract = data.contracts.find((c) => c.id === contractId);
   const eligible = contract ? data.members.filter((m) => m.company_id && (contract.companies || []).includes(m.company_id)) : [];
+  const statusOptions = [["active", "فعال"], ["inactive", "غیرفعال"]];
+  const fields = [
+    { col: "کاربر", name: "userId", type: "select", options: eligible.map((m) => [m.user_id, m.display_name || m.email]) },
+    { col: "سمت", name: "position", type: "text" },
+    { col: "شماره حکم", name: "decree", type: "text" },
+    { col: "شماره پرسنلی", name: "personnel", type: "text" },
+    { col: "وضعیت", name: "status", type: "select", options: statusOptions },
+    { col: "شروع", name: "startsOn", type: "date" },
+    { col: "پایان", name: "endsOn", type: "date" },
+    { col: "دسترسی", name: "access", type: "select", options: Object.entries(data.contractAccess) },
+  ];
+  async function save(values, id) {
+    const original = members.find((m) => m.id === id);
+    const startsAnotherAppointment = !original || original.user_id !== values.userId || original.status !== "active";
+    const otherActive = startsAnotherAppointment && values.status === "active" &&
+      members.some((m) => m.user_id === values.userId && m.status === "active" && m.id !== id);
+    const deactivateOthers = otherActive && window.confirm("این کاربر حکم فعال دیگری دارد. حکم‌های فعال قبلی غیرفعال شوند؟");
+    const input = { ...values };
+    if (original?.decree == null && id && !input.decree.trim()) delete input.decree;
+    const result = await post({ kind: "contract-member", contractId, id, ...input, deactivateOthers });
+    if (result?.member) select(result.member.id);
+    return result;
+  }
   return (
     <div className="card">
       <h2>تخصیص کاربر به قرارداد</h2>
-      <p className="sm muted">فقط کاربرانی که «شرکت شاغل» آن‌ها در ذی‌نفعان قرارداد است (تعریف قرارداد ◄ ذی‌نفعان) به قرارداد تخصیص داده می‌شوند و فقط همان قراردادها را در بالای صفحه می‌بینند.
-        هر کاربر در هر قرارداد یک سمت و یک سطح دسترسی دارد: «مشاهده» فقط می‌بیند و امضا می‌کند، «ثبت و ویرایش» گزارش و محتوا ثبت می‌کند، «مدیریت قرارداد» تعریف و منابع قرارداد را هم تغییر می‌دهد. دسترسی دقیق در گزارش‌ها (ایجاد، افزودن، ویرایش و حذف محتوا، امضا، برگشت، تأیید نهایی) از گروه‌های گردش کار گزارش می‌آید.</p>
-      {!contract ? <p className="empty-note">قرارداد جاری را در بالای صفحه انتخاب کنید.</p> : (
-        <form className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}
-          onSubmit={async (e) => { e.preventDefault(); if (await post({ kind: "contract-member", ...f })) setF(BLANK); }}>
-          <div className="field"><label htmlFor="cm-u">کاربر</label><select id="cm-u" required value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
-            <option value="">{contract && !eligible.length ? "— کاربری از شرکت‌های ذی‌نفع نیست —" : "—"}</option>
-            {eligible.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name || m.email}{m.company_code ? ` (${m.company_code})` : ""}</option>)}</select></div>
-          <div className="field"><label htmlFor="cm-p">سمت در قرارداد</label><input id="cm-p" required value={f.position} onChange={(e) => setF({ ...f, position: e.target.value })} /></div>
-          {[["decree","شماره حکم کارگزینی","text"], ["personnel","شماره پرسنلی","text"], ["startsOn","تاریخ شروع","date"], ["endsOn","تاریخ پایان","date"]].map(([key,label,type]) =>
-            <label key={key}>{label}<input type={type} required={key === "decree"} value={f[key]} min={key === "endsOn" ? f.startsOn : undefined}
-              onChange={(e) => setF({ ...f, [key]: e.target.value })} /></label>)}
-          <label>وضعیت <select value={f.status} onChange={(e) => setF({ ...f, status:e.target.value })}>
-            <option value="active">فعال</option><option value="inactive">غیرفعال</option></select></label>
-          <div className="field"><label htmlFor="cm-a">سطح دسترسی</label><select id="cm-a" value={f.access} onChange={(e) => setF({ ...f, access: e.target.value })}>
-            {Object.entries(data.contractAccess).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
-          <button className="btn" type="submit">ثبت</button>
-          {f.contractId && f.userId && data.contractMembers.some((x) => x.contract_id === f.contractId && x.user_id === f.userId) &&
-            <span className="sm muted">این کاربر در این قرارداد هست؛ ثبت، سمت و دسترسی او را ویرایش می‌کند.</span>}
-        </form>)}
-      {members.length === 0 ? <p className="empty-note">هنوز کسی به قراردادی تخصیص داده نشده.</p> : (
-        <table className="dtable"><thead><tr><th>قرارداد</th><th>کاربر</th><th>سمت</th><th>شماره حکم</th><th>شماره پرسنلی</th><th>وضعیت</th><th>شروع</th><th>پایان</th><th>دسترسی</th><th /></tr></thead>
-          <tbody>{members.map((x) => (
-            <tr key={x.id} className={selected === x.id ? "sel" : ""} onClick={() => select(x.id)}><td><span className="mono">{x.contract_no}</span> — {x.contract_title}</td><td>{x.display_name || x.email}</td><td>{x.position}</td><td>{x.decree}</td><td>{x.personnel}</td><td>{x.status === "active" ? "فعال" : "غیرفعال"}</td><td>{x.starts_on?.slice(0,10)}</td><td>{x.ends_on?.slice(0,10)}</td>
-              <td>{data.contractAccess[x.access]}</td><td>
-                <button className="btn ghost sm" type="button" onClick={() => setF({ contractId: x.contract_id, userId: x.user_id, position: x.position, access: x.access, decree: x.decree, personnel: x.personnel || "", status: x.status, startsOn: x.starts_on?.slice(0,10) || "", endsOn: x.ends_on?.slice(0,10) || "" })}>ویرایش</button>
-                <button className="btn ghost sm" type="button" onClick={() => post({ kind: "contract-member-remove", id: x.id })}>حذف</button></td></tr>))}</tbody></table>)}
+      {contract ? <form className="row" style={{ gap: 8, alignItems: "end", flexWrap: "wrap" }}
+        onSubmit={async (e) => { e.preventDefault(); if (await save(f)) setF(blank); }}>
+        {fields.map(({ col, name, type, options }) => <label key={name}>{col} {type === "select"
+          ? <select required value={f[name]} onChange={(e) => setF({ ...f, [name]: e.target.value })}>
+              {!f[name] && <option value="">انتخاب کنید</option>}
+              {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          : <input type={type} required={["position", "decree"].includes(name)} value={f[name]}
+              min={name === "endsOn" ? f.startsOn : undefined} onChange={(e) => setF({ ...f, [name]: e.target.value })} />}
+        </label>)}
+        <button className="btn" type="submit" disabled={!eligible.length}>ثبت حکم</button>
+      </form> : <p className="empty-note">قرارداد جاری را در بالای صفحه انتخاب کنید.</p>}
+      {contract && (members.length ? <TableKit name="contract-appointments" onRowNavigate={select}
+        onDelete={(id) => post({ kind: "contract-member-remove", id })} rowEdit={{
+          fields,
+          value: (id) => {
+            const m = members.find((row) => row.id === id);
+            return { userId: m.user_id, position: m.position, access: m.access, decree: m.decree || "",
+              personnel: m.personnel || "", status: m.status, startsOn: m.starts_on?.slice(0, 10) || "", endsOn: m.ends_on?.slice(0, 10) || "" };
+          },
+          onSave: (id, values) => save(values, id),
+        }}>
+        <table className="dtable">
+          <thead><tr>{fields.map((field) => <th key={field.name}>{field.col}</th>)}<th /></tr></thead>
+          <tbody>{members.map((m) => <tr key={m.id} data-key={m.id} className={selected === m.id ? "sel" : undefined}>
+            <td>{m.display_name || m.email}</td><td>{m.position}</td><td>{m.decree}</td><td>{m.personnel}</td>
+            <td>{m.status === "active" ? "فعال" : "غیرفعال"}</td><td>{m.starts_on?.slice(0, 10)}</td><td>{m.ends_on?.slice(0, 10)}</td>
+            <td>{data.contractAccess[m.access]}</td><td />
+          </tr>)}</tbody>
+        </table>
+      </TableKit> : <p className="empty-note">برای این قرارداد حکمی ثبت نشده است.</p>)}
       <InheritedStructure category="users" title="کاربران مشترک قرارداد" />
-      {current && <section><h2>وظایف کاربر · {current.display_name || current.email} · {current.decree}</h2><UserDuties key={current.id} userId={current.user_id} contractId={contractId} /></section>}
+      {current && <section><h2>وظایف کاربر · {current.display_name || current.email} · {current.decree}</h2>
+        <UserDuties key={current.id} userId={current.user_id} contractId={contractId} appointmentId={current.id} />
+      </section>}
     </div>
   );
 }

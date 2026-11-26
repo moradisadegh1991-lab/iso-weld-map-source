@@ -1,4 +1,5 @@
 "use client";
+import { rowNavigation } from "../../lib/client/row-navigation.mjs";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useConfirm } from "./ConfirmDialog";
 import { createPortal } from "react-dom";
@@ -470,16 +471,28 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
       togglePick(row, e.shiftKey);
       return;
     }
-    if (rowEdit && e.type === "click" && mayEditRow(row)) { guard(() => openEdit(row)); }
-    const cur = st.current.selRow;
-    if (cur && cur !== row) delete cur.dataset.tkSel;
-    if (cur === row && e.type === "click" && e.detail === 1) { delete row.dataset.tkSel; st.current.selRow = null; setSel(null); return; }
-    row.dataset.tkSel = "";
-    st.current.selRow = row;
-    setSel({ row, key: row.dataset.key || null });
-    if (e.type === "click") box.current?.closest(".tk")?.focus({ preventScroll: true });
-    setErr("");
-    if (e.type === "dblclick") setDialog("view");
+    const click = e.type === "click";
+    const single = e.detail === 1;
+    const selectRow = () => {
+      if (rowEdit && click && mayEditRow(row)) openEdit(row);
+      const current = st.current.selRow;
+      if (current && current !== row) delete current.dataset.tkSel;
+      if (!rowEdit && current === row && click && single) {
+        delete row.dataset.tkSel;
+        st.current.selRow = null;
+        setSel(null);
+        return;
+      }
+      row.dataset.tkSel = "";
+      st.current.selRow = row;
+      setSel({ row, key: row.dataset.key || null });
+      onRowNavigate?.(row.dataset.key);
+      if (click) box.current?.closest(".tk")?.focus({ preventScroll: true });
+      setErr("");
+      if (!click) setDialog("view");
+    };
+    if (rowEdit && click && ed?.row !== row) guard(selectRow);
+    else if (!rowEdit || !click || !ed) selectRow();
   }
   // ── several rows: pick, copy, cut, delete, paste ─────────────────────────
   const picksOf = () => { const s = st.current; if (!s.picks) s.picks = new Set(); return s.picks; };
@@ -687,14 +700,17 @@ export default function TableKit({ children, name = "table", min = 1, onEdit, on
   const title = cells.find(([, v]) => v)?.[1] || t("tk.row");
   const tableKeys = (e) => {
     if (e.defaultPrevented || e.repeat || e.nativeEvent.isComposing || busy || confirmation || dialog || leave) return;
-    if ((e.ctrlKey || e.metaKey) && ["PageUp", "PageDown"].includes(e.key)) {
+    const direction = rowNavigation(e);
+    if (direction) {
       const rows = [...(box.current?.querySelector("table")?.tBodies[0]?.rows || [])]
-        .filter((r) => !r.hidden && !r.classList.contains("tk-grp") && !r.classList.contains("tk-edit") && !isDetail(r) && r.getClientRects().length);
-      const current = e.target.closest("tbody tr:not(.tk-edit)") || sel?.row;
+        .filter((r) => !r.hidden && !r.classList.contains("tk-grp") && !r.classList.contains("tk-edit") && !isDetail(r) &&
+          (r === ed?.row ? ed.tr : r).getClientRects().length);
+      const current = e.target.closest("tbody tr:not(.tk-edit)") || ed?.row || sel?.row;
       const index = rows.indexOf(current);
+      if (index === -1) return;
       e.preventDefault();
-      const next = rows[index + (e.key === "PageDown" ? 1 : -1)];
-      if (index !== -1 && next) guard(() => {
+      const next = rows[index + direction];
+      if (next) guard(() => {
         if (st.current.selRow) delete st.current.selRow.dataset.tkSel;
         next.dataset.tkSel = "";
         st.current.selRow = next;
