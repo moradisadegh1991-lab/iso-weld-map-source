@@ -111,7 +111,12 @@ export default function ReportSetup({ rolesOnly = false }) {
       {shared.error && <p className="err" role="alert">{shared.error}</p>}
       <Roles data={data} inherited={shared.data?.rows || []} onLink={changeLink} post={post} tr={tr}
         selected={sharedSelection?.id || roleId} onSelect={(id, inheritedNode) => {
-          setSharedSelection(inheritedNode || null); setRoleId(id); setDutyId(null); setNd(blankDuty); setDutyTab("users");
+          const localDuty = data.duties.find((duty) => duty.id === id);
+          setSharedSelection(inheritedNode || null);
+          setRoleId(localDuty ? localDuty.roleId : id);
+          setDutyTab("users");
+          if (localDuty) chooseDuty(localDuty);
+          else { setDutyId(null); setNd(blankDuty); }
         }} />
       {inheritedDuties.length > 0 && <section className="card">
         <h2>وظایف زیرمجموعهٔ نقش</h2>
@@ -297,18 +302,39 @@ function Holders({ duty, users, post, ask, onlyUser, appointments = [] }) {
   const appointment = (id, appointmentId) => contractMembers.find((a) => a.id === appointmentId && a.user_id === id);
   const activeAppointments = contractMembers.filter((a) => a.status === "active" && a.decree);
   const members = onlyUser ? duty.members.filter((member) => member.userId === onlyUser) : duty.members;
-  const edit = (m) => setF({ userId: m.userId, appointmentId: m.appointmentId || "", active: m.active, own: !!m.permissions, permissions: m.permissions || [...duty.permissions], temporary: m.temporary, startsOn: m.startsOn || "", endsOn: m.endsOn || "" });
+  const edit = (m) => setF({ holderId: m.userId, userId: m.userId, appointmentId: m.appointmentId || "", active: m.active, own: !!m.permissions, permissions: m.permissions || [...duty.permissions], temporary: m.temporary, startsOn: m.startsOn || "", endsOn: m.endsOn || "" });
   return (
     <div data-holders={duty.code || duty.name}>
-      {members.length === 0 && <span className="sm muted">—</span>}
-      {members.map((m) => (
-        <div key={m.userId} className="sm" data-holder={m.name}>
-          <b>{m.name}</b> {appointment(m.userId, m.appointmentId) && <span>{[appointment(m.userId, m.appointmentId).personnel, appointment(m.userId, m.appointmentId).position, appointment(m.userId, m.appointmentId).decree, appointment(m.userId, m.appointmentId).status === "active" ? "فعال" : "غیرفعال"].filter(Boolean).join(" · ")}</span>}{!m.active && <span className="pill sm">{tr("rs.inactive")}</span>}
-          {m.permissions && <span className="muted"> · {m.permissions.map(perm).join(tr("c.sep"))}</span>}
-          {m.temporary && <span className="chip" style={{ marginInlineStart: 4 }} data-temporary>{tr("rs.tempSpan", { from: m.startsOn, to: m.endsOn })}</span>}
-          {" "}<button className="btn ghost sm" type="button" onClick={() => edit(m)}>{tr("dr.edit")}</button>
-          <button className="btn ghost sm" type="button" onClick={async () => { if (await ask(tr("rs.holderRemoveAsk", { name: m.name }))) post({ kind: "duty-member-remove", dutyId: duty.id, userId: m.userId }); }}>{tr("dr.remove")}</button>
-        </div>))}
+      {members.length ? <TableKit name="duty-holders" onRowNavigate={(id) => {
+        const member = members.find((row) => row.userId === id);
+        if (member) edit(member);
+      }}>
+        <table className="dtable">
+          <thead><tr><th>شماره پرسنلی</th><th>{tr("rs.user")}</th><th>سمت در قرارداد</th><th>شماره حکم</th><th>وضعیت</th><th>سطح دسترسی</th><th /></tr></thead>
+          <tbody>{members.map((m) => {
+            const contractAppointment = appointment(m.userId, m.appointmentId);
+            const active = m.active && contractAppointment?.status !== "inactive";
+            return <tr key={m.userId} data-key={m.userId} data-holder={m.name}>
+              <td>{contractAppointment?.personnel || "—"}</td>
+              <td>{m.name}</td>
+              <td>{contractAppointment?.position || "—"}</td>
+              <td>{contractAppointment?.decree || "—"}</td>
+              <td>{active ? "فعال" : "غیرفعال"}</td>
+              <td>{m.permissions?.map(perm).join(tr("c.sep")) || "—"}
+                {m.temporary && <span className="chip" data-temporary>{tr("rs.tempSpan", { from: m.startsOn, to: m.endsOn })}</span>}
+              </td>
+              <td>
+                <button className="btn ghost sm" type="button" onClick={() => edit(m)}>{tr("dr.edit")}</button>
+                <button className="btn ghost sm" type="button" onClick={async () => {
+                  if (await ask(tr("rs.holderRemoveAsk", { name: m.name }))) {
+                    await post({ kind: "duty-member-remove", dutyId: duty.id, userId: m.userId });
+                  }
+                }}>{tr("dr.remove")}</button>
+              </td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </TableKit> : <span className="sm muted">—</span>}
       {!onlyUser && !f && <button className="btn ghost sm" type="button" data-holder-add onClick={() => setF(blank)}>{tr("rs.holderAdd")}</button>}
       {f && (
         <form className="permgrid" style={{ marginTop: 6 }} aria-label={tr("rs.holdersOf", { name: duty.name })} onSubmit={async (e) => {
@@ -321,10 +347,10 @@ function Holders({ duty, users, post, ask, onlyUser, appointments = [] }) {
             onChange={(e) => { const holder = activeAppointments.find((a) => a.id === e.target.value);
               setF({ ...f, appointmentId: holder?.id || "", userId: holder?.user_id || "" }); }}>
             <option value="">انتخاب کاربر و شماره حکم</option>
-            {activeAppointments.filter((a) => (!onlyUser || a.user_id === onlyUser) && users.some((u) => u.id === a.user_id && u.active))
+            {activeAppointments.filter((a) => (!(onlyUser || f.holderId) || a.user_id === (onlyUser || f.holderId)) && users.some((u) => u.id === a.user_id && u.active))
               .map((a) => <option key={a.id} value={a.id}>{a.decree} · {a.display_name || a.email} · {a.position}</option>)}
           </select> : <select aria-label={tr("rs.user")} required value={f.userId}
-            onChange={(e) => setF({ ...f, userId: e.target.value })} data-holder-user disabled={!!onlyUser}>
+            onChange={(e) => setF({ ...f, userId: e.target.value })} data-holder-user disabled={!!(onlyUser || f.holderId)}>
             <option value="">—</option>{users.filter((u) => u.active || members.some((m) => m.userId === u.id))
               .map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>}
