@@ -59,7 +59,13 @@ export default function EpsPage() {
   live.current = { reload };
   async function post(body, done) {
     setMsg(null); setOk(null);
-    try { const r = await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, contractId, ...body }) }); reload(); if (done) setOk(done(r)); return r; }
+    try {
+      const r = await call("/api/eps", { method: "POST", body: JSON.stringify({ projectId, contractId, ...body }) });
+      const updated = reload();
+      if (body.kind === "calendar" || body.kind === "calendar-remove") await updated;
+      if (done) setOk(done(r));
+      return r;
+    }
     catch (e) { setMsg(e.message); return null; }
   }
   const tree = useMemo(() => (data ? asTree(data.pms) : null), [data]);
