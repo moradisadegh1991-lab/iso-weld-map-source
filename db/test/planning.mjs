@@ -480,4 +480,45 @@ test("shift hours respect split periods, holiday exceptions and exceptional shif
   equal(workingHours("2026-11-23","2026-11-24",{...calendar,shifts:{}}),null);
 });
 
+test("annual exceptions repeat across years, honor exact dates, and keep leap-day exceptions valid", async () => {
+  const { isWorking, workingHours } = await import("../../lib/eps/calendar.mjs");
+  const calendar = {
+    weekdays: [1, 2, 3, 4, 5],
+    annual_exceptions: { "12-31": false, "01-01": false, "02-29": false, "01-02": true },
+    exceptions: { "2027-01-01": true },
+    shifts: { 4: [["08:00", "16:00"]], 5: [["08:00", "16:00"]], 6: [["09:00", "12:00"]], "2027-01-01": [["08:00", "12:00"]] },
+  };
+  equal(workingDays("2026-12-31", "2027-01-02", calendar), 2);
+  equal(workingHours("2026-12-31", "2027-01-02", calendar), 7);
+  equal(workingFinish("2026-12-31", 2, calendar), "2027-01-02");
+  equal(isWorking("2027-12-31", calendar), false);
+  equal(isWorking("2028-01-01", calendar), false);
+  equal(isWorking("2028-02-29", calendar), false);
+  equal(workingDays("2027-02-28", "2027-03-01", calendar), 1);
+  const mondays = { weekdays: [1], annual_exceptions: { "01-04": false, "01-11": false } };
+  equal(workingFinish("2027-01-04", 1, mondays), "2027-01-18");
+  equal(workingFinish("9999-12-31", 1, { weekdays: [5], annual_exceptions: { "12-31": false } }), null);
+});
+
+test("an inherited annual rule affects Planning and persists through a calendar rename", async () => {
+  const { saveCalendar, listCalendars } = await import("../../lib/db/repos/contract-calendars.mjs");
+  await inP(async () => {
+    const ctx = { projectId: P, contractId: C.id };
+    const input = { ...ctx, name: "Annual calendar", weekdays: [0, 1, 2, 3, 4, 5, 6] };
+    await throws(() => saveCalendar(db, { ...input, annual_exceptions: { "02-30": false } }), "استثنای سالانه");
+    const calendar = await saveCalendar(db, { ...input, annual_exceptions: { "01-01": false } });
+    await saveCalendar(db, { ...input, id: calendar.id, name: "Annual calendar renamed" });
+    equal((await listCalendars(db, ctx)).find((c) => c.id === calendar.id).annual_exceptions, { "01-01": false });
+    const pms = await eps.savePms(db, { ...ctx, code: "ANNUAL", title: "Annual", userId: U.id, calendarId: calendar.id });
+    const v = await eps.saveVersion(db, { projectId: P, pmsId: pms.id, code: "ANNUAL-V1", title: "Annual V1", userId: U.id, calendarId: calendar.id });
+    const n = await eps.saveNode(db, { projectId: P, pmsId: pms.id, name: "Work", wf: 100 });
+    const a = await eps.saveActivity(db, { projectId: P, nodeId: n.id, name: "Activity", wf: 100 });
+    await plan.addToPlan(db, { projectId: P, versionId: v.id, activityIds: [a.id], days: 2, startOn: "2027-01-01", userId: U.id });
+    const row = (await plan.planRows(db, { projectId: P, versionId: v.id })).rows[0];
+    equal([row.end_on, row.days], ["2027-01-03", 2]);
+    await saveCalendar(db, { ...input, id: calendar.id, annual_exceptions: {} });
+    equal((await listCalendars(db, ctx)).find((c) => c.id === calendar.id).annual_exceptions, {});
+  });
+});
+
 await run();
