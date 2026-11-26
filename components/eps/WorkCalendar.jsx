@@ -1,5 +1,6 @@
 "use client";
 import { useId, useState } from "react";
+import { validAnnualDate } from "../../lib/eps/calendar.mjs";
 import { usePrefs } from "../../lib/client/prefs.mjs";
 
 export function CalendarSelect({ calendars = [], value, onChange, inherited, required = false, disabled = false }) {
@@ -14,7 +15,7 @@ export function CalendarSelect({ calendars = [], value, onChange, inherited, req
   </div>;
 }
 
-const empty = () => ({ id: null, name: "", weekdays: [0, 1, 2, 3, 4, 5, 6], exceptions: {}, isDefault: false });
+const empty = () => ({ id: null, name: "", weekdays: [0, 1, 2, 3, 4, 5, 6], exceptions: {}, annual_exceptions: {}, isDefault: false });
 export default function WorkCalendar({ calendars, post, may }) {
   const { t, lang } = usePrefs();
   const [draft, setDraft] = useState(null);
@@ -86,12 +87,47 @@ export default function WorkCalendar({ calendars, post, may }) {
           <button className="btn ghost sm" type="button" onClick={() => setDraft({ ...draft, exceptions: Object.fromEntries(Object.entries(draft.exceptions).filter(([key]) => key !== d)) })}>{t("ep.remove")}</button>
         </li>)}</ul>
       </fieldset>
+      <AnnualExceptions key={draft.id || "new"} value={draft.annual_exceptions || {}}
+        onChange={(annual_exceptions) => setDraft({ ...draft, annual_exceptions })} />
       <label><input type="checkbox" checked={draft.isDefault || !calendars.length} disabled={draft.is_default || !calendars.length}
         onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })} /> {t("ep.cal.default")}</label>
       <div className="row"><button className="btn" type="submit" disabled={busy || !draft.weekdays.length}>{t("ep.save")}</button>
         <button className="btn ghost" type="button" disabled={busy} onClick={() => setDraft(null)}>{t("ep.cancel")}</button></div>
     </form>}
   </details>;
+}
+
+function AnnualExceptions({ value, onChange }) {
+  const { t, lang } = usePrefs();
+  const [month, setMonth] = useState("01");
+  const [date, setDate] = useState("01");
+  const [working, setWorking] = useState(false);
+  const monthFormat = new Intl.DateTimeFormat(lang, { calendar: "gregory", month: "long", timeZone: "UTC" });
+  const key = `${month}-${date}`;
+  return <fieldset data-calendar-annual>
+    <legend>{t("ep.cal.annual")}</legend>
+    <p className="sm muted">{t("ep.cal.annualNote")}</p>
+    <label>{t("ep.cal.month")} <select value={month} onChange={(e) => setMonth(e.target.value)}>
+      {Array.from({ length: 12 }, (_, n) => <option key={n} value={String(n + 1).padStart(2, "0")}>
+        {monthFormat.format(new Date(Date.UTC(2000, n, 1)))}
+      </option>)}
+    </select></label>
+    <label>{t("ep.cal.monthDay")} <select value={date} onChange={(e) => setDate(e.target.value)}>
+      {Array.from({ length: 31 }, (_, n) => <option key={n} value={String(n + 1).padStart(2, "0")}>{n + 1}</option>)}
+    </select></label>
+    <select aria-label={t("ep.cal.annualStatus")} value={String(working)} onChange={(e) => setWorking(e.target.value === "true")}>
+      <option value="false">{t("ep.cal.off")}</option><option value="true">{t("ep.cal.on")}</option>
+    </select>
+    <button type="button" className="btn ghost sm" disabled={!validAnnualDate(key)}
+      onClick={() => onChange({ ...value, [key]: working })}>
+      {t(Object.hasOwn(value, key) ? "ep.cal.updateAnnual" : "ep.cal.addException")}
+    </button>
+    <ul>{Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([date, on]) => <li key={date}>
+      <bdi>{date}</bdi> · {t(on ? "ep.cal.on" : "ep.cal.off")}
+      <button type="button" className="btn ghost sm"
+        onClick={() => onChange(Object.fromEntries(Object.entries(value).filter(([d]) => d !== date)))}>{t("ep.remove")}</button>
+    </li>)}</ul>
+  </fieldset>;
 }
 
 function ShiftPeriods({dayKey,draft,setDraft}) {
