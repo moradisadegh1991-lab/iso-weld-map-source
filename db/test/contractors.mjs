@@ -46,8 +46,8 @@ test("a field nobody declared cannot be written through the profile", async () =
   // The update builds SQL from a fixed allowlist. A patch key outside it is
   // ignored rather than interpolated.
   const p = await projects.updateProjectProfile(db, {
-    projectId: proj.id, patch: { code: "HACKED", "name = 'x'--": 1, name: "K110 Phase 2" } });
-  equal(p.code, "K110", "the project code is not a profile field");
+    projectId: proj.id, patch: { id: "unrelated-id", "name = 'x'--": 1, name: "K110 Phase 2" } });
+  equal(p.id, proj.id, "the internal project ID is not a profile field");
   equal(p.name, "K110 Phase 2", "and a real one still writes");
 });
 
