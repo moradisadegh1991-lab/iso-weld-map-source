@@ -20,6 +20,8 @@ export default function WorkCalendar({ calendars, post, may }) {
   const [draft, setDraft] = useState(null);
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [shiftDay, setShiftDay] = useState("6");
+  const [shiftDate, setShiftDate] = useState("");
   const [working, setWorking] = useState(false);
   const [busy, setBusy] = useState(false);
   const weekday = new Intl.DateTimeFormat(lang, { weekday: "long", timeZone: "UTC" });
@@ -65,6 +67,13 @@ export default function WorkCalendar({ calendars, post, may }) {
           {weekday.format(new Date(Date.UTC(2026, 0, 4 + n)))}
         </label>)}
       </fieldset>
+      <fieldset><legend>ساعت‌های کاری و شیفت‌ها</legend>
+        <select aria-label="روز شیفت" value={shiftDay} onChange={e=>setShiftDay(e.target.value)}>
+          {[6,0,1,2,3,4,5].map(d=><option key={d} value={d}>{weekday.format(new Date(Date.UTC(2026,0,4+d)))}</option>)}
+          <option value="date">تاریخ استثنایی</option></select>
+        {shiftDay==="date" && <input type="date" aria-label="تاریخ شیفت" value={shiftDate} onChange={e=>setShiftDate(e.target.value)} />}
+        <ShiftPeriods dayKey={shiftDay==="date" ? shiftDate : shiftDay} draft={draft} setDraft={setDraft}/>
+      </fieldset>
       <fieldset><legend>{t("ep.cal.exceptions")}</legend>
         <label>{t("ep.date")} <input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
         <label>{t("ep.cal.until")} <input type="date" min={date || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)} /></label>
@@ -83,4 +92,21 @@ export default function WorkCalendar({ calendars, post, may }) {
         <button className="btn ghost" type="button" disabled={busy} onClick={() => setDraft(null)}>{t("ep.cancel")}</button></div>
     </form>}
   </details>;
+}
+
+function ShiftPeriods({dayKey,draft,setDraft}) {
+  if (!dayKey) return null;
+  const periods = draft.shifts?.[dayKey] || [];
+  function update(items) {
+    const shifts = {...draft.shifts};
+    if (items.length) shifts[dayKey]=items; else delete shifts[dayKey];
+    const exceptions = {...draft.exceptions};
+    if (dayKey.length>1 && items.length) exceptions[dayKey]=true;
+    setDraft({...draft,shifts,exceptions});
+  }
+  return <>{periods.map((pair,index)=><div className="row" key={index}>
+    {["شروع","پایان"].map((label,col)=><label key={label}>{label}<input dir="ltr" placeholder="HH:MM" required
+      value={pair[col]} onChange={e=>update(periods.map((p,i)=>i===index ? p.map((v,j)=>j===col ? e.target.value : v) : p))}/></label>)}
+    <button type="button" className="btn ghost" onClick={()=>update(periods.filter((_,i)=>i!==index))}>حذف بازه</button>
+  </div>)}<button type="button" className="btn ghost" onClick={()=>update([...periods,["",""]])}>+ بازهٔ کاری</button></>;
 }

@@ -575,3 +575,15 @@
     max-width: none;
   }
 }
+
+@media screen and (min-width: 901px) {
+  .shell > .sidenav {
+    position: sticky;
+    top: var(--bar-h);
+    align-self: start;
+    height: calc(100dvh - var(--bar-h));
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .sidenav .nav-groups { min-height: 0; overflow-y: auto; }
+}

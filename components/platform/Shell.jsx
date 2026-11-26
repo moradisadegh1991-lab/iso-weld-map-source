@@ -73,14 +73,14 @@ function Frame({ p, pathname, children }) {
   const roleName = (r) => (r ? t(`role.${r}`) : "—");
   const [rail, setRail] = useState(false);
   const [drawer, setDrawer] = useState(false);
-  const [closed, setClosed] = useState([]);
-  const [openSections, setOpenSections] = useState({});
+  const [openGroup, setOpenGroup] = useState(undefined);
+  const [openSection, setOpenSection] = useState(undefined);
   const activeRow = useRef(null);
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState(false);
   const search = useRef(null);
 
-  useEffect(() => { setRail(store.get("epc.nav.rail", false)); setClosed(store.get("epc.nav.closed", [])); }, []);
+  useEffect(() => { setRail(store.get("epc.nav.rail", false)); }, []);
   useEffect(() => { setDrawer(false); setMenu(false); }, [pathname]);
   // Ctrl/⌘+K: the menu's search, from anywhere.
   useEffect(() => {
@@ -119,10 +119,6 @@ function Frame({ p, pathname, children }) {
       .map((x) => ({ ...x, key: x.href, icon: s.icon, title: s.tabs.length > 1 ? `${s.title} › ${x.title}` : s.title, desc: s.desc, status: "live" }))));
   }, [q, nav]);
 
-  const toggleGroup = (g) => {
-    const next = closed.includes(g) ? closed.filter((x) => x !== g) : [...closed, g];
-    setClosed(next); store.set("epc.nav.closed", next);
-  };
   const toggleRail = () => { const v = !rail; setRail(v); store.set("epc.nav.rail", v); };
   const name = p.user?.displayName || p.user?.email || "";
   const initials = name.trim().charAt(0).toUpperCase() || "?";
@@ -192,20 +188,20 @@ function Frame({ p, pathname, children }) {
             found.length ? found.map((i) => <NavLink key={i.href} i={i} on={here?.href === i.href} onClick={() => setQ("")} />)
               : <p className="nav-empty">{t("shell.noSection", { q })}</p>
           ) : nav.map((g) => {
-            const isClosed = closed.includes(g.group);
+            const isClosed = (openGroup === undefined ? groupOf?.group || nav[0]?.group : openGroup) !== g.group;
             return (
               <div key={g.group} className={`nav-grp ${isClosed ? "closed" : ""}`}>
-                <button className="grp" onClick={() => toggleGroup(g.group)} aria-expanded={!isClosed}>
+                <button className="grp" onClick={() => { setOpenGroup(isClosed ? g.group : null); setOpenSection(null); }} aria-expanded={!isClosed}>
                   <span>{g.label}</span><span className="chev" aria-hidden>▾</span>
                 </button>
                 <div className="items">
                   {g.items.map((i) => {
                     const on = i.key === here?.section;
-                    const expanded = openSections[i.key] ?? false;
+                    const expanded = (openSection === undefined ? here?.section : openSection) === i.key;
                     return <div key={i.key} className="nav-section">
                       {rail ? <NavLink i={i} on={on} /> : <>
                         <button type="button" className={on ? "on" : ""} aria-expanded={expanded}
-                          onClick={() => setOpenSections((previous) => ({ ...previous, [i.key]: !expanded }))}>
+                          onClick={() => setOpenSection(expanded ? null : i.key)}>
                           <span className="ic" aria-hidden>{i.icon}</span><span>{i.title}</span>
                           <span className="nav-section-arrow" aria-hidden>{expanded ? "▾" : "▸"}</span>
                         </button>

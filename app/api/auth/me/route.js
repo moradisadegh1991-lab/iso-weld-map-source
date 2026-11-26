@@ -5,7 +5,7 @@ import { authenticate, errorResponse } from "../../../../lib/server/session.mjs"
 import { listProjectsForUser, effectiveTiles } from "../../../../lib/db/repos/projects.mjs";
 import { withProject } from "../../../../lib/db/scope.mjs";
 import { visibleContracts } from "../../../../lib/db/repos/users.mjs";
-import { formTypes } from "../../../../lib/db/repos/forms.mjs";
+import { companyFormAllowed, formTypes } from "../../../../lib/db/repos/forms.mjs";
 import { cleanPrefs } from "../../../../lib/prefs.mjs";
 
 /**
@@ -23,7 +23,7 @@ export async function GET(request) {
         p.contracts = await visibleContracts(db, { projectId: p.id, userId: user.id, role: p.role });
         // the project's handover forms: each a tile of the menu and the launchpad
         p.forms = (await formTypes(db, { projectId: p.id, published: true }))
-          .filter((f) => f.active && (!f.form_contract_id || p.contracts.some((c) => c.id === f.form_contract_id)))
+          .filter((f) => f.active && companyFormAllowed(p,f.form_company_id) && (!f.form_contract_id || p.contracts.some((c) => c.id === f.form_contract_id)))
           .map((f) => ({ code: f.code, name: f.name, section: f.section, form_contract_id: f.form_contract_id, form_navigation: f.form_navigation }));
       });
     }

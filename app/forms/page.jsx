@@ -1,4 +1,5 @@
 "use client";
+import InheritedStructure from "../../components/contracts/InheritedStructure";
 import { useState } from "react";
 import Link from "next/link";
 import TreeEditor from "../../components/ui/TreeEditor";
@@ -22,11 +23,11 @@ const WORK_COLUMNS = [
   { label: "ملاحظات", type: "text" },
 ].map((c) => ({ ...BLANK_FIELD, ...c }));
 
-const SCOPES = { contract: "قرارداد جاری", project: "پروژه جاری", global: "سراسری" };
+const SCOPES = { contract: "قرارداد جاری", company:"شرکت", project: "پروژه جاری", global: "سراسری" };
 const PARENTS = SECTIONS.flatMap((group) => group.items);
-const scopeOf = (form) => form.published ? "global" : form.form_contract_id ? "contract" : "project";
+const scopeOf = (form) => form.published ? "global" : form.form_company_id ? "company" : form.form_contract_id ? "contract" : "project";
 
-const toForm = (t) => ({ id: t.id, visibility: scopeOf(t), navigation: t.form_navigation || "handover", code: t.code, name: t.name, description: t.description || "", section: t.section, source: t.form.source || "",
+const toForm = (t) => ({ id: t.id, companyId: t.form_company_id || "", visibility: scopeOf(t), navigation: t.form_navigation || "handover", code: t.code, name: t.name, description: t.description || "", section: t.section, source: t.form.source || "",
   header: t.form.header.map((f) => ({ ...BLANK_FIELD, ...f, options: (f.options || []).join("، ") })),
   columns: t.form.columns.map((f) => ({ ...BLANK_FIELD, ...f, options: (f.options || []).join("، "), bind: f.bind || "" })) });
 const toDefinition = (f) => ({ source: f.source || null,
@@ -63,7 +64,7 @@ export default function FormsPage() {
   }
   function saveForm(form) {
     return send("save-type", { id: form.id, code: form.code, name: form.name, description: form.description,
-      section: form.section, definition: toDefinition(form), navigation: form.navigation, visibility: form.visibility }, `فرم ${form.code} ذخیره شد.`);
+      section: form.section, definition: toDefinition(form), navigation: form.navigation, visibility: form.visibility, companyId: form.companyId }, `فرم ${form.code} ذخیره شد.`);
   }
   async function save(event) {
     event.preventDefault();
@@ -102,10 +103,11 @@ export default function FormsPage() {
             </span>;
           }} />
       </div>
+      <InheritedStructure category="forms" title="فرم‌های مشترک" />
       {data.designable.length > 0 && !f && (
         <p><button className="btn" type="button" onClick={() => newForm()}>+ طراحی فرم تازه</button></p>)}
       {data.designable.length === 0 && <p className="sm muted">طراحی فرم با مدیر پروژه، یا با عضوی است که «طرف بازرسی: کارفرما» دارد و در آن بخش کار می‌کند.</p>}
-      {f && <Designer f={f} setF={setF} L={L} sections={data.designable} save={save} busy={busy} admin={admin} contractId={contractId} />}
+      {f && <Designer companies={data.companies} f={f} setF={setF} L={L} sections={data.designable} save={save} busy={busy} admin={admin} contractId={contractId} />}
     </div>
   );
 }
@@ -137,7 +139,7 @@ function FieldRows({ list, set, L, kind, source }) {
   );
 }
 
-function Designer({ f, setF, L, sections, save, busy, admin, contractId }) {
+function Designer({ companies, f, setF, L, sections, save, busy, admin, contractId }) {
   return (
     <form className="card" onSubmit={save}>
       <h2>{f.id ? `ویرایش طراحی ${f.code}` : "فرم تازه"}</h2>
@@ -154,14 +156,16 @@ function Designer({ f, setF, L, sections, save, busy, admin, contractId }) {
             {PARENTS.map((parent) => <option key={parent.key} value={parent.key}>{parent.title}</option>)}
           </select></div>
         <div className="field"><label htmlFor="fd-visibility">دسترسی</label>
-          <select id="fd-visibility" value={f.visibility} onChange={(e) => setF({ ...f, visibility: e.target.value, source: e.target.value === "contract" ? "" : f.source })}>
+          <select id="fd-visibility" value={f.visibility} onChange={(e) => setF({ ...f, visibility: e.target.value, source: ["contract","company"].includes(e.target.value) ? "" : f.source })}>
             {Object.entries(SCOPES).map(([key, label]) => <option key={key} value={key}
-              disabled={key === "contract" && !contractId || key === "global" && !admin}>{label}</option>)}
+              disabled={["contract","company"].includes(key) && !contractId || key === "global" && !admin}>{label}</option>)}
           </select></div>
+        {f.visibility === "company" && <label>شرکت ذی‌نفع <select required value={f.companyId || ""} onChange={(e) => setF({...f, companyId:e.target.value})}>
+          <option value="">انتخاب شرکت</option>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
         <div className="field"><label htmlFor="fd-desc">توضیح</label><input id="fd-desc" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
       </div>
       <label className="sm" style={{ display: "flex", gap: 6, alignItems: "center", margin: "8px 0" }}>
-        <input id="fd-src" type="checkbox" checked={f.source === "claims"} disabled={f.visibility === "contract"} onChange={(e) => setF({ ...f, source: e.target.checked ? "claims" : "" })} />
+        <input id="fd-src" type="checkbox" checked={f.source === "claims"} disabled={["contract","company"].includes(f.visibility)} onChange={(e) => setF({ ...f, source: e.target.checked ? "claims" : "" })} />
         {L.sources.claims} — ردیف‌های گزارش هر روز از کارهایی پر می‌شود که نمایندهٔ کارفرما همان روز در این بخش تأیید کرده است</label>
       {f.source === "claims" && f.columns.every((c) => !c.bind) && (
         <p><button className="btn ghost sm" type="button" onClick={() => setF({ ...f, columns: WORK_COLUMNS })}>ستون‌های پیشنهادی برای کار تحویل‌گرفته</button></p>)}

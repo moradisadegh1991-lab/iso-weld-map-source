@@ -73,7 +73,8 @@ export async function POST(request) {
       if (kind === "profile") return Response.json({ user: await users.updateProfile(db, { userId, username: body.username, displayName: body.displayName,
         jobTitle: body.jobTitle, specialty: body.specialty, phone: body.phone, companyId: body.companyId }) });
       if (kind === "contract-member") return Response.json({ member: await users.setContractMember(db, { projectId, contractId: body.contractId, userId,
-        position: body.position, access: body.access }) });
+        position: body.position, access: body.access, decree: body.decree, personnel: body.personnel,
+        status: body.status, startsOn: body.startsOn, endsOn: body.endsOn }) });
       if (kind === "revoke") return Response.json(await users.endSessions(db, a));
       if (kind === "tiles") return Response.json({ member: await users.setMemberTiles(db, { projectId, userId, tiles: body.tiles || [], cleanTiles,
         forms: await formTypes(db, { projectId }) }) });

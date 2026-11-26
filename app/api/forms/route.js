@@ -44,6 +44,7 @@ export async function GET(request) {
       const id = q("id");
       if (id) {
         const v = await forms.formReportView(db, { projectId, reportId: id, userId: user.id });
+        if (!forms.companyFormAllowed(membership, v.type.companyId)) throw notFound();
         if (v.type.formContractId && v.type.formContractId !== contractId) throw notFound();
         if (!formAllowed(membership, v.type.code)) throw notFound();
         return Response.json({ ...v, labels });
@@ -51,7 +52,7 @@ export async function GET(request) {
       const code = q("code");
       if (code) {
         const [t] = await forms.formTypes(db, { projectId, contractId, published: true, code });
-        if (!t || !formAllowed(membership, code) && !(forms.mayDesign(membership, t.section)
+        if (!t || !forms.companyFormAllowed(membership, t.form_company_id) || !formAllowed(membership, code) && !(forms.mayDesign(membership, t.section)
           && (!narrowed(membership) || membership.tiles.includes("/forms")))) throw notFound();
         if (t.template) return Response.json({ type: t, stages: [], reports: [], users: [], labels,
           may: { create: false, install: forms.mayDesign(membership, t.section) } });
@@ -65,12 +66,14 @@ export async function GET(request) {
           reports: await rp.listReports(db, { projectId, reportTypeId: t.id, userId: user.id }), users, labels,
           may: { create: checkCreate(stages, user.id).ok, design: forms.mayDesign(membership, t.section) } });
       }
-      const all = (await forms.formTypes(db, { projectId, contractId, published: true })).filter((form) => form.active);
+      const all = (await forms.formTypes(db, { projectId, contractId, published: true })).filter((form) => form.active && forms.companyFormAllowed(membership, form.form_company_id));
       const sections = forms.designableSections(membership);
       return Response.json({
         // a narrowed member sees the forms of their tiles; a designer, the forms of the sections they design too
         types: all.filter((t) => formAllowed(membership, t.code) || sections.includes(t.section)),
         designable: sections, labels,
+        companies: contractId && sections.length ? (await db.query(
+          "SELECT DISTINCT c.id,c.name FROM company c JOIN contract_stakeholder s ON s.company_id=c.id WHERE s.contract_id=$1 ORDER BY c.name", [contractId])).rows.filter((c) => forms.companyFormAllowed(membership,c.id)) : [],
       });
     });
   } catch (e) { return errorResponse(e); }
@@ -91,26 +94,29 @@ export async function POST(request) {
       if (kind === "install-type") return Response.json({ row: await forms.installFormType(db, { ...design, code: body.code }) });
       if (kind === "save-type" || kind === "remove-type") {
         const existing = body.id ? await forms.typeOf(db, { projectId, reportTypeId: body.id }) : null;
+        if (!forms.companyFormAllowed(membership, existing?.form_company_id)) throw notFound();
         if (existing?.form_contract_id && existing.form_contract_id !== selectedContract) throw notFound();
-        if (selectedContract && (existing?.form_contract_id || body.visibility === "contract")) {
+        if (selectedContract && (existing?.form_contract_id || ["contract","company"].includes(body.visibility))) {
           await assertContractAccess(db, { projectId, contractId: selectedContract, userId: user.id, role: membership.role, need: "manage" });
         }
         if (kind === "remove-type") return Response.json({ row: await forms.archiveFormType(db, { ...design, id: body.id }) });
         return Response.json({ ok: true, row: await forms.saveFormType(db, { projectId, id: body.id || null, code: body.code, name: body.name,
           description: body.description, section: body.section, definition: body.definition, navigation: body.navigation,
-          visibility: body.visibility, formContractId: selectedContract, membership: membershipOf(membership), userId: user.id }) });
+          visibility: body.visibility, companyId: body.companyId, formContractId: selectedContract, membership: membershipOf(membership), userId: user.id }) });
       }
       // a report's form, for the tile check
       let code = body.code;
       let contractForForm;
       if (kind !== "create") {
         const { rows: [r] } = await db.query(
-          "SELECT t.code, t.form_contract_id FROM report r JOIN report_type t ON t.id = r.report_type_id WHERE r.id = $1 AND r.project_id = $2 AND t.form IS NOT NULL", [body.reportId, projectId]);
-        if (!r) throw notFound();
+          "SELECT t.code, t.form_company_id, t.form_contract_id FROM report r JOIN report_type t ON t.id = r.report_type_id WHERE r.id = $1 AND r.project_id = $2 AND t.form IS NOT NULL", [body.reportId, projectId]);
+        if (!r || !forms.companyFormAllowed(membership,r.form_company_id)) throw notFound();
         code = r.code;
         contractForForm = r.form_contract_id;
       } else {
-        contractForForm = (await forms.formTypeByCode(db, { projectId, code })).form_contract_id;
+        const type = await forms.formTypeByCode(db, { projectId, code });
+        if (!forms.companyFormAllowed(membership,type.form_company_id)) throw notFound();
+        contractForForm = type.form_contract_id;
       }
       if (contractForForm && contractForForm !== selectedContract) throw notFound();
       if (!formAllowed(membership, code)) throw notFound();

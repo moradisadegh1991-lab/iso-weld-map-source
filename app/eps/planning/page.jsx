@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePlatform, useProjectData } from "../../../lib/client/platform.mjs";
+import PlanIdentifiers from "../../../components/eps/PlanIdentifiers";
 import ActivityGrid, { useSplit } from "../../../components/eps/ActivityGrid";
 import { CalendarSelect } from "../../../components/eps/WorkCalendar";
 import { useEpsFmt } from "../../../components/eps/ActivityDetail";
@@ -157,6 +158,8 @@ export default function PlanningPage() {
         {selectedActivityId && plan.get(selectedActivityId) && <CalendarSelect calendars={tree.data.version.calendars}
           value={plan.get(selectedActivityId).calendar_id} inherited={tree.data.version.calendar?.name}
           disabled={!may || busy} onChange={(calendarId) => post({ kind: "plan-edit", id: plan.get(selectedActivityId).id, calendarId }, () => t("ep.cal.saved"))} />}
+        {may && selectedActivityId && plan.has(selectedActivityId) &&
+          <PlanIdentifiers key={selectedActivityId} activity={plan.get(selectedActivityId)} planId={plan.get(selectedActivityId).id} save={post} />}
         <PlanningActivityHistory data={history.data} selected={sel} loading={history.busy} error={history.error} />
       </div>
     </div>
