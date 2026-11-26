@@ -46,7 +46,7 @@ export default function PlanningActivityHistory({ data, selected, loading, error
   return <section data-plan-history>
     <p className="sm muted">{t("ep.historyCaption")} <strong dir="ltr">{data.activity?.code || selected.item?.code}</strong> — {data.activity?.name || selected.item?.name || ""}
       {" · "}{t("ep.historyReadOnly")}
-      {onEditIdentifiers && <button type="button" className="btn ghost sm" onClick={onEditIdentifiers}>ویرایش Activity Code و Activity ID</button>}
+      {onEditIdentifiers && <button type="button" className="btn ghost sm" onClick={onEditIdentifiers}>{t("ep.identifiers.edit")}</button>}
     </p>
     <p className="sm muted">{t("ep.historyLiveActuals")}</p>
     {!data.rows?.length ? <p className="empty-note">{t("ep.historyEmpty")}</p> :
